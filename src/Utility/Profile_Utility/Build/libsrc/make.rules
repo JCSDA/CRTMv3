@@ -1,0 +1,18 @@
+#
+# The make include file of the suffix and compilation rules to be used
+# in the Profile_Utility library build.
+#
+# $Id$
+#
+
+.SUFFIXES:
+.SUFFIXES: .F90 .fpp .f90 .o
+.fpp.o:
+	$(FC) $(FCFLAGS) $(EXTRA_FCFLAGS) $(FPPFLAGS) $(LIBS) $<
+
+.F90.o:
+	$(FC) $(FCFLAGS) $(EXTRA_FCFLAGS) $(FPPFLAGS) $(LIBS) $<
+
+.f90.o:
+	$(FC) $(FCFLAGS) $(EXTRA_FCFLAGS) $(LIBS)$<
+

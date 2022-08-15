@@ -1,0 +1,34 @@
+#======================================================================
+# Project settings
+#======================================================================
+branches:
+  only:
+    - develop
+
+language: cpp
+
+services:
+  - docker
+
+before_install:
+  - echo $TRAVIS_PULL_REQUEST
+  - echo $TRAVIS_PULL_REQUEST_BRANCH
+  - echo $TRAVIS_BRANCH
+  - export BRANCH=$(if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo $TRAVIS_BRANCH; else echo $TRAVIS_PULL_REQUEST_BRANCH; fi)
+  - echo "TRAVIS_BRANCH=$TRAVIS_BRANCH, PR=$PR, BRANCH=$BRANCH"
+  - pwd
+  - ls ${TRAVIS_BUILD_DIR}
+
+  - docker pull jcsda/docker-clang-mpich-dev
+  - docker images
+
+script:
+  - docker run -d -t --name clang_container -v ${TRAVIS_BUILD_DIR}:/jcsda/src_repo jcsda/docker-clang-mpich-dev
+  - docker exec clang_container bash -c 'ls /jcsda/src_repo'
+  - docker exec clang_container bash -c 'mkdir /build_container'
+  - docker exec clang_container bash -c 'cd /build_container && ecbuild /jcsda/src_repo'
+  - docker exec clang_container bash -c 'cd /build_container && make -j4'
+# Not running the ctests right now since the AerosolCoeff.bin files are not recognized:
+# Check_Binary_File(FAILURE) : Error opening ./testinput/AerosolCoeff.bin - Cannot open file './testinput/AerosolCoeff.bin': No such file or directory
+#  - docker exec clang_container bash -c 'cd /jcsda/src_repo && . ./Set_CRTM_Environment.sh && sh Uncompress_Binary_Files.sh && cd /build_container && ctest --output-on-failure'
+

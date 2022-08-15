@@ -1,0 +1,12 @@
+
+The three data files CRTM_atm100.bin,  CRTM_geo100.bin,  CRTM_sfc100.bin in big endian
+  contain 100 profiles, which are constructed from 5000 ECMWF profiles. 
+  67 tmospheric profiles over water, 
+  23 profiles over land, 
+   6 profile over snow and 
+   5 profiles over ice
+   
+ The profile even number (2,4,...,100) are clear sky cases. The profile odd number is for
+ one  type cloud. All profiles include one aerosol profile.
+ 
+ Quanhua Liu
