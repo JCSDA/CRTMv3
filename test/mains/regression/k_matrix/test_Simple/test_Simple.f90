@@ -160,6 +160,15 @@ PROGRAM test_Simple
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
+
+  ! The comparative K-MATRIX structure inside the results file
+  CALL CRTM_Atmosphere_Create( atm_K, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
+  IF ( ANY(.NOT. CRTM_Atmosphere_Associated(atm_K)) ) THEN
+    Message = 'Error allocating CRTM atm_K structure'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    STOP 1
+  END IF
+
   ! ============================================================================
 
 
@@ -192,6 +201,7 @@ PROGRAM test_Simple
   ! 5a. Zero the K-matrix OUTPUT structures
   ! ---------------------------------------
   CALL CRTM_Atmosphere_Zero( Atmosphere_K )
+  CALL CRTM_Atmosphere_Zero( atm_K )
   CALL CRTM_Surface_Zero( Surface_K )
 
   ! 5b. Inintialize the K-matrix INPUT so
