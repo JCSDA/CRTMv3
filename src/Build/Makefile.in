@@ -13,8 +13,21 @@ prefix      = @prefix@
 installdir  = $(prefix)/$(distdir)
 
 # Target specification
-all clean check install uninstall nco_install:
+csem_lib=$(installdir)/lib/libcsem.a
+all install nco_install: ${csem_lib}
 	cd libsrc && $(MAKE) $@
+clean check uninstall : 
+	cd libsrc && $(MAKE) $@
+csem_home = @CSEM_HOME@
+ifeq ($(csem_home),)
+  csem_home := csem_v1.0.0
+endif
+${csem_lib}: $(csem_home)/lib/libcsem.a $(installdir)/lib $(installdir)/include
+	cp -f $(csem_home)/lib/libcsem.a ${csem_lib}
+	cp -fr $(csem_home)/include/*.mod $(installdir)/include
+$(installdir)/lib \
+$(installdir)/include :
+	- test -d $@ || mkdir -p $@
 
 distclean: clean
 	cd libsrc && $(MAKE) $@

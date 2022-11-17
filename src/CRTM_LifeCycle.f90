@@ -6,22 +6,10 @@
 !
 ! Written by:     Paul van Delst, 21-May-2004
 !                 paul.vandelst@noaa.gov
-!
-!
-! Record of Revisions:
-! ====================
-!
-!
-! Date:           Name:                    Description:
-! =====           =====                    ============
-!
-! 2020-08-01      Cheng Dang               Add optional arguments for 
-!                                          aerosol/cloud scheme/file/format.
-!
-! 2021-07-26      Patrick Stegmann         Add optional format input for
-!                                          TauCoeff files.
-!
-!
+! Modified by:    Cheng Dang, 1-Aug-2020
+!                 dangch@ucar.edu
+!                 Add optional arguments for aerosol/cloud scheme/file/format
+! CRTM LifeCycle with CSEM 
 
 MODULE CRTM_LifeCycle
 
@@ -51,27 +39,12 @@ MODULE CRTM_LifeCycle
   ! ...Cloud optical properties
   USE CRTM_CloudCoeff        , ONLY: CRTM_CloudCoeff_Load, &
                                      CRTM_CloudCoeff_Destroy
-  ! ...Infrared surface emissivities
-  USE CRTM_IRwaterCoeff      , ONLY: CRTM_IRwaterCoeff_Load, &
-                                     CRTM_IRwaterCoeff_Destroy
-  USE CRTM_IRlandCoeff       , ONLY: CRTM_IRlandCoeff_Load, &
-                                     CRTM_IRlandCoeff_Destroy
-  USE CRTM_IRsnowCoeff       , ONLY: CRTM_IRsnowCoeff_Load, &
-                                     CRTM_IRsnowCoeff_Destroy
-  USE CRTM_IRiceCoeff        , ONLY: CRTM_IRiceCoeff_Load, &
-                                     CRTM_IRiceCoeff_Destroy
-  ! ...Visible surface emissivities
-  USE CRTM_VISwaterCoeff     , ONLY: CRTM_VISwaterCoeff_Load, &
-                                     CRTM_VISwaterCoeff_Destroy
-  USE CRTM_VISlandCoeff      , ONLY: CRTM_VISlandCoeff_Load, &
-                                     CRTM_VISlandCoeff_Destroy
-  USE CRTM_VISsnowCoeff      , ONLY: CRTM_VISsnowCoeff_Load, &
-                                     CRTM_VISsnowCoeff_Destroy
-  USE CRTM_VISiceCoeff       , ONLY: CRTM_VISiceCoeff_Load, &
-                                     CRTM_VISiceCoeff_Destroy
-  ! ...Microwave surface emissivities
-  USE CRTM_MWwaterCoeff      , ONLY: CRTM_MWwaterCoeff_Load, &
-                                     CRTM_MWwaterCoeff_Destroy
+  !CSEM set up
+  USE CSEM_LifeCycle
+  !USE CSEM_SET_UP
+  USE CSEM_Model_Manager,       ONLY:  CSEM_Model_ID, Inq_Model_Option
+
+
   ! Disable all implicit typing
   IMPLICIT NONE
 
@@ -93,6 +66,7 @@ MODULE CRTM_LifeCycle
   INTEGER, PARAMETER :: ML = 256   ! Error message length
   INTEGER, PARAMETER :: SL = 5000  ! Maximum length for path+filenames
 
+  LOGICAL :: IS_CSEM_INIT = .FALSE.
 
 CONTAINS
 
@@ -115,8 +89,6 @@ CONTAINS
 !                                 Cloud_Model         = Cloud_Model         , &
 !                                 CloudCoeff_Format   = CloudCoeff_Format   , &
 !                                 CloudCoeff_File     = CloudCoeff_File     , &
-!                                 SpcCoeff_Format     = SpcCoeff_Format     , &
-!                                 TauCoeff_Format     = TauCoeff_Format     , &
 !                                 Load_CloudCoeff     = Load_CloudCoeff     , &
 !                                 Load_AerosolCoeff   = Load_AerosolCoeff   , &
 !                                 IRwaterCoeff_File   = IRwaterCoeff_File   , &
@@ -161,10 +133,8 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       Aerosol_Model:     Name of the aerosol scheme for scattering calculation
 !                          Available aerosol scheme:
-!                          - CRTM  [DEFAULT]
+!                          - GOCART  [DEFAULT]
 !                          - CMAQ
-!                          - GOCART-GEOS5
-!                          - NAAPS
 !                          UNITS:      N/A
 !                          TYPE:       CHARACTER(*)
 !                          DIMENSION:  Scalar
@@ -182,18 +152,12 @@ CONTAINS
 !       AerosolCoeff_File:  Name of the data file containing the aerosol optical
 !                           properties data for scattering calculations.
 !                           Available datafiles:
-!                           CRTM:
+!                           GOCART:
 !                           - AerosolCoeff.bin      [DEFAULT, Binary]
 !                           - AerosolCoeff.nc/nc4   [netCDF-Classic/4]
 !                           CMAQ:
 !                           - AerosolCoeff.CMAQ.bin      [Binary]
 !                           - AerosolCoeff.CMAQ.nc/nc4   [netCDF-Classic/4]
-!                           GOCART-GEOS5:
-!                           - AerosolCoeff.GOCART-GEOS5.bin      [Binary]
-!                           - AerosolCoeff.GOCART-GEOS5.nc/nc4   [netCDF-Classic/4]
-!                           NAAPS:
-!                           - AerosolCoeff.NAAPS.bin      [Binary]
-!                           - AerosolCoeff.NAAPS.nc/nc4   [netCDF-Classic/4]
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -225,24 +189,6 @@ CONTAINS
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
 !                           ATTRIBUTES: INTENT(IN), OPTIONAL
-!
-!       SpcCoeff_Format:     Format of the CRTM spectral coefficients
-!                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
-!                              UNITS:      N/A
-!                              TYPE:       CHARACTER(*)
-!                              DIMENSION:  Scalar
-!                              ATTRIBUTES: INTENT(IN), OPTIONAL
-!
-!       TauCoeff_Format:     Format of the CRTM transmittance coefficients
-!                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
-!                              UNITS:      N/A
-!                              TYPE:       CHARACTER(*)
-!                              DIMENSION:  Scalar
-!                              ATTRIBUTES: INTENT(IN), OPTIONAL
 !
 !       Load_CloudCoeff:    Set this logical argument for not loading the CloudCoeff data
 !                           to save memory space under the clear conditions
@@ -442,8 +388,6 @@ CONTAINS
     Cloud_Model         , &  ! Optional input
     CloudCoeff_Format   , &  ! Optional input
     CloudCoeff_File     , &  ! Optional input
-    SpcCoeff_Format     , &  ! Optional input 
-    TauCoeff_Format     , &  ! Optional input 
     EmisCoeff_File      , &  ! Optional input  ! *** DEPRECATED. Replaced by IRwaterCoeff_File
     IRwaterCoeff_File   , &  ! Optional input
     IRlandCoeff_File    , &  ! Optional input
@@ -471,8 +415,6 @@ CONTAINS
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: Cloud_Model
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: CloudCoeff_Format
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: CloudCoeff_File
-    CHARACTER(*),      OPTIONAL, INTENT(IN)  :: SpcCoeff_Format
-    CHARACTER(*),      OPTIONAL, INTENT(IN)  :: TauCoeff_Format
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: EmisCoeff_File  ! *** DEPRECATED. Replaced by IRwaterCoeff_File
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRwaterCoeff_File
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRlandCoeff_File
@@ -502,8 +444,6 @@ CONTAINS
     CHARACTER(SL) :: Default_Cloud_Model
     CHARACTER(SL) :: Default_CloudCoeff_Format
     CHARACTER(SL) :: Default_CloudCoeff_File
-    CHARACTER(SL) :: Default_SpcCoeff_Format
-    CHARACTER(SL) :: Default_TauCoeff_Format
     CHARACTER(SL) :: Default_IRwaterCoeff_File
     CHARACTER(SL) :: Default_IRlandCoeff_File
     CHARACTER(SL) :: Default_IRsnowCoeff_File
@@ -514,11 +454,15 @@ CONTAINS
     CHARACTER(SL) :: Default_VISiceCoeff_File
     CHARACTER(SL) :: Default_MWwaterCoeff_File
 
+    CHARACTER(SL) :: CSEM_Config="csem_model.registor"
 
     INTEGER :: l, n, n_Sensors
     LOGICAL :: Local_Load_CloudCoeff
     LOGICAL :: Local_Load_AerosolCoeff
-    LOGICAL :: netCDF
+
+    LOGICAL :: CSEM_Config_Exist
+    TYPE(CSEM_MODEL_ID) :: MODEL
+
     ! ******
     ! TEMPORARY UNTIL LOAD ROUTINE INTERFACES HAVE BEEN MODIFIED
     INTEGER :: iQuiet
@@ -529,6 +473,16 @@ CONTAINS
       END IF
     END IF
     ! ******
+
+    INQUIRE(FILE=TRIM(CSEM_Config), EXIST=CSEM_Config_Exist)
+    IF(.NOT. CSEM_Config_Exist) THEN
+      WRITE(*,*)"Error loading CSEM Algorithm registor file ( CRTM_LifeCycle ): ", TRIM(CSEM_Config), " ....."
+      STOP
+    ENDIF
+    IF(.NOT. IS_CSEM_INIT ) THEN
+       err_stat = CSEM_INIT( TRIM(CSEM_Config))
+       IS_CSEM_INIT = .TRUE.
+    ENDIF
 
     ! Set up
     err_stat = SUCCESS
@@ -562,14 +516,12 @@ CONTAINS
 
     ! Specify sensor-independent coefficient filenames
     ! ...Default filenames
-    Default_Aerosol_Model       = 'CRTM'
+    Default_Aerosol_Model       = 'GOCART'
     Default_AerosolCoeff_Format = 'Binary'
     Default_AerosolCoeff_File   = 'AerosolCoeff.bin'
     Default_Cloud_Model         = 'CRTM'
     Default_CloudCoeff_Format   = 'Binary'
     Default_CloudCoeff_File     = 'CloudCoeff.bin'
-    Default_SpcCoeff_Format     = 'Binary'
-    Default_TauCoeff_Format     = 'Binary'
     Default_IRwaterCoeff_File   = 'Nalli.IRwater.EmisCoeff.bin'
     Default_IRlandCoeff_File    = 'NPOESS.IRland.EmisCoeff.bin'
     Default_IRsnowCoeff_File    = 'NPOESS.IRsnow.EmisCoeff.bin'
@@ -586,8 +538,6 @@ CONTAINS
     IF ( PRESENT(Cloud_Model         ) ) Default_Cloud_Model         = TRIM(ADJUSTL(Cloud_Model))
     IF ( PRESENT(CloudCoeff_Format   ) ) Default_CloudCoeff_Format   = TRIM(ADJUSTL(CloudCoeff_Format))
     IF ( PRESENT(CloudCoeff_File     ) ) Default_CloudCoeff_File     = TRIM(ADJUSTL(CloudCoeff_File))
-    IF ( PRESENT(SpcCoeff_Format     ) ) Default_SpcCoeff_Format     = TRIM(ADJUSTL(SpcCoeff_Format))
-    IF ( PRESENT(TauCoeff_Format     ) ) Default_TauCoeff_Format     = TRIM(ADJUSTL(TauCoeff_Format))
     IF ( PRESENT(IRwaterCoeff_File   ) ) Default_IRwaterCoeff_File   = TRIM(ADJUSTL(IRwaterCoeff_File))
     IF ( PRESENT(IRlandCoeff_File    ) ) Default_IRlandCoeff_File    = TRIM(ADJUSTL(IRlandCoeff_File))
     IF ( PRESENT(IRsnowCoeff_File    ) ) Default_IRsnowCoeff_File    = TRIM(ADJUSTL(IRsnowCoeff_File))
@@ -627,17 +577,9 @@ CONTAINS
     END IF
 
     ! Load the spectral coefficients
-    netCDF = .FALSE.
-    IF ( PRESENT(SpcCoeff_Format) ) THEN
-      IF ( TRIM(SpcCoeff_Format) == 'netCDF' ) THEN
-        netCDF = .TRUE.
-      END IF
-    END IF
-    WRITE(*,*) "Loading"//SpcCoeff_Format//" spectral coefficients."
     err_stat = CRTM_SpcCoeff_Load( &
                  Sensor_ID                            , &
                  File_Path         = File_Path        , &
-                 netCDF            = netCDF           , &
                  Quiet             = Quiet            , &
                  Process_ID        = Process_ID       , &
                  Output_Process_ID = Output_Process_ID  )
@@ -648,18 +590,10 @@ CONTAINS
 
 
     ! Load the transmittance model coefficients
-    netCDF = .FALSE.
-    IF ( PRESENT(TauCoeff_Format) ) THEN
-      IF ( TRIM(TauCoeff_Format) == 'netCDF' ) THEN
-        netCDF = .TRUE.
-      END IF
-    END IF
-    WRITE(*,*) "Loading "//TauCoeff_Format//" transmittance coefficients."
     err_stat = CRTM_Load_TauCoeff( &
                  Sensor_ID         = Sensor_ID        , &
                  File_Path         = File_Path        , &
                  Quiet             = iQuiet           , &  ! *** Use of iQuiet temporary
-                 netCDF            = netCDF           , &
                  Process_ID        = Process_ID       , &
                  Output_Process_ID = Output_Process_ID  )
     IF ( err_stat /= SUCCESS ) THEN
@@ -706,119 +640,6 @@ CONTAINS
         RETURN
       END IF
     END IF
-
-
-    ! Load the emissivity model coefficients
-    ! ...Infrared
-    Infrared_Sensor: IF ( ANY(SpcCoeff_IsInfraredSensor(SC)) ) THEN
-      ! ...IR land
-      err_stat = CRTM_IRlandCoeff_Load( &
-                   Default_IRlandCoeff_File, &
-                   Quiet             = Quiet            , &
-                   Process_ID        = Process_ID       , &
-                   Output_Process_ID = Output_Process_ID  )
-      IF ( err_stat /= SUCCESS ) THEN
-        msg = 'Error loading IRlandCoeff data from '//TRIM(Default_IRlandCoeff_File)
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-        RETURN
-      END IF
-      ! ...IR Water
-      err_stat = CRTM_IRwaterCoeff_Load( &
-                   Default_IRwaterCoeff_File, &
-                   Quiet             = Quiet            , &
-                   Process_ID        = Process_ID       , &
-                   Output_Process_ID = Output_Process_ID  )
-      IF ( err_stat /= SUCCESS ) THEN
-        msg = 'Error loading IRwaterCoeff data from '//TRIM(Default_IRwaterCoeff_File)
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-        RETURN
-      END IF
-      ! ...IR snow
-      err_stat = CRTM_IRsnowCoeff_Load( &
-                   Default_IRsnowCoeff_File, &
-                   Quiet             = Quiet            , &
-                   Process_ID        = Process_ID       , &
-                   Output_Process_ID = Output_Process_ID  )
-      IF ( err_stat /= SUCCESS ) THEN
-        msg = 'Error loading IRsnowCoeff data from '//TRIM(Default_IRsnowCoeff_File)
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-        RETURN
-      END IF
-      ! ...IR ice
-      err_stat = CRTM_IRiceCoeff_Load( &
-                   Default_IRiceCoeff_File, &
-                   Quiet             = Quiet            , &
-                   Process_ID        = Process_ID       , &
-                   Output_Process_ID = Output_Process_ID  )
-      IF ( err_stat /= SUCCESS ) THEN
-        msg = 'Error loading IRiceCoeff data from '//TRIM(Default_IRiceCoeff_File)
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-        RETURN
-      END IF
-    END IF Infrared_Sensor
-
-    ! ...Visible
-    Visible_Sensor: IF ( ANY(SpcCoeff_IsVisibleSensor(SC)) ) THEN
-      ! ...VIS land
-      err_stat = CRTM_VISlandCoeff_Load( &
-                   Default_VISlandCoeff_File, &
-                   Quiet             = Quiet            , &
-                   Process_ID        = Process_ID       , &
-                   Output_Process_ID = Output_Process_ID  )
-      IF ( err_stat /= SUCCESS ) THEN
-        msg = 'Error loading VISlandCoeff data from '//TRIM(Default_VISlandCoeff_File)
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-        RETURN
-      END IF
-      ! ...VIS water
-      err_stat = CRTM_VISwaterCoeff_Load( &
-                   Default_VISwaterCoeff_File, &
-                   Quiet             = Quiet            , &
-                   Process_ID        = Process_ID       , &
-                   Output_Process_ID = Output_Process_ID  )
-      IF ( err_stat /= SUCCESS ) THEN
-        msg = 'Error loading VISwaterCoeff data from '//TRIM(Default_VISwaterCoeff_File)
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-        RETURN
-      END IF
-      ! ...VIS snow
-      err_stat = CRTM_VISsnowCoeff_Load( &
-                   Default_VISsnowCoeff_File, &
-                   Quiet             = Quiet            , &
-                   Process_ID        = Process_ID       , &
-                   Output_Process_ID = Output_Process_ID  )
-      IF ( err_stat /= SUCCESS ) THEN
-        msg = 'Error loading VISsnowCoeff data from '//TRIM(Default_VISsnowCoeff_File)
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-        RETURN
-      END IF
-      ! ...VIS ice
-      err_stat = CRTM_VISiceCoeff_Load( &
-                   Default_VISiceCoeff_File, &
-                   Quiet             = Quiet            , &
-                   Process_ID        = Process_ID       , &
-                   Output_Process_ID = Output_Process_ID  )
-      IF ( err_stat /= SUCCESS ) THEN
-        msg = 'Error loading VISiceCoeff data from '//TRIM(Default_VISiceCoeff_File)
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-        RETURN
-      END IF
-    END IF Visible_Sensor
-
-    ! ...Microwave
-    Microwave_Sensor: IF ( ANY(SpcCoeff_IsMicrowaveSensor(SC)) ) THEN
-      ! ...MW water
-      err_stat = CRTM_MWwaterCoeff_Load( &
-                   Default_MWwaterCoeff_File, &
-                   Quiet             = Quiet            , &
-                   Process_ID        = Process_ID       , &
-                   Output_Process_ID = Output_Process_ID  )
-      IF ( err_stat /= SUCCESS ) THEN
-        msg = 'Error loading MWwaterCoeff data from '//TRIM(Default_MWwaterCoeff_File)
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-        RETURN
-      END IF
-    END IF Microwave_Sensor
 
 
     ! Load the ChannelInfo structure
@@ -920,6 +741,7 @@ CONTAINS
       pid_msg = ''
     END IF
 
+    !CALL CSEM_Destroy
 
     ! Destroy all the ChannelInfo structures
     CALL CRTM_ChannelInfo_Destroy( ChannelInfo )
@@ -929,63 +751,6 @@ CONTAINS
       CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
     END IF
 
-
-    ! Destroy the shared data structure
-    Destroy_Status = CRTM_VISiceCoeff_Destroy( Process_ID = Process_ID )
-    IF ( Destroy_Status /= SUCCESS ) THEN
-      err_stat = Destroy_Status
-      msg = 'Error deallocating shared VISiceCoeff data structure'//TRIM(pid_msg)
-      CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-    END IF
-
-    Destroy_Status = CRTM_VISsnowCoeff_Destroy( Process_ID = Process_ID )
-    IF ( Destroy_Status /= SUCCESS ) THEN
-      err_stat = Destroy_Status
-      msg = 'Error deallocating shared VISsnowCoeff data structure'//TRIM(pid_msg)
-      CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-    END IF
-
-    Destroy_Status = CRTM_VISwaterCoeff_Destroy( Process_ID = Process_ID )
-    IF ( Destroy_Status /= SUCCESS ) THEN
-      err_stat = Destroy_Status
-      msg = 'Error deallocating shared VISwaterCoeff data structure'//TRIM(pid_msg)
-      CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-    END IF
-
-    Destroy_Status = CRTM_VISlandCoeff_Destroy( Process_ID = Process_ID )
-    IF ( Destroy_Status /= SUCCESS ) THEN
-      err_stat = Destroy_Status
-      msg = 'Error deallocating shared VISlandCoeff data structure'//TRIM(pid_msg)
-      CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-    END IF
-
-    Destroy_Status = CRTM_IRiceCoeff_Destroy( Process_ID = Process_ID )
-    IF ( Destroy_Status /= SUCCESS ) THEN
-      err_stat = Destroy_Status
-      msg = 'Error deallocating shared IRiceCoeff data structure'//TRIM(pid_msg)
-      CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-    END IF
-
-    Destroy_Status = CRTM_IRsnowCoeff_Destroy( Process_ID = Process_ID )
-    IF ( Destroy_Status /= SUCCESS ) THEN
-      err_stat = Destroy_Status
-      msg = 'Error deallocating shared IRsnowCoeff data structure'//TRIM(pid_msg)
-      CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-    END IF
-
-    Destroy_Status = CRTM_IRwaterCoeff_Destroy( Process_ID = Process_ID )
-    IF ( Destroy_Status /= SUCCESS ) THEN
-      err_stat = Destroy_Status
-      msg = 'Error deallocating shared IRwaterCoeff data structure'//TRIM(pid_msg)
-      CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-    END IF
-
-    Destroy_Status = CRTM_IRlandCoeff_Destroy( Process_ID = Process_ID )
-    IF ( Destroy_Status /= SUCCESS ) THEN
-      err_stat = Destroy_Status
-      msg = 'Error deallocating shared IRlandCoeff data structure'//TRIM(pid_msg)
-      CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-    END IF
 
     Destroy_Status = CRTM_AerosolCoeff_Destroy( Process_ID = Process_ID )
     IF ( Destroy_Status /= SUCCESS ) THEN
@@ -1015,12 +780,6 @@ CONTAINS
       CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
     END IF
 
-    Destroy_Status = CRTM_MWwaterCoeff_Destroy( Process_ID = Process_ID )
-    IF ( Destroy_Status /= SUCCESS ) THEN
-      err_stat = Destroy_Status
-      msg = 'Error deallocating shared MWwaterCoeff data structure'//TRIM(pid_msg)
-      CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-    END IF
 
   END FUNCTION CRTM_Destroy
 

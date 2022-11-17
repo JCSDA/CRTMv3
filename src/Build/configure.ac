@@ -3,6 +3,9 @@ AC_REVISION($Id: $)
 
 # Initialise autoconf
 AC_INIT([CRTM], m4_esyscmd([tr -d "\n'" < libsrc/CRTM_Version.inc |tr -d "\n'" < libsrc/CRTM_Version.inc | tr -d "#define CRTM_VERSION "]), [ncep.list.emc.jcsda_crtm.support@noaa.gov], [crtm])
+# CSEM Home
+AC_ARG_VAR([CSEM_HOME],[CSEM Home (default='csem_v1.0.0')])
+#AC_SUBST([CSEM_HOME], csem_v1.0.0)
 
 
 ## Initialise autoconf
@@ -203,6 +206,7 @@ fi
 AC_SUBST(ENDIAN_PLATFORM)
 AC_SUBST(ENDIAN_IO)
 AC_SUBST(FPPFLAGS)
+
 
 # Create the configure script and Makefiles
 AC_OUTPUT

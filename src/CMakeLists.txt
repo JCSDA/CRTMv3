@@ -2,7 +2,6 @@
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
-
 include(GNUInstallDirs)
 list( APPEND crtm_src_files
 			Ancillary/CRTM_AncillaryInput_Define.f90
@@ -50,22 +49,8 @@ list( APPEND crtm_src_files
 			Coefficients/CloudCoeff/CloudCoeff_netCDF_IO.f90
 			Coefficients/CRTM_AerosolCoeff.f90
 			Coefficients/CRTM_CloudCoeff.f90
-			Coefficients/CRTM_IRiceCoeff.f90
-			Coefficients/CRTM_IRlandCoeff.f90
-			Coefficients/CRTM_IRsnowCoeff.f90
-			Coefficients/CRTM_IRwaterCoeff.f90
-			Coefficients/CRTM_MWwaterCoeff.f90
 			Coefficients/CRTM_SpcCoeff.f90
 			Coefficients/CRTM_TauCoeff.f90
-			Coefficients/CRTM_VISiceCoeff.f90
-			Coefficients/CRTM_VISlandCoeff.f90
-			Coefficients/CRTM_VISsnowCoeff.f90
-			Coefficients/CRTM_VISwaterCoeff.f90
-			Coefficients/EmisCoeff/IR_Land/LSEatlas/LSEatlas_Define.f90
-			Coefficients/EmisCoeff/IR_Water/IRwaterCoeff_Define.f90
-			Coefficients/EmisCoeff/MW_Water/MWwaterCoeff_Define.f90
-			Coefficients/EmisCoeff/MW_Water/MWwaterLUT/MWwaterLUT_Define.f90
-			Coefficients/EmisCoeff/SEcategory/SEcategory_Define.f90
 			Coefficients/FitCoeff/FitCoeff_Define.f90
 			Coefficients/FitCoeff/FitCoeff_Destroy.inc
 			Coefficients/FitCoeff/FitCoeff_Equal.inc
@@ -123,54 +108,9 @@ list( APPEND crtm_src_files
 			RTSolution/RTV_Define.f90
 			RTSolution/SOI/SOI_Module.f90
 			SensorInfo/CRTM_SensorInfo.f90
-			SfcOptics/CRTM_IR_Ice_SfcOptics.f90
-			SfcOptics/CRTM_IR_Land_SfcOptics.f90
-			SfcOptics/CRTM_IR_Snow_SfcOptics.f90
-			SfcOptics/CRTM_IR_Water_SfcOptics.f90
-			SfcOptics/CRTM_MW_Ice_SfcOptics.f90
-			SfcOptics/CRTM_MW_Land_SfcOptics.f90
-			SfcOptics/CRTM_MW_Snow_SfcOptics.f90
-			SfcOptics/CRTM_MW_Water_SfcOptics.f90
 			SfcOptics/CRTM_SfcOptics_Define.f90
 			SfcOptics/CRTM_SfcOptics.f90
-			SfcOptics/CRTM_VIS_Ice_SfcOptics.f90
-			SfcOptics/CRTM_VIS_Land_SfcOptics.f90
-			SfcOptics/CRTM_VIS_Snow_SfcOptics.f90
-			SfcOptics/CRTM_VIS_Water_SfcOptics.f90
-			SfcOptics/IR_Water/IRSSEM/CRTM_IRSSEM.f90
-			SfcOptics/MW_Water/FASTEM_MWSSEM/Azimuth_Emissivity_F6_Module.f90
-			SfcOptics/MW_Water/FASTEM_MWSSEM/Azimuth_Emissivity_Module.f90
-			SfcOptics/MW_Water/FASTEM_MWSSEM/CRTM_Fastem1.f90
-			SfcOptics/MW_Water/FASTEM_MWSSEM/CRTM_FastemX.f90
-			SfcOptics/MW_Water/FASTEM_MWSSEM/Foam_Utility_Module.f90
-			SfcOptics/MW_Water/FASTEM_MWSSEM/Large_Scale_Correction_Module.f90
-			SfcOptics/MW_Water/FASTEM_MWSSEM/Reflection_Correction_Module.f90
-			SfcOptics/MW_Water/FASTEM_MWSSEM/Slope_Variance.f90
-			SfcOptics/MW_Water/FASTEM_MWSSEM/Small_Scale_Correction_Module.f90
 			SfcOptics/MW_Water/Fresnel/Fresnel.f90
-			SfcOptics/MW_Water/LowFrequency_MWSSEM/CRTM_LowFrequency_MWSSEM.f90
-			SfcOptics/MW_Water/Ocean_Permittivity/Ellison.f90
-			SfcOptics/MW_Water/Ocean_Permittivity/Guillou.f90
-			SfcOptics/MW_Water/Ocean_Permittivity/Liu.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_AMSRE_SICEEM_Module.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_AMSRE_SNOWEM_Module.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_AMSU_SICEEM_Module.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_AMSU_SnowEM_Module.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_ATMS_SeaICE_LIB.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_ATMS_SeaICE_Module.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_ATMS_SnowEM_Module.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_LandEM_Module.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_MHS_SICEEM_Module.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_MHS_SnowEM_Module.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_SEAICE_PHYEM_MODULE.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_SnowEM_ATMS_Parameters.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_SnowEM_Parameters.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_SSMI_Module.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_SSMI_SIceEM_Module.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_SSMI_SnowEM_Module.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_SSMIS_SeaIceEM_Module.f90
-			SfcOptics/NESDIS_Emissivity/NESDIS_SSMIS_SnowEM_Module.f90
-			SfcOptics/SEcategory/CRTM_SEcategory.f90
 			Source_Functions/CRTM_Planck_Functions.f90
 			Surface/CRTM_Surface_Define.f90
 			Surface/SensorData/CRTM_SensorData_Define.f90
@@ -197,13 +137,11 @@ list( APPEND crtm_src_files
 			Utility/Type_Kinds.f90
 			Zeeman/Zeeman_Utility.f90
 )
-
 ecbuild_add_library(TARGET ${PROJECT_NAME} SOURCES ${${PROJECT_NAME}_src_files})
-
 #Dependecies
 target_link_libraries(${PROJECT_NAME} PUBLIC OpenMP::OpenMP_Fortran)
 target_link_libraries(${PROJECT_NAME} PUBLIC NetCDF::NetCDF_Fortran)
-
+target_link_libraries(${PROJECT_NAME} PUBLIC CSEM_LIB)
 #Fortran module output directory for build and install interfaces
 set(MODULE_DIR module/${PROJECT_NAME}/${CMAKE_Fortran_COMPILER_ID}/${CMAKE_Fortran_COMPILER_VERSION})
 set_target_properties(${PROJECT_NAME} PROPERTIES Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/${MODULE_DIR})
@@ -211,4 +149,3 @@ install(DIRECTORY ${CMAKE_BINARY_DIR}/${MODULE_DIR}/ DESTINATION ${MODULE_DIR})
 target_include_directories(${PROJECT_NAME} INTERFACE
                                 $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/${MODULE_DIR}>
                                 $<INSTALL_INTERFACE:${MODULE_DIR}>)
-

@@ -20,6 +20,19 @@ include(GNUInstallDirs)
 find_package( OpenMP COMPONENTS Fortran )
 find_package( NetCDF REQUIRED COMPONENTS Fortran )
 
+## CSEM
+set(CSEM_DIR "/home/Ming.Chen/save/CRTM/CSEM1.0.0")
+if(NOT DEFINED CSEM_HOME)
+    message(WARNING "CSEM_HOME is not set ...")
+    message(NOTICE "CSEM_HOME set to ${CSEM_DIR} ...")
+    set(CSEM_HOME ${CSEM_DIR} CACHE STRING "Path to CSEM library")
+endif()
+ADD_LIBRARY(CSEM_LIB STATIC IMPORTED)
+SET_TARGET_PROPERTIES(CSEM_LIB PROPERTIES
+    IMPORTED_LOCATION ${CSEM_HOME}/lib/libcsem.a)
+SET_TARGET_PROPERTIES(CSEM_LIB PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES  ${CSEM_HOME}/include)
+
 ## Sources
 add_subdirectory(src)
 add_subdirectory(test)
