@@ -31,6 +31,16 @@ if [[ "$hostname" == "s4-submit.ssec.wisc.edu" ]] ; then #S4
   -g -fpp -traceback -check bounds \
   -I $NC4_DIR/include \
   -I $HDF_DIR/include "
+elif [[ "$hostname" == "rhw9105.star1.nesdis.noaa.gov" ]] ; then #rhw
+  export NC4_DIR="/data/jcsda3/mchen/local/libs/netcdf-fortran-4.5.3.ifort"
+  export HDF_DIR="/data/jcsda3/mchen/local/libs/hdf5-1.12.0"
+  export LIBS="\
+  -L $NC4_DIR/lib  -lnetcdff \
+  -L $HDF_DIR/lib -lhdf5 \
+  -g -fpp -traceback -check bounds \
+  -I $NC4_DIR/include \
+  -I $HDF_DIR/include "
+
 else
   export LIBS=""
 fi
