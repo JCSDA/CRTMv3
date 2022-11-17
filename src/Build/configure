@@ -267,7 +267,7 @@ fi
     $as_echo "$0: be upgraded to zsh 4.3.4 or later."
   else
     $as_echo "$0: Please tell bug-autoconf@gnu.org and
-$0: crtm-support@googlegroups.com about your
+$0: ncep.list.emc.jcsda_crtm.support@noaa.gov about your
 $0: system, including any error possibly output before this
 $0: message. Then install a modern shell, or manually run
 $0: the script under such a shell if you do have one."
@@ -582,7 +582,7 @@ PACKAGE_NAME='CRTM'
 PACKAGE_TARNAME='crtm'
 PACKAGE_VERSION='v2.4.1-alpha'
 PACKAGE_STRING='CRTM v2.4.1-alpha'
-PACKAGE_BUGREPORT='crtm-support@googlegroups.com'
+PACKAGE_BUGREPORT='ncep.list.emc.jcsda_crtm.support@noaa.gov'
 PACKAGE_URL=''
 
 ac_unique_file="libsrc/CRTM_Module.F90"
@@ -605,6 +605,7 @@ ac_ct_FC
 LDFLAGS
 FCFLAGS
 FC
+CSEM_HOME
 target_alias
 host_alias
 build_alias
@@ -624,7 +625,6 @@ infodir
 docdir
 oldincludedir
 includedir
-runstatedir
 localstatedir
 sharedstatedir
 sysconfdir
@@ -653,6 +653,7 @@ enable_openmp
       ac_precious_vars='build_alias
 host_alias
 target_alias
+CSEM_HOME
 FC
 FCFLAGS
 LDFLAGS
@@ -695,7 +696,6 @@ datadir='${datarootdir}'
 sysconfdir='${prefix}/etc'
 sharedstatedir='${prefix}/com'
 localstatedir='${prefix}/var'
-runstatedir='${localstatedir}/run'
 includedir='${prefix}/include'
 oldincludedir='/usr/include'
 docdir='${datarootdir}/doc/${PACKAGE_TARNAME}'
@@ -948,15 +948,6 @@ do
   | -silent | --silent | --silen | --sile | --sil)
     silent=yes ;;
 
-  -runstatedir | --runstatedir | --runstatedi | --runstated \
-  | --runstate | --runstat | --runsta | --runst | --runs \
-  | --run | --ru | --r)
-    ac_prev=runstatedir ;;
-  -runstatedir=* | --runstatedir=* | --runstatedi=* | --runstated=* \
-  | --runstate=* | --runstat=* | --runsta=* | --runst=* | --runs=* \
-  | --run=* | --ru=* | --r=*)
-    runstatedir=$ac_optarg ;;
-
   -sbindir | --sbindir | --sbindi | --sbind | --sbin | --sbi | --sb)
     ac_prev=sbindir ;;
   -sbindir=* | --sbindir=* | --sbindi=* | --sbind=* | --sbin=* \
@@ -1094,7 +1085,7 @@ fi
 for ac_var in	exec_prefix prefix bindir sbindir libexecdir datarootdir \
 		datadir sysconfdir sharedstatedir localstatedir includedir \
 		oldincludedir docdir infodir htmldir dvidir pdfdir psdir \
-		libdir localedir mandir runstatedir
+		libdir localedir mandir
 do
   eval ac_val=\$$ac_var
   # Remove trailing slashes.
@@ -1247,7 +1238,6 @@ Fine tuning of the installation directories:
   --sysconfdir=DIR        read-only single-machine data [PREFIX/etc]
   --sharedstatedir=DIR    modifiable architecture-independent data [PREFIX/com]
   --localstatedir=DIR     modifiable single-machine data [PREFIX/var]
-  --runstatedir=DIR       modifiable per-process data [LOCALSTATEDIR/run]
   --libdir=DIR            object code libraries [EPREFIX/lib]
   --includedir=DIR        C header files [PREFIX/include]
   --oldincludedir=DIR     C header files for non-gcc [/usr/include]
@@ -1283,6 +1273,7 @@ Optional Features:
   --disable-openmp        do not use OpenMP
 
 Some influential environment variables:
+  CSEM_HOME   CSEM Home (default='csem_v1.0.0')
   FC          Fortran compiler command
   FCFLAGS     Fortran compiler flags
   LDFLAGS     linker flags, e.g. -L<lib dir> if you have libraries in a
@@ -1292,7 +1283,7 @@ Some influential environment variables:
 Use these variables to override the choices made by `configure' or to help
 it to find libraries and programs with nonstandard names/locations.
 
-Report bugs to <crtm-support@googlegroups.com>.
+Report bugs to <ncep.list.emc.jcsda_crtm.support@noaa.gov>.
 _ACEOF
 ac_status=$?
 fi
@@ -1804,10 +1795,13 @@ ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $
 ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
+# CSEM Home
+
+#AC_SUBST([CSEM_HOME], csem_v1.0.0)
 
 
 ## Initialise autoconf
-#AC_INIT([CRTM], m4_esyscmd([tr -d "\n'" < libsrc/CRTM_Version.inc]), [crtm-support@googlegroups.com], [crtm])
+#AC_INIT([CRTM], m4_esyscmd([tr -d "\n'" < libsrc/CRTM_Version.inc]), [ncep.list.emc.jcsda_crtm.support@noaa.gov], [crtm])
 
 
 # Output info for user
@@ -1931,7 +1925,7 @@ fi
 $as_echo "$as_me:${as_lineno-$LINENO}: checking for Fortran compiler version" >&5
 set X $ac_compile
 ac_compiler=$2
-for ac_option in --version; do
+for ac_option in --version -v -V -qversion; do
   { { ac_try="$ac_compiler $ac_option >&5"
 case "(($ac_try" in
   *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
@@ -2890,6 +2884,7 @@ fi
 
 
 
+
 # Create the configure script and Makefiles
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -3480,7 +3475,7 @@ Usage: $0 [OPTION]... [TAG]...
 Configuration files:
 $config_files
 
-Report bugs to <crtm-support@googlegroups.com>."
+Report bugs to <ncep.list.emc.jcsda_crtm.support@noaa.gov>."
 
 _ACEOF
 cat >>$CONFIG_STATUS <<_ACEOF || ac_write_fail=1
