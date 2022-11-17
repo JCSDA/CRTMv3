@@ -1,0 +1,29 @@
+#!/bin/sh
+#-------------------------------------------------------------------------------#
+# PRODUCTION build settings for ftn compiler on EMC Linux Cray machine
+#-------------------------------------------------------------------------------#
+
+export FC="ftn"
+
+export FCFLAGS="\
+-O3 \
+-axCore-AVX2 \
+-fp-model source \
+-convert big_endian \
+-free \
+-assume byterecl"
+
+export LDFLAGS=""
+export LIBS=""
+
+export NETCDF_HOME 
+export HDF5_HOME 
+
+echo "========================================="
+echo " CSEM compilation environment variables:"
+echo "   FC:       ${FC}"
+echo "   FCFLAGS: ${FCFLAGS}"
+echo "   FL:       ${FL}"
+echo "   FLFLAGS: ${FLFLAGS}"
+echo "========================================="
+echo

@@ -1,0 +1,19 @@
+CSEM uses the original NPOESS types. So the only change in GSI is the following in the crtm_interface.f90
+
+
+       ! map usgs to CRTM
+       !select case ( TRIM(CRTM_IRlandCoeff_Classification()) ) 
+       select case ( 'NPOESS' )
+
+
+       ! nmm igbp to CRTM 
+       !select case ( TRIM(CRTM_IRlandCoeff_Classification()) )
+       select case ( 'NPOESS' )
+ 
+
+CSEM is a library for both CRTM and GSI. It is not necessary to recompile CRTM and GSI if there is no change in CSEM. For development testing, recompile the GSI every time the CSEM has been changed.
+
+
+1)Copy csem_model.registor to the same subdirectory of the GSI executable
+
+2)Copy CSEM fix (coefficients) to  the same subdirectory of the GSI executable

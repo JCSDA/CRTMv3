@@ -1,0 +1,22 @@
+1) go to env.setup and source the specific compiler config file
+   e.g., source gfortran.setup
+   note: make sure the following three evn variables are 
+   already defined or included in the esetup file.
+    B shell (sh, bash)
+         export CSEM_HOME=path to the package home 
+         export NETCDF_HOME=path to the netcdf 
+         export HDF5_HOME=path to the hdf5
+    C shell (csh)
+         setenv CSEM_HOME    path to the package home
+         setenv NETCDF_HOME  path to the netcdf
+         setenv HDF5_HOME    path to the hdf5
+    run step 1) for complete the first time fresh installation or as long as 
+    these three evn variables are changed.
+    
+2) generate the file "configure"
+    ./autogen.sh
+3) generate the file "Makefile", you may specify where the CSEM library will be 
+   installed. The default is the current directory
+    ./configure --prefix=path for the CSEM library installation
+4) make
+5) make install 

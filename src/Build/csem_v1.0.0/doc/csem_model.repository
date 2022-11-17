@@ -1,0 +1,62 @@
+###########################
+# Microwave Bands
+###########################
+
+[MW_LAND]
+NESDIS_Land_MW213,      1        # CRTM default without TL/AD
+NESDIS_Land_MW,         0        # Same as MW213 with TL AD
+TELSEM_ATLAS,           0,      ./csem_coeffs/
+TELSEM2_ATLAS,          0,      ./csem_coeffs/telsem2/
+CNRM_AMSUA_ATLAS,       0,      ./csem_coeffs/
+
+
+[MW_WATER]
+NESDIS_FASTEM_V6,       1,      ./csem_coeffs/  # CRTM default 
+NESDIS_FASTEM_V5,       0,      ./csem_coeffs/
+RTTOV_FASTEM_V6,        0,      ./       # RTTOV FASTEM6 
+RTTOV_FASTEM_V5,        0,      ./       #
+RTTOV_FASTEM_V4,        0,      ./       #
+
+[MW_SNOW]
+NESDIS_Snow_MW,         0
+SensorBased,            1        # CRTM default
+
+[MW_ICE]
+NESDIS_Ice_MW,          0
+SensorBased,            1        # CRTM default
+
+###########################
+# Infrared Bands
+###########################
+
+[IR_LAND]
+NPOESS_LUT,             1       # CRTM default
+UWIR_ATLAS,             0,      ./csem_coeffs/
+
+[IR_WATER]
+NESDIS_IRW_Nalli,       1,      ./csem_coeffs/
+NESDIS_IRW_WuSmith,     0,      ./csem_coeffs/
+NESDIS_IRW_NalliV2CM,   1,      ./csem_coeffs/  # Nalli V2 with Cox-Monk
+NESDIS_IRW_NalliV2EK,   0,      ./csem_coeffs/  # Nalli V2 with Ebuchi-Kio
+NPOESS_LUT,             0
+
+[IR_SNOW]
+NPOESS_LUT,             1       # CRTM default
+
+[IR_ICE]
+NPOESS_LUT,             1       # CRTM default
+
+###########################
+# Visible Bands
+###########################
+[VIS_LAND]
+NPOESS_LUT,             1
+
+[VIS_WATER]
+NPOESS_LUT,             1
+
+[VIS_SNOW]
+NPOESS_LUT,             1
+
+[VIS_ICE]
+NPOESS_LUT,             1

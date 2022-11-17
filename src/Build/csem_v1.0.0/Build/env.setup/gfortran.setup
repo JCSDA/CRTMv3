@@ -1,0 +1,40 @@
+#!/bin/bash
+#-------------------------------------------------------------------------------#
+# PRODUCTION build settings for Linux gfortran compiler
+#-------------------------------------------------------------------------------#
+
+# The compiler and linker name
+export FC="gfortran"
+
+export FL="gfortran"
+
+# Compiler and linker settings for PRODUCTION builds
+F_COMMON_FLAGS=
+
+export FCFLAGS="\
+-O3 \
+-fimplicit-none \
+-ffree-form \
+-fno-second-underscore \
+-frecord-marker=4 \
+-funroll-loops \
+-ggdb \
+-Wall \
+-std=f2008\
+ ${F_COMMON_FLAGS}"
+
+export FLFLAGS="\
+ ${F_COMMON_FLAGS}"
+
+export CSEM_HOME="/data/jcsda3/mchen/CSEM"
+export NETCDF_HOME="/data/jcsda3/mchen/local/libs/netcdf-fortran-4.5.3.scl8.gfort"
+export HDF5_HOME="/data/jcsda3/mchen/local/libs/hdf5-1.12.0"
+
+echo "========================================="
+echo " CSEM compilation environment variables:"
+echo "   FC:       ${FC}"
+echo "   FCFLAGS: ${FCFLAGS}"
+echo "   FL:       ${FL}"
+echo "   FLFLAGS: ${FLFLAGS}"
+echo "========================================="
+echo

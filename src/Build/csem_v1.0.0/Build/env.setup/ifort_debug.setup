@@ -1,0 +1,41 @@
+#!/bin/sh
+-------------------------------------------------------------------------------#
+# DEBUG build settings for Linux ifort compiler
+#-------------------------------------------------------------------------------#
+
+# The compiler and linker name
+export FC="ifort"
+
+export FL="ifort"
+
+# Compiler and linker settings for DEBUG builds
+F_COMMON_FLAGS=
+
+export FCFLAGS="\
+-g \
+-check bounds \
+-e08 \
+-traceback \
+-free \
+-assume byterecl,realloc_lhs \
+-fp-stack-check \
+-mieee-fp \
+ ${F_COMMON_FLAGS}"
+
+export FLFLAGS="\
+ ${F_COMMON_FLAGS}"
+
+#export CSEM_HOME="/data/jcsda/mchen/CSEM"
+export NETCDF_HOME="/data/jcsda/mchen/netcdf-fortran-4.4.4/ifort"
+export HDF5_HOME="/data/jcsda/mchen/hdf5-1.8.20-ifort"
+export NC4_DIR=${NETCDF_HOME}
+export HDF_DIR=${HDF5_HOME}
+
+echo "========================================="
+echo " CSEM compilation environment variables:"
+echo "   FC:       ${FC}"
+echo "   FCFLAGS: ${FCFLAGS}"
+echo "   FL:       ${FL}"
+echo "   FLFLAGS: ${FLFLAGS}"
+echo "========================================="
+echo

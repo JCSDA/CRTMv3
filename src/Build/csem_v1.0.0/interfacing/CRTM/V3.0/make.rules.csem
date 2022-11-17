@@ -1,0 +1,17 @@
+#
+# The make include file of the suffix and compilation rules to be used
+# in the Profile_Utility library build.
+#
+# $Id: make.rules 99117 2017-11-27 18:37:14Z tong.zhu@noaa.gov $
+#
+
+CSEM_INC= 
+
+.SUFFIXES:
+.SUFFIXES: .F90 .f90 .o
+.F90.o:
+	$(FC) $(CSEM_INC) $(FCFLAGS) $(EXTRA_FCFLAGS) $(FPPFLAGS) $<
+
+.f90.o:
+	$(FC) $(CSEM_INC) $(FCFLAGS) $(EXTRA_FCFLAGS) $<
+

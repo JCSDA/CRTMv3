@@ -1,0 +1,32 @@
+#!/bin/sh
+#-------------------------------------------------------------------------------#
+# PRODUCTION build settings for IBM AIX xlf2003 compiler
+#-------------------------------------------------------------------------------#
+
+export FC="xlf2003"
+
+export FCFLAGS="\
+-qdbg \
+-qarch=auto \
+-qhalt=W \
+-qlanglvl=2008pure \
+-qsuffix=f=f90:cpp=F90 \
+-qstrict \
+-NS32768 \
+-O3"
+
+export LDFLAGS="-O3"
+
+export LIBS="-lmass -lm"
+
+export NETCDF_HOME
+export HDF5_HOME
+
+echo "========================================="
+echo " CSEM compilation environment variables:"
+echo "   FC:       ${FC}"
+echo "   FCFLAGS: ${FCFLAGS}"
+echo "   FL:       ${FL}"
+echo "   FLFLAGS: ${FLFLAGS}"
+echo "========================================="
+echo

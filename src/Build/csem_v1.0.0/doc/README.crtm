@@ -1,0 +1,12 @@
+The files enclosed here are needed to compile CRTM (Community Radiative Transfer Model). 
+
+1)Replace the same files under CRTM libsrc with these files;
+
+2)Modify the CSEM_INC path in the make.rules
+
+3)Compile CRTM following the CRTM documentaion
+
+
+CSEM is a library for both CRTM and other applications. It is not necessary to recompile CRTM  if there is no change in CSEM. For development testing, recompile the CRTM every time the CSEM has been changed.
+
+4) Copy csem_model.registor to the same subdirectory of the user's executable 

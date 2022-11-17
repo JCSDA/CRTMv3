@@ -1,0 +1,37 @@
+#!/bin/bash
+#-------------------------------------------------------------------------------#
+# DEBUG build settings for Linux g95 compiler
+#-------------------------------------------------------------------------------#
+
+# The compiler and linker name
+export FC="g95"
+
+export FL="g95"
+
+# Compiler and linker settings for DEBUG builds
+F_COMMON_FLAGS=
+
+export FCFLAGS="\
+ -fbounds-check \
+ -fendian=big \
+ -ffree-form \
+ -fno-second-underscore \
+ -ftrace=frame \
+ -malign-double \
+ -Wall \
+ ${F_COMMON_FLAGS}"
+
+export FLFLAGS="\
+ ${F_COMMON_FLAGS}"
+
+export NETCDF_HOME
+export HDF5_HOME
+
+echo "========================================="
+echo " CSEM compilation environment variables:"
+echo "   FC:       ${FC}"
+echo "   FCFLAGS: ${FCFLAGS}"
+echo "   FL:       ${FL}"
+echo "   FLFLAGS: ${FLFLAGS}"
+echo "========================================="
+echo

@@ -1,0 +1,146 @@
+!
+! NESDIS_LandIR_PhyModel
+!
+! Module containing the NESDIS infrared non-snow land emissivity model
+! Currently, this physical model is not well developed.
+!
+!
+! CREATION HISTORY:
+!       Written by:     Ming Chen, Fuzhong Weng, 02-28-2015
+!                       Ming.Chen@noaa.gov
+!                       Fuzhong.Weng@noaa.gov
+
+
+
+MODULE NESDIS_LandIR_PhyModel
+ 
+  ! -----------------
+  ! Enviroment set up
+  ! -----------------
+  ! Module use
+  USE CSEM_Type_Kinds, ONLY: fp => CSEM_fp
+  
+  ! Disable implicit typing
+  IMPLICIT NONE
+
+  ! ------------
+  ! Visibilities
+  ! ------------
+  PRIVATE
+  PUBLIC  :: NESDIS_LandIR_Emiss
+ 
+  ! -----------------
+  ! Module parameters
+  ! -----------------
+  REAL(fp), PARAMETER :: ZERO   = 0.0_fp
+  REAL(fp), PARAMETER :: ONE    = 1.0_fp
+  REAL(fp), PARAMETER :: TWO    = 2.0_fp
+  REAL(fp), PARAMETER :: PI     = 3.141592653589793238462643_fp
+  REAL(fp), PARAMETER :: EMISSH_DEFAULT = 0.25_fp
+  REAL(fp), PARAMETER :: EMISSV_DEFAULT = 0.30_fp
+
+CONTAINS
+
+!
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       NESDIS_LandIR_Emiss
+!
+! PURPOSE:
+!       Function to simulate infrared emissivity over non-snow land conditions.
+!
+! REFERENCES:
+!       Weng, F., B. Yan, and N. Grody, 2001: "A infrared land emissivity model",
+!         J. Geophys. Res., 106, 20, 115-20, 123
+!
+! CALLING SEQUENCE:
+!              Error_Status = NESDIS_LandIR_Emiss(              &
+!                                  Frequency,                   &  ! Input
+!                                  Angle,                       &  ! Input
+!                                  Land_Skin_Temperature,       &  ! Input
+!                                  Soil_Temperature,            &  ! Input
+!                                  Soil_Moisture_Content,       &  ! Input
+!                                  Vegetation_Fraction,         &  ! Input
+!                                  LAI,                         &  ! Input
+!                                  Vegetation_Type,             &  ! Input
+!                                  Soil_Type,                   &  ! Input
+!                                  Emissivity_H,                &  ! Output
+!                                  Emissivity_V)                   ! Output
+! 	    
+!
+! INPUT ARGUMENTS:
+!                                  DIMENSION:  Scalar
+!
+! OUTPUT ARGUMENTS:
+!         Emissivity_H:            The surface emissivity at a horizontal
+!                                  polarization.
+!                                  UNITS:      N/A
+!                                  TYPE:       REAL(fp)
+!                                  DIMENSION:  Scalar
+!
+!         Emissivity_V:            The surface emissivity at a vertical polarization.
+!                                  UNITS:      N/A
+!                                  TYPE:       REAL(fp)
+!                                  DIMENSION:  Scalar
+!
+!
+! INTERNAL ARGUMENTS:
+!
+! CREATION HISTORY:
+!       Recoded by:     Ming Chen, Feb 2015
+!                       Ming.Chen@noaa.gov
+!
+!------------------------------------------------------------------------------------------------------------
+
+  FUNCTION NESDIS_LandIR_Emiss(      &
+      & Wavenumber,                  &  ! Input
+      & Angle,                       &  ! Input
+      & Land_Skin_Temperature,       &  ! Input
+      & Soil_Temperature,            &  ! Input
+      & Soil_Moisture_Content,       &  ! Input
+      & Vegetation_Fraction,         &  ! Input
+      & LAI,                         &  ! Input
+      & Vegetation_Type,             &  ! Input
+      & Soil_Type,                   &  ! Input
+      & Emissivity_H,                &  ! Output
+      & Emissivity_V)                &  ! Output
+    RESULT (Error_Status)
+     
+    ! Arguments
+    REAL(fp), INTENT(IN) :: Wavenumber
+    REAL(fp), INTENT(IN) :: Angle
+    REAL(fp), INTENT(IN) :: Soil_Moisture_Content
+    REAL(fp), INTENT(IN) :: Vegetation_Fraction
+    REAL(fp), INTENT(IN) :: Soil_Temperature
+    REAL(fp), INTENT(IN) :: Land_Skin_Temperature
+    REAL(fp), INTENT(IN) :: LAI
+    INTEGER,  INTENT(IN) :: Soil_Type
+    INTEGER,  INTENT(IN) :: Vegetation_Type
+    REAL(fp), INTENT(OUT):: Emissivity_V, Emissivity_H
+    INTEGER :: Error_Status
+    ! local
+    INTEGER  :: idummy
+    REAL(fp) :: rdummy
+
+    Error_Status = 0
+    IF(.FALSE.) THEN
+    rdummy =  Wavenumber
+    rdummy =  Angle
+    rdummy =  Land_Skin_Temperature
+    rdummy =  Soil_Temperature
+    rdummy =  Soil_Moisture_Content
+    rdummy =  Vegetation_Fraction
+    rdummy =  LAI                         
+    idummy =  Vegetation_Type
+    idummy =  Soil_Type
+    END IF
+    
+    Emissivity_H = EMISSH_DEFAULT
+    Emissivity_V = EMISSV_DEFAULT
+  
+      
+  END FUNCTION NESDIS_LandIR_Emiss
+
+
+END MODULE NESDIS_LandIR_PhyModel

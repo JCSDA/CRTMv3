@@ -1,0 +1,11 @@
+The files enclosed here are needed to compile CRTM (Community Radiative Transfer Model). 
+Replace the same files in CRTM  with these files. The utility file "Setup_CSEM_Library.sh" can be used to automate the modification.
+1) Copy Setup_CSEM_Library.sh to the CRTM_ROOT/
+2) Modify the CRTM_ROOT and CSEM_HOME inside Setup_CSEM_Library.sh
+3) Make sure the CSEM library has bee built.
+4) Run Setup_CSEM_Library.sh
+5) Compile CRTM following the CRTM documentaion
+
+CSEM is a library for both CRTM and other applications. It is not necessary to recompile CRTM  if there is no change in CSEM. For development testing, recompile the CRTM every time the CSEM has been changed.
+
+6) Copy csem_model.registor to the same subdirectory of the user's executable 

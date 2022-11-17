@@ -1,0 +1,144 @@
+############################################################################################
+#
+# GNU Makefile MARCRO definition template
+# This is a  GNU makefile macros template file used in auto configuration to create
+# the top-level make.macros. 
+#
+# Before running the configuration,  set the proper compiler
+# e.g., source ./configuration/ifort.setup
+#
+# CREATION HISTORY:
+#       Written by:     Ming Chen, 28-Feb-2016
+#                       ming.chen@noaa.gov
+#  
+# 
+############################################################################################
+
+
+# Define default shell
+SHELL = /bin/sh
+
+MAKE	= make
+
+
+# Define archiver and flags
+AR = ar
+AR_FLAG = rv
+
+
+# Some extra compilers to play with
+# ---------------------------------
+# gfortran
+FC_GFORTRAN = gfortran
+FC_GFORTRAN_FLAGS = \
+                    -fbounds-check \
+                    -fconvert=big-endian \
+                    -ffpe-trap=overflow,zero \
+                    -ffree-form \
+	            -fno-second-underscore \
+                    -frecord-marker=4 \
+	            -static \
+                    -Wall
+           
+# g95
+FC_G95 = g95
+FC_G95_FLAGS =  \
+               -fbounds-check \
+               -fendian=big \
+               -ffree-form \
+               -fno-second-underscore \
+               -ftrace=frame \
+               -malign-double \
+               -Wall
+ 
+# Intel
+FC_INTEL = ifort
+FC_INTEL_FLAGS =  \
+                 -g \
+                 -check bounds \
+                 -convert big_endian \
+                 -traceback \
+                 -warn errors \
+                 -e03 \
+                 -free \
+                 -assume byterecl 
+#                 -mp  \
+#                 -e95 \
+#                 -fpstkchk \
+
+# PGI
+FC_PGI = pgf95
+FC_PGI_FLAGS = -c \
+               -g \
+               -byteswapio \
+               -Ktrap=ovf,divz \
+               -Mbounds \
+               -Mchkstk \
+               -Mdclchk \
+               -Minform,inform \
+               -Mnosave \
+               -Mstandard \
+               -Mref_externals
+
+# Lahey f95
+FC_LAHEY = lf95
+FC_LAHEY_FLAGS = -c \
+                 -g \
+                 --chk aesu \
+                 --f95 \
+                 --trace \
+                 --trap \
+                 --ninfo --warn
+
+# AIX XLF
+FC_XLF = xlf95
+FC_XLF_FLAGS =  \
+               -qcheck \
+               -qdbg \
+               -qextchk \
+               -qfloat=nomaf:rndsngl:nans \
+               -qflttrap=ov:zero:inv:en \
+               -qinitauto \
+               -qfree=f90 \
+               -qhalt=W \
+               -qlanglvl=95pure \
+               -qmaxmem=-1 \
+               -qsuffix=f=f90:cpp=F90
+FC=@FC@
+FCFLAGS=@FCFLAGS@
+
+# Set default compiler
+# Relpace make implicit fortran compiler (f77)
+# https://www.gnu.org/software/make/manual/html_node/Implicit-Variables.html
+# ifndef $(FC)
+ifeq ($(strip $(FC)),f77)
+  FC      = $(FC_GFORTRAN) 
+  FCFLAGS = $(FC_GFORTRAN_FLAGS) 
+endif
+ifndef $(FL)
+  FL      = $(FC) 
+  FLFLAGS = 
+endif
+
+# NetCDF home
+ifeq ($(strip $(FC)),gfortran)
+  NETCDF_DIR = /data/jcsda/mchen/netcdf-4.2-gfortran
+  NETCDF_DIR = /data/jcsda/mchen/netcdf-fortran-4.4.4/gfortran
+  HDF5_DIR   = /data/jcsda/mchen/hdf5-1.8.20-gfortran
+endif
+ifeq ($(strip $(FC)), ifort)
+  NETCDF_DIR = /data/jcsda/mchen/netcdf-4.2-ifort
+  NETCDF_DIR = /data/jcsda/mchen/netcdf-fortran-4.4.4/ifort
+  HDF5_DIR   = /data/jcsda/mchen/hdf5-1.8.20-ifort
+endif
+ifeq ($(strip $(FC)), pgf95)
+  NETCDF_DIR=/data/jcsda/mchen/netcdf-4.2-pgi
+endif
+
+NETCDF_DIR = @NETCDF_HOME@
+HDF5_DIR   = @HDF5_HOME@
+
+NETCDF_INC = -I${NETCDF_DIR}/include 
+NETCDF_LIB = -L${NETCDF_DIR}/lib -lnetcdff
+HDF5_LIB   = -L${HDF5_DIR}/lib -lhdf5hl_fortran -lhdf5_hl -lhdf5_fortran -lhdf5 -lz
+HDF5_INC   = -I${HDF5_DIR}/include

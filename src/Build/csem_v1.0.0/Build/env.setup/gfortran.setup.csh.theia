@@ -1,0 +1,23 @@
+#!/bin/csh
+#-------------------------------------------------------------------------------#
+# PRODUCTION build settings for Linux gfortran compiler
+#-------------------------------------------------------------------------------#
+
+setenv FC "gfortran"
+setenv FL "gfortran"
+setenv FCFLAGS "-O3 -fimplicit-none -ffree-form -fno-second-underscore -frecord-marker=4 -funroll-loops -ggdb -Wall -std=f2008"
+setenv FLFLAGS ""
+setenv LDFLAGS ""
+setenv LIBS ""
+
+#setenv NETCDF_HOME ""
+#setenv HDF5_HOME   ""
+
+echo "========================================="
+echo " CSEM compilation environment variables:"
+echo "   FC:       ${FC}"
+echo "   FCFLAGS: ${FCFLAGS}"
+echo "   FL:       ${FL}"
+echo "   FLFLAGS: ${FLFLAGS}"
+echo "========================================="
+echo

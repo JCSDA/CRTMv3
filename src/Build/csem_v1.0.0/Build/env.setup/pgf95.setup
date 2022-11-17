@@ -1,0 +1,26 @@
+#!/bin/sh
+#-------------------------------------------------------------------------------#
+# PRODUCTION build settings for Linux pgf95 compiler
+#-------------------------------------------------------------------------------#
+
+export FC="pgf95"
+
+export FCFLAGS="\
+-g \
+-fast"
+
+export LDFLAGS=""
+
+export LIBS=""
+
+export NETCDF_HOME
+export HDF5_HOME
+
+echo "========================================="
+echo " CSEM compilation environment variables:"
+echo "   FC:       ${FC}"
+echo "   FCFLAGS: ${FCFLAGS}"
+echo "   FL:       ${FL}"
+echo "   FLFLAGS: ${FLFLAGS}"
+echo "========================================="
+echo

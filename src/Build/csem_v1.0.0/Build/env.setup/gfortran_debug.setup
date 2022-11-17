@@ -1,0 +1,41 @@
+#!/bin/bash
+#-------------------------------------------------------------------------------#
+# DEBUG build settings for Linux gfortran compiler
+#-------------------------------------------------------------------------------#
+
+# The compiler and linker name
+export FC="gfortran"
+
+export FL="gfortran"
+
+# Compiler and linker settings for DEBUG builds
+F_COMMON_FLAGS=
+
+export FCFLAGS="\
+-fbounds-check \
+-fimplicit-none \
+-ffpe-trap=overflow,zero,invalid \
+-ffree-form \
+-fno-second-underscore \
+-frecord-marker=4 \
+-ggdb \
+-Wall \
+-Wno-conversion \
+-std=f2008 \
+ ${F_COMMON_FLAGS}"
+
+export FLFLAGS="\
+ ${F_COMMON_FLAGS}"
+
+export CSEM_HOME="/data/jcsda/mchen/CSEM"
+export NETCDF_HOME="/data/jcsda/mchen/netcdf-fortran-4.4.4/gfortran"
+export HDF5_HOME="/data/jcsda/mchen/hdf5-1.8.20-gfortran"
+
+echo "========================================="
+echo " CSEM compilation environment variables:"
+echo "   FC:       ${FC}"
+echo "   FCFLAGS: ${FCFLAGS}"
+echo "   FL:       ${FL}"
+echo "   FLFLAGS: ${FLFLAGS}"
+echo "========================================="
+echo

@@ -1,0 +1,36 @@
+#!/bin/sh
+#-------------------------------------------------------------------------------#
+# PRODUCTION build settings for Linux ifort compiler
+#-------------------------------------------------------------------------------#
+
+# The compiler and linker name
+export FC="ifort"
+
+export FL="ifort"
+
+# Compiler and linker settings for PRODUCTION builds
+F_COMMON_FLAGS=
+
+export FCFLAGS="\
+-O2 \
+-fp-model source \
+-e08 \
+-free \
+-assume byterecl,realloc_lhs \
+ ${F_COMMON_FLAGS}"
+
+export FLFLAGS="\
+ ${F_COMMON_FLAGS}"
+
+export CSEM_HOME="/home/mchen/CSEM"
+export NETCDF_HOME="/opt/netcdf4/4.7.3-intel-18.0.3"
+export HDF5_HOME="/opt/hdf5/1.8.21-intel-18.0.3"
+
+echo "========================================="
+echo " CSEM compilation environment variables:"
+echo "   FC:       ${FC}"
+echo "   FCFLAGS: ${FCFLAGS}"
+echo "   FL:       ${FL}"
+echo "   FLFLAGS: ${FLFLAGS}"
+echo "========================================="
+echo

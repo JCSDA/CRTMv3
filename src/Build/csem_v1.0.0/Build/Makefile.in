@@ -1,0 +1,83 @@
+############################################################################################
+#
+# GNU Makefile.in
+# This is a  GNU makefile.in file used in auto configuration to create
+# the top-level Makefile. 
+#
+# Before running the configuration, set the proper compiler
+# e.g., source ifort.setup
+# the default compiler is gfortran
+#
+# CREATION HISTORY:
+#       Written by:     Ming Chen, 28-Feb-2016
+#                       ming.chen@noaa.gov
+#  
+# 
+############################################################################################
+
+# Home directory of the CSEM package, type: make CSEM_HOME=your path 
+
+# Define CSEM_HOME
+CSEM_HOME=$(shell echo @abs_builddir@ | sed -r "s/(.+)\/.+/\1/")
+
+# Package-specific substitution variables
+package = @PACKAGE_NAME@
+version = @PACKAGE_VERSION@
+tarname = @PACKAGE_TARNAME@
+distdir = $(tarname)_$(version)
+
+# if FL_FLAGS and FC_FLAGS used in Makefile
+# FL_FLAGS  = @FLFLAGS@
+# FC_FLAGS  = @FCFLAGS@
+#
+# Linux commands to manipulate model files
+AR	= ar
+ARFLAGS	=
+RANLIB	= ranlib
+RM	= rm
+MAKE	= make
+
+SHELL	= /bin/sh
+PWD     = $(shell pwd)
+
+#.SILENT :
+
+# PREFIX defines the subdirectory where the compiled codes will be installed
+#PREFIX  = @prefix@/${distdir}
+PREFIX  = @prefix@
+LIB_DIR = $(PREFIX)/lib
+INC_DIR = $(PREFIX)/include
+
+BAND_DIRS = $(CSEM_HOME)/src/MW $(CSEM_HOME)/src/VisIR 
+
+LIBRARY = libcsem.a
+
+all ${LIBRARY}: 
+	@echo; echo cleaning up ; \
+	for d in $(BAND_DIRS); do (cd $$d; $(MAKE)  CSEM_HOME=$(CSEM_HOME) ); done
+
+
+install: $(LIB_DIR) $(INC_DIR) $(LIBRARY)
+
+	@echo; echo "Installing $(LIBRARY) in $(LIB_DIR)"; \
+	for d in $(BAND_DIRS); \
+	   do (cd $$d; $(MAKE) install CSEM_HOME=$(CSEM_HOME) PREFIX=$(PREFIX) ); done
+	@echo; (cd $(CSEM_HOME)/src/CSEM_Define; \
+	   make CSEM_HOME=$(CSEM_HOME) PREFIX=$(PREFIX); \
+	   make install CSEM_HOME=$(CSEM_HOME) PREFIX=$(PREFIX))
+	@echo; cd ${LIB_DIR};  \
+	$(AR) -rv  $(LIBRARY) *.o; rm -f *.o  
+        
+# ...Create directories if necessary
+$(LIB_DIR) \
+$(INC_DIR) :
+	- test -d $@ || mkdir -p  $@
+
+clean :
+	@echo; echo cleaning up in .; \
+	for d in $(BAND_DIRS); do (cd $$d; $(MAKE) clean PREFIX=$(PREFIX)); done
+	@echo; if [ -d ${LIB_DIR} ] ; then rm -fR ${LIB_DIR} ; fi
+	@echo; if [ -d ${INC_DIR} ] ; then rm -fR ${INC_DIR} ; fi
+
+
+#include @abs_builddir@/Build/make.rules

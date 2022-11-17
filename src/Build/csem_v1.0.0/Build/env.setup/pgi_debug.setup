@@ -1,0 +1,40 @@
+#!/bin/bash
+#-------------------------------------------------------------------------------#
+# DEBUG build settings for Linux pgf95 compiler
+#-------------------------------------------------------------------------------#
+
+# The compiler and linker name
+export FC="pgf95"
+
+export FL="pgf95"
+
+# Compiler and linker settings for DEBUG builds
+F_COMMON_FLAGS="-Kieee"
+
+export FCFLAGS="\
+ -g \
+ -byteswapio \
+ -Ktrap=ovf,divz -Mdaz \
+ -Mbounds \
+ -Mchkstk \
+ -Mdclchk \
+ -Minform,inform \
+ -Mnosave \
+ -Mref_externals \
+ ${F_COMMON_FLAGS}"
+
+export FLFLAGS="\
+ ${F_COMMON_FLAGS}"
+
+
+export NETCDF_HOME
+export HDF5_HOME
+
+echo "========================================="
+echo " CSEM compilation environment variables:"
+echo "   FC:       ${FC}"
+echo "   FCFLAGS: ${FCFLAGS}"
+echo "   FL:       ${FL}"
+echo "   FLFLAGS: ${FLFLAGS}"
+echo "========================================="
+echo
