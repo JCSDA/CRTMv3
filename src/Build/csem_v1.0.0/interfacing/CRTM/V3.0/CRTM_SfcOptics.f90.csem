@@ -503,6 +503,8 @@ CONTAINS
     INTEGER :: i
     INTEGER :: nL, nZ
     REAL(fp) :: SIN2_Angle
+    REAL(fp) :: pv, ph
+    REAL(fp) :: phi, theta_f
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES) :: Emissivity
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES, &
                         SfcOptics%n_Angles,MAX_N_STOKES) :: Reflectivity
@@ -1387,6 +1389,8 @@ CONTAINS
     INTEGER :: nL, nZ
     INTEGER :: Polarization
     REAL(fp) :: SIN2_Angle
+    REAL(fp) :: pv, ph
+    REAL(fp) :: phi, theta_f
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES) :: Emissivity_TL
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES, &
                         SfcOptics%n_Angles,MAX_N_STOKES) :: Reflectivity_TL
@@ -2050,6 +2054,8 @@ CONTAINS
     INTEGER :: nL, nZ
     INTEGER :: Polarization
     REAL(fp) :: SIN2_Angle
+    REAL(fp) :: pv, ph
+    REAL(fp) :: phi, theta_f
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES) :: Emissivity_AD
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES, &
                         SfcOptics%n_Angles,MAX_N_STOKES) :: Reflectivity_AD
