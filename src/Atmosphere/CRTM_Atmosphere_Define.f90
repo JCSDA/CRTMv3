@@ -1114,8 +1114,8 @@ CONTAINS
 !:sdoc-:
 !--------------------------------------------------------------------------------
 
-!  ELEMENTAL FUNCTION CRTM_Atmosphere_Compare( &
-  FUNCTION CRTM_Atmosphere_Compare( &
+  ELEMENTAL FUNCTION CRTM_Atmosphere_Compare( &
+!  FUNCTION CRTM_Atmosphere_Compare( &
     x, &
     y, &
     n_SigFig ) &
