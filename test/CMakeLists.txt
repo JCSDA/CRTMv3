@@ -3,17 +3,6 @@
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
 
-cmake_minimum_required (VERSION 3.12)
-project("CRTM_Tests" VERSION 1.0.1 LANGUAGES Fortran C)
-enable_testing ()
-
-## Ecbuild integration
-find_package( ecbuild QUIET )
-include( ecbuild_system NO_POLICY_SCOPE )
-ecbuild_declare_project()
-list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )
-set( CMAKE_DIRECTORY_LABELS ${PROJECT_NAME} )
-
 # macro to create a symlink from src to dst
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -61,35 +50,16 @@ if( DEFINED LOCAL_PATH_JEDI_TESTFILES )
   message(STATUS "use LOCAL_PATH_JEDI_TESTFILES: ${LOCAL_PATH_JEDI_TESTFILES}")
 # Download CRTM coefficients
 else()
+  set( CRTM_COEFFS_BRANCH "jedi_release_2.4.0" )
   set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
-  set( ECBUILD_DOWNLOAD_BASE_URL https://dashrepo.ucar.edu/api/v1/dataset/147_miesch/version/1.1.0/file )
-  set( test_files_dirname crtm_coefficients.tar.gz )
-  set( checksum "0")
-  message(STATUS "download CRTM coeffs files from: ${ECBUILD_DOWNLOAD_BASE_URL} to ${CRTM_COEFFS_PATH}")
-
-  list( APPEND CRTM_DATA_DOWNLOADER_ARGS
-                ${ECBUILD_DOWNLOAD_BASE_URL}
-                ${CRTM_COEFFS_PATH}
-                ${test_files_dirname}
-                ${checksum} )
-
-  # Create download script for ufo_get_*_test_data test
-  set ( FILENAME crtm_data_downloader.py)
-  set ( SOURCE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/${FILENAME} )
-  set ( DEST_FILE ${CMAKE_BINARY_DIR}/bin/${FILENAME} )
-
-  if( EXISTS "${SOURCE_FILE}.in" )
-    configure_file( ${SOURCE_FILE}.in ${DEST_FILE} @ONLY )
-  else()
-    configure_file( ${SOURCE_FILE}    ${DEST_FILE} @ONLY )
-  endif()
-
-  # add test for downloading data
-  ecbuild_add_test( TARGET    get_crtm_coeffs
-                    TYPE      SCRIPT
-                    COMMAND   ${CMAKE_BINARY_DIR}/bin/crtm_data_downloader.py
-                    ARGS      ${CRTM_DATA_DOWNLOADER_ARGS} )
+  set( ECBUILD_DOWNLOAD_BASE_URL https://gdex.ucar.edu/dataset/jedi-skylab )
+  message(STATUS "download CRTM coeffs files from: ${ECBUILD_DOWNLOAD_BASE_URL}/file to ${CRTM_COEFFS_PATH}")
+  ecbuild_get_test_multidata( TARGET   get_crtm_coeffs
+                              NAMES    crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz:7e35d27179b2f62e54fdf257751f29bf
+                              DIRNAME  file
+                              DIRLOCAL ${CRTM_COEFFS_PATH}
+                              EXTRACT )
 endif()
 
 # Add files to cmake resources
@@ -228,92 +198,6 @@ ecbuild_add_test (
     OMP     $ENV{OMP_NUM_THREADS}
     TEST_DEPENDS get_crtm_coeffs
     )
-
-#(PS) SpcCoeff Version 3 I/O test
-ecbuild_add_executable (
-	TARGET "test_spc_io"
-	SOURCES mains/unit/input_output/test_SpcCoeff/test_spc_io.f90
-	LIBS crtm
-	NOINSTALL
-	)
-ecbuild_add_test(
-	TARGET "Unit_test_spc_io"
-	COMMAND "test_spc_io"
-	OMP     $ENV{OMP_NUM_THREADS}
-	TEST_DEPENDS get_crtm_coeffs
-	)
-
-#(PS) SpcCoeff netCDF I/O test
-ecbuild_add_executable (
-    TARGET "test_spc_io_nc"
-	SOURCES mains/unit/input_output/test_SpcCoeff_NC/test_spc_io_nc.f90
-	LIBS crtm
-	NOINSTALL
-	)
-ecbuild_add_test(
-    TARGET "Unit_test_spc_io_nc"
-	COMMAND "test_spc_io_nc"
-	OMP $ENV{OMP_NUM_THREADS}
-	TEST_DEPENDS get_crtm_coeffs
-	)
-
-#(PS) TauCoeff netCDF I/O test
-ecbuild_add_executable (
-	TARGET "test_taucoeff_io_nc"
-	SOURCES mains/unit/input_output/test_TauCoeff_NC/test_taucoeff_io_nc.f90 
-	LIBS crtm
-	NOINSTALL
-	)
-
-ecbuild_add_test(
-	TARGET "Unit_test_tc_io_nc"
-	COMMAND "test_taucoeff_io_nc"
-	OMP $ENV{OMP_NUM_THREADS}
-	TEST_DEPENDS get_crtm_coeffs
-	)
-
-#(CD) AerosolCoeff I/O test
-ecbuild_add_executable (
-    TARGET "test_aerosol_coeff_io"
-        SOURCES mains/unit/input_output/test_AerosolCoeff/test_aerosol_coeff_io.f90
-        LIBS crtm
-        NOINSTALL
-        )
-ecbuild_add_test(
-    TARGET "Unit_test_aerosol_coeff_io"
-        COMMAND "test_aerosol_coeff_io"
-        OMP $ENV{OMP_NUM_THREADS}
-        TEST_DEPENDS get_crtm_coeffs
-        )
-
-#(CD) AerosolCoeff netCDF I/O test
-ecbuild_add_executable (
-    TARGET "test_aerosol_coeff_io_nc"
-        SOURCES mains/unit/input_output/test_AerosolCoeff_NC/test_aerosol_coeff_io_nc.f90
-        LIBS crtm
-        NOINSTALL
-        )
-ecbuild_add_test(
-    TARGET "Unit_test_aerosol_coeff_io_nc"
-        COMMAND "test_aerosol_coeff_io_nc"
-        OMP $ENV{OMP_NUM_THREADS}
-        TEST_DEPENDS get_crtm_coeffs
-        )
-
-#(PS) Hypsometric Equation test
-ecbuild_add_executable (
-    TARGET "test_hypsometric_eq"
-    SOURCES mains/unit/Unit_Test/test_Hypsometric.f90
-    LIBS crtm
-    NOINSTALL
-    )
-
-ecbuild_add_test(
-    TARGET "Unit_test_hypsometric_eq"
-    COMMAND "test_hypsometric_eq"
-    OMP $ENV{OMP_NUM_THREADS}
-    )
-
 
 #=================================================================================
 #forward and k_matrix regression tests
@@ -455,24 +339,8 @@ SpcCoeff/Little_Endian/ssu_n11.SpcCoeff.bin
 SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
 )
 
+
 # Symlink all CRTM files
-CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}
+CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/crtm/${CRTM_COEFFS_BRANCH}
                          ${CMAKE_CURRENT_BINARY_DIR}/testinput
                          ${crtm_test_input} )
-
-# Symlink netCDF test data
-CREATE_SYMLINK_FILENAME( $ENV{CRTM_TEST_ROOT}/mains/unit/input_output/test_SpcCoeff_NC/data/
-		                 ${CMAKE_CURRENT_BINARY_DIR}/testinput
-						 amsua_aqua.SpcCoeff.nc )
-
-CREATE_SYMLINK_FILENAME( $ENV{CRTM_TEST_ROOT}/mains/unit/input_output/test_TauCoeff_NC/data/
-                                 ${CMAKE_CURRENT_BINARY_DIR}/testinput
-                                                 amsua_aqua.TauCoeff.nc )
-# Symlink Aerosol_Coeff test data
-CREATE_SYMLINK_FILENAME( $ENV{CRTM_TEST_ROOT}/mains/unit/input_output/test_AerosolCoeff/data/
-                                 ${CMAKE_CURRENT_BINARY_DIR}/testinput
-                                                       AerosolCoeff.bin )
-CREATE_SYMLINK_FILENAME( $ENV{CRTM_TEST_ROOT}/mains/unit/input_output/test_AerosolCoeff_NC/data/
-                                 ${CMAKE_CURRENT_BINARY_DIR}/testinput
-				                       AerosolCoeff.nc4 )
-
