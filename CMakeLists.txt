@@ -17,18 +17,16 @@ include( ${PROJECT_NAME}_compiler_flags )
 include(GNUInstallDirs)
 
 ## Dependencies
-find_package( OpenMP COMPONENTS Fortran )
+find_package( jedicmake QUIET )
+if(OPENMP)
+  find_package( OpenMP COMPONENTS Fortran )
+endif()
 find_package( NetCDF REQUIRED COMPONENTS Fortran )
 
 ## Sources
-add_subdirectory(src)
-add_subdirectory(test)
+add_subdirectory( src )
+add_subdirectory( test )
+include(CTest)
 
-
-## Finalise configuration
-# prepares a tar.gz of the sources and/or binaries
-ecbuild_install_project( NAME crtm )
-
-# print the summary of the configuration
+ecbuild_install_project( NAME ${PROJECT_NAME} )
 ecbuild_print_summary()
-
