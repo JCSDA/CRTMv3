@@ -30,14 +30,12 @@
 !  7 = Insoluble
 !  8 = dust-like
 !  --- GOCART-GEOS5 ---
-!  1 = Dust
-!  2 = Sea salt
-!  3 = Organic carbon hydrophobic
-!  4 = Organic carbon hydrophilic
-!  5 = Black carbon hydrophobic
-!  6 = Black carbon hydrophilic
-!  7 = Sulfate
-!  8 = Nitrate
+!  1, 2, 3, 4, 5  = Dust 1, 2, 3, 4, 5
+!  6, 7, 8, 9, 10 = Sea salt 1, 2, 3, 4, 5
+!  11, 12 = Organic carbon 1, 2
+!  13, 14 = Black carbon 1, 2
+!  15, 16 = Sulfate 1, 2
+!  17, 18, 19 = Nitrate 1, 2, 3
 !  --- NAAPS ---
 !  1 = Dust
 !  2 = Smoke
@@ -113,6 +111,8 @@ PROGRAM check_crtm
   CHARACTER(256) :: AerosolCoeff_Format
   CHARACTER(256) :: CloudCoeff_File
   CHARACTER(256) :: CloudCoeff_Format
+  CHARACTER(256) :: Aerosol_Scheme
+  CHARACTER(256) :: Cloud_Scheme
   INTEGER :: err_stat, alloc_stat
   INTEGER :: n_channels
   INTEGER :: l, m, n, nc
@@ -154,71 +154,31 @@ PROGRAM check_crtm
   !
   ! 4a. Initialise all the sensors at once
   ! --------------------------------------
-  !.. Cloud coefficient information
-  IF ( Coeff_Format == 'Binary' ) THEN
-    CloudCoeff_Format   = 'Binary'
-    CloudCoeff_File     = 'CloudCoeff.bin'
-  ! if netCDF I/O
-  ELSE IF ( Coeff_Format == 'netCDF' ) THEN
-    CloudCoeff_Format   = 'netCDF'
-    CloudCoeff_File     = 'CloudCoeff.nc4'
+  ! ... Cloud coefficient information
+  IF ( Cloud_Model /= 'CRTM' ) THEN
+      Cloud_Scheme = Cloud_Model//'.'
   ELSE
-    message = 'Aerosol/Cloud coefficient format is not supported'
-    CALL Display_Message( PROGRAM_NAME, message, FAILURE )
-    STOP
+      Cloud_Scheme = ' '
   END IF
-
-  !.....Aerosol
-  IF ( Aerosol_Model == 'CRTM' ) THEN
-    IF ( Coeff_Format == 'Binary' ) THEN
-      AerosolCoeff_Format = 'Binary'
-      AerosolCoeff_File   = 'AerosolCoeff.bin'
-    ELSE IF ( Coeff_Format == 'netCDF' ) THEN
-      AerosolCoeff_Format = 'netCDF'
-      AerosolCoeff_File   = 'AerosolCoeff.nc4'
-    ELSE
-      message = 'Aerosol coefficient format is not supported'
-      CALL Display_Message( PROGRAM_NAME, message, FAILURE )
-      STOP
-    END IF
-  ELSEIF ( Aerosol_Model == 'CMAQ' ) THEN
-    IF ( Coeff_Format == 'Binary' ) THEN
-      AerosolCoeff_Format = 'Binary'
-      AerosolCoeff_File   = 'AerosolCoeff.CMAQ.bin'
-    ELSE IF ( Coeff_Format == 'netCDF' ) THEN
-      AerosolCoeff_Format = 'netCDF'
-      AerosolCoeff_File   = 'AerosolCoeff.CMAQ.nc4'
-    ELSE
-      message = 'Aerosol coefficient format is not supported'
-      CALL Display_Message( PROGRAM_NAME, message, FAILURE )
-      STOP
-    END IF
-  ELSEIF ( Aerosol_Model == 'GOCART-GEOS5' ) THEN
-    IF ( Coeff_Format == 'Binary' ) THEN
-      AerosolCoeff_Format = 'Binary'
-      AerosolCoeff_File   = 'AerosolCoeff.GOCART-GEOS5.bin'
-    ELSE IF ( Coeff_Format == 'netCDF' ) THEN
-      AerosolCoeff_Format = 'netCDF'
-      AerosolCoeff_File   = 'AerosolCoeff.GOCART-GEOS5.nc4'
-    ELSE
-      message = 'Aerosol coefficient format is not supported'
-      CALL Display_Message( PROGRAM_NAME, message, FAILURE )
-      STOP
-    END IF
-  ELSEIF ( Aerosol_Model == 'NAAPS' ) THEN
-    IF ( Coeff_Format == 'Binary' ) THEN
-      AerosolCoeff_Format = 'Binary'
-      AerosolCoeff_File   = 'AerosolCoeff.NAAPS.bin'
-    ELSE IF ( Coeff_Format == 'netCDF' ) THEN
-      AerosolCoeff_Format = 'netCDF'
-      AerosolCoeff_File   = 'AerosolCoeff.NAAPS.nc4'
-    ELSE
-      message = 'Aerosol coefficient format is not supported'
-      CALL Display_Message( PROGRAM_NAME, message, FAILURE )
-      STOP
-    END IF
+  ! ... Aerosol coefficient information
+  IF ( Aerosol_Model /= 'CRTM' ) THEN
+      Aerosol_Scheme = Aerosol_Model//'.'
+  ELSE
+      Aerosol_Scheme = ' '
   END IF
-
+  ! ... Coefficient table format
+  IF ( Coeff_Format == 'Binary' ) THEN
+    AerosolCoeff_Format = 'Binary'
+    AerosolCoeff_File   = 'AerosolCoeff.'//TRIM(Aerosol_Scheme)//'bin'
+    CloudCoeff_Format   = 'Binary'
+    CloudCoeff_File     = 'CloudCoeff.'//TRIM(Cloud_Scheme)//'bin'
+  ELSE IF ( Coeff_Format == 'netCDF' ) THEN
+    AerosolCoeff_Format = 'netCDF'
+    AerosolCoeff_File   = 'AerosolCoeff.'//TRIM(Aerosol_Scheme)//'nc4'
+    CloudCoeff_Format   = 'netCDF'
+    CloudCoeff_File     = 'CloudCoeff.'//TRIM(Cloud_Scheme)//'nc4'
+  END IF
+  
   WRITE( *,'(/5x,"Initializing the CRTM...")' )
   err_stat = CRTM_Init( SENSOR_ID, &
                         chinfo, &
@@ -583,7 +543,7 @@ CONTAINS
     !   Dust, Sulphate, and Sea Salt SSCM3
     Load_Aerosol_Data_1: IF ( atm(1)%n_Aerosols > 0 ) THEN
 
-      atm(1)%Aerosol(1)%Type = 1 ! dust (CRTM, CMAQ, GOCART-GEOS5)
+      atm(1)%Aerosol(1)%Type = 1 ! dust (CRTM, CMAQ, GOCART-GEOS5, NAAPS)
       atm(1)%Aerosol(1)%Effective_Radius = & ! microns
       (/0.000000E+00_fp, 0.000000E+00_fp, &
         0.000000E+00_fp, 0.000000E+00_fp, 0.000000E+00_fp, 0.000000E+00_fp, 0.000000E+00_fp, &
@@ -911,7 +871,8 @@ CONTAINS
     !   Sea Sat SSAM, Sea Salt SSCM1, and Sea Salt SSCM2
     Load_Aerosol_Data_2: IF ( atm(2)%n_Aerosols > 0 ) THEN
 
-      atm(2)%Aerosol(1)%Type = 2 ! SEASALT_SSAM_AEROSOL (CRTM), Soot (CMAQ), Sea salt (GOCART-GEOS5)
+      atm(2)%Aerosol(1)%Type = 2 ! SEASALT_SSAM_AEROSOL (CRTM), Soot (CMAQ), 
+                                 ! DUST 2 (GOCART-GEOS5), Smoke (NAAPS)
       atm(2)%Aerosol(1)%Effective_Radius = & ! microns
       (/0.000000E+00_fp, 0.000000E+00_fp, &
         0.000000E+00_fp, 0.000000E+00_fp, 0.000000E+00_fp, 0.000000E+00_fp, 0.000000E+00_fp, &
@@ -976,7 +937,8 @@ CONTAINS
       END IF
 
       IF ( atm(2)%n_Aerosols > 1 ) THEN
-        atm(2)%Aerosol(2)%Type = 3 ! SEASALT_SSCM1_AEROSOL (CRTM), Water soluble (CMAQ), Organic carbon (GOCART-GEOS5)
+        atm(2)%Aerosol(2)%Type = 3 ! SEASALT_SSCM1_AEROSOL (CRTM), Water soluble (CMAQ), 
+                                   ! DUST 3 (GOCART-GEOS5), Sea salt (NAAPS)
         atm(2)%Aerosol(2)%Effective_Radius = & ! microns
         (/0.000000E+00_fp, 0.000000E+00_fp, &
           0.000000E+00_fp, 0.000000E+00_fp, 0.000000E+00_fp, 0.000000E+00_fp, 0.000000E+00_fp, &
@@ -1042,7 +1004,8 @@ CONTAINS
       END IF
 
       IF ( atm(2)%n_Aerosols > 2 ) THEN
-        atm(2)%Aerosol(3)%Type = 4 ! SEASALT_SSCM2_AEROSOL (CRTM), Sulfate (CMAQ), Organic carbon (GOCART-GEOS5)
+        atm(2)%Aerosol(3)%Type = 4 ! SEASALT_SSCM2_AEROSOL (CRTM), Sulfate (CMAQ), 
+                                   ! Dust 4 (GOCART-GEOS5), Anthropogenic and Biogenic Fine Particles (NAAPS)
         atm(2)%Aerosol(3)%Effective_Radius = & ! microns
         (/0.000000E+00_fp, 0.000000E+00_fp, &
           0.000000E+00_fp, 0.000000E+00_fp, 0.000000E+00_fp, 0.000000E+00_fp, 0.000000E+00_fp, &
