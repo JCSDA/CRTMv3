@@ -928,7 +928,7 @@ CONTAINS
       CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
       IsValid = .FALSE.
     ENDIF
-    IF ( ANY(Atm%Relative_Humidity < ZERO ) .OR.  ANY(Atm%Relative_Humidity > ONE ) ) THEN
+    IF ( ANY(Atm%Relative_Humidity < ZERO ) .OR.  ANY(Atm%Relative_Humidity > 1.2_fp ) ) THEN
       msg = 'Invalid layer relative humidity found'
       CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
       IsValid = .FALSE.
