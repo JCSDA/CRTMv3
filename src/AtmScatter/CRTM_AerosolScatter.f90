@@ -89,12 +89,10 @@ MODULE CRTM_AerosolScatter
   ! Message string length
   INTEGER, PARAMETER :: ML = 256
   ! Number of stream angle definitions
-  INTEGER, PARAMETER :: TWO_STREAMS       =  2
   INTEGER, PARAMETER :: FOUR_STREAMS      =  4
   INTEGER, PARAMETER :: SIX_STREAMS       =  6
   INTEGER, PARAMETER :: EIGHT_STREAMS     =  8
   INTEGER, PARAMETER :: SIXTEEN_STREAMS   = 16
-  INTEGER, PARAMETER :: THIRTYTWO_STREAMS = 32
 
 
 CONTAINS
@@ -207,7 +205,6 @@ CONTAINS
    ! AeroC lookup table corresponding to the
    ! number of streams
    SELECT CASE(AScat%n_Legendre_Terms)
-      CASE (TWO_STREAMS)    ; AScat%lOffset = 0
       CASE (FOUR_STREAMS)   ; AScat%lOffset = 0
       CASE (SIX_STREAMS)    ; AScat%lOffset = 5
       CASE (EIGHT_STREAMS)  ; AScat%lOffset = 12
@@ -283,9 +280,9 @@ CONTAINS
         !   tau = be
         ! This is why the optical depth is used in the denominator to
         ! compute the single scatter albedo in the Layer_loop below.
-        
         AScat%Optical_Depth(ka) = AScat%Optical_Depth(ka) + &
                                   (ASV%ke(ka,n)*Atm%Aerosol(n)%Concentration(ka))
+
         ! Compute the phase matrix coefficients
         ! p = p + p(LUT)*bs
         ! where
@@ -313,7 +310,6 @@ CONTAINS
           END DO
         END IF
       END DO Aerosol_Layer_loop
-  
     END DO Aerosol_loop
 
 

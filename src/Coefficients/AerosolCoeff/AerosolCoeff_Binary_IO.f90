@@ -11,7 +11,9 @@
 !       Modified by     Yingtao Ma, 2020/6/11
 !                       yingtao.ma@noaa.gov
 !                       Implemented CMAQ aerosol
-!
+!       Modified by     Cheng Dang, 30-Mar-2022
+!                       dangch@ucar.edu
+!                       Add dimension n_RH_Radii
 
 MODULE AerosolCoeff_Binary_IO
 
@@ -115,6 +117,13 @@ CONTAINS
 !                          DIMENSION:  Scalar
 !                          ATTRIBUTES: INTENT(IN)
 !
+!       n_RH_Radii:        The number of relative humidity entries in
+!                          the CRTM and CMAQ tables. Must be > 0.
+!                          UNITS:      N/A
+!                          TYPE:       INTEGER
+!                          DIMENSION:  Scalar
+!                          ATTRIBUTES: INTENT(IN)
+!
 !       n_Legendre_Terms:  The maximum number of Legendre polynomial
 !                          terms in the LUT. Can be = 0.
 !                          UNITS:      N/A
@@ -160,6 +169,7 @@ CONTAINS
     n_Sigma         , &  ! Optional output
     n_Types         , &  ! Optional output
     n_RH            , &  ! Optional output
+    n_RH_Radii      , &  ! Optional output
     n_Legendre_Terms, &  ! Optional output
     n_Phase_Elements, &  ! Optional output
     Release         , &  ! Optional output
@@ -173,6 +183,7 @@ CONTAINS
     INTEGER,      OPTIONAL, INTENT(OUT) :: n_Sigma
     INTEGER,      OPTIONAL, INTENT(OUT) :: n_Types
     INTEGER,      OPTIONAL, INTENT(OUT) :: n_RH
+    INTEGER,      OPTIONAL, INTENT(OUT) :: n_RH_Radii
     INTEGER,      OPTIONAL, INTENT(OUT) :: n_Legendre_Terms
     INTEGER,      OPTIONAL, INTENT(OUT) :: n_Phase_Elements
     INTEGER,      OPTIONAL, INTENT(OUT) :: Release
@@ -218,7 +229,18 @@ CONTAINS
                                AerosolCoeff%n_RH            , &
                                AerosolCoeff%n_Legendre_Terms, &
                                AerosolCoeff%n_Phase_Elements
-                               
+
+    IF ( io_stat /= 0 ) THEN
+      WRITE( msg,'("Error reading dimensions from ",a,". IOSTAT = ",i0)' ) &
+             TRIM(Filename), io_stat
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+
+    ! Read the dimension used for CRTM and CMAQ only
+    AerosolCoeff%n_RH_Radii = 1 ! dummy variable if not CRTM nor CMAQ tables
+    IF (Aerosol_Model == 'CRTM' .OR. Aerosol_Model == 'CMAQ') THEN
+      READ( fid,IOSTAT=io_stat ) AerosolCoeff%n_RH_Radii
+    END IF
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error reading dimensions from ",a,". IOSTAT = ",i0)' ) &
              TRIM(Filename), io_stat
@@ -238,6 +260,7 @@ CONTAINS
     IF ( PRESENT(n_Sigma         ) ) n_Sigma          = AerosolCoeff%n_Sigma
     IF ( PRESENT(n_Types         ) ) n_Types          = AerosolCoeff%n_Types
     IF ( PRESENT(n_RH            ) ) n_RH             = AerosolCoeff%n_RH
+    IF ( PRESENT(n_RH_Radii      ) ) n_RH_Radii       = AerosolCoeff%n_RH_Radii
     IF ( PRESENT(n_Legendre_Terms) ) n_Legendre_Terms = AerosolCoeff%n_Legendre_Terms
     IF ( PRESENT(n_Phase_Elements) ) n_Phase_Elements = AerosolCoeff%n_Phase_Elements
     IF ( PRESENT(Release         ) ) Release          = AerosolCoeff%Release
@@ -371,7 +394,6 @@ CONTAINS
 
     ! Read and check the release and version
     READ( fid,IOSTAT=io_stat ) dummy%Release, dummy%Version
-   
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error reading Release/Version. IOSTAT = ",i0)' ) io_stat
       CALL Read_Cleanup(); RETURN
@@ -390,22 +412,34 @@ CONTAINS
                                dummy%n_RH            , &
                                dummy%n_Legendre_Terms, &
                                dummy%n_Phase_Elements
-
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error reading data dimensions. IOSTAT = ",i0)' ) io_stat
       CALL Read_Cleanup(); RETURN
     END IF
+
+    ! ... Read the dimension used only for CRTM and CMAQ tables
+    dummy%n_RH_Radii = 1 ! dummy variable if not CRTM nor CMAQ tables
+    IF ( Aerosol_Model == 'CRTM' .OR. Aerosol_Model == 'CMAQ' )THEN
+      READ( fid,IOSTAT=io_stat ) dummy%n_RH_Radii
+    END IF
+    IF ( io_stat /= 0 ) THEN
+      WRITE( msg,'("Error reading data dimensions. IOSTAT = ",i0)' ) io_stat
+      CALL Read_Cleanup(); RETURN
+    END IF
+
     ! Add aerosol scheme
     dummy%Scheme = TRIM(Aerosol_Model)
 
     ! ...Allocate the object
     CALL AerosolCoeff_Create( &
            AerosolCoeff          , &
+           dummy%Scheme          , &
            dummy%n_Wavelengths   , &
            dummy%n_Radii         , &
            dummy%n_Sigma         , &
            dummy%n_Types         , &
            dummy%n_RH            , &
+           dummy%n_RH_Radii      , &
            dummy%n_Legendre_Terms, &
            dummy%n_Phase_Elements  )
     IF ( .NOT. AerosolCoeff_Associated( AerosolCoeff ) ) THEN
@@ -462,41 +496,40 @@ CONTAINS
                                AerosolCoeff%Rsig      , &
                                AerosolCoeff%RH
 
+
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error reading dimension vector data. IOSTAT = ",i0)' ) io_stat
       CALL Read_Cleanup(); RETURN
     END IF
     ! ...Read the coefficient data
     IF( AerosolCoeff%Version <= 300 .and. dummy%Version <= 300 ) THEN
-    READ( fid,IOSTAT=io_stat ) AerosolCoeff%ke    , &
-                               AerosolCoeff%w     , &
-                               AerosolCoeff%g     , &
-                               AerosolCoeff%pcoeff
+      READ( fid,IOSTAT=io_stat ) AerosolCoeff%ke    , &
+                                 AerosolCoeff%w     , &
+                                 AerosolCoeff%g     , &
+                                 AerosolCoeff%pcoeff
     ELSE
-    READ( fid,IOSTAT=io_stat ) AerosolCoeff%ke    , &
-                               AerosolCoeff%w     , &
-                               AerosolCoeff%g     , &
-                               AerosolCoeff%kb    , &
-                               AerosolCoeff%pcoeff    
+      READ( fid,IOSTAT=io_stat ) AerosolCoeff%ke    , &
+                                 AerosolCoeff%w     , &
+                                 AerosolCoeff%g     , &
+                                 AerosolCoeff%kb    , &
+                                 AerosolCoeff%pcoeff
     END IF
 
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error reading coefficient data. IOSTAT = ",i0)' ) io_stat
       CALL Read_Cleanup(); RETURN
     END IF
+
     ! ...Assign the release and version number read in
     AerosolCoeff%Release = dummy%Release
     AerosolCoeff%Version = dummy%Version
     AerosolCoeff%Scheme  = dummy%Scheme
-
-
 
 !    AerosolCoeff%Version = 301
 !    io_stat = AerosolCoeff_Binary_WriteFile( &
 !    Aerosol_Model, &  ! Input
 !    'Aerosol_V3.bin' , &  ! Input
 !    AerosolCoeff)
-
 
     ! ...Compute the frequencies
     CALL AerosolCoeff_Frequency( AerosolCoeff )
@@ -660,7 +693,14 @@ CONTAINS
                                 AerosolCoeff%n_RH            , &
                                 AerosolCoeff%n_Legendre_Terms, &
                                 AerosolCoeff%n_Phase_Elements
-
+    IF ( io_stat /= 0 ) THEN
+      WRITE( msg,'("Error writing data dimensions. IOSTAT = ",i0)' ) io_stat
+      CALL Write_Cleanup(); RETURN
+    END IF
+    ! ... Write the dimension used only for CRTM and CMAQ tables
+    IF ( Aerosol_Model == 'CRTM' .OR. Aerosol_Model == 'CMAQ' )THEN
+      WRITE( fid,IOSTAT=io_stat ) AerosolCoeff%n_RH_Radii
+    END IF
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error writing data dimensions. IOSTAT = ",i0)' ) io_stat
       CALL Write_Cleanup(); RETURN
@@ -705,16 +745,16 @@ CONTAINS
     END IF
     ! ...Write the coefficient data
     IF( AerosolCoeff%Version <= 100 ) THEN
-    WRITE( fid,IOSTAT=io_stat ) AerosolCoeff%ke    , &
-                                AerosolCoeff%w     , &
-                                AerosolCoeff%g     , &
-                                AerosolCoeff%pcoeff
+      WRITE( fid,IOSTAT=io_stat ) AerosolCoeff%ke    , &
+                                  AerosolCoeff%w     , &
+                                  AerosolCoeff%g     , &
+                                  AerosolCoeff%pcoeff
     ELSE
-    WRITE( fid,IOSTAT=io_stat ) AerosolCoeff%ke    , &
-                                AerosolCoeff%w     , &
-                                AerosolCoeff%g     , &
-                                AerosolCoeff%kb    , &                                
-                                AerosolCoeff%pcoeff
+      WRITE( fid,IOSTAT=io_stat ) AerosolCoeff%ke    , &
+                                  AerosolCoeff%w     , &
+                                  AerosolCoeff%g     , &
+                                  AerosolCoeff%kb    , &
+                                  AerosolCoeff%pcoeff
     END IF
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error writing coefficient data. IOSTAT = ",i0)' ) io_stat
