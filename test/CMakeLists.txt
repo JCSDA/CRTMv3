@@ -303,7 +303,7 @@ TauCoeff/ODPS/Little_Endian/cris-fsr_n21.TauCoeff.bin
 SpcCoeff/Little_Endian/atms_n21.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/atms_n21.TauCoeff.bin
 SpcCoeff/Little_Endian/v.viirs-m_j2.SpcCoeff.bin
-TauCoeff/ODAS/Little_Endian/v.viirs-m_j2.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/v.viirs-m_j2.TauCoeff.bin
 SpcCoeff/Little_Endian/v.abi_g18.SpcCoeff.bin
 TauCoeff/ODAS/Little_Endian/v.abi_g18.TauCoeff.bin
 TauCoeff/ODPS/Little_Endian/zssmis_f20.TauCoeff.bin
