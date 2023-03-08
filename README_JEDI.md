@@ -1,21 +1,21 @@
 README_JEDI.md
 
-CRTM REL-2.4.1-alpha 
+CRTM REL-3.0.0 
 Released April 1, 2021
 
 
 
 The README.md file contains a lot of general information about this repository and the legacy build system based on autotools.
 
-CRTM REL-2.4.1-alpha JEDI environment build instructions
+CRTM REL-3.0.0 JEDI environment build instructions
 =========================================================
 
 Preamble
 --------
 
-CRTM v2.4.1-alpha release (`REL-2.4.1-alpha`)  
+CRTM v3.0.0-alpha release (`REL-3.0.0`)  
 
-This is a fully functional release of CRTM v2.4.1-alpha. 
+This is a fully functional release of CRTM v3.0.0-alpha. 
 
 Basic requirements:  
 (1) A Fortran 2003 compatible compiler.  
@@ -50,7 +50,7 @@ Contents
 
 Configuration, building, and testing the library
 ================================================  
-JCSDA CRTM v2.4.x Build Instructions
+JCSDA CRTM v3.0.0 Build Instructions
   
 The CRTM **development** repository directory structure looks like:
 
@@ -61,7 +61,7 @@ The CRTM **development** repository directory structure looks like:
   ├── NOTES
   ├── README.md 
   ├── Set_CRTM_Environment.sh
-  ├── Uncompress_Binary_Files.sh  (uncompresses files in the fix/ directory "manually")
+  ├── Get_CRTM_Binary_Files.sh (downloads the "fix" directory binary data from ftp, this is useful if you're doing out-of-jedi tests or if you want to override the default binary datasets. ) 
   ├── CMakeLists.txt           (top-level configuration file for ecbuild)
   ├── <b>configuration/</b>
   ├── <b>documentation/</b>
@@ -109,7 +109,8 @@ In the above list, the directories highlighted in bold (bold in markdown), are t
 
 JEDI Configuration
 ------------------
-As of v2.4.1-alpha, the "`fix/`" directory is provided in the CRTM by git LFS.  It needs to be uncompressed by running the Uncompress_Binary_Files.sh
+As of v3.0.0, binary data is obtained during the ecbuild step, it downloads a tarball from UCAR's GDEX service and unpacks it.  see `test/CMakeLists.txt`.   
+
 
 **Configuration**
     git clone https://github.com/JCSDA/crtm      (you've probably done this already)  
