@@ -38,25 +38,30 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results/forward)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results/unit)
 CREATE_SYMLINK( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${crtm_test_input} )
 
+# temporary begin
+ set( LOCAL_PATH_CRTM_TESTFILES /data/users/bjohnson/CRTM/CRTMv3_cd/fix )
+# temporary end
 
-if( DEFINED ENV{LOCAL_PATH_JEDI_TESTFILES})
-    set(LOCAL_PATH_JEDI_TESTFILES "$ENV{LOCAL_PATH_JEDI_TESTFILES}")
+if( DEFINED ENV{LOCAL_PATH_CRTM_TESTFILES})
+    set(LOCAL_PATH_CRTM_TESTFILES "$ENV{LOCAL_PATH_CRTM_TESTFILES}")
 endif()
 
-set( REPO_VERSION crtm/2.4.0 )
+set( REPO_VERSION crtm/3.0.0 )
 # If local path to testfiles is defined don't download
-if( DEFINED LOCAL_PATH_JEDI_TESTFILES )
-  set( CRTM_COEFFS_PATH ${LOCAL_PATH_JEDI_TESTFILES}/${REPO_VERSION} )
-  message(STATUS "use LOCAL_PATH_JEDI_TESTFILES: ${LOCAL_PATH_JEDI_TESTFILES}")
+
+if( DEFINED LOCAL_PATH_CRTM_TESTFILES )
+  set( CRTM_COEFFS_PATH ${LOCAL_PATH_CRTM_TESTFILES}/ )
+  message(STATUS "use LOCAL_PATH_CRTM_TESTFILES: ${LOCAL_PATH_CRTM_TESTFILES}")
 # Download CRTM coefficients
 else()
-  set( CRTM_COEFFS_BRANCH "jedi_release_2.4.0" )
+	set( CRTM_COEFFS_BRANCH_PREFIX "crtm" ) 
+  set( CRTM_COEFFS_BRANCH "jedi_release_3.0.0" )
   set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
   set( ECBUILD_DOWNLOAD_BASE_URL https://gdex.ucar.edu/dataset/jedi-skylab )
   message(STATUS "download CRTM coeffs files from: ${ECBUILD_DOWNLOAD_BASE_URL}/file to ${CRTM_COEFFS_PATH}")
   ecbuild_get_test_multidata( TARGET   get_crtm_coeffs
-                              NAMES    crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz:7e35d27179b2f62e54fdf257751f29bf
+                              NAMES    crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz:9941a3c099704108830e33e49792478
                               DIRNAME  file
                               DIRLOCAL ${CRTM_COEFFS_PATH}
                               EXTRACT )
@@ -341,6 +346,6 @@ SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
 
 
 # Symlink all CRTM files
-CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/crtm/${CRTM_COEFFS_BRANCH}
+CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}
                          ${CMAKE_CURRENT_BINARY_DIR}/testinput
                          ${crtm_test_input} )
