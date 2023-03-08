@@ -255,9 +255,6 @@ endforeach()
 #####################################################################
 
 list( APPEND crtm_test_input
-Test_Input/ECMWF_5K/Big_Endian/ecmwf_5k_atmosphereccol.bin
-Test_Input/ECMWF_5K/Big_Endian/ecmwf_5k_surfaceccol.bin
-Test_Input/ECMWF_5K/Big_Endian/ecmwf_5k_geometryccol.bin
 AerosolCoeff/Little_Endian/AerosolCoeff.bin
 CloudCoeff/Little_Endian/CloudCoeff.bin
 EmisCoeff/MW_Water/Little_Endian/FASTEM6.MWwater.EmisCoeff.bin
@@ -305,8 +302,8 @@ SpcCoeff/Little_Endian/cris-fsr_n21.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/cris-fsr_n21.TauCoeff.bin
 SpcCoeff/Little_Endian/atms_n21.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/atms_n21.TauCoeff.bin
-SpcCoeff/Little_Endian/v.viirs-m_n21.SpcCoeff.bin
-TauCoeff/ODAS/Little_Endian/v.viirs-m_n21.TauCoeff.bin
+SpcCoeff/Little_Endian/v.viirs-m_j2.SpcCoeff.bin
+TauCoeff/ODAS/Little_Endian/v.viirs-m_j2.TauCoeff.bin
 SpcCoeff/Little_Endian/v.abi_g18.SpcCoeff.bin
 TauCoeff/ODAS/Little_Endian/v.abi_g18.TauCoeff.bin
 TauCoeff/ODPS/Little_Endian/zssmis_f20.TauCoeff.bin
