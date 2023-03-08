@@ -29,6 +29,7 @@ list( APPEND crtm_src_files
 			Atmosphere/Cloud/CRTM_Cloud_Define.f90
 			Atmosphere/CRTM_Atmosphere_Define.f90
 			Atmosphere/CRTM_Hypsometric.f90
+			Atmosphere/CRTM_Relative_Humidity.f90
 			Atmosphere/CRTM_Atmosphere.f90
 			Atmosphere/CRTM_Model_Profiles.f90
 			Atmosphere/iAtm_Define.f90

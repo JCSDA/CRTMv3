@@ -38,25 +38,26 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results/forward)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results/unit)
 CREATE_SYMLINK( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${crtm_test_input} )
 
-
-if( DEFINED ENV{LOCAL_PATH_JEDI_TESTFILES})
-    set(LOCAL_PATH_JEDI_TESTFILES "$ENV{LOCAL_PATH_JEDI_TESTFILES}")
-endif()
-
-set( REPO_VERSION crtm/2.4.0 )
+set( REPO_VERSION crtm/3.0.0 )
 # If local path to testfiles is defined don't download
-if( DEFINED LOCAL_PATH_JEDI_TESTFILES )
-  set( CRTM_COEFFS_PATH ${LOCAL_PATH_JEDI_TESTFILES}/${REPO_VERSION} )
-  message(STATUS "use LOCAL_PATH_JEDI_TESTFILES: ${LOCAL_PATH_JEDI_TESTFILES}")
+
+# IF the fix/ directory already exists locally, don't download the tarball from gdex
+# this supports non-jedi users.
+IF(EXISTS  ${CMAKE_SOURCE_DIR}/fix)
+  set( CRTM_COEFFS_PATH ${CMAKE_SOURCE_DIR}/fix )
+  message(STATUS "use LOCAL_PATH_JEDI_TESTFILES: ${CRTM_COEFFS_PATH}")
+  message("Using existing local fix directory instead of downloading.")
 # Download CRTM coefficients
 else()
-  set( CRTM_COEFFS_BRANCH "jedi_release_2.4.0" )
-  set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})
-  file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
-  set( ECBUILD_DOWNLOAD_BASE_URL https://gdex.ucar.edu/dataset/jedi-skylab )
+	set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
+  set( CRTM_COEFFS_BRANCH "jedi_release_3.0.0" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)
+	# it is my intention is to not have any difference between jedi/ufo versions of CRTM and stand-alond versions of CRTM -- they should both work "out of the box"
+  set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})   #this is where the symlinks point to binary files for the testinput/* directory after ecbuild. 
+  file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})  
+  set( ECBUILD_DOWNLOAD_BASE_URL https://gdex.ucar.edu/dataset/jedi-skylab )   
   message(STATUS "download CRTM coeffs files from: ${ECBUILD_DOWNLOAD_BASE_URL}/file to ${CRTM_COEFFS_PATH}")
   ecbuild_get_test_multidata( TARGET   get_crtm_coeffs
-                              NAMES    crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz:7e35d27179b2f62e54fdf257751f29bf
+                              NAMES    crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz:9941a3c099704108830e33e49792478   #i'm assuming these are md5sums, this is the md5sum for crtm_coefficients_3.0.0_skylab_4.0.tar.gz as of March 8, 2023 that was sent to gdex
                               DIRNAME  file
                               DIRLOCAL ${CRTM_COEFFS_PATH}
                               EXTRACT )
@@ -70,30 +71,30 @@ ecbuild_add_resources( TARGET crtm_test_scripts
 
 # Create list of sensor ids for testing
 list( APPEND Simple_Sensor_Ids
-        atms_npp
-        cris399_npp
-        v.abi_gr
+        atms_n21
+        cris-fsr_n21
+        v.abi_g18
         modis_aqua
 )
 
 list( APPEND ScatteringSwitch_Sensor_Ids
-        atms_npp
-        cris399_npp
-        v.abi_gr
+        atms_n21
+        cris-fsr_n21
+        v.abi_g18
         modis_aqua
 )
 
 list( APPEND SOI_Sensor_Ids
-        atms_npp
-        cris399_npp
-        v.abi_gr
+        atms_n21
+        cris-fsr_n21
+        v.abi_g18
         modis_aqua
 )
 
 list( APPEND VerticalCoordinates_Sensor_Ids
-        atms_npp
-        cris399_npp
-        v.abi_gr
+        atms_n21
+        cris-fsr_n21
+        v.abi_g18
         modis_aqua
 )
 
@@ -103,16 +104,16 @@ list( APPEND SSU_Sensor_Ids
 )
 
 list( APPEND ClearSky_Sensor_Ids
-        atms_npp
-        cris399_npp
-        v.abi_gr
+        atms_n21
+        cris-fsr_n21
+        v.abi_g18
         modis_aqua
 )
 
 # Create list of sensor ids for testing
 list( APPEND AOD_Sensor_Ids
-        cris399_npp
-        v.abi_gr
+        cris-fsr_n21
+        v.abi_g18
         airs_aqua
 )
 
@@ -131,7 +132,7 @@ list( APPEND ChannelSubset_Sensor_Ids
 )
 
 list( APPEND Aircraft_Sensor_Ids
-      crisB1_npp
+      cris-fsr_n21
 )
 
 list (APPEND common_tests
@@ -254,9 +255,6 @@ endforeach()
 #####################################################################
 
 list( APPEND crtm_test_input
-Test_Input/ECMWF_5K/Big_Endian/ecmwf_5k_atmosphereccol.bin
-Test_Input/ECMWF_5K/Big_Endian/ecmwf_5k_surfaceccol.bin
-Test_Input/ECMWF_5K/Big_Endian/ecmwf_5k_geometryccol.bin
 AerosolCoeff/Little_Endian/AerosolCoeff.bin
 CloudCoeff/Little_Endian/CloudCoeff.bin
 EmisCoeff/MW_Water/Little_Endian/FASTEM6.MWwater.EmisCoeff.bin
@@ -280,8 +278,8 @@ SpcCoeff/Little_Endian/gmi_gpm.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/gmi_gpm.TauCoeff.bin
 SpcCoeff/Little_Endian/seviri_m08.SpcCoeff.bin
 TauCoeff/ODAS/Little_Endian/seviri_m08.TauCoeff.bin
-SpcCoeff/Little_Endian/cris-fsr_npp.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/cris-fsr_npp.TauCoeff.bin
+SpcCoeff/Little_Endian/cris-fsr_n21.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/cris-fsr_n21.TauCoeff.bin
 SpcCoeff/Little_Endian/iasi_metop-a.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/iasi_metop-a.TauCoeff.bin
 SpcCoeff/Little_Endian/iasi_metop-b.SpcCoeff.bin
@@ -300,16 +298,14 @@ SpcCoeff/Little_Endian/airs_aqua.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/airs_aqua.TauCoeff.bin
 SpcCoeff/Little_Endian/modis_aqua.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/modis_aqua.TauCoeff.bin
-SpcCoeff/Little_Endian/cris399_npp.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/cris399_npp.TauCoeff.bin
-SpcCoeff/Little_Endian/crisB1_npp.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/crisB1_npp.TauCoeff.bin
-SpcCoeff/Little_Endian/atms_npp.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/atms_npp.TauCoeff.bin
-SpcCoeff/Little_Endian/v.viirs-m_npp.SpcCoeff.bin
-TauCoeff/ODAS/Little_Endian/v.viirs-m_npp.TauCoeff.bin
-SpcCoeff/Little_Endian/v.abi_gr.SpcCoeff.bin
-TauCoeff/ODAS/Little_Endian/v.abi_gr.TauCoeff.bin
+SpcCoeff/Little_Endian/cris-fsr_n21.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/cris-fsr_n21.TauCoeff.bin
+SpcCoeff/Little_Endian/atms_n21.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/atms_n21.TauCoeff.bin
+SpcCoeff/Little_Endian/v.viirs-m_j2.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/v.viirs-m_j2.TauCoeff.bin
+SpcCoeff/Little_Endian/v.abi_g18.SpcCoeff.bin
+TauCoeff/ODAS/Little_Endian/v.abi_g18.TauCoeff.bin
 TauCoeff/ODPS/Little_Endian/zssmis_f20.TauCoeff.bin
 TauCoeff/ODPS/Little_Endian/zssmis_f19.TauCoeff.bin
 TauCoeff/ODPS/Little_Endian/zssmis_f18.TauCoeff.bin
@@ -341,6 +337,6 @@ SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
 
 
 # Symlink all CRTM files
-CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/crtm/${CRTM_COEFFS_BRANCH}
+CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}
                          ${CMAKE_CURRENT_BINARY_DIR}/testinput
                          ${crtm_test_input} )

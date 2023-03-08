@@ -11,8 +11,10 @@
 !       Modified by     Yingtao Ma, 2020/6/11
 !                       yingtao.ma@noaa.gov
 !                       Implemented CMAQ aerosol
+!       Modified by:    Cheng Dang, 17-Aug-2022
+!                       dangch@ucar.edu
+!                       Add relative humidity calculation
 !
-
 MODULE CRTM_Atmosphere_Define
 
   ! -----------------
@@ -80,6 +82,8 @@ MODULE CRTM_Atmosphere_Define
                                    CRTM_Aerosol_SetLayers, &
                                    CRTM_Aerosol_ReadFile, &
                                    CRTM_Aerosol_WriteFile
+   USE CRTM_Relative_Humidity, ONLY: PPMV_to_MR, MR_to_RH
+
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -341,7 +345,6 @@ MODULE CRTM_Atmosphere_Define
   INTEGER, PARAMETER :: ML = 256
   ! File status on close after write error
   CHARACTER(*), PARAMETER :: WRITE_ERROR_STATUS = 'DELETE'
-
 
   ! -------------------------------
   ! Atmosphere structure definition
@@ -794,12 +797,12 @@ CONTAINS
     IF ( .NOT. CRTM_Atmosphere_Associated(Atmosphere) ) RETURN
 
     ! Zero out the data
-    Atmosphere%Level_Pressure = ZERO
-    Atmosphere%Pressure       = ZERO
-    Atmosphere%Temperature    = ZERO
+    Atmosphere%Level_Pressure    = ZERO
+    Atmosphere%Pressure          = ZERO
+    Atmosphere%Temperature       = ZERO
     Atmosphere%Relative_Humidity = ZERO
-    Atmosphere%Absorber       = ZERO
-    Atmosphere%Cloud_Fraction = ZERO
+    Atmosphere%Absorber          = ZERO
+    Atmosphere%Cloud_Fraction    = ZERO
 
     ! Reset the structure components
     IF ( Atmosphere%n_Clouds   > 0 ) CALL CRTM_Cloud_Zero( Atmosphere%Cloud )
@@ -925,8 +928,8 @@ CONTAINS
       CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
       IsValid = .FALSE.
     ENDIF
-    IF ( ANY(Atm%Relative_Humidity < ZERO ) ) THEN
-      msg = 'Negative layer relative humidity found'
+    IF ( ANY(Atm%Relative_Humidity < ZERO ) .OR.  ANY(Atm%Relative_Humidity > 1.2_fp ) ) THEN
+      msg = 'Invalid layer relative humidity found'
       CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
       IsValid = .FALSE.
     ENDIF
@@ -1030,7 +1033,7 @@ CONTAINS
     WRITE(fid, '(3x,"Layer pressure:")')
     WRITE(fid, '(5(1x,es22.15,:))') Atm%Pressure(1:k)
     WRITE(fid, '(3x,"Layer temperature:")')
-    WRITE(fid, '(5(1x,es22.15,:))') Atm%Temperature(1:k) 
+    WRITE(fid, '(5(1x,es22.15,:))') Atm%Temperature(1:k)
     WRITE(fid, '(3x,"Layer relative humidity:")')
     WRITE(fid, '(5(1x,es22.15,:))') Atm%Relative_Humidity(1:k)
     WRITE(fid, '(3x,"Layer absorber:")')
@@ -1115,7 +1118,6 @@ CONTAINS
 !--------------------------------------------------------------------------------
 
   ELEMENTAL FUNCTION CRTM_Atmosphere_Compare( &
-!  FUNCTION CRTM_Atmosphere_Compare( &
     x, &
     y, &
     n_SigFig ) &
@@ -1153,31 +1155,27 @@ CONTAINS
       j = x%n_Absorbers
       IF ( ANY(x%Absorber_ID(1:j)    /= y%Absorber_ID(1:j)   ) .OR. &
            ANY(x%Absorber_Units(1:j) /= y%Absorber_Units(1:j)) ) RETURN
-
       ! ...Floating point arrays
-      IF ( (.NOT. ALL(Compares_Within_Tolerance(x%Level_Pressure,y%Level_Pressure,n))) .OR. &
-           (.NOT. ALL(Compares_Within_Tolerance(x%Pressure      ,y%Pressure      ,n))) .OR. &
-           (.NOT. ALL(Compares_Within_Tolerance(x%Temperature   ,y%Temperature   ,n))) .OR. &
-           (.NOT. ALL(Compares_Within_Tolerance(x%Relative_Humidity   ,y%Relative_Humidity   ,n))) .OR. &
-           (.NOT. ALL(Compares_Within_Tolerance(x%Absorber      ,y%Absorber      ,n))) .OR. &
-           (.NOT. ALL(Compares_Within_Tolerance(x%Cloud_Fraction,y%Cloud_Fraction,n)))) RETURN
+      IF ( (.NOT. ALL(Compares_Within_Tolerance(x%Level_Pressure      ,y%Level_Pressure    ,n))) .OR. &
+           (.NOT. ALL(Compares_Within_Tolerance(x%Pressure            ,y%Pressure          ,n))) .OR. &
+           (.NOT. ALL(Compares_Within_Tolerance(x%Temperature         ,y%Temperature       ,n))) .OR. &
+           (.NOT. ALL(Compares_Within_Tolerance(x%Relative_Humidity   ,y%Relative_Humidity ,n))) .OR. &
+           (.NOT. ALL(Compares_Within_Tolerance(x%Absorber            ,y%Absorber          ,n))) .OR. &
+           (.NOT. ALL(Compares_Within_Tolerance(x%Cloud_Fraction      ,y%Cloud_Fraction    ,n)))) RETURN
       ! ...Clouds
-
       IF ( x%n_Clouds > 0 ) THEN
         IF ( .NOT. ALL(CRTM_Cloud_Compare(x%Cloud,y%Cloud,n_SigFig=n)) ) RETURN
-
       END IF
       ! ...Aerosols
       IF ( x%n_Aerosols > 0 ) THEN
         IF ( .NOT. ALL(CRTM_Aerosol_Compare(x%Aerosol,y%Aerosol,n_SigFig=n)) ) RETURN
-
       END IF
     END IF
 
     ! If we get here, the objects are comparable
     is_comparable = .TRUE.
+
   END FUNCTION CRTM_Atmosphere_Compare
-!  END FUNCTION CRTM_Atmosphere_Compare
 
 
 !--------------------------------------------------------------------------------
@@ -2146,14 +2144,14 @@ CONTAINS
     IF ( CRTM_Atmosphere_Associated(x) .AND. CRTM_Atmosphere_Associated(y) ) THEN
       k = x%n_Layers
       j = x%n_Absorbers
-      IF ( .NOT. (ALL(x%Absorber_ID(1:j)       ==     y%Absorber_ID(1:j)   ) .AND. &
-                  ALL(x%Absorber_Units(1:j)    ==     y%Absorber_Units(1:j)) .AND. &
-                  ALL(x%Level_Pressure(0:k) .EqualTo. y%Level_Pressure(0:k)) .AND. &
-                  ALL(x%Pressure(1:k)       .EqualTo. y%Pressure(1:k)      ) .AND. &
-                  ALL(x%Temperature(1:k)    .EqualTo. y%Temperature(1:k)   ) .AND. &
-                  ALL(x%Relative_Humidity(1:k)    .EqualTo. y%Relative_Humidity(1:k)   ) .AND. &
-                  ALL(x%Absorber(1:k,1:j)   .EqualTo. y%Absorber(1:k,1:j)  ) .AND. &
-                  ALL(x%Cloud_Fraction(1:k) .EqualTo. y%Cloud_Fraction(1:k))) ) RETURN
+      IF ( .NOT. (ALL(x%Absorber_ID(1:j)          ==     y%Absorber_ID(1:j)   )    .AND. &
+                  ALL(x%Absorber_Units(1:j)       ==     y%Absorber_Units(1:j))    .AND. &
+                  ALL(x%Level_Pressure(0:k)    .EqualTo. y%Level_Pressure(0:k))    .AND. &
+                  ALL(x%Pressure(1:k)          .EqualTo. y%Pressure(1:k)      )    .AND. &
+                  ALL(x%Temperature(1:k)       .EqualTo. y%Temperature(1:k)   )    .AND. &
+                  ALL(x%Relative_Humidity(1:k) .EqualTo. y%Relative_Humidity(1:k)) .AND. &
+                  ALL(x%Absorber(1:k,1:j)      .EqualTo. y%Absorber(1:k,1:j)  )    .AND. &
+                  ALL(x%Cloud_Fraction(1:k)    .EqualTo. y%Cloud_Fraction(1:k))) ) RETURN
       ! ...Clouds
       IF ( x%n_Clouds > 0 ) THEN
         IF ( .NOT. ALL(x%Cloud == y%Cloud) ) RETURN
@@ -2272,12 +2270,12 @@ CONTAINS
     ! And add its components to the second one
     k = atm1%n_Layers
     j = atm1%n_Absorbers
-    atmsum%Level_Pressure(0:k) = atmsum%Level_Pressure(0:k) + atm2%Level_Pressure(0:k)
-    atmsum%Pressure(1:k)       = atmsum%Pressure(1:k)       + atm2%Pressure(1:k)
-    atmsum%Temperature(1:k)    = atmsum%Temperature(1:k)    + atm2%Temperature(1:k)
-    atmsum%Relative_Humidity(1:k)    = atmsum%Relative_Humidity(1:k)    + atm2%Relative_Humidity(1:k)
-    atmsum%Absorber(1:k,1:j)   = atmsum%Absorber(1:k,1:j)   + atm2%Absorber(1:k,1:j)
-    atmsum%Cloud_Fraction(1:k) = atmsum%Cloud_Fraction(1:k) + atm2%Cloud_Fraction(1:k)
+    atmsum%Level_Pressure(0:k)    = atmsum%Level_Pressure(0:k)    + atm2%Level_Pressure(0:k)
+    atmsum%Pressure(1:k)          = atmsum%Pressure(1:k)          + atm2%Pressure(1:k)
+    atmsum%Temperature(1:k)       = atmsum%Temperature(1:k)       + atm2%Temperature(1:k)
+    atmsum%Relative_Humidity(1:k) = atmsum%Relative_Humidity(1:k) + atm2%Relative_Humidity(1:k)
+    atmsum%Absorber(1:k,1:j)      = atmsum%Absorber(1:k,1:j)      + atm2%Absorber(1:k,1:j)
+    atmsum%Cloud_Fraction(1:k)    = atmsum%Cloud_Fraction(1:k)    + atm2%Cloud_Fraction(1:k)
     ! ...Cloud component
     IF ( atm1%n_Clouds > 0 ) THEN
       DO i = 1, atm1%n_Clouds
@@ -2354,12 +2352,12 @@ CONTAINS
     ! And subtract the second one's components from it
     k = atm1%n_Layers
     j = atm1%n_Absorbers
-    atmdiff%Level_Pressure(0:k) = atmdiff%Level_Pressure(0:k) - atm2%Level_Pressure(0:k)
-    atmdiff%Pressure(1:k)       = atmdiff%Pressure(1:k)       - atm2%Pressure(1:k)
-    atmdiff%Temperature(1:k)    = atmdiff%Temperature(1:k)    - atm2%Temperature(1:k)
-    atmdiff%Relative_Humidity(1:k)    = atmdiff%Relative_Humidity(1:k)    - atm2%Relative_Humidity(1:k)
-    atmdiff%Absorber(1:k,1:j)   = atmdiff%Absorber(1:k,1:j)   - atm2%Absorber(1:k,1:j)
-    atmdiff%Cloud_Fraction(1:k) = atmdiff%Cloud_Fraction(1:k) - atm2%Cloud_Fraction(1:k)
+    atmdiff%Level_Pressure(0:k)    = atmdiff%Level_Pressure(0:k)    - atm2%Level_Pressure(0:k)
+    atmdiff%Pressure(1:k)          = atmdiff%Pressure(1:k)          - atm2%Pressure(1:k)
+    atmdiff%Temperature(1:k)       = atmdiff%Temperature(1:k)       - atm2%Temperature(1:k)
+    atmdiff%Relative_Humidity(1:k) = atmdiff%Relative_Humidity(1:k) - atm2%Relative_Humidity(1:k)
+    atmdiff%Absorber(1:k,1:j)      = atmdiff%Absorber(1:k,1:j)      - atm2%Absorber(1:k,1:j)
+    atmdiff%Cloud_Fraction(1:k)    = atmdiff%Cloud_Fraction(1:k)    - atm2%Cloud_Fraction(1:k)
     ! ...Cloud component
     IF ( atm1%n_Clouds > 0 ) THEN
       DO i = 1, atm1%n_Clouds
@@ -2409,6 +2407,7 @@ CONTAINS
     INTEGER :: n_clouds
     INTEGER :: n_aerosols
 
+
     ! Set up
     err_stat = SUCCESS
 
@@ -2453,8 +2452,7 @@ CONTAINS
       atm%Level_Pressure, &
       atm%Pressure, &
       atm%Temperature, &
-!qliu      atm%Relative_Humidity, &
-      atm%Relative_Humidity, &
+      !atm%Relative_Humidity, &   ! RH APPROACH #1
       atm%Absorber, &
       atm%Cloud_Fraction
     IF ( io_stat /= 0 ) THEN
@@ -2462,6 +2460,9 @@ CONTAINS
       CALL Read_Record_Cleanup(); RETURN
     END IF
 
+    ! RH APPROACH #2
+    ! Compute the relative humidity
+    CALL Compute_Relative_Humidity( atm )
 
     ! Read the cloud data
     IF ( n_clouds > 0 ) THEN
@@ -2491,7 +2492,7 @@ CONTAINS
         CALL Read_Record_Cleanup(); RETURN
       END IF
     END IF
-    
+
   CONTAINS
 
     SUBROUTINE Read_Record_Cleanup()
@@ -2620,5 +2621,79 @@ CONTAINS
     END SUBROUTINE Write_Record_Cleanup
 
   END FUNCTION Write_Record
+
+  !--------------------------------------------------------------------------------
+  !:sdoc+:
+  !
+  ! NAME:
+  !       Compute_Relative_Humidity
+  !
+  ! PURPOSE:
+  !       Subroutine to compute and set the relative humidity of layers
+  !       given water vapor concentration
+  !
+  ! CALLING SEQUENCE:
+  !      CALL Compute_Relative_Humidity( Atmosphere )
+  !
+  ! OBJECT:
+  !       Atmosphere:   CRTM Atmosphere object which is to have its working number
+  !                     of layers updated.
+  !                     UNITS:      N/A
+  !                     TYPE:       CRTM_Atmosphere_type
+  !                     DIMENSION:  Scalar or any rank
+  !                     ATTRIBUTES: INTENT(IN OUT)
+  !:sdoc-:
+  !--------------------------------------------------------------------------------
+
+    SUBROUTINE Compute_Relative_Humidity( Atmosphere )
+      ! Arguments
+      TYPE(CRTM_Atmosphere_type), INTENT(IN OUT) :: Atmosphere
+      ! Local parameters
+      CHARACTER( * ), PARAMETER :: ROUTINE_NAME = 'Compute_Relative_Humidity'
+      ! Local variables
+      INTEGER :: H2O_Index
+      REAL(fp), ALLOCATABLE :: H2O_MR(:)
+      REAL(fp), ALLOCATABLE :: RH(:)
+      CHARACTER(256) :: msg
+      INTEGER :: Error_Status
+
+      ! Allocate local variables
+      ALLOCATE( H2O_MR(Atmosphere%n_Layers) )
+      ALLOCATE( RH(Atmosphere%n_Layers) )
+
+      ! Find the index of absorber water vapor
+      H2O_Index = CRTM_Get_AbsorberIdx(Atmosphere, H2O_ID)
+
+      ! Obtain water vapor concentration in unit g/kg
+      IF ( Atmosphere%Absorber_Units(H2O_Index) == VOLUME_MIXING_RATIO_UNITS ) THEN
+        CALL PPMV_to_MR( Atmosphere%Absorber(:, H2O_Index) , &
+                         H2O_MR, &
+                         Molecule_ID = H2O_ID )
+      ELSE IF ( Atmosphere%Absorber_Units(H2O_Index) == MASS_MIXING_RATIO_UNITS ) THEN
+        H2O_MR = Atmosphere%Absorber(:, H2O_Index)
+      ELSE
+        Error_Status = FAILURE
+        WRITE( msg, '( "The water vapor units type ", i4, " is currently not supported")') &
+                            Atmosphere%Absorber_Units(H2O_Index)
+        CALL Display_Message( ROUTINE_NAME, TRIM( msg ), Error_Status )
+        RETURN
+      ENDIF
+
+      ! Compute relative humidity
+      CALL MR_to_RH( Atmosphere%Pressure, &
+                     Atmosphere%Temperature, &
+                     H2O_MR, &
+                     Atmosphere%Relative_Humidity) ! replace with RH for discussion below
+
+      ! Test: are RH approaches 1 and 2 equivalent?
+      ! Remove after discussion.
+     !  IF ( .NOT. (ALL(Atmosphere%Relative_Humidity .EqualTo. RH)) ) THEN
+     !    Error_Status = FAILURE
+     !    WRITE(msg, '("Atmosphere%Relative_Humidity and RH are different")')
+     !    CALL Display_Message(ROUTINE_NAME, msg, Error_Status )
+     !    RETURN
+     ! END IF
+
+    END SUBROUTINE Compute_Relative_Humidity
 
 END MODULE CRTM_Atmosphere_Define
