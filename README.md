@@ -1,4 +1,4 @@
-CRTM REL-2.4.1-alpha 
+CRTM REL-3.0.0 
 ====================
 
 [![Build Status](https://app.travis-ci.com/JCSDA-internal/crtm.svg?token=r6aaq9P13fHcTi8yBgdM&branch=develop)](https://app.travis-ci.com/JCSDA-internal/crtm)
@@ -6,12 +6,14 @@ CRTM REL-2.4.1-alpha
 Preamble
 --------
 
-CRTM v2.4.1-alpha release (`REL-2.4.1-alpha`)  
+CRTM v3.0.0 release (`REL-3.0.0`)  
 
-v2.4.1-alpha Released on April 1, 2021
+v3.0.0 Released March, 2023  
+v2.4.1-alpha Released on April 1, 2021 (internal realease only)
 v2.4.0 Released on October 23, 2020
 
-This is an alpha release of CRTM v2.4.1, some features may not be fully functional. Contact crtm-support@googlegroups.com.  
+This is an experimental/early release of CRTM v3.0.0, some features may not be fully functional. Contact crtm-support@googlegroups.com.  
+v3.x features will be rolled out in incremental updates. 
 
 Basic requirements:  
 (1) A Fortran 2003 compatible compiler
@@ -53,7 +55,7 @@ Contents
 
 Configuration, building, and testing the library
 ================================================  
-JCSDA CRTM v2.4.x Build Instructions
+JCSDA CRTM v3.0.x Build Instructions
 
 - Development Repository Build
 - Note: the development repository build differs from a release build. 
@@ -67,7 +69,7 @@ The CRTM **development** repository directory structure looks like:
   ├── NOTES
   ├── README.md 
   ├── Set_CRTM_Environment.sh
-  ├── Uncompress_Binary_Files.sh  (manually gunzip files in the fix/ directory after cloning)
+  ├── Get_CRTM_Binary_Files.sh  
   ├── <b>configuration/</b>
   ├── <b>documentation/</b>
   ├── <b>fix/</b>
@@ -121,8 +123,9 @@ But after a clean clone of the development repository, none of the links to sour
 
 Configuration
 -------------
-Unlike version 2.4.0, the "`fix/`" directory is now provided in the CRTM via git-LFS.   The files therein are gzipped (*.gz extension).
-Uncompress_Binary_Files.sh script will traverse and gunzip all of the files.  
+At present, the 'fix/' directory is provided through ftp, rather than git-LFS.  We're working on a way to make the process of getting binary data equitable and easy for all users.
+
+The files therein are gzipped (*.gz extension).  Use the Get_CRTM_Binary_Files.sh script to obtain and unpack the dataset.    
 
 At the top level (`crtm/`), the `configuration` directory contains the various compiler-specific configuration files.
 <pre>
@@ -244,10 +247,10 @@ make install
 Linking to the library
 ----------------------
 
-Let's assume the above install was moved into "/home/username/CRTM/crtm_v2.4.1/", to use the library in this structure in your own application, the usual environment variables would need to be be modified something like:
+Let's assume the above install was moved into "/home/username/CRTM/crtm_v3.0.0/", to use the library in this structure in your own application, the usual environment variables would need to be be modified something like:
 
 <pre>
-libroot="/home/username/CRTM/crtm_v2.4.1"
+libroot="/home/username/CRTM/crtm_v3.0.0"
 FCFLAGS="-I${libroot}/include ${FCFLAGS}"
 LDFLAGS="-L${libroot}/lib ${LDFLAGS}"
 LIBS="-lcrtm ${LIBS}"
@@ -260,11 +263,11 @@ To uninstall the library (assuming you haven't moved the installation directory 
 
     make uninstall
 
-This will DELETE the created installation directory. So, for a library version, say, v2.4.1, if your configure script invocation was something like
+This will DELETE the created installation directory. So, for a library version, say, v3.0.0, if your configure script invocation was something like
 
     ./configure --prefix=${PWD} ...other command line arguments...
 
-then the "uninstall" target will delete the "${PWD}/crtm_v2.4.1" directory.
+then the "uninstall" target will delete the "${PWD}/crtm_v3.0.0" directory.
 
 
 Cleaning Up
@@ -311,13 +314,13 @@ make install
 
 **Additional options for `configure`**
 
-`configure` sets an install path environment variable, among other things.  This, by default, will set the `lib/` and `include/` directory paths in the `/usr/local/crtm_v2.4.1/` (or whatever string in in `src/CRTM_Version.inc`).  
+`configure` sets an install path environment variable, among other things.  This, by default, will set the `lib/` and `include/` directory paths in the `/usr/local/crtm_v3.0.0/` (or whatever string in in `src/CRTM_Version.inc`).  
 
 The `--prefix` switch sets the installation directory, make sure you have write access to that directory.  
 
 You can override this by setting a different install directory as follows:  
   `   ./configure --prefix=<install directory>`  
-For example, `./configure --prefix=${PWD}` will create the library in the directory in which you're currently in (e.g., crtm/src/Build/crtm_v2.4.1/).
+For example, `./configure --prefix=${PWD}` will create the library in the directory in which you're currently in (e.g., crtm/src/Build/crtm_v3.0.0y/).
 
 By default, the CRTM is built for big-endian I/O. The --disable-big-endian switch builds the library and test programs for little-endian I/O:
 
