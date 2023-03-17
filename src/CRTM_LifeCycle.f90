@@ -15,7 +15,7 @@
 ! Date:           Name:                    Description:
 ! =====           =====                    ============
 !
-! 2020-08-01      Cheng Dang               Add optional arguments for 
+! 2020-08-01      Cheng Dang               Add optional arguments for
 !                                          aerosol/cloud scheme/file/format.
 !
 ! 2021-07-26      Patrick Stegmann         Add optional format input for
@@ -442,8 +442,8 @@ CONTAINS
     Cloud_Model         , &  ! Optional input
     CloudCoeff_Format   , &  ! Optional input
     CloudCoeff_File     , &  ! Optional input
-    SpcCoeff_Format     , &  ! Optional input 
-    TauCoeff_Format     , &  ! Optional input 
+    SpcCoeff_Format     , &  ! Optional input
+    TauCoeff_Format     , &  ! Optional input
     EmisCoeff_File      , &  ! Optional input  ! *** DEPRECATED. Replaced by IRwaterCoeff_File
     IRwaterCoeff_File   , &  ! Optional input
     IRlandCoeff_File    , &  ! Optional input
@@ -670,11 +670,11 @@ CONTAINS
 
     ! Load the cloud coefficients
     IF ( Local_Load_CloudCoeff ) THEN
-      IF (.not. Quiet) THEN
-        WRITE(*, '("Load the cloud coefficients: ") ')
-        WRITE(*, '("...Cloud model: ", a) ') TRIM(Default_Cloud_Model)
-        WRITE(*, '("...CloudCoeff file: ", a) ') TRIM(Default_CloudCoeff_File)
-      END IF
+      ! IF ( iQuiet == 0 ) THEN ! IF ( .not. Quiet) THEN
+      !   WRITE(*, '("Load the cloud coefficients: ") ')
+      !   WRITE(*, '("...Cloud model: ", a) ') TRIM(Default_Cloud_Model)
+      !   WRITE(*, '("...CloudCoeff file: ", a) ') TRIM(Default_CloudCoeff_File)
+      ! END IF
       err_stat = CRTM_CloudCoeff_Load( &
                    Default_Cloud_Model                  , &
                    Default_CloudCoeff_Format            , &
@@ -689,14 +689,13 @@ CONTAINS
       END IF
     END IF
 
-
     ! Load the aerosol coefficients
     IF ( Local_Load_AerosolCoeff ) THEN
-      IF (.not. Quiet) THEN
-        WRITE(*, '("Load the aerosol coefficients: ") ')
-        WRITE(*, '("...Aerosol model: ", a) ') TRIM(Default_Aerosol_Model)
-        WRITE(*, '("...AerosolCoeff file: ", a) ') TRIM(Default_AerosolCoeff_File)
-      END IF
+      ! IF ( iQuiet == 0 ) THEN ! IF ( .not. Quiet) THEN
+      !   WRITE(*, '("Load the aerosol coefficients: ") ')
+      !   WRITE(*, '("...Aerosol model: ", a) ') TRIM(Default_Aerosol_Model)
+      !   WRITE(*, '("...AerosolCoeff file: ", a) ') TRIM(Default_AerosolCoeff_File)
+      ! END IF
       err_stat = CRTM_AerosolCoeff_Load( &
                    Default_Aerosol_Model                , &
                    Default_AerosolCoeff_Format          , &
