@@ -72,7 +72,7 @@ IF(EXISTS  ${CMAKE_SOURCE_DIR}/fix)
 else()
    #### Version 3
    #set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
-   #set( CRTM_COEFFS_BRANCH "3.0.0_skylab_4.0" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)     
+   set( CRTM_COEFFS_BRANCH "3.0.0_skylab_4.0" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)     
    # it is my intention is to not have any difference between jedi/ufo versions of CRTM and stand-alond versions of CRTM -- they should both work "out of the box"
    #set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})   #this is where the symlinks point to binary files for the testinput/* directory after ecbuild.
    #file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
@@ -88,7 +88,8 @@ else()
   ####Version 2.4.1	
   set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/crtm/${CRTM_COEFFS_BRANCH})
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
-  set( ECBUILD_DOWNLOAD_BASE_URL https://gdex.ucar.edu/dataset/jedi-skylab/file )
+  #set( ECBUILD_DOWNLOAD_BASE_URL https://gdex.ucar.edu/dataset/jedi-skylab/file )
+  set( ECBUILD_DOWNLOAD_BASE_URL https://ftp.ssec.wisc.edu/pub/s4/CRTM )
   set( test_files_dirname crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz )
   set( checksum "0")
   message(STATUS "download CRTM coeffs files from: ${ECBUILD_DOWNLOAD_BASE_URL} to ${CRTM_COEFFS_PATH}")
