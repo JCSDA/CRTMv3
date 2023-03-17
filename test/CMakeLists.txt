@@ -130,7 +130,7 @@ list( APPEND Simple_Sensor_Ids
         cris-fsr_n21
         v.abi_g18
 	atms_npp
-        cris399_np
+        cris399_npp
         v.abi_gr
 	abi_g18
         modis_aqua
