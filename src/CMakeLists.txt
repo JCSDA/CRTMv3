@@ -46,9 +46,11 @@ list( APPEND crtm_src_files
 			Coefficients/AerosolCoeff/AerosolCoeff_Binary_IO.f90
 			Coefficients/AerosolCoeff/AerosolCoeff_Define.f90
 			Coefficients/AerosolCoeff/AerosolCoeff_netCDF_IO.f90
+			Coefficients/AerosolCoeff/AerosolCoeff_IO.f90
 			Coefficients/CloudCoeff/CloudCoeff_Binary_IO.f90
 			Coefficients/CloudCoeff/CloudCoeff_Define.f90
 			Coefficients/CloudCoeff/CloudCoeff_netCDF_IO.f90
+			Coefficients/CloudCoeff/CloudCoeff_IO.f90
 			Coefficients/CRTM_AerosolCoeff.f90
 			Coefficients/CRTM_CloudCoeff.f90
 			Coefficients/CRTM_IRiceCoeff.f90
@@ -64,9 +66,17 @@ list( APPEND crtm_src_files
 			Coefficients/CRTM_VISwaterCoeff.f90
 			Coefficients/EmisCoeff/IR_Land/LSEatlas/LSEatlas_Define.f90
 			Coefficients/EmisCoeff/IR_Water/IRwaterCoeff_Define.f90
+			Coefficients/EmisCoeff/IR_Water/IRwaterCoeff_IO.f90
+			Coefficients/EmisCoeff/IR_Water/IRwaterCoeff_netCDF_IO.f90
+			Coefficients/EmisCoeff/IR_Snow/IRsnowCoeff_Define.f90
+			Coefficients/EmisCoeff/IR_Snow/IRsnowCoeff_IO.f90
+			Coefficients/EmisCoeff/IR_Snow/IRsnowCoeff_Binary_IO.f90
+			Coefficients/EmisCoeff/IR_Snow/IRsnowCoeff_netCDF_IO.f90
 			Coefficients/EmisCoeff/MW_Water/MWwaterCoeff_Define.f90
 			Coefficients/EmisCoeff/MW_Water/MWwaterLUT/MWwaterLUT_Define.f90
 			Coefficients/EmisCoeff/SEcategory/SEcategory_Define.f90
+			Coefficients/EmisCoeff/SEcategory/SEcategory_IO.f90
+			Coefficients/EmisCoeff/SEcategory/SEcategory_netCDF_IO.f90
 			Coefficients/FitCoeff/FitCoeff_Define.f90
 			Coefficients/FitCoeff/FitCoeff_Destroy.inc
 			Coefficients/FitCoeff/FitCoeff_Equal.inc
@@ -139,6 +149,7 @@ list( APPEND crtm_src_files
 			SfcOptics/CRTM_VIS_Snow_SfcOptics.f90
 			SfcOptics/CRTM_VIS_Water_SfcOptics.f90
 			SfcOptics/IR_Water/IRSSEM/CRTM_IRSSEM.f90
+			SfcOptics/IR_Snow/CRTM_IRSnowEM.f90
 			SfcOptics/MW_Water/FASTEM_MWSSEM/Azimuth_Emissivity_F6_Module.f90
 			SfcOptics/MW_Water/FASTEM_MWSSEM/Azimuth_Emissivity_Module.f90
 			SfcOptics/MW_Water/FASTEM_MWSSEM/CRTM_Fastem1.f90

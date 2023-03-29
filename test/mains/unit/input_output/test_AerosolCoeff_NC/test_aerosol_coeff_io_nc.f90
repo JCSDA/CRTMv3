@@ -40,9 +40,9 @@ PROGRAM test_aerosol_coeff_io_nc
   !TYPE(AerosolCoeff_type) :: aero_coeff
   CHARACTER(2000)         :: info
   CHARACTER(*), PARAMETER :: Aerosol_Model = 'CRTM'
-  CHARACTER(*), PARAMETER :: AerosolCoeff_Format = 'netCDF'
   CHARACTER(*), PARAMETER :: AerosolCoeff_File = 'AerosolCoeff.nc4'
   CHARACTER(*), PARAMETER :: File_Path = './testinput/'
+  LOGICAL,      PARAMETER :: netCDF = .TRUE.
   LOGICAL,      PARAMETER :: Quiet = .TRUE.
   INTEGER                 :: err_stat
   TYPE(UnitTest_type)     :: ioTest
@@ -59,11 +59,11 @@ PROGRAM test_aerosol_coeff_io_nc
   ! Load the aerosol coefficient look-up table:
   err_stat = 3
   err_stat = CRTM_AerosolCoeff_Load( &
-                Aerosol_Model            , &
-                AerosolCoeff_Format      , &
-                AerosolCoeff_File        , &
-                File_Path                , &
-                Quiet             = Quiet  ) 
+                Aerosol_Model              , &
+                AerosolCoeff_File          , &
+                File_Path                  , &
+                netCDF            = netCDF , &
+                Quiet             = Quiet    )
   CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
   testPassed = UnitTest_Passed(ioTest)
   

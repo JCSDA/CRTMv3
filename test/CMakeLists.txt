@@ -359,32 +359,32 @@ ecbuild_add_test(
         )
 
 #(CD) EmisCoeff I/O test
-#ecbuild_add_executable (
-#    TARGET "test_emis_coeff_io"
-#        SOURCES mains/unit/input_output/test_EmisCoeff/test_emis_coeff_io.f90
-#        LIBS crtm
-#        NOINSTALL
-#        )
-#ecbuild_add_test(
-#    TARGET "Unit_test_emis_coeff_io"
-#        COMMAND "test_emis_coeff_io"
-#        OMP $ENV{OMP_NUM_THREADS}
-#        TEST_DEPENDS get_crtm_coeffs
-#        )
+ecbuild_add_executable (
+    TARGET "test_emis_coeff_io"
+        SOURCES mains/unit/input_output/test_EmisCoeff/test_emis_coeff_io.f90
+        LIBS crtm
+        NOINSTALL
+        )
+ecbuild_add_test(
+    TARGET "Unit_test_emis_coeff_io"
+        COMMAND "test_emis_coeff_io"
+        OMP $ENV{OMP_NUM_THREADS}
+        TEST_DEPENDS get_crtm_coeffs
+        )
 
 #(CD) EmisCoeff netCDF I/O test
-#ecbuild_add_executable (
-#    TARGET "test_emis_coeff_io_nc"
-#        SOURCES mains/unit/input_output/test_EmisCoeff_NC/test_emis_coeff_io_nc.f90
-#        LIBS crtm
-#        NOINSTALL
-#        )
-#ecbuild_add_test(
-#    TARGET "Unit_test_emis_coeff_io_nc"
-#        COMMAND "test_emis_coeff_io_nc"
-#        OMP $ENV{OMP_NUM_THREADS}
-#        TEST_DEPENDS get_crtm_coeffs
-#        )
+ecbuild_add_executable (
+    TARGET "test_emis_coeff_io_nc"
+        SOURCES mains/unit/input_output/test_EmisCoeff_NC/test_emis_coeff_io_nc.f90
+        LIBS crtm
+        NOINSTALL
+        )
+ecbuild_add_test(
+    TARGET "Unit_test_emis_coeff_io_nc"
+        COMMAND "test_emis_coeff_io_nc"
+        OMP $ENV{OMP_NUM_THREADS}
+        TEST_DEPENDS get_crtm_coeffs
+        )
 
 #(PS) Hypsometric Equation test
 ecbuild_add_executable (
@@ -489,14 +489,25 @@ AerosolCoeff/netCDF/AerosolCoeff.nc4
 CloudCoeff/Little_Endian/CloudCoeff.bin
 EmisCoeff/MW_Water/Little_Endian/FASTEM6.MWwater.EmisCoeff.bin
 EmisCoeff/IR_Ice/SEcategory/Little_Endian/NPOESS.IRice.EmisCoeff.bin
+EmisCoeff/IR_Ice/SEcategory/netCDF/NPOESS.IRice.EmisCoeff.nc4
 EmisCoeff/IR_Land/SEcategory/Little_Endian/NPOESS.IRland.EmisCoeff.bin
+EmisCoeff/IR_Land/SEcategory/netCDF/NPOESS.IRland.EmisCoeff.nc4
 EmisCoeff/IR_Snow/SEcategory/Little_Endian/NPOESS.IRsnow.EmisCoeff.bin
+EmisCoeff/IR_Snow/SEcategory/netCDF/NPOESS.IRsnow.EmisCoeff.nc4
 EmisCoeff/IR_Snow/Nalli/Little_Endian/Nalli.IRsnow.EmisCoeff.bin
+EmisCoeff/IR_Snow/Nalli/netCDF/Nalli.IRsnow.EmisCoeff.nc4
 EmisCoeff/VIS_Ice/SEcategory/Little_Endian/NPOESS.VISice.EmisCoeff.bin
+EmisCoeff/VIS_Ice/SEcategory/netCDF/NPOESS.VISice.EmisCoeff.nc4
 EmisCoeff/VIS_Land/SEcategory/Little_Endian/NPOESS.VISland.EmisCoeff.bin
+EmisCoeff/VIS_Land/SEcategory/netCDF/NPOESS.VISland.EmisCoeff.nc4
 EmisCoeff/VIS_Snow/SEcategory/Little_Endian/NPOESS.VISsnow.EmisCoeff.bin
+EmisCoeff/VIS_Snow/SEcategory/netCDF/NPOESS.VISsnow.EmisCoeff.nc4
 EmisCoeff/VIS_Water/SEcategory/Little_Endian/NPOESS.VISwater.EmisCoeff.bin
+EmisCoeff/VIS_Water/SEcategory/netCDF/NPOESS.VISwater.EmisCoeff.nc4
 EmisCoeff/IR_Water/Little_Endian/Nalli.IRwater.EmisCoeff.bin
+EmisCoeff/IR_Water/Little_Endian/Nalli2.IRwater.EmisCoeff.bin
+EmisCoeff/IR_Water/netCDF/Nalli.IRwater.EmisCoeff.nc4
+EmisCoeff/IR_Water/netCDF/Nalli2.IRwater.EmisCoeff.nc4
 EmisCoeff/IR_Land/SEcategory/Little_Endian/USGS.IRland.EmisCoeff.bin
 EmisCoeff/VIS_Land/SEcategory/Little_Endian/USGS.VISland.EmisCoeff.bin
 SpcCoeff/Little_Endian/hirs4_metop-a.SpcCoeff.bin
