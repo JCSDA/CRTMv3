@@ -73,8 +73,8 @@ PROGRAM check_crtm
   CHARACTER(*), PARAMETER :: NC_COEFFICIENT_PATH='coefficients/netcdf/'
 
   ! Aerosol/Cloud coefficient format
-  CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
-  !CHARACTER(*), PARAMETER :: Coeff_Format = 'netCDF'
+  !CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
+  CHARACTER(*), PARAMETER :: Coeff_Format = 'netCDF'
 
   ! Aerosol/Cloud coefficient scheme
   CHARACTER(*), PARAMETER :: Aerosol_Model = 'CRTM'
@@ -308,8 +308,13 @@ PROGRAM check_crtm
     ! 7b. Inintialize the K-matrix INPUT so
     !     that the results are dTb/dx
     ! -------------------------------------
+    CALL CRTM_RTSolution_Create( rts_K, N_LAYERS ) ! This is necessary for Reflectivity
     rts_K%Radiance               = ZERO
     rts_K%Brightness_Temperature = ONE
+    DO m = 1, N_LAYERS
+       rts_K%Reflectivity(m) = ZERO
+       rts_K%Reflectivity_Attenuated(m) = ZERO
+    END DO
     ! ==========================================================================
 
     ! ==========================================================================

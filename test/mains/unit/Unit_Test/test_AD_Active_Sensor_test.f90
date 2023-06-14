@@ -2,12 +2,16 @@
 ! test_AD
 !
 ! Program to provide a (relatively) simple example of how
-! to test the CRTM adjoint function. 
-! 
+! to test the CRTM adjoint function.
+!
 ! The code checks whether the Jacobian from the Tangent-Linear
 ! and the Adjoint are consistent.
 !
 ! Copyright Patrick Stegmann, 2020
+!
+! Modified by Isaac Moradi Isaac.Moradi@NASA.GOV
+!             Nov-30-2021
+!             Modified to work with active sensor module
 !
 
 PROGRAM test_AD
@@ -25,9 +29,8 @@ PROGRAM test_AD
   ! ----------
   ! Parameters
   ! ----------
-  CHARACTER(*), PARAMETER :: ENDIAN_TYPE='little_endian'
   CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'test_AD'
-  CHARACTER(*), PARAMETER :: COEFFICIENTS_PATH = 'coefficients/'//ENDIAN_TYPE//'/'! './testinput/'
+  CHARACTER(*), PARAMETER :: COEFFICIENTS_PATH = './testinput/'
   CHARACTER(*), PARAMETER :: RESULTS_PATH = './results/unit/'
 
 
@@ -39,7 +42,7 @@ PROGRAM test_AD
   INTEGER, PARAMETER :: N_PROFILES  = 2
   INTEGER, PARAMETER :: N_LAYERS    = 92
   INTEGER, PARAMETER :: N_ABSORBERS = 2
-  INTEGER, PARAMETER :: N_CLOUDS    = 0
+  INTEGER, PARAMETER :: N_CLOUDS    = 1
   INTEGER, PARAMETER :: N_AEROSOLS  = 0
   ! ...but only ONE Sensor at a time
   INTEGER, PARAMETER :: N_SENSORS = 1
@@ -65,7 +68,7 @@ PROGRAM test_AD
   ! Declarations for Jacobian comparisons
   INTEGER :: n_la, n_ma
   INTEGER :: n_ls, n_ms
-  INTEGER :: ii, jj
+  INTEGER :: ii, jj, ilev1, ilev2, iprof, chan1, chan2
   CHARACTER(256) :: atmk_File, sfck_File
   ! Declarations for adjoint testing
   REAL(fp) :: Perturbation
@@ -101,6 +104,31 @@ PROGRAM test_AD
   ! ============================================================================
 
 
+  ! Directory location of coefficients
+! #ifdef LITTLE_ENDIAN
+  CHARACTER(*), PARAMETER :: ENDIAN_TYPE='little_endian'
+! #else
+!  CHARACTER(*), PARAMETER :: ENDIAN_TYPE='big_endian'
+!#endif
+  CHARACTER(*), PARAMETER :: COEFFICIENT_PATH='coefficients/'//ENDIAN_TYPE//'/'
+  CHARACTER(*), PARAMETER :: NC_COEFFICIENT_PATH='coefficients/netcdf/'
+
+  ! Aerosol/Cloud coefficient format
+  !CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
+  CHARACTER(*), PARAMETER :: Coeff_Format = 'netCDF'
+
+  ! Aerosol/Cloud coefficient scheme
+  CHARACTER(*), PARAMETER :: Aerosol_Model = 'CRTM'
+  !CHARACTER(*), PARAMETER :: Aerosol_Model = 'CMAQ'
+  !CHARACTER(*), PARAMETER :: Aerosol_Model = 'GOCART-GEOS5'
+  !CHARACTER(*), PARAMETER :: Aerosol_Model = 'NAAPS'
+  CHARACTER(*), PARAMETER :: Cloud_Model   = 'CRTM'
+
+  CHARACTER(256) :: AerosolCoeff_File
+  CHARACTER(256) :: AerosolCoeff_Format
+  CHARACTER(256) :: CloudCoeff_File
+  CHARACTER(256) :: CloudCoeff_Format
+  LOGICAL :: Attenuated_Reflectivity
 
   ! Program header
   ! --------------
@@ -120,6 +148,76 @@ PROGRAM test_AD
 
 
   ! ============================================================================
+  ! STEP 4. **** INITIALIZE THE CRTM ****
+  !
+  ! 4a. Initialise all the sensors at once
+  ! --------------------------------------
+  !.. Cloud coefficient information
+  IF ( Coeff_Format == 'Binary' ) THEN
+    CloudCoeff_Format   = 'Binary'
+    CloudCoeff_File     = 'CloudCoeff.bin'
+  ! if netCDF I/O
+  ELSE IF ( Coeff_Format == 'netCDF' ) THEN
+    CloudCoeff_Format   = 'netCDF'
+    CloudCoeff_File     = 'CloudCoeff_DDA_ARTS.nc4'
+  ELSE
+    message = 'Aerosol/Cloud coefficient format is not supported'
+    CALL Display_Message( PROGRAM_NAME, message, FAILURE )
+    STOP
+  END IF
+
+  !.....Aerosol
+  IF ( Aerosol_Model == 'CRTM' ) THEN
+    IF ( Coeff_Format == 'Binary' ) THEN
+      AerosolCoeff_Format = 'Binary'
+      AerosolCoeff_File   = 'AerosolCoeff.bin'
+    ELSE IF ( Coeff_Format == 'netCDF' ) THEN
+      AerosolCoeff_Format = 'netCDF'
+      AerosolCoeff_File   = 'AerosolCoeff.nc4'
+    ELSE
+      message = 'Aerosol coefficient format is not supported'
+      CALL Display_Message( PROGRAM_NAME, message, FAILURE )
+      STOP
+    END IF
+  ELSEIF ( Aerosol_Model == 'CMAQ' ) THEN
+    IF ( Coeff_Format == 'Binary' ) THEN
+      AerosolCoeff_Format = 'Binary'
+      AerosolCoeff_File   = 'AerosolCoeff.CMAQ.bin'
+    ELSE IF ( Coeff_Format == 'netCDF' ) THEN
+      AerosolCoeff_Format = 'netCDF'
+      AerosolCoeff_File   = 'AerosolCoeff.CMAQ.nc4'
+    ELSE
+      message = 'Aerosol coefficient format is not supported'
+      CALL Display_Message( PROGRAM_NAME, message, FAILURE )
+      STOP
+    END IF
+  ELSEIF ( Aerosol_Model == 'GOCART-GEOS5' ) THEN
+    IF ( Coeff_Format == 'Binary' ) THEN
+      AerosolCoeff_Format = 'Binary'
+      AerosolCoeff_File   = 'AerosolCoeff.GOCART-GEOS5.bin'
+    ELSE IF ( Coeff_Format == 'netCDF' ) THEN
+      AerosolCoeff_Format = 'netCDF'
+      AerosolCoeff_File   = 'AerosolCoeff.GOCART-GEOS5.nc4'
+    ELSE
+      message = 'Aerosol coefficient format is not supported'
+      CALL Display_Message( PROGRAM_NAME, message, FAILURE )
+      STOP
+    END IF
+  ELSEIF ( Aerosol_Model == 'NAAPS' ) THEN
+    IF ( Coeff_Format == 'Binary' ) THEN
+      AerosolCoeff_Format = 'Binary'
+      AerosolCoeff_File   = 'AerosolCoeff.NAAPS.bin'
+    ELSE IF ( Coeff_Format == 'netCDF' ) THEN
+      AerosolCoeff_Format = 'netCDF'
+      AerosolCoeff_File   = 'AerosolCoeff.NAAPS.nc4'
+    ELSE
+      message = 'Aerosol coefficient format is not supported'
+      CALL Display_Message( PROGRAM_NAME, message, FAILURE )
+      STOP
+    END IF
+  END IF
+
+  ! ============================================================================
   ! 2. **** INITIALIZE THE CRTM ****
   !
   ! 2a. This initializes the CRTM for the sensors
@@ -128,9 +226,19 @@ PROGRAM test_AD
   !           wired for this example.
   ! --------------------------------------------------
   WRITE( *,'(/5x,"Initializing the CRTM...")' )
-  Error_Status = CRTM_Init( (/Sensor_Id/), &  ! Input... must be an array, hence the (/../)
-                            ChannelInfo  , &  ! Output
-                            File_Path=COEFFICIENTS_PATH )
+
+  error_status = CRTM_Init( (/ sensor_ID /), &
+                        channelInfo, &
+                        Aerosol_Model, &
+                        AerosolCoeff_Format, &
+                        AerosolCoeff_File, &
+                        Cloud_Model, &
+                        CloudCoeff_Format, &
+                        CloudCoeff_File, &
+                        File_Path=COEFFICIENT_PATH, &
+                        NC_File_Path=NC_COEFFICIENT_PATH, &
+                        Quiet=.TRUE.)
+
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error initializing CRTM'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -176,6 +284,7 @@ PROGRAM test_AD
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP
   END IF
+  Atm%Add_Extra_Layers = .FALSE.
 
   ! The input TL structure
   CALL CRTM_Atmosphere_Create( Atmosphere_TL, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
@@ -193,10 +302,13 @@ PROGRAM test_AD
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP
   END IF
+
+
+CALL CRTM_RTSolution_Create(RTSolution,N_LAYERS)
+CALL CRTM_RTSolution_Create(RTSolution_TL,N_LAYERS)
+CALL CRTM_RTSolution_Create(RTSolution_AD,N_LAYERS)
+
   ! ============================================================================
-
-
-
 
   ! ============================================================================
   ! 4. **** ASSIGN INPUT DATA ****
@@ -210,11 +322,32 @@ PROGRAM test_AD
   ! --------------------------------
   CALL Load_Atm_Data()
   CALL Load_Sfc_Data()
+  ilev1 = 61
+  ilev2 = 72
+  iprof = 1
+  chan1 = 16
+  chan2 = 17
+  Attenuated_Reflectivity = .FALSE.
+
+  Do jj=1,2
+    !Atm(jj)%Cloud(1)%Water_Content = 10.0_fp
+    Atmosphere_TL(jj)%Climatology = atm(jj)%Climatology
+    Atmosphere_TL(jj)%Absorber_Id = atm(jj)%Absorber_Id
+    Atmosphere_TL(jj)%Absorber_Units = atm(jj)%Absorber_Units
+
+    Atmosphere_AD(jj)%Climatology = atm(jj)%Climatology
+    Atmosphere_AD(jj)%Absorber_Id = atm(jj)%Absorber_Id
+    Atmosphere_AD(jj)%Absorber_Units = atm(jj)%Absorber_Units
+  END DO
 
   ! Set the test state vector as the first to Temperature values.
   ! -------------------------------------------------------------
-  x_test(1,1) = Atm(1)%Temperature(61)
-  x_test(2,1) = Atm(1)%Temperature(72)
+!  x_test(1,1) = Atm(1)%Temperature(61)
+!  x_test(2,1) = Atm(1)%Temperature(72)
+
+  x_test(1,1) = Atm(iprof)%Cloud(1)%Water_Content(ilev1)
+  x_test(2,1) = Atm(iprof)%Cloud(1)%Water_Content(ilev2)
+
 
   ! 4b. GeometryInfo input
   ! ----------------------
@@ -225,28 +358,24 @@ PROGRAM test_AD
                                Sensor_Scan_Angle   = SCAN_ANGLE )
   ! ============================================================================
 
-  
+
 
 
   ! ============================================================================
   ! 5. **** INITIALIZE THE TL ARGUMENTS ****
-  
+
   ! 5a. Zero the LT INPUT structures
   ! ---------------------------------------
   CALL CRTM_Atmosphere_Zero( Atmosphere_TL )
   CALL CRTM_Surface_Zero( Surface_TL )
   Perturbation = ONE
-  !Perturbation = Atm(1)%Temperature(72)*0.1_fp**6
-  Atmosphere_TL(1)%Temperature(72) = Perturbation
-
+  Atmosphere_TL(iprof)%Cloud(1)%Water_Content(ilev2) = Perturbation
 
   ! ============================================================================
   ! 5b. Zero the AD OUTPUT structures
   ! ---------------------------------------
   CALL CRTM_Atmosphere_Zero( Atmosphere_AD )
   CALL CRTM_Surface_Zero( Surface_AD )
-
-
 
   ! ============================================================================
   ! 6. **** CALL THE CRTM TANGENT-LINEAR MODEL ****
@@ -265,16 +394,25 @@ PROGRAM test_AD
    STOP
   END IF
 
-  WRITE(*,*) 'Tangent-linear Result 1: ', RTSolution_TL(5,1)%Radiance
-  L_operator(1,1) = RTSolution_TL(5,1)%Radiance
-  L_operator(1,2) = RTSolution_TL(6,1)%Radiance
+  ! For the reflectivity, we use two different levels instead of two different channels
+
+  if (Attenuated_Reflectivity) then
+     WRITE(*,*) 'Tangent-linear Result 1: ', RTSolution_TL(chan1,iprof)%Reflectivity_Attenuated(ilev2)
+     L_operator(1,1) = RTSolution_TL(chan1,iprof)%Reflectivity_Attenuated(ilev2)
+     L_operator(1,2) = RTSolution_TL(chan2,iprof)%Reflectivity_Attenuated(ilev2)
+  else
+     WRITE(*,*) 'Tangent-linear Result 1: ', RTSolution_TL(chan1,iprof)%Reflectivity(ilev2)
+     L_operator(1,1) = RTSolution_TL(chan1,iprof)%Reflectivity(ilev2)
+     L_operator(1,2) = RTSolution_TL(chan2,iprof)%Reflectivity(ilev2)
+  endif
 
   CALL CRTM_Atmosphere_Zero( Atmosphere_TL )
   CALL CRTM_Surface_Zero( Surface_TL )
 
   !Perturbation = Atm(1)%Temperature(61)*0.1_fp
   Perturbation = ONE
-  Atmosphere_TL(1)%Temperature(61) = Perturbation
+!  Atmosphere_TL(1)%Temperature(61) = Perturbation
+  Atmosphere_TL(iprof)%Cloud(1)%Water_Content(ilev1) = Perturbation
 
   Error_Status = CRTM_Tangent_Linear( Atm , &
                                     Sfc , &
@@ -290,9 +428,19 @@ PROGRAM test_AD
    STOP
   END IF
 
-  WRITE(*,*) 'Tangent-linear Result 2: ', RTSolution_TL(5,1)%Radiance
-  L_operator(2,1) = RTSolution_TL(5,1)%Radiance
-  L_operator(2,2) = RTSolution_TL(6,1)%Radiance
+!  WRITE(*,*) 'Tangent-linear Result 2: ', RTSolution_TL(5,1)%Radiance
+!  L_operator(2,1) = RTSolution_TL(5,1)%Radiance
+!  L_operator(2,2) = RTSolution_TL(6,1)%Radiance
+
+  if (Attenuated_Reflectivity) then
+    WRITE(*,*) 'Tangent-linear Result 2: ', RTSolution_TL(chan1,iprof)%Reflectivity_Attenuated(ilev1)
+    L_operator(2,1) = RTSolution_TL(chan1,iprof)%Reflectivity_Attenuated(ilev1)
+    L_operator(2,2) = RTSolution_TL(chan2,iprof)%Reflectivity_Attenuated(ilev1)
+  else
+    WRITE(*,*) 'Tangent-linear Result 2: ', RTSolution_TL(chan1,iprof)%Reflectivity(ilev1)
+    L_operator(2,1) = RTSolution_TL(chan1,iprof)%Reflectivity(ilev1)
+    L_operator(2,2) = RTSolution_TL(chan2,iprof)%Reflectivity(ilev1)
+  endif
 
 
   ! ============================================================================
@@ -306,9 +454,22 @@ PROGRAM test_AD
   CALL CRTM_Surface_Zero( Surface_AD )
 
   ! Initialise the Adjoint INPUT to provide dR/dx derivatives
-  RTSolution_AD%Radiance = ZERO 
-  RTSolution_AD(5,1)%Radiance = ONE ! Check only channel 5 in the first AD run.
+!  RTSolution_AD%Radiance = ZERO
+!  RTSolution_AD(5,1)%Radiance = ONE ! Check only channel 5 in the first AD run.
+!  RTSolution_AD%Brightness_Temperature = ZERO
+
+  DO jj=1, N_LAYERS
+    RTSolution_AD%Reflectivity(jj) = ZERO
+    RTSolution_AD%Reflectivity_Attenuated(jj) = ZERO
+  ENDDO
+  if (Attenuated_Reflectivity) then
+     RTSolution_AD(chan1,iprof)%Reflectivity_Attenuated = ONE ! Check only channel 5 in the first AD run.
+  else
+     RTSolution_AD(chan1,iprof)%Reflectivity = ONE ! Check only channel 5 in the first AD run.
+  endif
+
   RTSolution_AD%Brightness_Temperature = ZERO
+  RTSolution_AD%Radiance = ZERO
 
   Error_Status = CRTM_Adjoint( Atm , &
                               Sfc , &
@@ -324,16 +485,31 @@ PROGRAM test_AD
    STOP
   END IF
 
-  WRITE(*,*) 'Adjoint Result 1: ', Atmosphere_AD(1)%Temperature(72)
-  L_operator_T(1,1) = Atmosphere_AD(1)%Temperature(72)
-  L_operator_T(1,2) = Atmosphere_AD(1)%Temperature(61)
+!  WRITE(*,*) 'Adjoint Result 1: ', Atmosphere_AD(1)%Temperature(72)
+!  L_operator_T(1,1) = Atmosphere_AD(1)%Temperature(72)
+!  L_operator_T(1,2) = Atmosphere_AD(1)%Temperature(61)
+
+  WRITE(*,*) 'Adjoint Result 1: ', Atmosphere_AD(iprof)%Cloud(1)%Water_Content(ilev2)
+  L_operator_T(1,1) = Atmosphere_AD(iprof)%Cloud(1)%Water_Content(ilev2)
+  L_operator_T(1,2) = Atmosphere_AD(iprof)%Cloud(1)%Water_Content(ilev1)
 
   CALL CRTM_Atmosphere_Zero( Atmosphere_AD )
   CALL CRTM_Surface_Zero( Surface_AD )
 
   ! Initialise the Adjoint INPUT to provide dR/dx derivatives
+!  RTSolution_AD%Radiance = ZERO
+!  RTSolution_AD(6,1)%Radiance = ONE ! Check only channel 6 in the first AD run.
+!  RTSolution_AD%Brightness_Temperature = ZERO
+DO jj=1, N_LAYERS
+  RTSolution_AD%Reflectivity(jj) = ZERO
+  RTSolution_AD%Reflectivity_Attenuated(jj) = ZERO
+ENDDO
+if (Attenuated_Reflectivity) then
+  RTSolution_AD(chan2,iprof)%Reflectivity_Attenuated = ONE ! Check only channel 6 in the first AD run.
+else
+  RTSolution_AD(chan2,iprof)%Reflectivity = ONE ! Check only channel 6 in the first AD run.
+endif
   RTSolution_AD%Radiance = ZERO
-  RTSolution_AD(6,1)%Radiance = ONE ! Check only channel 6 in the first AD run.
   RTSolution_AD%Brightness_Temperature = ZERO
 
   Error_Status = CRTM_Adjoint( Atm , &
@@ -350,9 +526,13 @@ PROGRAM test_AD
    STOP
   END IF
 
-  WRITE(*,*) 'Adjoint Result 2: ', Atmosphere_AD(1)%Temperature(61)
-  L_operator_T(2,1) = Atmosphere_AD(1)%Temperature(72)
-  L_operator_T(2,2) = Atmosphere_AD(1)%Temperature(61)
+!  WRITE(*,*) 'Adjoint Result 2: ', Atmosphere_AD(1)%Temperature(61)
+!  L_operator_T(2,1) = Atmosphere_AD(1)%Temperature(72)
+!  L_operator_T(2,2) = Atmosphere_AD(1)%Temperature(61)
+
+  WRITE(*,*) 'Adjoint Result 2: ', Atmosphere_AD(iprof)%Cloud(1)%Water_Content(ilev1)
+  L_operator_T(2,1) = Atmosphere_AD(iprof)%Cloud(1)%Water_Content(ilev2)
+  L_operator_T(2,2) = Atmosphere_AD(iprof)%Cloud(1)%Water_Content(ilev1)
 
   ! ============================================================================
 
@@ -377,7 +557,7 @@ PROGRAM test_AD
         STOP 1
       END IF
     END DO
-  END DO test_loop 
+  END DO test_loop
 
   ! ============================================================================
   ! 8. **** DESTROY THE CRTM ****
@@ -390,7 +570,7 @@ PROGRAM test_AD
     STOP
   END IF
   ! ============================================================================
- 
+
 
   ! ============================================================================
   ! 10. **** CLEAN UP ****
@@ -410,7 +590,7 @@ PROGRAM test_AD
              STAT = Allocate_Status)
   ! ============================================================================
 
- 
+
 CONTAINS
 
   INCLUDE 'Load_Atm_Data.inc'

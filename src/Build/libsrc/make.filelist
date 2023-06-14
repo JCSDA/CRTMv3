@@ -108,6 +108,8 @@ FSRC_FILES = \
   Emission_Module.f90 \
   CRTM_RTSolution_Define.f90 \
   Common_RTSolution.f90 \
+  ODPS_CoordinateMapping.f90 \
+  CRTM_Active_Sensor.f90 \
   CRTM_RTSolution.f90 \
   CRTM_AntennaCorrection.f90 \
   CRTM_AncillaryInput_Define.f90 \
@@ -143,7 +145,6 @@ FSRC_FILES = \
   ODSSU_Binary_IO.f90 \
   ODSSU_TauCoeff.f90 \
   Profile_Utility_Parameters.f90 \
-  ODPS_CoordinateMapping.f90 \
   ODZeeman_TauCoeff.f90 \
   ODZeeman_AtmAbsorption.f90 \
   ODZeeman_Predictor.f90 \

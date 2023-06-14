@@ -120,6 +120,7 @@ list( APPEND crtm_src_files
 			RTSolution/Common_RTSolution.f90
 			RTSolution/CRTM_RTSolution_Define.f90
 			RTSolution/CRTM_RTSolution.f90
+			RTSolution/CRTM_Active_Sensor.f90
 			RTSolution/Emission/Emission_Module.f90
 			RTSolution/RTV_Define.f90
 			RTSolution/SOI/SOI_Module.f90
