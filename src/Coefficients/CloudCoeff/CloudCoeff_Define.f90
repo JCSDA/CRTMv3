@@ -544,9 +544,9 @@ CONTAINS
     WRITE(*,'(5x,"CloudCoeff Temperature :")') 
     WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%Temperature
     WRITE(*,'(5x,"CloudCoeff Density_MW     :")') 
-    WRITE(*,'(5(1x,es22.15,:))') CloudCoeff%Density_MW    
+    WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%Density_MW    
     WRITE(*,'(5x,"CloudCoeff Density_IR     :")') 
-    WRITE(*,'(5(1x,es22.15,:))') CloudCoeff%Density_IR
+    WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%Density_IR
 
     ! Microwave data
     WRITE(*,'(/3x,"Microwave data...")')
@@ -560,6 +560,7 @@ CONTAINS
       WRITE(*,'(5x,"Microwave liquid phase mass extinction coefficients:")') 
       WRITE(*,'(7x,"Temperature     : ",es13.6)') CloudCoeff%Temperature(j)
       DO i = 1, CloudCoeff%n_MW_Radii
+        WRITE(*,'(7x,"Water Content: ",es13.6)') CloudCoeff%Water_Density_MW(i)
         WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_MW(i)
         WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%ke_L_MW(:,i,j)     
       END DO
@@ -573,6 +574,7 @@ CONTAINS
       WRITE(*,'(5x,"Microwave liquid phase single scatter albedo:")') 
       WRITE(*,'(7x,"Temperature     : ",es13.6)') CloudCoeff%Temperature(j)
       DO i = 1, CloudCoeff%n_MW_Radii
+        WRITE(*,'(7x,"Water Content: ",es13.6)') CloudCoeff%Water_Density_MW(i)
         WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_MW(i)
         WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%w_L_MW(:,i,j)     
       END DO
@@ -586,6 +588,7 @@ CONTAINS
       WRITE(*,'(5x,"Microwave liquid phase asymmetry parameter:")') 
       WRITE(*,'(7x,"Temperature     : ",es13.6)') CloudCoeff%Temperature(j)
       DO i = 1, CloudCoeff%n_MW_Radii
+        WRITE(*,'(7x,"Water Content: ",es13.6)') CloudCoeff%Water_Density_MW(i)
         WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_MW(i)
         WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%g_L_MW(:,i,j)     
       END DO
@@ -606,6 +609,7 @@ CONTAINS
           DO j = 1, CloudCoeff%n_Temperatures
             WRITE(*,'(7x,"Temperature     : ",es13.6)') CloudCoeff%Temperature(j)
             DO i = 1, CloudCoeff%n_MW_Radii
+              WRITE(*,'(7x,"Water Content: ",es13.6)') CloudCoeff%Water_Density_MW(i)
               WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_MW(i)
               WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%pcoeff_L_MW(:,i,j,kidx,l)
             END DO
@@ -623,6 +627,7 @@ CONTAINS
       WRITE(*,'(5x,"Microwave solid phase mass extinction coefficients:")') 
       WRITE(*,'(7x,"Density         : ",es13.6)') CloudCoeff%Density_MW(j)
       DO i = 1, CloudCoeff%n_MW_Radii
+        WRITE(*,'(7x,"Water Content: ",es13.6)') CloudCoeff%Water_Density_MW(i)
         WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_MW(i)
         WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%ke_S_MW(:,i,j)     
       END DO
@@ -634,8 +639,9 @@ CONTAINS
     END IF
     DO j = 1, CloudCoeff%n_MW_Densities
       WRITE(*,'(5x,"Microwave solid phase single scatter albedo:")') 
-      WRITE(*,'(7x,"Density         : ",es13.6)') CloudCoeff%Density_IR(j)
+      WRITE(*,'(7x,"Density_MW         : ",es13.6)') CloudCoeff%Density_MW(j)
       DO i = 1, CloudCoeff%n_MW_Radii
+        WRITE(*,'(7x,"Water Content: ",es13.6)') CloudCoeff%Water_Density_MW(i)
         WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_MW(i)
         WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%w_S_MW(:,i,j)     
       END DO
@@ -647,8 +653,9 @@ CONTAINS
     END IF
     DO j = 1, CloudCoeff%n_MW_Densities
       WRITE(*,'(5x,"Microwave solid phase asymmetry parameter:")') 
-      WRITE(*,'(7x,"Density         : ",es13.6)') CloudCoeff%Density_MW(j)
+      WRITE(*,'(7x,"Density_MW     : ",es13.6)') CloudCoeff%Density_MW(j)
       DO i = 1, CloudCoeff%n_MW_Radii
+        WRITE(*,'(7x,"Water Content: ",es13.6)') CloudCoeff%Water_Density_MW(i)
         WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_MW(i)
         WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%g_S_MW(:,i,j)     
       END DO
@@ -669,6 +676,7 @@ CONTAINS
           DO j = 1, CloudCoeff%n_MW_Densities
             WRITE(*,'(7x,"Density         : ",es13.6)') CloudCoeff%Density_MW(j)
             DO i = 1, CloudCoeff%n_MW_Radii
+              WRITE(*,'(7x,"Water Content: ",es13.6)') CloudCoeff%Water_Density_MW(i)
               WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_MW(i)
               WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%pcoeff_S_MW(:,i,j,kidx,l)
             END DO
