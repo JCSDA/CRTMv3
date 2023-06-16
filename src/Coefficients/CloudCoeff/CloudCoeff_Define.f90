@@ -660,6 +660,20 @@ CONTAINS
         WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%g_S_MW(:,i,j)     
       END DO
     END DO
+
+    IF ( wait ) THEN
+      WRITE(*,'(/5x,"Press <ENTER> to view the microwave solid phase backscattering parameter")')
+      READ(*,*) 
+    END IF
+    DO j = 1, CloudCoeff%n_MW_Densities
+      WRITE(*,'(5x,"Microwave solid phase backscatter parameter:")') 
+      WRITE(*,'(7x,"Density_MW         : ",es22.15)') CloudCoeff%Density_MW(j)
+      DO i = 1, CloudCoeff%n_MW_Radii
+        WRITE(*,'(7x,"Water Content: ",es22.15)') CloudCoeff%Water_Density_MW(i)
+        WRITE(*,'(7x,"Effective radius: ",es22.15)') CloudCoeff%Reff_MW(i)
+        WRITE(*,'(5(1x,es22.15,:))') CloudCoeff%kb_S_MW(:,i,j)     
+      END DO
+    END DO
     
     DO m = 1, CloudCoeff%n_Stream_Sets
       IF ( wait ) THEN
@@ -674,7 +688,7 @@ CONTAINS
           WRITE(*,'(7x,"Legendre term: ",i0)') k
           kidx = k + CloudCoeff%Legendre_Offset(m)
           DO j = 1, CloudCoeff%n_MW_Densities
-            WRITE(*,'(7x,"Density         : ",es13.6)') CloudCoeff%Density_MW(j)
+            WRITE(*,'(7x,"Density_MW         : ",es13.6)') CloudCoeff%Density_MW(j)
             DO i = 1, CloudCoeff%n_MW_Radii
               WRITE(*,'(7x,"Water Content: ",es13.6)') CloudCoeff%Water_Density_MW(i)
               WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_MW(i)
@@ -720,6 +734,16 @@ CONTAINS
       WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%g_IR(:,i,0)     
     END DO
 
+    IF ( wait ) THEN
+      WRITE(*,'(/5x,"Press <ENTER> to view the infrared liquid phase backscattering parameter")')
+      READ(*,*) 
+    END IF
+    WRITE(*,'(5x,"Infrared liquid phase asymmetry parameter:")') 
+    DO i = 1, CloudCoeff%n_IR_Radii
+      WRITE(*,'(7x,"Effective radius: ",es22.15)') CloudCoeff%Reff_IR(i)
+      WRITE(*,'(5(1x,es22.15,:))') CloudCoeff%kb_IR(:,i,0)     
+    END DO
+    
     DO m = 1, CloudCoeff%n_Stream_Sets
       IF ( wait ) THEN
         WRITE(*,'(/5x,"Press <ENTER> to view the ",i0,"-stream infrared liquid ",&
@@ -744,7 +768,7 @@ CONTAINS
     END IF
     DO j = 1, CloudCoeff%n_IR_Densities
       WRITE(*,'(5x,"Infrared solid phase mass extinction coefficients:")') 
-      WRITE(*,'(7x,"Density         : ",es13.6)') CloudCoeff%Density_IR(j)
+      WRITE(*,'(7x,"Density_IR         : ",es13.6)') CloudCoeff%Density_IR(j)
       DO i = 1, CloudCoeff%n_IR_Radii
         WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_IR(i)
         WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%ke_IR(:,i,j)     
@@ -757,7 +781,7 @@ CONTAINS
     END IF
     DO j = 1, CloudCoeff%n_IR_Densities
       WRITE(*,'(5x,"Infrared solid phase single scatter albedo:")') 
-      WRITE(*,'(7x,"Density         : ",es13.6)') CloudCoeff%Density_IR(j)
+      WRITE(*,'(7x,"Density_IR         : ",es13.6)') CloudCoeff%Density_IR(j)
       DO i = 1, CloudCoeff%n_IR_Radii
         WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_IR(i)
         WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%w_IR(:,i,j)     
@@ -770,7 +794,7 @@ CONTAINS
     END IF
     DO j = 1, CloudCoeff%n_IR_Densities
       WRITE(*,'(5x,"Infrared solid phase asymmetry parameter:")') 
-      WRITE(*,'(7x,"Density         : ",es13.6)') CloudCoeff%Density_IR(j)
+      WRITE(*,'(7x,"Density_IR         : ",es13.6)') CloudCoeff%Density_IR(j)
       DO i = 1, CloudCoeff%n_IR_Radii
         WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_IR(i)
         WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%g_IR(:,i,j)     
@@ -801,7 +825,7 @@ CONTAINS
         WRITE(*,'(7x,"Legendre term: ",i0)') k
         kidx = k + CloudCoeff%Legendre_Offset(m)
         DO j = 1, CloudCoeff%n_IR_Densities
-          WRITE(*,'(7x,"Density         : ",es13.6)') CloudCoeff%Density_IR(j)
+          WRITE(*,'(7x,"Density_IR         : ",es13.6)') CloudCoeff%Density_IR(j)
           DO i = 1, CloudCoeff%n_IR_Radii
             WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_IR(i)
             WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%pcoeff_IR(:,i,j,kidx,1)
@@ -1050,6 +1074,7 @@ CONTAINS
     ! ...Data
     IF ( ALL(x%Frequency_MW .EqualTo. y%Frequency_MW ) .AND. &
          ALL(x%Frequency_IR .EqualTo. y%Frequency_IR ) .AND. &
+         ALL(x%Water_Density_MW .EqualTo. y%Water_Density_MW ) .AND. &
          ALL(x%Reff_MW      .EqualTo. y%Reff_MW      ) .AND. &
          ALL(x%Reff_IR      .EqualTo. y%Reff_IR      ) .AND. &
          ALL(x%Temperature  .EqualTo. y%Temperature  ) .AND. &
