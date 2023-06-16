@@ -11,10 +11,21 @@
 !       Modified by     Yingtao Ma, 2020/6/11
 !                       yingtao.ma@noaa.gov
 !                       Implemented CMAQ aerosol
+!
+!      Modified by:    Isaac Moradi     isaac.moradi@nasa.gov
+!                      24-Sept-2021
+!                      Several new variables were added to later simpify the interpolation
+!                      of cloud optical properties
+!                      
+!                      Isaac Moradi     isaac.moradi@nasa.gov
+!                      30-Nov-2021
+!                      Added Add_Extra_Layers with default value set to .TRUE.
+!
 !       Modified by:    Cheng Dang, 17-Aug-2022
 !                       dangch@ucar.edu
 !                       Add relative humidity calculation
 !
+
 MODULE CRTM_Atmosphere_Define
 
   ! -----------------
@@ -871,6 +882,7 @@ CONTAINS
     ! Zero out the data
     Atmosphere%Level_Pressure    = ZERO
     Atmosphere%Pressure          = ZERO
+    Atmosphere%Height         = ZERO
     Atmosphere%Temperature       = ZERO
     Atmosphere%Relative_Humidity = ZERO
     Atmosphere%Absorber          = ZERO
@@ -1231,6 +1243,7 @@ CONTAINS
            ANY(x%Absorber_Units(1:j) /= y%Absorber_Units(1:j)) ) RETURN
       ! ...Floating point arrays
       IF ( (.NOT. ALL(Compares_Within_Tolerance(x%Level_Pressure      ,y%Level_Pressure    ,n))) .OR. &
+           (.NOT. ALL(Compares_Within_Tolerance(x%Height              ,y%Height            ,n))) .OR. &
            (.NOT. ALL(Compares_Within_Tolerance(x%Pressure            ,y%Pressure          ,n))) .OR. &
            (.NOT. ALL(Compares_Within_Tolerance(x%Temperature         ,y%Temperature       ,n))) .OR. &
            (.NOT. ALL(Compares_Within_Tolerance(x%Relative_Humidity   ,y%Relative_Humidity ,n))) .OR. &
