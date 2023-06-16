@@ -71,8 +71,8 @@ PROGRAM check_crtm
 #else
   CHARACTER(*), PARAMETER :: ENDIAN_TYPE='big_endian'
 #endif
-  CHARACTER(*), PARAMETER :: COEFFICIENT_PATH='coefficients/'//ENDIAN_TYPE//'/'
-  CHARACTER(*), PARAMETER :: NC_COEFFICIENT_PATH='coefficients/netcdf/'
+  CHARACTER(*), PARAMETER :: COEFFICIENT_PATH='./testinput/'
+  CHARACTER(*), PARAMETER :: NC_COEFFICIENT_PATH='./testinput/'
 
   ! Aerosol/Cloud coefficient format
   CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
@@ -94,7 +94,7 @@ PROGRAM check_crtm
   INTEGER, PARAMETER :: N_ABSORBERS = 2
   INTEGER, PARAMETER :: N_CLOUDS    = 1
   INTEGER, PARAMETER :: N_AEROSOLS  = 1
-  
+
   ! Sensor information
   INTEGER     , PARAMETER :: N_SENSORS = 2
   CHARACTER(*), PARAMETER :: SENSOR_ID(N_SENSORS) = (/'cris399_npp', &
@@ -114,6 +114,8 @@ PROGRAM check_crtm
   CHARACTER(256) :: AerosolCoeff_Format
   CHARACTER(256) :: CloudCoeff_File
   CHARACTER(256) :: CloudCoeff_Format
+  CHARACTER(256) :: Aerosol_Scheme
+  CHARACTER(256) :: Cloud_Scheme
   INTEGER :: err_stat, alloc_stat
   INTEGER :: n_channels
   INTEGER :: l, m, n, nc
@@ -155,70 +157,31 @@ PROGRAM check_crtm
   !
   ! 4a. Initialise all the sensors at once
   ! --------------------------------------
-  !.. Cloud coefficient information
-  IF ( Coeff_Format == 'Binary' ) THEN
-    CloudCoeff_Format   = 'Binary'
-    CloudCoeff_File     = 'CloudCoeff.bin'
-  ! if netCDF I/O
-  ELSE IF ( Coeff_Format == 'netCDF' ) THEN
-    CloudCoeff_Format   = 'netCDF'
-    CloudCoeff_File     = 'CloudCoeff.nc4'
+  ! ... Cloud coefficient information
+  IF ( Cloud_Model /= 'CRTM' ) THEN
+      Cloud_Scheme = Cloud_Model//'.'
   ELSE
-    message = 'Aerosol/Cloud coefficient format is not supported'
-    CALL Display_Message( PROGRAM_NAME, message, FAILURE )
-    STOP
+      Cloud_Scheme = ' '
+  END IF
+  ! ... Aerosol coefficient information
+  IF ( Aerosol_Model /= 'CRTM' ) THEN
+      Aerosol_Scheme = Aerosol_Model//'.'
+  ELSE
+      Aerosol_Scheme = ' '
+  END IF
+  ! ... Coefficient table format
+  IF ( Coeff_Format == 'Binary' ) THEN
+    AerosolCoeff_Format = 'Binary'
+    AerosolCoeff_File   = 'AerosolCoeff.'//TRIM(Aerosol_Scheme)//'bin'
+    CloudCoeff_Format   = 'Binary'
+    CloudCoeff_File     = 'CloudCoeff.'//TRIM(Cloud_Scheme)//'bin'
+  ELSE IF ( Coeff_Format == 'netCDF' ) THEN
+    AerosolCoeff_Format = 'netCDF'
+    AerosolCoeff_File   = 'AerosolCoeff.'//TRIM(Aerosol_Scheme)//'nc4'
+    CloudCoeff_Format   = 'netCDF'
+    CloudCoeff_File     = 'CloudCoeff.'//TRIM(Cloud_Scheme)//'nc4'
   END IF
 
-  !.....Aerosol
-  IF ( Aerosol_Model == 'CRTM' ) THEN
-    IF ( Coeff_Format == 'Binary' ) THEN
-      AerosolCoeff_Format = 'Binary'
-      AerosolCoeff_File   = 'AerosolCoeff.bin'
-    ELSE IF ( Coeff_Format == 'netCDF' ) THEN
-      AerosolCoeff_Format = 'netCDF'
-      AerosolCoeff_File   = 'AerosolCoeff.nc4'
-    ELSE
-      message = 'Aerosol coefficient format is not supported'
-      CALL Display_Message( PROGRAM_NAME, message, FAILURE )
-      STOP
-    END IF
-  ELSEIF ( Aerosol_Model == 'CMAQ' ) THEN
-    IF ( Coeff_Format == 'Binary' ) THEN
-      AerosolCoeff_Format = 'Binary'
-      AerosolCoeff_File   = 'AerosolCoeff.CMAQ.bin'
-    ELSE IF ( Coeff_Format == 'netCDF' ) THEN
-      AerosolCoeff_Format = 'netCDF'
-      AerosolCoeff_File   = 'AerosolCoeff.CMAQ.nc4'
-    ELSE
-      message = 'Aerosol coefficient format is not supported'
-      CALL Display_Message( PROGRAM_NAME, message, FAILURE )
-      STOP
-    END IF
-  ELSEIF ( Aerosol_Model == 'GOCART-GEOS5' ) THEN
-    IF ( Coeff_Format == 'Binary' ) THEN
-      AerosolCoeff_Format = 'Binary'
-      AerosolCoeff_File   = 'AerosolCoeff.GOCART-GEOS5.bin'
-    ELSE IF ( Coeff_Format == 'netCDF' ) THEN
-      AerosolCoeff_Format = 'netCDF'
-      AerosolCoeff_File   = 'AerosolCoeff.GOCART-GEOS5.nc4'
-    ELSE
-      message = 'Aerosol coefficient format is not supported'
-      CALL Display_Message( PROGRAM_NAME, message, FAILURE )
-      STOP
-    END IF
-  ELSEIF ( Aerosol_Model == 'NAAPS' ) THEN
-    IF ( Coeff_Format == 'Binary' ) THEN
-      AerosolCoeff_Format = 'Binary'
-      AerosolCoeff_File   = 'AerosolCoeff.NAAPS.bin'
-    ELSE IF ( Coeff_Format == 'netCDF' ) THEN
-      AerosolCoeff_Format = 'netCDF'
-      AerosolCoeff_File   = 'AerosolCoeff.NAAPS.nc4'
-    ELSE
-      message = 'Aerosol coefficient format is not supported'
-      CALL Display_Message( PROGRAM_NAME, message, FAILURE )
-      STOP
-    END IF
-  END IF
 
   WRITE( *,'(/5x,"Initializing the CRTM...")' )
   err_stat = CRTM_Init( SENSOR_ID, &

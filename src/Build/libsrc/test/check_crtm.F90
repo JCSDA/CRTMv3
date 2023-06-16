@@ -178,7 +178,7 @@ PROGRAM check_crtm
     CloudCoeff_Format   = 'netCDF'
     CloudCoeff_File     = 'CloudCoeff.'//TRIM(Cloud_Scheme)//'nc4'
   END IF
-  
+
   WRITE( *,'(/5x,"Initializing the CRTM...")' )
   err_stat = CRTM_Init( SENSOR_ID, &
                         chinfo, &
@@ -876,7 +876,7 @@ CONTAINS
     !   Sea Sat SSAM, Sea Salt SSCM1, and Sea Salt SSCM2
     Load_Aerosol_Data_2: IF ( atm(2)%n_Aerosols > 0 ) THEN
 
-      atm(2)%Aerosol(1)%Type = 2 ! SEASALT_SSAM_AEROSOL (CRTM), Soot (CMAQ), 
+      atm(2)%Aerosol(1)%Type = 2 ! SEASALT_SSAM_AEROSOL (CRTM), Soot (CMAQ),
                                  ! DUST 2 (GOCART-GEOS5), Smoke (NAAPS)
       atm(2)%Aerosol(1)%Effective_Radius = & ! microns
       (/0.000000E+00_fp, 0.000000E+00_fp, &
@@ -942,7 +942,7 @@ CONTAINS
       END IF
 
       IF ( atm(2)%n_Aerosols > 1 ) THEN
-        atm(2)%Aerosol(2)%Type = 3 ! SEASALT_SSCM1_AEROSOL (CRTM), Water soluble (CMAQ), 
+        atm(2)%Aerosol(2)%Type = 3 ! SEASALT_SSCM1_AEROSOL (CRTM), Water soluble (CMAQ),
                                    ! DUST 3 (GOCART-GEOS5), Sea salt (NAAPS)
         atm(2)%Aerosol(2)%Effective_Radius = & ! microns
         (/0.000000E+00_fp, 0.000000E+00_fp, &
@@ -1009,7 +1009,7 @@ CONTAINS
       END IF
 
       IF ( atm(2)%n_Aerosols > 2 ) THEN
-        atm(2)%Aerosol(3)%Type = 4 ! SEASALT_SSCM2_AEROSOL (CRTM), Sulfate (CMAQ), 
+        atm(2)%Aerosol(3)%Type = 4 ! SEASALT_SSCM2_AEROSOL (CRTM), Sulfate (CMAQ),
                                    ! Dust 4 (GOCART-GEOS5), Anthropogenic and Biogenic Fine Particles (NAAPS)
         atm(2)%Aerosol(3)%Effective_Radius = & ! microns
         (/0.000000E+00_fp, 0.000000E+00_fp, &
