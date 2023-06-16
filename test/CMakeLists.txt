@@ -182,6 +182,63 @@ ecbuild_add_test( TARGET  test_check_crtm_random
                   LIBS    crtm
                   TEST_DEPENDS get_crtm_coeffs)
 
+#(CD) AerosolCoeff I/O test
+ecbuild_add_executable (
+    TARGET "test_aerosol_coeff_io"
+        SOURCES mains/unit/input_output/test_AerosolCoeff/test_aerosol_coeff_io.f90
+        LIBS crtm
+        NOINSTALL
+        )
+ecbuild_add_test(
+    TARGET "Unit_test_aerosol_coeff_io"
+        COMMAND "test_aerosol_coeff_io"
+        OMP $ENV{OMP_NUM_THREADS}
+        TEST_DEPENDS get_crtm_coeffs
+        )
+
+#(CD) AerosolCoeff netCDF I/O test
+ecbuild_add_executable (
+    TARGET "test_aerosol_coeff_io_nc"
+        SOURCES mains/unit/input_output/test_AerosolCoeff_NC/test_aerosol_coeff_io_nc.f90
+        LIBS crtm
+        NOINSTALL
+        )
+ecbuild_add_test(
+    TARGET "Unit_test_aerosol_coeff_io_nc"
+        COMMAND "test_aerosol_coeff_io_nc"
+        OMP $ENV{OMP_NUM_THREADS}
+        TEST_DEPENDS get_crtm_coeffs
+        )
+
+
+#(CD) CloudCoeff Binary I/O test
+ecbuild_add_executable (
+    TARGET "test_cloud_coeff_io"
+        SOURCES mains/unit/input_output/test_CloudCoeff/test_cloud_coeff_io.f90
+        LIBS crtm
+        NOINSTALL
+        )
+ecbuild_add_test(
+    TARGET "Unit_test_cloud_coeff_io"
+        COMMAND "test_cloud_coeff_io"
+        OMP $ENV{OMP_NUM_THREADS}
+        TEST_DEPENDS get_crtm_coeffs
+        )
+
+#(CD) CloudCoeff netCDF I/O test
+ecbuild_add_executable (
+    TARGET "test_cloud_coeff_io_nc"
+        SOURCES mains/unit/input_output/test_CloudCoeff_NC/test_cloud_coeff_io_nc.f90
+        LIBS crtm
+        NOINSTALL
+        )
+ecbuild_add_test(
+    TARGET "Unit_test_cloud_coeff_io_nc"
+        COMMAND "test_cloud_coeff_io_nc"
+        OMP $ENV{OMP_NUM_THREADS}
+        TEST_DEPENDS get_crtm_coeffs
+        )
+
 #---------------------------------------------------------------------------------
 #unit tests
 
@@ -257,7 +314,9 @@ endforeach()
 
 list( APPEND crtm_test_input
 AerosolCoeff/Little_Endian/AerosolCoeff.bin
+AerosolCoeff/netCDF/AerosolCoeff.nc4
 CloudCoeff/Little_Endian/CloudCoeff.bin
+CloudCoeff/netCDF/CloudCoeff.nc4
 EmisCoeff/MW_Water/Little_Endian/FASTEM6.MWwater.EmisCoeff.bin
 EmisCoeff/IR_Ice/SEcategory/Little_Endian/NPOESS.IRice.EmisCoeff.bin
 EmisCoeff/IR_Land/SEcategory/Little_Endian/NPOESS.IRland.EmisCoeff.bin
