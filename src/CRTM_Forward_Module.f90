@@ -16,7 +16,7 @@ MODULE CRTM_Forward_Module
   ! ------------
   USE Type_Kinds,                 ONLY: fp, LLong
   USE Message_Handler,            ONLY: SUCCESS, FAILURE, WARNING, Display_Message
-  USE CRTM_Parameters,            ONLY: SET,NOT_SET,ZERO,ONE, RT_VMOM, &
+  USE CRTM_Parameters,            ONLY: SET,NOT_SET,ZERO,ONE, EPSILON_FP, RT_VMOM, &
                                         MAX_N_LAYERS        , &
                                         MAX_N_PHASE_ELEMENTS, &
                                         MAX_N_LEGENDRE_TERMS, &
