@@ -1,2 +1,11 @@
 .DS_Store
 *.o
+*.rej
+*.tgz
+.ipynb*
+build
+fix/
+**/Build/
+build.bash
+rebuild.bash
+.gitignore

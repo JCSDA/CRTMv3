@@ -9,6 +9,12 @@
 !       Written by:     Paul van Delst, 17-Dec-2002
 !                       paul.vandelst@noaa.gov
 !
+!       Modified by:     Isaac Moradi, 12-Nov-2021
+!                        Isaac.Moradi@NASA.GOV
+!
+!                        Included changes to determine whether the sensor
+!                        is active or not
+!
 
 MODULE SpcCoeff_netCDF_IO
 
@@ -27,7 +33,8 @@ MODULE SpcCoeff_netCDF_IO
                              SpcCoeff_Inspect       , &
                              SpcCoeff_ValidRelease  , &
                              SpcCoeff_Info          
-                            
+  USE SensorInfo_Parameters, ONLY: ACTIVE_SENSOR
+
   USE netcdf
   ! Disable implicit typing
   IMPLICIT NONE
@@ -503,6 +510,7 @@ CONTAINS
     INTEGER :: nf90_status
     INTEGER :: fileid
     INTEGER :: varid
+    INTEGER(long) :: Sensor_Type
 
     ! Set up
     err_stat = SUCCESS
@@ -550,7 +558,14 @@ CONTAINS
             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Write_Cleanup(); RETURN
     END IF
-    NF90_Status = NF90_PUT_VAR( FileId,VarID,SpcCoeff%Sensor_Type )
+
+    ! If it Is_Active_Sensor then add ACTIVE_SENOR to Sensor_Type
+    IF (SpcCoeff%Is_Active_Sensor) THEN
+        Sensor_Type = SpcCoeff%Sensor_Type + ACTIVE_SENSOR
+    ELSE
+        Sensor_Type = SpcCoeff%Sensor_Type
+    END IF
+    NF90_Status = NF90_PUT_VAR( FileId,VarID,Sensor_Type )
     IF ( NF90_Status /= NF90_NOERR ) THEN
       msg = 'Error writing '//SENSOR_TYPE_VARNAME//' to '//TRIM(Filename)//&
             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
@@ -934,6 +949,13 @@ CONTAINS
             ' - '//TRIM(NF90_STRERROR( nf90_status ))
       CALL Read_Cleanup(); RETURN
     END IF
+    ! If the Sensor_Type is greater than ACTIVE_SENOR then set the Is_Active_Sensor flag
+    ! and subtract the numebr so that subsequently it can be defined as MW/IR/VIS/UV
+    IF (SpcCoeff%Sensor_Type .GT. ACTIVE_SENSOR) THEN
+       SpcCoeff%Is_Active_Sensor = .TRUE.
+       SpcCoeff%Sensor_Type = SpcCoeff%Sensor_Type - ACTIVE_SENSOR
+    END IF
+
     ! ...Sensor_Channel variable
     nf90_status = NF90_INQ_VARID( fileid,SENSOR_CHANNEL_VARNAME,varid )
     IF ( nf90_status /= NF90_NOERR ) THEN
