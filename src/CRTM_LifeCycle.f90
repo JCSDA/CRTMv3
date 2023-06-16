@@ -587,6 +587,8 @@ CONTAINS
     IF ( PRESENT(Aerosol_Model       ) ) Default_Aerosol_Model       = TRIM(ADJUSTL(Aerosol_Model))
     IF ( PRESENT(Cloud_Model         ) ) Default_Cloud_Model         = TRIM(ADJUSTL(Cloud_Model))
     ! ...Were other filenames specified?
+    IF ( PRESENT(AerosolCoeff_File   ) ) Default_AerosolCoeff_File   = TRIM(ADJUSTL(AerosolCoeff_File))
+    IF ( PRESENT(CloudCoeff_File     ) ) Default_CloudCoeff_File     = TRIM(ADJUSTL(CloudCoeff_File))
     IF ( PRESENT(SpcCoeff_Format     ) ) Default_SpcCoeff_Format     = TRIM(ADJUSTL(SpcCoeff_Format))
     IF ( PRESENT(TauCoeff_Format     ) ) Default_TauCoeff_Format     = TRIM(ADJUSTL(TauCoeff_Format))
     IF ( PRESENT(IRwaterCoeff_File   ) ) Default_IRwaterCoeff_File   = TRIM(ADJUSTL(IRwaterCoeff_File))
