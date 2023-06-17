@@ -711,7 +711,7 @@ CONTAINS
     WRITE(*,'(5x,"Infrared liquid phase mass extinction coefficients:")') 
     DO i = 1, CloudCoeff%n_IR_Radii
       WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_IR(i)
-      WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%ke_IR(:,i,0)     
+      WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%ke_IR(:,i,1)     
     END DO
     
     IF ( wait ) THEN
@@ -721,7 +721,7 @@ CONTAINS
     WRITE(*,'(5x,"Infrared liquid phase single scatter albedo:")') 
     DO i = 1, CloudCoeff%n_IR_Radii
       WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_IR(i)
-      WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%w_IR(:,i,0)     
+      WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%w_IR(:,i,1)     
     END DO
 
     IF ( wait ) THEN
@@ -731,7 +731,7 @@ CONTAINS
     WRITE(*,'(5x,"Infrared liquid phase asymmetry parameter:")') 
     DO i = 1, CloudCoeff%n_IR_Radii
       WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_IR(i)
-      WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%g_IR(:,i,0)     
+      WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%g_IR(:,i,1)     
     END DO
 
     IF ( wait ) THEN
@@ -741,7 +741,7 @@ CONTAINS
     WRITE(*,'(5x,"Infrared liquid phase asymmetry parameter:")') 
     DO i = 1, CloudCoeff%n_IR_Radii
       WRITE(*,'(7x,"Effective radius: ",es22.15)') CloudCoeff%Reff_IR(i)
-      WRITE(*,'(5(1x,es22.15,:))') CloudCoeff%kb_IR(:,i,0)     
+      WRITE(*,'(5(1x,es22.15,:))') CloudCoeff%kb_IR(:,i,1)     
     END DO
     
     DO m = 1, CloudCoeff%n_Stream_Sets
@@ -756,7 +756,7 @@ CONTAINS
         kidx = k + CloudCoeff%Legendre_Offset(m)
         DO i = 1, CloudCoeff%n_IR_Radii
           WRITE(*,'(7x,"Effective radius: ",es13.6)') CloudCoeff%Reff_IR(i)
-          WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%pcoeff_IR(:,i,0,kidx,1)
+          WRITE(*,'(5(1x,es13.6,:))') CloudCoeff%pcoeff_IR(:,i,1,kidx,1)
         END DO
       END DO
     END DO
