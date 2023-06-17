@@ -601,6 +601,9 @@ CONTAINS
     ! ...Were data formats specificed?
     IF ( PRESENT(AerosolCoeff_Format ) ) Default_AerosolCoeff_Format  = TRIM(ADJUSTL(AerosolCoeff_Format))
     IF ( PRESENT(CloudCoeff_Format   ) ) Default_CloudCoeff_Format    = TRIM(ADJUSTL(CloudCoeff_Format))
+    IF ( PRESENT(AerosolCoeff_File ) ) Default_AerosolCoeff_File  = TRIM(ADJUSTL(AerosolCoeff_File))
+    IF ( PRESENT(CloudCoeff_File   ) ) Default_CloudCoeff_File    = TRIM(ADJUSTL(CloudCoeff_File))
+
     ! ...Was a path specified?
     IF ( PRESENT(File_Path) ) THEN
       Default_IRwaterCoeff_File  = TRIM(ADJUSTL(File_Path)) // TRIM(Default_IRwaterCoeff_File)
