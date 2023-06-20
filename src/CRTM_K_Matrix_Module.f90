@@ -415,7 +415,7 @@ CONTAINS
 !$OMP END SINGLE
 !$OMP END PARALLEL
 
-    print *,' n_omp_threads = ',n_omp_threads, n_Profiles
+    ! print *,' n_omp_threads = ',n_omp_threads, n_Profiles
     ! Determine how many threads to use for profiles and channels
     ! After profiles get what they need, we use the left-over threads
     ! to parallelize channels
