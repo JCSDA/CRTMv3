@@ -36,6 +36,8 @@ PROGRAM test_TL_convergence
   CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'test_TL_convergence'
   CHARACTER(*), PARAMETER :: RESULTS_PATH = './results/unit/'
   CHARACTER(*), PARAMETER :: COEFFICIENTS_PATH = './testinput/'
+  CHARACTER(*), PARAMETER :: NC_COEFFICIENT_PATH='./testinput/'
+
 
   ! ============================================================================
   ! 0. **** SOME SET UP PARAMETERS FOR THIS EXAMPLE ****
@@ -103,8 +105,7 @@ PROGRAM test_TL_convergence
 ! #else
 !  CHARACTER(*), PARAMETER :: ENDIAN_TYPE='big_endian'
 !#endif
-  CHARACTER(*), PARAMETER :: COEFFICIENT_PATH='coefficients/'//ENDIAN_TYPE//'/'
-  CHARACTER(*), PARAMETER :: NC_COEFFICIENT_PATH='coefficients/netcdf/'
+
 
   ! Aerosol/Cloud coefficient format
   !CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
@@ -135,7 +136,7 @@ PROGRAM test_TL_convergence
   ! -----------------------
   !WRITE( *,'(/5x,"Enter sensor id [hirs4_n18, amsua_metop-a, or mhs_n18]: ")',ADVANCE='NO' )
   !READ( *,'(a)' ) Sensor_Id
-  Sensor_Id = 'atms_npp'
+  Sensor_Id = 'cpr_cloudsat'
   Sensor_Id = ADJUSTL(Sensor_Id)
   WRITE( *,'(//5x,"Running CRTM for ",a," sensor...")' ) TRIM(Sensor_Id)
 
@@ -227,7 +228,7 @@ PROGRAM test_TL_convergence
                         Cloud_Model, &
                         CloudCoeff_Format, &
                         CloudCoeff_File, &
-                        File_Path=COEFFICIENT_PATH, &
+                        File_Path=COEFFICIENTS_PATH, &
                         NC_File_Path=NC_COEFFICIENT_PATH, &
                         Quiet=.TRUE.)
 

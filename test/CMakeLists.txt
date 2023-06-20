@@ -306,6 +306,46 @@ foreach(regtype IN LISTS TLAD_types)
 endforeach()
 
 
+#---------------------------------------------------------------------------------
+# Active sensor module AD/TL test
+ecbuild_add_executable (
+    TARGET "test_AD_Active_Sensor"
+    SOURCES mains/unit/Unit_Test/test_AD_Active_Sensor.f90
+    LIBS crtm
+    NOINSTALL
+    )
+
+ecbuild_add_test(
+    TARGET "test_AD_Active_Sensor"
+    COMMAND "test_AD_Active_Sensor"
+    OMP $ENV{OMP_NUM_THREADS}
+    )
+
+ecbuild_add_executable (
+    TARGET "test_AD_Active_Sensor_test"
+    SOURCES mains/unit/Unit_Test/test_AD_Active_Sensor_test.f90
+    LIBS crtm
+    NOINSTALL
+    )
+
+ecbuild_add_test(
+    TARGET "test_AD_Active_Sensor_test"
+    COMMAND "test_AD_Active_Sensor_test"
+    OMP $ENV{OMP_NUM_THREADS}
+    )
+
+ecbuild_add_executable (
+    TARGET "test_TL_convergence_active_sensor"
+    SOURCES mains/unit/Unit_Test/test_TL_convergence_active_sensor.f90
+    LIBS crtm
+    NOINSTALL
+    )
+
+ecbuild_add_test(
+    TARGET "test_TL_convergence_active_sensor"
+    COMMAND "test_TL_convergence_active_sensor"
+    OMP $ENV{OMP_NUM_THREADS}
+    )
 
 
 #####################################################################
