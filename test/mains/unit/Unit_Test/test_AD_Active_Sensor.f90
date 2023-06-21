@@ -402,12 +402,12 @@ CALL CRTM_RTSolution_Create(RTSolution_AD,N_LAYERS)
   RTSolution_AD%Brightness_Temperature = ZERO
   RTSolution_AD%Radiance = ZERO
   DO jj=1, N_LAYERS
-    RTSolution_AD%Reflectivity_Attenuated(jj) = ZERO
-    RTSolution_AD%Reflectivity(jj) = ZERO
+    RTSolution_AD(ichan,iprof)%Reflectivity_Attenuated(jj) = ZERO
+    RTSolution_AD(ichan,iprof)%Reflectivity(jj) = ZERO
     if (Attenuated_Reflectivity) then
-       RTSolution_AD(ichan,:)%Reflectivity_Attenuated(jj) = ONE
+       RTSolution_AD(ichan,iprof)%Reflectivity_Attenuated(jj) = ONE
     else
-       RTSolution_AD(ichan,:)%Reflectivity(jj) = ONE
+       RTSolution_AD(ichan,iprof)%Reflectivity(jj) = ONE
     endif
   ENDDO
 
