@@ -21,6 +21,7 @@ PROGRAM test_AD
   !
   ! Module usage
   USE CRTM_Module
+  USE CRTM_SpcCoeff,            ONLY: SC 
 
   ! Disable all implicit typing
   IMPLICIT NONE
@@ -31,6 +32,7 @@ PROGRAM test_AD
   ! ----------
   CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'test_AD'
   CHARACTER(*), PARAMETER :: COEFFICIENTS_PATH = './testinput/'
+  CHARACTER(*), PARAMETER :: NC_COEFFICIENT_PATH='./testinput/'
   CHARACTER(*), PARAMETER :: RESULTS_PATH = './results/unit/'
 
 
@@ -46,6 +48,7 @@ PROGRAM test_AD
   INTEGER, PARAMETER :: N_AEROSOLS  = 0
   ! ...but only ONE Sensor at a time
   INTEGER, PARAMETER :: N_SENSORS = 1
+  INTEGER, PARAMETER :: SensorIndex = 1
 
   ! Test GeometryInfo angles. The test scan angle is based
   ! on the default Re (earth radius) and h (satellite height)
@@ -110,8 +113,8 @@ PROGRAM test_AD
 ! #else
 !  CHARACTER(*), PARAMETER :: ENDIAN_TYPE='big_endian'
 !#endif
-  CHARACTER(*), PARAMETER :: COEFFICIENT_PATH='coefficients/'//ENDIAN_TYPE//'/'
-  CHARACTER(*), PARAMETER :: NC_COEFFICIENT_PATH='coefficients/netcdf/'
+
+
 
   ! Aerosol/Cloud coefficient format
   !CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
@@ -142,7 +145,7 @@ PROGRAM test_AD
   ! -----------------------
   !WRITE( *,'(/5x,"Enter sensor id [hirs4_n18, amsua_metop-a, or mhs_n18]: ")',ADVANCE='NO' )
   !READ( *,'(a)' ) Sensor_Id
-  Sensor_Id = 'atms_npp'
+  Sensor_Id = 'atms_n21'
   Sensor_Id = ADJUSTL(Sensor_Id)
   WRITE( *,'(//5x,"Running CRTM for ",a," sensor...")' ) TRIM(Sensor_Id)
 
@@ -235,7 +238,7 @@ PROGRAM test_AD
                         Cloud_Model, &
                         CloudCoeff_Format, &
                         CloudCoeff_File, &
-                        File_Path=COEFFICIENT_PATH, &
+                        File_Path=COEFFICIENTS_PATH, &
                         NC_File_Path=NC_COEFFICIENT_PATH, &
                         Quiet=.TRUE.)
 
@@ -339,6 +342,7 @@ CALL CRTM_RTSolution_Create(RTSolution_AD,N_LAYERS)
     Atmosphere_AD(jj)%Absorber_Id = atm(jj)%Absorber_Id
     Atmosphere_AD(jj)%Absorber_Units = atm(jj)%Absorber_Units
   END DO
+  SC(SensorIndex)%Is_Active_Sensor  = .TRUE.
 
   ! Set the test state vector as the first to Temperature values.
   ! -------------------------------------------------------------
@@ -459,8 +463,8 @@ CALL CRTM_RTSolution_Create(RTSolution_AD,N_LAYERS)
 !  RTSolution_AD%Brightness_Temperature = ZERO
 
   DO jj=1, N_LAYERS
-    RTSolution_AD%Reflectivity(jj) = ZERO
-    RTSolution_AD%Reflectivity_Attenuated(jj) = ZERO
+    RTSolution_AD(chan1,iprof)%Reflectivity(jj) = ZERO
+    RTSolution_AD(chan1,iprof)%Reflectivity_Attenuated(jj) = ZERO
   ENDDO
   if (Attenuated_Reflectivity) then
      RTSolution_AD(chan1,iprof)%Reflectivity_Attenuated = ONE ! Check only channel 5 in the first AD run.
@@ -501,8 +505,8 @@ CALL CRTM_RTSolution_Create(RTSolution_AD,N_LAYERS)
 !  RTSolution_AD(6,1)%Radiance = ONE ! Check only channel 6 in the first AD run.
 !  RTSolution_AD%Brightness_Temperature = ZERO
 DO jj=1, N_LAYERS
-  RTSolution_AD%Reflectivity(jj) = ZERO
-  RTSolution_AD%Reflectivity_Attenuated(jj) = ZERO
+  RTSolution_AD(chan2,iprof)%Reflectivity(jj) = ZERO
+  RTSolution_AD(chan2,iprof)%Reflectivity_Attenuated(jj) = ZERO
 ENDDO
 if (Attenuated_Reflectivity) then
   RTSolution_AD(chan2,iprof)%Reflectivity_Attenuated = ONE ! Check only channel 6 in the first AD run.
