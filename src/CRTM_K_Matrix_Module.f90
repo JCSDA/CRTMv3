@@ -1299,7 +1299,7 @@ CONTAINS
             END IF
  
               ! The radiance post-processing
-              CALL Post_Process_RTSolution(RTSolution(ln,m), &
+              CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), &
                                            NLTE_Predictor, &
                                            ChannelIndex, SensorIndex, &
                                            compute_antenna_correction, GeometryInfo)
@@ -1309,7 +1309,7 @@ CONTAINS
               ! Perform clear-sky post and pre-processing
               IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
                 ! Radiance post-processing
-                CALL Post_Process_RTSolution(RTSolution_Clear(nt), &
+                CALL Post_Process_RTSolution(Opt, RTSolution_Clear(nt), &
                                              NLTE_Predictor, &
                                              ChannelIndex, SensorIndex, &
                                              compute_antenna_correction, GeometryInfo)
@@ -1319,7 +1319,7 @@ CONTAINS
 
 
               ! The adjoint radiance pre-processing
-              CALL Pre_Process_RTSolution_K(RTSolution(ln,m), RTSolution_K(ln,m), &
+              CALL Pre_Process_RTSolution_K(Opt, RTSolution(ln,m), RTSolution_K(ln,m), &
                                             NLTE_Predictor, NLTE_Predictor_K(nt), &
                                             ChannelIndex, SensorIndex, &
                                             compute_antenna_correction, GeometryInfo)
@@ -1643,10 +1643,11 @@ CONTAINS
     !   3. Apply antenna correction to brightness temperature
     ! ----------------------------------------------------------------
 
-    SUBROUTINE Post_Process_RTSolution(rts, &
+    SUBROUTINE Post_Process_RTSolution(Opt, rts, &
                                        NLTE_Predictor, &
                                        ChannelIndex, SensorIndex, &
                                        compute_antenna_correction, GeometryInfo)
+      TYPE(CRTM_Options_type),      INTENT(IN)     :: Opt
       TYPE(CRTM_RTSolution_type),   INTENT(IN OUT) :: rts
       TYPE(NLTE_Predictor_type),    INTENT(IN)     :: NLTE_Predictor
       INTEGER,                      INTENT(IN) :: ChannelIndex, SensorIndex
@@ -1687,10 +1688,11 @@ CONTAINS
     !   3. Apply adjoint non-LTE correction to radiances
     ! ----------------------------------------------------------------
       
-    SUBROUTINE Pre_Process_RTSolution_K(rts, rts_K, &
+    SUBROUTINE Pre_Process_RTSolution_K(Opt, rts, rts_K, &
                                         NLTE_Predictor, NLTE_Predictor_K, &
                                         ChannelIndex, SensorIndex, &
                                         compute_antenna_correction, GeometryInfo)
+      TYPE(CRTM_Options_type),       INTENT(IN)     :: Opt
       TYPE(CRTM_RTSolution_type),   INTENT(IN OUT) :: rts, rts_K
       TYPE(NLTE_Predictor_type),    INTENT(IN)     :: NLTE_Predictor
       TYPE(NLTE_Predictor_type),    INTENT(IN OUT) :: NLTE_Predictor_K
