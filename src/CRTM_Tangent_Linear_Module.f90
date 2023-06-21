@@ -1297,7 +1297,7 @@ CONTAINS
          
           ! Combine cloudy and clear radiances for fractional cloud coverage
           ! The radiance post-processing
-          CALL Post_Process_RTSolution(RTSolution(ln,m), RTSolution_TL(ln,m), &
+          CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), RTSolution_TL(ln,m), &
                                        NLTE_Predictor, NLTE_Predictor_TL,&
                                        ChannelIndex, SensorIndex, &
                                        compute_antenna_correction, GeometryInfo)
@@ -1305,7 +1305,7 @@ CONTAINS
           ! Combine cloudy and clear radiances for fractional cloud coverage          
           ! Perform clear-sky post-processing
           IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-            CALL Post_Process_RTSolution(RTSolution_Clear(nt), RTSolution_Clear_TL(nt), &
+            CALL Post_Process_RTSolution(Opt, RTSolution_Clear(nt), RTSolution_Clear_TL(nt), &
                                          NLTE_Predictor, NLTE_Predictor_TL, &
                                          ChannelIndex, SensorIndex, &
                                          compute_antenna_correction, GeometryInfo)
@@ -1361,9 +1361,10 @@ CONTAINS
     !   3. Apply antenna correction to brightness temperature
     ! ----------------------------------------------------------------
    
-    SUBROUTINE Post_Process_RTSolution(rts, rts_TL, NLTE_Predictor, NLTE_Predictor_TL, &
+    SUBROUTINE Post_Process_RTSolution(Opt, rts, rts_TL, NLTE_Predictor, NLTE_Predictor_TL, &
                  ChannelIndex, SensorIndex, &
                  compute_antenna_correction, GeometryInfo)
+      TYPE(CRTM_Options_type), INTENT(IN) :: Opt
       TYPE(CRTM_RTSolution_type), INTENT(IN OUT) :: rts, rts_TL
       TYPE(NLTE_Predictor_type),    INTENT(IN)     :: NLTE_Predictor
       TYPE(NLTE_Predictor_type),    INTENT(IN)     :: NLTE_Predictor_TL      
