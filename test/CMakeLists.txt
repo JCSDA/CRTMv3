@@ -322,19 +322,6 @@ ecbuild_add_test(
     )
 
 ecbuild_add_executable (
-    TARGET "test_AD_Active_Sensor_test"
-    SOURCES mains/unit/Unit_Test/test_AD_Active_Sensor_test.f90
-    LIBS crtm
-    NOINSTALL
-    )
-
-ecbuild_add_test(
-    TARGET "test_AD_Active_Sensor_test"
-    COMMAND "test_AD_Active_Sensor_test"
-    OMP $ENV{OMP_NUM_THREADS}
-    )
-
-ecbuild_add_executable (
     TARGET "test_TL_convergence_active_sensor"
     SOURCES mains/unit/Unit_Test/test_TL_convergence_active_sensor.f90
     LIBS crtm

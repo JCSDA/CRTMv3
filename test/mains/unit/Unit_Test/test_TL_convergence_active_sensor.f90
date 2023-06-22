@@ -24,6 +24,8 @@ PROGRAM test_TL_convergence
   !
   ! Module usage
   USE CRTM_Module
+  USE CRTM_SpcCoeff,            ONLY: SC
+
   !USE UnitTest_Define, ONLY: UnitTest_IsEqualWithin
   ! Disable all implicit typing
   IMPLICIT NONE
@@ -50,6 +52,7 @@ PROGRAM test_TL_convergence
   INTEGER, PARAMETER :: N_AEROSOLS  = 0
   ! ...but only ONE Sensor at a time
   INTEGER, PARAMETER :: N_SENSORS = 1
+  INTEGER, PARAMETER :: SensorIndex = 1
 
   ! Test GeometryInfo angles. The test scan angle is based
   ! on the default Re (earth radius) and h (satellite height)
@@ -136,7 +139,7 @@ PROGRAM test_TL_convergence
   ! -----------------------
   !WRITE( *,'(/5x,"Enter sensor id [hirs4_n18, amsua_metop-a, or mhs_n18]: ")',ADVANCE='NO' )
   !READ( *,'(a)' ) Sensor_Id
-  Sensor_Id = 'cpr_cloudsat'
+  Sensor_Id = 'atms_n21'
   Sensor_Id = ADJUSTL(Sensor_Id)
   WRITE( *,'(//5x,"Running CRTM for ",a," sensor...")' ) TRIM(Sensor_Id)
 
@@ -328,6 +331,7 @@ CALL CRTM_RTSolution_Create(RTSolution_Perturb,N_LAYERS)
     Atm_Prtb(ii) = Atm(ii)
     Atm(ii)%Cloud(1)%Water_Content = 5
     END DO
+  SC(SensorIndex)%Is_Active_Sensor  = .TRUE.
 
   ! 4b. GeometryInfo input
   ! ----------------------

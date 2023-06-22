@@ -69,7 +69,7 @@ PROGRAM test_AD
   ! Declarations for Jacobian comparisons
   INTEGER :: n_la, n_ma
   INTEGER :: n_ls, n_ms
-  INTEGER :: ii, jj, ilev1, ilev2, iprof, ichan
+  INTEGER :: i1, j1, jj, ilev1, ilev2, iprof, ichan
   CHARACTER(256) :: atmk_File, sfck_File
   ! Declarations for adjoint testing
   REAL(fp) :: Perturbation
@@ -404,15 +404,19 @@ CALL CRTM_RTSolution_Create(RTSolution_AD,N_LAYERS)
   ! Initialise the Adjoint INPUT to provide dR/dx derivatives
   RTSolution_AD%Brightness_Temperature = ZERO
   RTSolution_AD%Radiance = ZERO
+  !DO i1=1,n_channels
+  !DO j1=1,n_profiles
   DO jj=1, N_LAYERS
-    RTSolution_AD(ichan,iprof)%Reflectivity_Attenuated(jj) = ZERO
-    RTSolution_AD(ichan,iprof)%Reflectivity(jj) = ZERO
+    RTSolution_AD%Reflectivity_Attenuated(jj) = ZERO
+    RTSolution_AD%Reflectivity(jj) = ZERO
     if (Attenuated_Reflectivity) then
-       RTSolution_AD(ichan,iprof)%Reflectivity_Attenuated(jj) = ONE
+       RTSolution_AD(ichan,:)%Reflectivity_Attenuated(jj) = ONE 
     else
-       RTSolution_AD(ichan,iprof)%Reflectivity(jj) = ONE
-    endif
+       RTSolution_AD(ichan,:)%Reflectivity(jj) = ONE 
+    endif   
   ENDDO
+  !ENDDO
+  !ENDDO
 
   Error_Status = CRTM_Adjoint( Atm , &
                               Sfc , &
