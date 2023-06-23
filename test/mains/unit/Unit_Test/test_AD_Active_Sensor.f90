@@ -50,8 +50,8 @@ PROGRAM test_AD
   
   ! Test GeometryInfo angles. The test scan angle is based
   ! on the default Re (earth radius) and h (satellite height)
-  REAL(fp), PARAMETER :: ZENITH_ANGLE = 30.0_fp
-  REAL(fp), PARAMETER :: SCAN_ANGLE   = 26.37293341421_fp
+  REAL(fp), PARAMETER :: ZENITH_ANGLE = 1.0_fp
+  REAL(fp), PARAMETER :: SCAN_ANGLE   = 1.0_fp
   ! ============================================================================
 
 
@@ -296,7 +296,7 @@ PROGRAM test_AD
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP
   END IF
-
+  Atmosphere_TL%Add_Extra_Layers = .FALSE.
 
   ! The output AD structure
   CALL CRTM_Atmosphere_Create( Atmosphere_AD, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
@@ -305,7 +305,7 @@ PROGRAM test_AD
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP
   END IF
-
+  Atmosphere_AD%Add_Extra_Layers = .FALSE.
 
 CALL CRTM_RTSolution_Create(RTSolution,N_LAYERS)
 CALL CRTM_RTSolution_Create(RTSolution_TL,N_LAYERS)
@@ -336,18 +336,20 @@ CALL CRTM_RTSolution_Create(RTSolution_AD,N_LAYERS)
 
   Do jj=1,2
     atm(jj)%Height = Calculate_Height(Atm(jj))
-    Atmosphere_TL(jj)%Height = atm(jj)%Height
-    Atmosphere_AD(jj)%Height = atm(jj)%Height
+    Atm(jj)%Cloud(1)%Type = SNOW_CLOUD
+    WHERE (Atm(jj)%Cloud(1)%Water_Content .GT. 0.0_fp) 
+         Atm(jj)%Cloud(1)%Water_Content = 5
+    ENDWHERE
 
     Atmosphere_TL(jj)%Climatology = atm(jj)%Climatology
     Atmosphere_TL(jj)%Absorber_Id = atm(jj)%Absorber_Id
     Atmosphere_TL(jj)%Absorber_Units = atm(jj)%Absorber_Units
-    Atmosphere_TL(jj)%Add_Extra_Layers = .FALSE.
+    Atmosphere_TL(jj)%Height = atm(jj)%Height
 
     Atmosphere_AD(jj)%Climatology = atm(jj)%Climatology
     Atmosphere_AD(jj)%Absorber_Id = atm(jj)%Absorber_Id
     Atmosphere_AD(jj)%Absorber_Units = atm(jj)%Absorber_Units
-    Atmosphere_AD(jj)%Add_Extra_Layers = .FALSE.
+    Atmosphere_AD(jj)%Height = atm(jj)%Height
   END DO
   SC(SensorIndex)%Is_Active_Sensor  = .TRUE.
   

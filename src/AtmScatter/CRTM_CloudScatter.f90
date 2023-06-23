@@ -876,7 +876,7 @@ CONTAINS
                                    kb_AD                               , & ! AD  Input
                                    w_AD                                , & ! AD  Input
                                    pcoeff_AD                           , & ! AD  Input
-                                   Atm_AD%Cloud(n)%Water_Content(kc)   , & ! AD  Output
+                                   Atm_AD%Cloud(n)%Water_Density(kc)   , & ! AD  Output
                                    Atm_AD%Cloud(n)%Effective_Radius(kc), & ! AD  Output
                                    Atm_AD%Temperature(kc)              , & ! AD  Output
                                    CSV%csi(kc,n)                         ) ! Interpolation

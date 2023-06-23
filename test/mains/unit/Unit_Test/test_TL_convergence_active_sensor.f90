@@ -53,11 +53,12 @@ PROGRAM test_TL_convergence
   ! ...but only ONE Sensor at a time
   INTEGER, PARAMETER :: N_SENSORS = 1
   INTEGER, PARAMETER :: SensorIndex = 1
+  LOGICAL :: Attenuated_Reflectivity
 
   ! Test GeometryInfo angles. The test scan angle is based
   ! on the default Re (earth radius) and h (satellite height)
-  REAL(fp), PARAMETER :: ZENITH_ANGLE = 30.0_fp
-  REAL(fp), PARAMETER :: SCAN_ANGLE   = 26.37293341421_fp
+  REAL(fp), PARAMETER :: ZENITH_ANGLE = 1.0_fp
+  REAL(fp), PARAMETER :: SCAN_ANGLE   = 1.0_fp
   ! ============================================================================
 
 
@@ -323,13 +324,17 @@ CALL CRTM_RTSolution_Create(RTSolution_Perturb,N_LAYERS)
 
 
     Do ii=1,2
+    atm(ii)%Height = Calculate_Height(Atm(ii))
+    Atm(ii)%Cloud(1)%Type = SNOW_CLOUD
+    WHERE (Atm(ii)%Cloud(1)%Water_Content .GT. 0.0_fp)
+      Atm(ii)%Cloud(1)%Water_Content = 5
+    END WHERE
+
     Atmosphere_TL(ii)%Climatology = atm(ii)%Climatology
     Atmosphere_TL(ii)%Absorber_Id = atm(ii)%Absorber_Id
     Atmosphere_TL(ii)%Absorber_Units = atm(ii)%Absorber_Units
-    atm(ii)%Height = Calculate_Height(Atm(ii))
     Atmosphere_TL(ii)%Height = atm(ii)%Height
     Atm_Prtb(ii) = Atm(ii)
-    Atm(ii)%Cloud(1)%Water_Content = 5
     END DO
   SC(SensorIndex)%Is_Active_Sensor  = .TRUE.
 
@@ -375,11 +380,15 @@ CALL CRTM_RTSolution_Create(RTSolution_Perturb,N_LAYERS)
   ilev = 70
   iprof = 1
   ichan = 3 !16
-
+  Attenuated_Reflectivity = .TRUE.
 
   OPEN(500,FILE='convergence.txt',STATUS='UNKNOWN')
   write(500, '(A)')  'Ratio should approach ZERO because it is ONE - [(R_Prtb - R) / R_TL)]'
   write(500,'(2A)')  'Iter  Refl (R)    R_Prt - R        R_TL              WC_Prtb          Ratio', &
+                    '        --    R         R_Prt - R        R_TL             WC_Prtb          Ratio'
+
+  write(*, '(A)')  'Ratio should approach ZERO because it is ONE - [(R_Prtb - R) / R_TL)]'
+  write(*,'(2A)')  'Iter  Refl (R)    R_Prt - R        R_TL              WC_Prtb          Ratio', &
                     '        --    R         R_Prt - R        R_TL             WC_Prtb          Ratio'
 
   convergence_loop: DO ii = 1, 20
@@ -434,10 +443,15 @@ CALL CRTM_RTSolution_Create(RTSolution_Perturb,N_LAYERS)
 
 
     ! ============================================================================
-    Reflectivity_Prtb = RTSolution_Perturb(ichan,iprof)%Reflectivity
-    Reflectivity = RTSolution(ichan,iprof)%Reflectivity
-    Reflectivity_TL = RTSolution_TL(ichan,iprof)%Reflectivity
-
+    if (Attenuated_Reflectivity) THEN
+       Reflectivity_Prtb = RTSolution_Perturb(ichan,iprof)%Reflectivity_Attenuated
+       Reflectivity = RTSolution(ichan,iprof)%Reflectivity_Attenuated
+       Reflectivity_TL = RTSolution_TL(ichan,iprof)%Reflectivity_Attenuated
+     else
+       Reflectivity_Prtb = RTSolution_Perturb(ichan,iprof)%Reflectivity_Attenuated
+       Reflectivity = RTSolution(ichan,iprof)%Reflectivity_Attenuated
+       Reflectivity_TL = RTSolution_TL(ichan,iprof)%Reflectivity_Attenuated
+     endif
 
      Ratio_new(isign) = ONE - ((Reflectivity_Prtb(ilev) - Reflectivity(ilev)) / Reflectivity_TL(ilev))
 
@@ -445,6 +459,8 @@ CALL CRTM_RTSolution_Create(RTSolution_Perturb,N_LAYERS)
     !do jj=70,80
     jj = ilev
     write(500,'(I5, F8.3, 5F17.11)', advance='no') ii, Reflectivity(jj), Reflectivity_Prtb(jj) - Reflectivity(jj), Reflectivity_TL(jj), Perturbation,       Ratio_new(isign)
+
+    write(*,'(I5, F8.3, 5F17.11)', advance='no') ii, Reflectivity(jj), Reflectivity_Prtb(jj) - Reflectivity(jj), Reflectivity_TL(jj), Perturbation,       Ratio_new(isign)
     !ENDDO
 
 
@@ -452,6 +468,7 @@ CALL CRTM_RTSolution_Create(RTSolution_Perturb,N_LAYERS)
     Ratio_old(isign) = Ratio_new(isign)
 
     END DO sign_loop
+    write(*,*)   ! new line
     write(500,*)   ! new line
 
 

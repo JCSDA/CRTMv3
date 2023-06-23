@@ -309,6 +309,19 @@ endforeach()
 #---------------------------------------------------------------------------------
 # Active sensor module AD/TL test
 ecbuild_add_executable (
+    TARGET "test_Active_Sensor"
+    SOURCES mains/unit/Unit_Test/test_active_sensor.f90
+    LIBS crtm
+    NOINSTALL
+    )
+
+ecbuild_add_test(
+    TARGET "test_Active_Sensor"
+    COMMAND "test_Active_Sensor"
+    OMP $ENV{OMP_NUM_THREADS}
+    )
+
+ecbuild_add_executable (
     TARGET "test_AD_Active_Sensor"
     SOURCES mains/unit/Unit_Test/test_AD_Active_Sensor.f90
     LIBS crtm

@@ -1,5 +1,5 @@
 !
-! test_TL_convergence
+! test_active_sensor
 !
 ! Program to provide a (relatively) simple example of how
 ! to test the CRTM tangent-linear function.
@@ -10,20 +10,20 @@
 ! The convergence should be monotonous, which it isn't right.
 ! For this reason the test in its current state will fai.
 !
-! Copyright Patrick Stegmann, 2020
 !
-! Modified by Isaac Moradi Isaac.Moradi@NASA.GOV
-!             Nov-30-2021
-!             Modified to work with active sensor module
+! Created by Isaac Moradi Isaac.Moradi@NASA.GOV
+!             June-22-2023
 !
 
-PROGRAM test_TL_convergence
+PROGRAM test_active_sensor
 
   ! ============================================================================
   ! **** ENVIRONMENT SETUP FOR RTM USAGE ****
   !
   ! Module usage
   USE CRTM_Module
+  USE CRTM_SpcCoeff,            ONLY: SC
+
   !USE UnitTest_Define, ONLY: UnitTest_IsEqualWithin
   ! Disable all implicit typing
   IMPLICIT NONE
@@ -33,7 +33,7 @@ PROGRAM test_TL_convergence
   ! ----------
   ! Parameters
   ! ----------
-  CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'test_TL_convergence'
+  CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'test_active_sensor'
   CHARACTER(*), PARAMETER :: RESULTS_PATH = './results/unit/'
   CHARACTER(*), PARAMETER :: COEFFICIENTS_PATH = './testinput/'
   CHARACTER(*), PARAMETER :: NC_COEFFICIENT_PATH='./testinput/'
@@ -50,11 +50,12 @@ PROGRAM test_TL_convergence
   INTEGER, PARAMETER :: N_AEROSOLS  = 0
   ! ...but only ONE Sensor at a time
   INTEGER, PARAMETER :: N_SENSORS = 1
+  INTEGER, PARAMETER :: SensorIndex = 1
 
   ! Test GeometryInfo angles. The test scan angle is based
   ! on the default Re (earth radius) and h (satellite height)
-  REAL(fp), PARAMETER :: ZENITH_ANGLE = 30.0_fp
-  REAL(fp), PARAMETER :: SCAN_ANGLE   = 26.37293341421_fp
+  REAL(fp), PARAMETER :: ZENITH_ANGLE = 1.0_fp
+  REAL(fp), PARAMETER :: SCAN_ANGLE   = 1.0_fp
   ! ============================================================================
 
 
@@ -78,7 +79,7 @@ PROGRAM test_TL_convergence
   REAL(fp) :: Perturbation
   REAL(16) :: Ratio_new(nsign), Ratio_old(nsign)
   REAL(fp), PARAMETER :: TOLERANCE = 0.1_fp
-  REAL(fp) :: Reflectivity_Prtb(N_LAYERS), Reflectivity(N_LAYERS), Reflectivity_TL(N_LAYERS)
+
 
   ! ============================================================================
   ! 1. **** DEFINE THE CRTM INTERFACE STRUCTURES ****
@@ -87,16 +88,10 @@ PROGRAM test_TL_convergence
   TYPE(CRTM_Geometry_type)                :: Geometry(N_PROFILES)
 
   ! Define the FORWARD variables
-  TYPE(CRTM_Atmosphere_type)              :: Atm(N_PROFILES), Atm_Prtb(N_PROFILES)
+  TYPE(CRTM_Atmosphere_type)              :: Atm(N_PROFILES)
   TYPE(CRTM_Surface_type)                 :: Sfc(N_PROFILES)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution(:,:)
-  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution_Perturb(:,:)
 
-  ! Define the Tangent-Linear variables
-  TYPE(CRTM_Atmosphere_type) :: Atmosphere_TL(N_PROFILES)
-  !TYPE(CRTM_Atmosphere_type) :: Perturbation
-  TYPE(CRTM_Surface_type)    :: Surface_TL(N_PROFILES)
-  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution_TL(:,:)
   ! ============================================================================
 
   ! Directory location of coefficients
@@ -136,7 +131,7 @@ PROGRAM test_TL_convergence
   ! -----------------------
   !WRITE( *,'(/5x,"Enter sensor id [hirs4_n18, amsua_metop-a, or mhs_n18]: ")',ADVANCE='NO' )
   !READ( *,'(a)' ) Sensor_Id
-  Sensor_Id = 'cpr_cloudsat'
+  Sensor_Id = 'atms_n21'
   Sensor_Id = ADJUSTL(Sensor_Id)
   WRITE( *,'(//5x,"Running CRTM for ",a," sensor...")' ) TRIM(Sensor_Id)
 
@@ -260,8 +255,6 @@ PROGRAM test_TL_convergence
   ! Users can make the number of profiles dynamic also, but
   ! then the INPUT arrays (Atmosphere, Surface) will also have to be allocated.
   ALLOCATE( RTSolution( n_Channels, N_PROFILES ), &
-            RTSolution_Perturb( n_Channels, N_PROFILES ), &
-            RTSolution_TL( n_Channels, N_PROFILES ), &
             STAT = Allocate_Status )
   IF ( Allocate_Status /= 0 ) THEN
     Message = 'Error allocating structure arrays'
@@ -280,29 +273,9 @@ PROGRAM test_TL_convergence
   END IF
   Atm%Add_Extra_Layers = .FALSE.
 
-  CALL CRTM_Atmosphere_Create( Atm_Prtb, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
-  IF ( ANY(.NOT. CRTM_Atmosphere_Associated(Atm_Prtb)) ) THEN
-    Message = 'Error allocating CRTM Atmosphere structure'
-    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-    STOP 1
-  END IF
-  Atm_Prtb%Add_Extra_Layers = .FALSE.
-
-  ! The input TL structure
-  CALL CRTM_Atmosphere_Create( Atmosphere_TL, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
-  IF ( ANY(.NOT. CRTM_Atmosphere_Associated(Atmosphere_TL)) ) THEN
-    Message = 'Error allocating CRTM Atmosphere_TL structure'
-    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-    STOP 1
-  END IF
-
-CALL CRTM_RTSolution_Create(RTSolution,N_LAYERS)
-CALL CRTM_RTSolution_Create(RTSolution_TL,N_LAYERS)
-CALL CRTM_RTSolution_Create(RTSolution_Perturb,N_LAYERS)
+  CALL CRTM_RTSolution_Create(RTSolution,N_LAYERS)
 
   ! ============================================================================
-
-
 
 
   ! ============================================================================
@@ -320,14 +293,13 @@ CALL CRTM_RTSolution_Create(RTSolution_Perturb,N_LAYERS)
 
 
     Do ii=1,2
-    Atmosphere_TL(ii)%Climatology = atm(ii)%Climatology
-    Atmosphere_TL(ii)%Absorber_Id = atm(ii)%Absorber_Id
-    Atmosphere_TL(ii)%Absorber_Units = atm(ii)%Absorber_Units
-    atm(ii)%Height = Calculate_Height(Atm(ii))
-    Atmosphere_TL(ii)%Height = atm(ii)%Height
-    Atm_Prtb(ii) = Atm(ii)
-    Atm(ii)%Cloud(1)%Water_Content = 5
+      atm(ii)%Height = Calculate_Height(Atm(ii))
+      Atm(ii)%Cloud(1)%Type = SNOW_CLOUD
+      WHERE (Atm(ii)%Cloud(1)%Water_Content .GT. 0.0_fp) 
+         Atm(ii)%Cloud(1)%Water_Content = 5
+      ENDWHERE
     END DO
+  SC(SensorIndex)%Is_Active_Sensor  = .TRUE.
 
   ! 4b. GeometryInfo input
   ! ----------------------
@@ -338,16 +310,6 @@ CALL CRTM_RTSolution_Create(RTSolution_Perturb,N_LAYERS)
                                Sensor_Scan_Angle   = SCAN_ANGLE )
   ! ============================================================================
 
-
-
-
-  ! ============================================================================
-  ! 5. **** INITIALIZE THE TL ARGUMENTS ****
-  !
-  ! 5a. Zero the LT INPUT structures
-  ! ---------------------------------------
-  CALL CRTM_Atmosphere_Zero( Atmosphere_TL )
-  CALL CRTM_Surface_Zero( Surface_TL )
 
   ! ============================================================================
   ! 6. **** CALL THE CRTM FORWARD MODEL ****
@@ -364,94 +326,20 @@ CALL CRTM_RTSolution_Create(RTSolution_Perturb,N_LAYERS)
   END IF
 
 
-
-  testresult = 0
-  Ratio_old = 100.0_fp
-
   ilev = 70
   iprof = 1
-  ichan = 3 !16
+  ichan = 16
 
 
-  OPEN(500,FILE='convergence.txt',STATUS='UNKNOWN')
-  write(500, '(A)')  'Ratio should approach ZERO because it is ONE - [(R_Prtb - R) / R_TL)]'
-  write(500,'(2A)')  'Iter  Refl (R)    R_Prt - R        R_TL              WC_Prtb          Ratio', &
-                    '        --    R         R_Prt - R        R_TL             WC_Prtb          Ratio'
+  OPEN(500,FILE='reflectivity.txt',STATUS='UNKNOWN')
+  write(500,'(4A40)')  'Layer', 'Water Content', 'Reflectivity', 'Attenuated Reflectivity'
+  write(*,'(4A40)')  'Layer', 'Water Content', 'Reflectivity', 'Attenuated Reflectivity'
+  DO ii=1,n_layers
+     write(500,'(i40,f40.5,f40.5,f40.5)')  ii, Atm(1)%Cloud(1)%Water_Content(ii), RTSolution(ichan,iprof)%Reflectivity(ii), RTSolution(ichan,iprof)%Reflectivity_Attenuated(ii)
+     write(*,'(i40,f40.5,f40.5,f40.5)')  ii, Atm(1)%Cloud(1)%Water_Content(ii), RTSolution(ichan,iprof)%Reflectivity(ii), RTSolution(ichan,iprof)%Reflectivity_Attenuated(ii)
+  ENDDO
+  CLOSE(500)
 
-  convergence_loop: DO ii = 1, 20
-  sign = -1  ! we want to make sure both positive and negative signs converge
-  sign_loop: DO isign = 1, nsign
-     sign = -1 * sign
-
-    Perturbation = Atm(1)%Cloud(1)%Water_Content(ilev)*(sign * 1.0_fp)/(2.0_fp**ii)
-    Atmosphere_TL(iprof)%Cloud(1)%Water_Content(ilev) = Perturbation
-    ! ============================================================================
-
-    !Atm(1)%Temperature(92) = Atm(1)%Temperature(92) + Perturbation
-    Atm_Prtb(iprof)%Cloud(1)%Water_Content(ilev) = Atm(iprof)%Cloud(1)%Water_Content(ilev) + Perturbation
-
-    ! ============================================================================
-    ! 6. **** CALL THE PERTURBED CRTM FORWARD MODEL ****
-    !
-    Error_Status = CRTM_Forward( Atm_Prtb         , &
-                                  Sfc         , &
-                                  Geometry    , &
-                                  ChannelInfo , &
-                                  RTSolution_Perturb  )
-    IF ( Error_Status /= SUCCESS ) THEN
-      Message = 'Error in perturbed CRTM Forward Model'
-      CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-      STOP 1
-    END IF
-
-
-    ! ============================================================================
-    ! 6. **** CALL THE CRTM TANGENT-LINEAR MODEL ****
-    !
-    Error_Status = CRTM_Tangent_Linear( Atm , &
-                                      Sfc , &
-                                      Atmosphere_TL , &
-                                      Surface_TL , &
-                                      Geometry , &
-                                      ChannelInfo , &
-                                      RTSolution , &
-                                      RTSolution_TL  )
-    IF ( Error_Status /= SUCCESS ) THEN
-     Message = 'Error in CRTM Tangent-linear Model'
-     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-     STOP 1
-    END IF
-
-    !WRITE(*,*) 'Tangent-linear Result: ', RTSolution_TL(ichan,iprof)%Reflectivity(ilev)
-
-    ! ============================================================================
-
-    ! ============================================================================
-
-
-    ! ============================================================================
-    Reflectivity_Prtb = RTSolution_Perturb(ichan,iprof)%Reflectivity
-    Reflectivity = RTSolution(ichan,iprof)%Reflectivity
-    Reflectivity_TL = RTSolution_TL(ichan,iprof)%Reflectivity
-
-
-     Ratio_new(isign) = ONE - ((Reflectivity_Prtb(ilev) - Reflectivity(ilev)) / Reflectivity_TL(ilev))
-
-
-    !do jj=70,80
-    jj = ilev
-    write(500,'(I5, F8.3, 5F17.11)', advance='no') ii, Reflectivity(jj), Reflectivity_Prtb(jj) - Reflectivity(jj), Reflectivity_TL(jj), Perturbation,       Ratio_new(isign)
-    !ENDDO
-
-
-    ! Reassign Ratio for next iteration.
-    Ratio_old(isign) = Ratio_new(isign)
-
-    END DO sign_loop
-    write(500,*)   ! new line
-
-
-  END DO convergence_loop
 
   ! ============================================================================
   ! 8. **** DESTROY THE CRTM ****
@@ -465,11 +353,6 @@ CALL CRTM_RTSolution_Create(RTSolution_Perturb,N_LAYERS)
   END IF
   ! ============================================================================
 
-
-  CLOSE(500)
-
-
-
   ! ============================================================================
   ! 10. **** CLEAN UP ****
   !
@@ -479,45 +362,17 @@ CALL CRTM_RTSolution_Create(RTSolution_Perturb,N_LAYERS)
   !      and RTSolution structures, will also be allocated and thus
   !      should also be deallocated here.
   ! ---------------------------------------------------------------
-  CALL CRTM_Atmosphere_Destroy(Atmosphere_TL)
   CALL CRTM_Atmosphere_Destroy(Atm)
 
   ! 10b. Deallocate the arrays
   ! --------------------------
-  DEALLOCATE(RTSolution, RTSolution_TL, &
+  DEALLOCATE(RTSolution,  &
              STAT = Allocate_Status)
-  ! ============================================================================
-  IF( ( testresult == 0 ) .AND. ( Ratio_old(1) < TOLERANCE ) .AND. ( Ratio_old(2) < TOLERANCE ) ) THEN
-    testresult = 0
-    STOP 0
-  ELSE
-    testresult = 1
-    STOP 1
-  END IF
-
+ 
 
 CONTAINS
 
   INCLUDE 'Load_Atm_Data.inc'
   INCLUDE 'Load_Sfc_Data.inc'
 
-  SUBROUTINE Integrate_Reflectivity(Re, R)
-      IMPLICIT NONE
-      Real(fp), INTENT(IN) :: Re(:)
-      Real(fp), INTENT(OUT) :: R(:)
-      REAL(fp) :: Rs(SIZE(Re))
-      REAL(fp), PARAMETER :: M3_to_MM6overM3 = 1.0d18
-
-
-      WHERE (Re > -100)
-          Rs = 10.0_fp**(Re / 10.0_fp) / M3_to_MM6overM3
-      ELSEWHERE
-          Rs = 0.0_fp
-      END WHERE
-
-      R = Rs
-      !R = SUM(Rs)
-
-  END SUBROUTINE Integrate_Reflectivity
-
-END PROGRAM test_TL_convergence
+END PROGRAM test_active_sensor
