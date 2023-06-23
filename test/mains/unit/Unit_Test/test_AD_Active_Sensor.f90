@@ -406,19 +406,20 @@ CALL CRTM_RTSolution_Create(RTSolution_AD,N_LAYERS)
   ! Initialise the Adjoint INPUT to provide dR/dx derivatives
   RTSolution_AD%Brightness_Temperature = ZERO
   RTSolution_AD%Radiance = ZERO
-  !DO i1=1,n_channels
-  !DO j1=1,n_profiles
+
+  DO i1=1,n_channels
+  DO j1=1,n_profiles
   DO jj=1, N_LAYERS
-    RTSolution_AD%Reflectivity_Attenuated(jj) = ZERO
-    RTSolution_AD%Reflectivity(jj) = ZERO
+    RTSolution_AD(i1,j1)%Reflectivity_Attenuated(jj) = ZERO
+    RTSolution_AD(i1,j1)%Reflectivity(jj) = ZERO
     if (Attenuated_Reflectivity) then
-       RTSolution_AD(ichan,:)%Reflectivity_Attenuated(jj) = ONE 
+       RTSolution_AD(ichan,j1)%Reflectivity_Attenuated(jj) = ONE
     else
-       RTSolution_AD(ichan,:)%Reflectivity(jj) = ONE 
-    endif   
+       RTSolution_AD(ichan,j1)%Reflectivity(jj) = ONE
+    endif
   ENDDO
-  !ENDDO
-  !ENDDO
+  ENDDO
+  ENDDO
 
   Error_Status = CRTM_Adjoint( Atm , &
                               Sfc , &
