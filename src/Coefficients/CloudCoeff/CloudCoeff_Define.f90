@@ -802,7 +802,7 @@ CONTAINS
     END DO
     
     IF ( wait ) THEN
-      WRITE(*,'(/5x,"Press <ENTER> to view the infrared solid phase backscatteringparameter")')
+      WRITE(*,'(/5x,"Press <ENTER> to view the infrared solid phase backscattering parameter")')
       READ(*,*)
     END IF
     DO j = 1, CloudCoeff%n_IR_Densities

@@ -1,6 +1,5 @@
 .DS_Store
 *.o
-*.rej
 *.tgz
 .ipynb*
 build
