@@ -182,6 +182,15 @@ ecbuild_add_test( TARGET  test_check_crtm_random
                   LIBS    crtm
                   TEST_DEPENDS get_crtm_coeffs)
 
+ecbuild_add_test( TARGET  SpcCoeff_Edit
+                  SOURCES mains/application/SpcCoeff_Edit.f90
+                  ARGS    "testinput/single_profile.yaml"
+                  OMP     $ENV{OMP_NUM_THREADS}
+                  LIBS    crtm
+                  TEST_DEPENDS get_crtm_coeffs)
+
+
+
 #---------------------------------------------------------------------------------
 #unit tests
 
