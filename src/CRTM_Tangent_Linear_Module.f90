@@ -283,7 +283,7 @@ CONTAINS
     TYPE(CRTM_Atmosphere_type),        INTENT(IN OUT)     :: Atmosphere(:)     ! M
     TYPE(CRTM_Surface_type),           INTENT(IN)     :: Surface(:)        ! M
     TYPE(CRTM_Atmosphere_type),        INTENT(IN)     :: Atmosphere_TL(:)  ! M
-    TYPE(CRTM_Surface_type),           INTENT(IN)     :: Surface_TL(:)     ! M    
+    TYPE(CRTM_Surface_type),           INTENT(IN)     :: Surface_TL(:)     ! M
     TYPE(CRTM_Geometry_type),          INTENT(IN)     :: Geometry(:)       ! M
     TYPE(CRTM_ChannelInfo_type),       INTENT(IN)     :: ChannelInfo(:)    ! n_Sensors
     TYPE(CRTM_RTSolution_type),        INTENT(IN OUT) :: RTSolution(:,:)   ! L x M
@@ -378,14 +378,14 @@ CONTAINS
     ! Determine how many threads to use for profiles and channels
     ! After profiles get what they need, we use the left-over threads
     ! to parallelize channels
-    IF ( n_omp_threads <= n_Profiles ) THEN
+    IF ( n_omp_threads <= n_Profiles .OR. n_Profiles == 0) THEN
       n_profile_threads = n_omp_threads
       n_channel_threads = 1
       CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
     ELSE
       n_profile_threads = n_Profiles
       n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
-!   There may have bug for MW and IR cases by using openMP over channels      
+!   There may have bug for MW and IR cases by using openMP over channels
 !    IF(SpcCoeff_IsInfraredSensor(SC(1)) .OR. &
 !                SpcCoeff_IsMicrowaveSensor(SC(1)) ) THEN
 !      n_channel_threads = 1
@@ -397,7 +397,7 @@ CONTAINS
       END IF
     END IF
 
-!    WRITE(6,*) 
+!    WRITE(6,*)
 !    WRITE(6,'("   Using",i3," OpenMP threads =",i3," for profiles and",i3," for channels.")') &
 !         n_omp_threads, n_profile_threads, n_channel_threads
 
@@ -436,7 +436,7 @@ CONTAINS
          CYCLE Profile_Loop1
       END IF
     END DO Profile_Loop1
-!$OMP END PARALLEL DO 
+!$OMP END PARALLEL DO
 
     IF (Error_Status == FAILURE) THEN
       RETURN
@@ -477,7 +477,7 @@ CONTAINS
       CALL CRTM_RTSolution_Inspect (RTSolution(:,:))
     END IF
     RETURN
-    
+
   CONTAINS
 
     ! Function profile_solution contains all the computational code inside of CRTM_Forward that
@@ -490,7 +490,7 @@ CONTAINS
       INTEGER, INTENT(in) :: m               ! profile index
       TYPE(CRTM_Options_type), INTENT(IN) :: Opt
       TYPE(CRTM_AncillaryInput_type), INTENT(IN) :: AncillaryInput
-    
+
       ! Local variables
       INTEGER :: Error_Status
       CHARACTER(256) :: Message
@@ -549,7 +549,7 @@ CONTAINS
       ! ...Assign the option specific SfcOptics input
          IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
          RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
-      END IF   
+      END IF
 
         CALL CRTM_SfcOptics_Create( SfcOptics(nt)  , MAX_N_ANGLES, MAX_N_STOKES )
         CALL CRTM_SfcOptics_Create( SfcOptics_TL(nt), MAX_N_ANGLES, MAX_N_STOKES )
@@ -683,7 +683,7 @@ CONTAINS
                                     Atm%n_Layers        , &
                                     MAX_N_LEGENDRE_TERMS, &
                                     CloudC%N_PHASE_ELEMENTS  )
-                                    
+
       IF ( Options_Present ) THEN
         AtmOptics(nt)%depolarization = Opt%depolarization
         AtmOptics_TL(nt)%depolarization = Opt%depolarization
@@ -692,7 +692,7 @@ CONTAINS
         AtmOptics_TL(nt)%n_Stokes = RTV(nt)%n_Stokes
         AtmOptics(nt)%Include_Scattering = Opt%Include_Scattering
         AtmOptics_TL(nt)%Include_Scattering = Opt%Include_Scattering
-      END IF 
+      END IF
 
       IF ( (.NOT. CRTM_AtmOptics_Associated( Atmoptics(nt) )) .OR. &
            (.NOT. CRTM_AtmOptics_Associated( Atmoptics_TL(nt) )) ) THEN
@@ -723,8 +723,8 @@ CONTAINS
                              Atm%n_Layers        , &
                              Atm%n_Aerosols        )
         END IF
-      END DO 
-!$OMP END PARALLEL DO 
+      END DO
+!$OMP END PARALLEL DO
 
       IF ( Error_Status == FAILURE) RETURN
 
@@ -776,7 +776,7 @@ CONTAINS
           SfcOptics_Clear_TL(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
           SfcOptics_Clear(nt)%n_Stokes = RTV(nt)%n_Stokes               ! It may be changed for CSEM.
           SfcOptics_Clear_TL(nt)%n_Stokes = RTV(nt)%n_Stokes            ! It may be changed for CSEM.
-          
+
           ! ...CLEAR SKY average surface skin temperature for multi-surface types
           CALL CRTM_Compute_SurfaceT( Surface(m), SfcOptics_Clear(nt) )
           CALL CRTM_Compute_SurfaceT_TL( Surface(m), Surface_TL(m), SfcOptics_Clear_TL(nt) )
@@ -873,7 +873,7 @@ CONTAINS
             END IF
           END IF
         END DO
-!$OMP END PARALLEL DO 
+!$OMP END PARALLEL DO
 
         IF ( Error_Status == FAILURE ) RETURN
 
@@ -981,7 +981,7 @@ CONTAINS
             ! ...Transfer stream count to scattering structure
             AtmOptics(nt)%n_Legendre_Terms = n_Full_Streams
             AtmOptics_TL(nt)%n_Legendre_Terms = n_Full_Streams
-            
+
             ! Compute the gas absorption
             CALL CRTM_Compute_AtmAbsorption( SensorIndex   , &  ! Input
                                              ChannelIndex  , &  ! Input
@@ -1115,7 +1115,7 @@ CONTAINS
             CALL CRTM_AtmOptics_Combine( AtmOptics(nt), AOvar(nt) )
             CALL CRTM_AtmOptics_Combine_TL( AtmOptics(nt), AtmOptics_TL(nt), AOvar(nt) )
           END IF
-  
+
           ! ...Save vertically integrated scattering optical depth for output
           RTSolution(ln,m)%SOD = AtmOptics(nt)%Scattering_Optical_Depth
           RTSolution_TL(ln,m)%SOD = AtmOptics_TL(nt)%Scattering_Optical_Depth
@@ -1161,7 +1161,7 @@ CONTAINS
             END IF
           END IF
 
-!  non scattering case, this condition may be changed for future surface reflectance 
+!  non scattering case, this condition may be changed for future surface reflectance
       IF( .not.RTSolution(ln,m)%Scattering_FLAG .or. .not.AtmOptics(nt)%Include_Scattering ) RTV(nt)%n_Azi = 0
 
           ! Fourier component loop for azimuth angles (VIS).
@@ -1196,7 +1196,7 @@ CONTAINS
               CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             END IF
 
-  
+
             ! ...Tangent-linear model
             Error_Status = CRTM_Compute_RTSolution_TL( &
                              Atm                , &  ! FWD Input
@@ -1220,7 +1220,7 @@ CONTAINS
               CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
               CYCLE  !RETURN
             END IF
-            
+
             ! Repeat clear sky for fractionally cloudy atmospheres
           IF (CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV(nt)%mth_Azi==0 ) THEN
               RTV_Clear(nt)%mth_Azi = mth_Azi
@@ -1270,10 +1270,10 @@ CONTAINS
 
 
           END DO Azimuth_Fourier_Loop
-          
+
           ! Combine cloudy and clear radiances for fractional cloud coverage
           IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-            ! ...Save the 100% cloudy radince (or just reverse the order of calculation?)    
+            ! ...Save the 100% cloudy radince (or just reverse the order of calculation?)
             DO ks = 1, RTV(nt)%n_Stokes
             r_cloudy = RTSolution(ln,m)%Stokes(ks)
             ! ...Forward radiance
@@ -1290,11 +1290,11 @@ CONTAINS
             RTSolution(ln,m)%Total_Cloud_Cover    =    CloudCover%Total_Cloud_Cover
             RTSolution_TL(ln,m)%Total_Cloud_Cover = CloudCover_TL%Total_Cloud_Cover
             END DO
-            
+
             RTSolution(ln,m)%Radiance = RTSolution(ln,m)%Stokes(1)
             RTSolution_TL(ln,m)%Radiance = RTSolution_TL(ln,m)%Stokes(1)
           END IF
-         
+
           ! Combine cloudy and clear radiances for fractional cloud coverage
           ! The radiance post-processing
           CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), RTSolution_TL(ln,m), &
@@ -1302,14 +1302,14 @@ CONTAINS
                                        ChannelIndex, SensorIndex, &
                                        compute_antenna_correction, GeometryInfo)
 
-          ! Combine cloudy and clear radiances for fractional cloud coverage          
+          ! Combine cloudy and clear radiances for fractional cloud coverage
           ! Perform clear-sky post-processing
           IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
             CALL Post_Process_RTSolution(Opt, RTSolution_Clear(nt), RTSolution_Clear_TL(nt), &
                                          NLTE_Predictor, NLTE_Predictor_TL, &
                                          ChannelIndex, SensorIndex, &
                                          compute_antenna_correction, GeometryInfo)
- 
+
             ! ...Save the results in the output structure
             RTSolution(ln,m)%R_Clear     = RTSolution_Clear(nt)%Radiance
             RTSolution(ln,m)%Tb_Clear    = RTSolution_Clear(nt)%Brightness_Temperature
@@ -1319,7 +1319,7 @@ CONTAINS
 
         END DO Channel_Loop
         END DO Thread_Loop
-!$OMP END PARALLEL DO 
+!$OMP END PARALLEL DO
 
         IF ( Error_Status == FAILURE ) RETURN
 
@@ -1360,14 +1360,14 @@ CONTAINS
     !   2. Convert radiance to brightness temperature
     !   3. Apply antenna correction to brightness temperature
     ! ----------------------------------------------------------------
-   
+
     SUBROUTINE Post_Process_RTSolution(Opt, rts, rts_TL, NLTE_Predictor, NLTE_Predictor_TL, &
                  ChannelIndex, SensorIndex, &
                  compute_antenna_correction, GeometryInfo)
       TYPE(CRTM_Options_type), INTENT(IN) :: Opt
       TYPE(CRTM_RTSolution_type), INTENT(IN OUT) :: rts, rts_TL
       TYPE(NLTE_Predictor_type),    INTENT(IN)     :: NLTE_Predictor
-      TYPE(NLTE_Predictor_type),    INTENT(IN)     :: NLTE_Predictor_TL      
+      TYPE(NLTE_Predictor_type),    INTENT(IN)     :: NLTE_Predictor_TL
       INTEGER,                      INTENT(IN) :: ChannelIndex, SensorIndex
       LOGICAL,                      INTENT(IN) :: compute_antenna_correction
       TYPE(CRTM_GeometryInfo_type), INTENT(IN) :: GeometryInfo
@@ -1410,7 +1410,7 @@ CONTAINS
                rts_TL       )  ! Output
       END IF
 
-    END SUBROUTINE Post_Process_RTSolution    
+    END SUBROUTINE Post_Process_RTSolution
 
 
   END FUNCTION CRTM_Tangent_Linear
