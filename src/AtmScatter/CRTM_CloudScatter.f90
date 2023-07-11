@@ -1403,8 +1403,10 @@ CONTAINS
            END IF
         END IF ! ICE_Cloud etc interpol
       CASE DEFAULT
-         print*, 'Cloud State not defined'
-         STOP
+          Error_Status = FAILURE
+          WRITE(Message,'("Cloud state not defined")')
+          CALL Display_Message( ROUTINE_NAME,Message,Error_Status )
+          RETURN
     END SELECT
 
   END SUBROUTINE Get_Cloud_Opt_MW
