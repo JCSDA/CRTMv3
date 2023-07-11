@@ -551,7 +551,6 @@ SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
 
 # Symlink all CRTM files
 # Version 3
-# CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}
-CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}
+CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}
                          ${CMAKE_CURRENT_BINARY_DIR}/testinput
                          ${crtm_test_input} )
