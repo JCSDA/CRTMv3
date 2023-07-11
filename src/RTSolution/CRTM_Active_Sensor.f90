@@ -221,9 +221,9 @@ FUNCTION Water_Permittivity_Turner_2016(freq_Hz, temp_K) RESULT(perm)
   d1 = 6.627E+2
   d2 = 6.089E+2
 
-  tc = 133.1383
+  tc = 133.1383_fp
 
-  e0 = 87.9144
+  e0 = 87.9144_fp
   e1 = 0.404399_fp
   e2 = 9.58726d-4
   e3 = -1.32802d-6
