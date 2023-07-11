@@ -419,7 +419,7 @@ CONTAINS
     ! Determine how many threads to use for profiles and channels
     ! After profiles get what they need, we use the left-over threads
     ! to parallelize channels
-    IF ( n_omp_threads <= n_Profiles ) THEN
+    IF ( n_omp_threads <= n_Profiles .OR. n_Profiles == 0) THEN
       n_profile_threads = n_omp_threads
       n_channel_threads = 1
       CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
@@ -455,10 +455,10 @@ CONTAINS
                 Atmosphere(m)%Cloud(nc)%Effective_Radius(:) = ZERO
              END WHERE
           END DO
-          
+
 
           IF(.NOT. CRTM_CloudCoeff_IsLoaded() )THEN
-             
+
              Error_Status = FAILURE
              WRITE( Message,'("The CloudCoeff data must be loaded (with CRTM_Init routine) ", &
                   &"for the cloudy case profile #",i0)' ) m
@@ -479,7 +479,7 @@ CONTAINS
     IF (Error_Status == FAILURE) THEN
        RETURN
     END IF
-    
+
 !$OMP PARALLEL DO PRIVATE (Opt, AncillaryInput) NUM_THREADS(n_profile_threads) SCHEDULE (runtime)
     Profile_Loop2: DO m = 1, n_Profiles
       ! Check the optional Options structure argument
@@ -501,7 +501,7 @@ CONTAINS
       CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
       RETURN
     END IF
-      
+
     IF (enable_timing) THEN
       CALL SYSTEM_CLOCK (count=count_end)
       elapsed = REAL (count_end - count_start) / REAL (count_rate)
@@ -534,7 +534,7 @@ CONTAINS
       INTEGER, INTENT(in) :: m               ! profile index
       TYPE(CRTM_Options_type), INTENT(IN) :: Opt
       TYPE(CRTM_AncillaryInput_type), INTENT(IN) :: AncillaryInput
-    
+
       ! Local variables
       INTEGER :: Error_Status
       CHARACTER(256) :: Message
@@ -586,7 +586,7 @@ CONTAINS
 
       ! Silence gfortran complaints about maybe-used-uninit by init to huge()
       r_cloudy = HUGE(r_cloudy)
-      
+
       ! Reinitialise the output RTSolution
       CALL CRTM_RTSolution_Zero(RTSolution(:,m))
 
@@ -775,7 +775,7 @@ CONTAINS
 
       ! Setup for fractional cloud coverage
       IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-      
+
         ! Compute cloudcover
         Error_Status = CloudCover%Compute_CloudCover(atm, Overlap = opt%Overlap_Id)
         IF ( Error_Status /= SUCCESS ) THEN
@@ -990,7 +990,7 @@ CONTAINS
             RTSolution(ln,m)%WMO_Satellite_Id = ChannelInfo(n)%WMO_Satellite_Id
             RTSolution(ln,m)%WMO_Sensor_Id    = ChannelInfo(n)%WMO_Sensor_Id
             RTSolution(ln,m)%Sensor_Channel   = ChannelInfo(n)%Sensor_Channel(l)
-            
+
             RTSolution_K(ln,m)%Sensor_Id        = RTSolution(ln,m)%Sensor_Id
             RTSolution_K(ln,m)%WMO_Satellite_Id = RTSolution(ln,m)%WMO_Satellite_Id
             RTSolution_K(ln,m)%WMO_Sensor_Id    = RTSolution(ln,m)%WMO_Sensor_Id
@@ -1218,8 +1218,8 @@ CONTAINS
 !  Clear_sky case uses Emission_Module.f90 without atmospheric scatterings right now.
              IF( ks == 1 ) &
              RTSolution_Clear_K(nt)%Radiance=(ONE-CloudCover%Total_Cloud_Cover)*RTSolution_K(ln,m)%Stokes(ks)
-             RTSolution_K(ln,m)%Stokes(ks) = CloudCover%Total_Cloud_Cover*RTSolution_K(ln,m)%Stokes(ks)          
-           END DO          
+             RTSolution_K(ln,m)%Stokes(ks) = CloudCover%Total_Cloud_Cover*RTSolution_K(ln,m)%Stokes(ks)
+           END DO
          END IF
         END IF
       END IF
@@ -1275,10 +1275,10 @@ CONTAINS
                     CYCLE Thread_Loop
                   END IF
           END IF
-          
+
          IF(mth_Azi == RTV(nt)%n_Azi) THEN
             ! Combine cloudy and clear radiances for fractional cloud coverage
-            IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN 
+            IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
              IF( RTV(nt)%n_Stokes == 1 ) THEN
               r_cloudy(1) = RTSolution(ln,m)%Radiance  ! Save the 100% cloudy radiance
               RTSolution(ln,m)%Radiance = &
@@ -1290,14 +1290,14 @@ CONTAINS
               r_cloudy(ks) = RTSolution(ln,m)%Stokes(ks)  ! Save the 100% cloudy radiance
               RTSolution(ln,m)%Stokes(ks) = &
                   ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Stokes(ks)) + &
-                  (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Stokes(ks))              
+                  (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Stokes(ks))
               END DO
               RTSolution(ln,m)%Radiance = RTSolution(ln,m)%Stokes(1)
               END IF
               ! ...Save the cloud cover in the output structure
               RTSolution(ln,m)%Total_Cloud_Cover = CloudCover%Total_Cloud_Cover
             END IF
- 
+
               ! The radiance post-processing
               CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), &
                                            NLTE_Predictor, &
@@ -1337,9 +1337,9 @@ CONTAINS
              END IF
 
            END IF
- 
+
          END IF
-         
+
           IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV(nt)%mth_Azi==0 ) THEN
                 ! The adjoint of the clear sky radiative transfer for fractionally cloudy atmospheres
                 RTV_Clear(nt)%mth_Azi = RTV(nt)%mth_Azi
@@ -1367,8 +1367,8 @@ CONTAINS
                 CYCLE Thread_Loop
               END IF
             END IF
-        
-          
+
+
                 ! The adjoint of the radiative transfer
                 Error_Status = CRTM_Compute_RTSolution_AD( &
                                  Atm               , &  ! FWD Input
@@ -1579,7 +1579,7 @@ CONTAINS
                 CYCLE Thread_Loop
               END IF
             END IF
-            
+
             ! K-matrix of the atmosphere layer addition
             Error_Status = CRTM_Atmosphere_AddLayers_AD( Atmosphere(m), Atm_K(nt), Atmosphere_K(ln,m) )
 
@@ -1633,7 +1633,7 @@ CONTAINS
 !$OMP END PARALLEL DO
 
     END FUNCTION profile_solution
- 
+
     ! ----------------------------------------------------------------
     ! Local subroutine to post-process the FORWARD radiance, as it is
     ! the same for all-sky and fractional clear-sky cases.
@@ -1687,7 +1687,7 @@ CONTAINS
     !   2. Convert adjoint radiances to brightness temperatures
     !   3. Apply adjoint non-LTE correction to radiances
     ! ----------------------------------------------------------------
-      
+
     SUBROUTINE Pre_Process_RTSolution_K(Opt, rts, rts_K, &
                                         NLTE_Predictor, NLTE_Predictor_K, &
                                         ChannelIndex, SensorIndex, &
