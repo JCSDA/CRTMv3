@@ -58,8 +58,8 @@ PROGRAM test_Simple
   INTEGER :: n_la, n_ma
   INTEGER :: n_ls, n_ms
   CHARACTER(256) :: atmk_File, sfck_File
-  TYPE(CRTM_Atmosphere_type), ALLOCATABLE :: atm_k(:,:)
-  TYPE(CRTM_Surface_type)   , ALLOCATABLE :: sfc_k(:,:)
+  TYPE(CRTM_Atmosphere_type), ALLOCATABLE :: atm_K(:,:)
+  TYPE(CRTM_Surface_type)   , ALLOCATABLE :: sfc_K(:,:)
 
 
 
@@ -133,6 +133,7 @@ PROGRAM test_Simple
   ! 3a. Allocate the ARRAYS
   ! -----------------------
   ALLOCATE( RTSolution( n_Channels, N_PROFILES ), &
+            atm_K( n_Channels, N_PROFILES ), &
             Atmosphere_K( n_Channels, N_PROFILES ), &
             Surface_K( n_Channels, N_PROFILES ), &
             RTSolution_K( n_Channels, N_PROFILES ), &

@@ -2452,7 +2452,7 @@ CONTAINS
       atm%Level_Pressure, &
       atm%Pressure, &
       atm%Temperature, &
-      !atm%Relative_Humidity, &   ! RH APPROACH #1
+      atm%Relative_Humidity, &   ! RH APPROACH #1
       atm%Absorber, &
       atm%Cloud_Fraction
     IF ( io_stat /= 0 ) THEN
@@ -2462,7 +2462,7 @@ CONTAINS
 
     ! RH APPROACH #2
     ! Compute the relative humidity
-    CALL Compute_Relative_Humidity( atm )
+    !CALL Compute_Relative_Humidity( atm )
 
     ! Read the cloud data
     IF ( n_clouds > 0 ) THEN

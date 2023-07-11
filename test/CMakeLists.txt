@@ -70,52 +70,19 @@ IF(EXISTS  ${CMAKE_SOURCE_DIR}/fix)
   message("Using existing local fix directory instead of downloading.")
 # Download CRTM coefficients
 else()
-   #### Version 3
-   #set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
-   set( CRTM_COEFFS_BRANCH "3.0.0_skylab_4.0" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)     
-   # it is my intention is to not have any difference between jedi/ufo versions of CRTM and stand-alond versions of CRTM -- they should both work "out of the box"
-   #set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})   #this is where the symlinks point to binary files for the testinput/* directory after ecbuild.
-   #file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
-#  set( ECBUILD_DOWNLOAD_BASE_URL https://gdex.ucar.edu/dataset/jedi-skylab )
-   #set( ECBUILD_DOWNLOAD_BASE_URL https://ftp.ssec.wisc.edu/pub/s4/CRTM )
-   #message(STATUS "download CRTM coeffs files from: ${ECBUILD_DOWNLOAD_BASE_URL}/file to ${CRTM_COEFFS_PATH}")
-   #ecbuild_get_test_multidata( TARGET   get_crtm_coeffs
-   #                            NAMES    crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz:9941a3c099704108830e33e49792478   #i'm assuming these are md5sums, this is the md5sum for crtm_coefficients_3.0.0_skylab_4.0.tar.gz as of March 8, 2023 that was sent to gdex
-   #                            DIRNAME  file
-   #                            DIRLOCAL ${CRTM_COEFFS_PATH}
-   #                            EXTRACT )
-
-  ####Version 2.4.1	
-  set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/crtm/${CRTM_COEFFS_BRANCH})
+	set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
+  set( CRTM_COEFFS_BRANCH "3.0.0_skylab_4.0" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)
+	# it is my intention is to not have any difference between jedi/ufo versions of CRTM and stand-alond versions of CRTM -- they should both work "out of the box"
+  set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})   #this is where the symlinks point to binary files for the testinput/* directory after ecbuild.
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
-  #set( ECBUILD_DOWNLOAD_BASE_URL https://gdex.ucar.edu/dataset/jedi-skylab/file )
-  set( ECBUILD_DOWNLOAD_BASE_URL https://ftp.ssec.wisc.edu/pub/s4/CRTM )
-  set( test_files_dirname crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz )
-  set( checksum "0")
-  message(STATUS "download CRTM coeffs files from: ${ECBUILD_DOWNLOAD_BASE_URL} to ${CRTM_COEFFS_PATH}")
-
-  list( APPEND CRTM_DATA_DOWNLOADER_ARGS
-                ${ECBUILD_DOWNLOAD_BASE_URL}
-                ${CMAKE_BINARY_DIR}/test_data
-                ${test_files_dirname}
-                ${checksum} )
-
-  # Create download script for ufo_get_*_test_data test
-  set ( FILENAME crtm_data_downloader.py)
-  set ( SOURCE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/${FILENAME} )
-  set ( DEST_FILE ${CMAKE_BINARY_DIR}/bin/${FILENAME} )
-
-  if( EXISTS "${SOURCE_FILE}.in" )
-    configure_file( ${SOURCE_FILE}.in ${DEST_FILE} @ONLY )
-  else()
-    configure_file( ${SOURCE_FILE}    ${DEST_FILE} @ONLY )
-  endif()
-
-  # add test for downloading data
-  ecbuild_add_test( TARGET    get_crtm_coeffs
-                    TYPE      SCRIPT
-                    COMMAND   ${CMAKE_BINARY_DIR}/bin/crtm_data_downloader.py
-                    ARGS      ${CRTM_DATA_DOWNLOADER_ARGS} )
+#  set( ECBUILD_DOWNLOAD_BASE_URL https://gdex.ucar.edu/dataset/jedi-skylab )
+  set( ECBUILD_DOWNLOAD_BASE_URL ftp://ftp.ssec.wisc.edu/pub/s4/CRTM )
+  message(STATUS "download CRTM coeffs files from: ${ECBUILD_DOWNLOAD_BASE_URL}/file to ${CRTM_COEFFS_PATH}")
+  ecbuild_get_test_multidata( TARGET   get_crtm_coeffs
+                              NAMES    crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz:9cf4b1cc57e20802e608a597d7f53073  #i'm assuming these are md5sums, this is the md5sum for crtm_coefficients_3.0.0_skylab_4.0.tar.gz as of March 8, 2023 that was sent to gdex
+                              DIRNAME  file
+                              DIRLOCAL ${CRTM_COEFFS_PATH}
+                              EXTRACT )
 endif()
 
 # Add files to cmake resources
@@ -278,7 +245,7 @@ ecbuild_add_executable (
     TARGET  "TL_TEST"
     SOURCES mains/unit/Unit_Test/test_TL.f90
     LIBS    crtm
-    NOINSTALL 
+    NOINSTALL
     )
 ecbuild_add_test (
     TARGET "Unit_TL_TEST"
@@ -414,16 +381,16 @@ foreach(regtype IN LISTS regression_types)
                             SOURCES "mains/regression/${regtype}/test_${testtype}/test_${testtype}.f90"
                             LIBS    crtm
                             NOINSTALL)
- 
+
     foreach(sensor_id IN LISTS ${testtype}_Sensor_Ids)
-  
+
           ecbuild_add_test( TARGET  "test_${regtype}_${testtype}_${sensor_id}"
                             OMP     $ENV{OMP_NUM_THREADS}
                             COMMAND "test_${regtype}_test_${testtype}"
                             ARGS    "${sensor_id}"
                             TEST_DEPENDS get_crtm_coeffs)
     endforeach()
-  endforeach() 
+  endforeach()
 endforeach()
 
 
@@ -438,7 +405,7 @@ foreach(regtype IN LISTS TLAD_types)
                             SOURCES "mains/regression/${regtype}/test_${testtype}/test_${testtype}.f90"
                             LIBS    crtm
                             NOINSTALL)
-  
+
     foreach(sensor_id IN LISTS ${testtype}_Sensor_Ids)
           ecbuild_add_test( TARGET  "test_${regtype}_${testtype}_${sensor_id}"
                             OMP     $ENV{OMP_NUM_THREADS}
@@ -446,7 +413,7 @@ foreach(regtype IN LISTS TLAD_types)
                             ARGS    "${sensor_id}"
                             TEST_DEPENDS get_crtm_coeffs)
     endforeach()
-  endforeach() 
+  endforeach()
 endforeach()
 
 
