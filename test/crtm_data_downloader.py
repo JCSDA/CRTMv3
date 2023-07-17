@@ -15,9 +15,19 @@ md5check = sys.argv[4]
 
 def DownloadUntar(download_base_url, testfiles_path, testfiles_name, md5check):
   if (md5check == "1"):
-    urllib.request.urlretrieve( download_base_url+"/"+testfiles_name+".md5", testfiles_path+"/"+testfiles_name+".md5")
-
-  urllib.request.urlretrieve( download_base_url+"/"+testfiles_name, testfiles_path+"/"+testfiles_name)
+    try:
+      urllib.request.urlretrieve( download_base_url+"/"+testfiles_name+".md5", testfiles_path+"/"+testfiles_name+".md5")
+    except:
+      raise RuntimeError("Downloading md5 checksum file failed!")
+    try:
+      urllib.request.urlretrieve( download_base_url+"/"+testfiles_name, testfiles_path+"/"+testfiles_name)
+    except:
+      raise RuntimeError("Downloading CRTM test data file failed!")
+  else:
+    try:
+      urllib.request.urlretrieve( download_base_url+"/"+testfiles_name, testfiles_path+"/"+testfiles_name)
+    except:
+      raise RuntimeError("Downloading CRTM test data file failed!")
   tar_file = tarfile.open(testfiles_path+"/"+testfiles_name)
   tar_file.extractall(testfiles_path)
   tar_file.close()
@@ -30,7 +40,10 @@ if (md5check == "1") :
     print("local files found")
 
     #  dl md5 save it as *.md5.dl
-    urllib.request.urlretrieve( download_base_url+"/"+testfiles_name+".md5", testfiles_path+"/"+testfiles_name+".md5.dl")
+    try:
+      urllib.request.urlretrieve( download_base_url+"/"+testfiles_name+".md5", testfiles_path+"/"+testfiles_name+".md5.dl")
+    except:
+      raise RuntimeError("Downloading md5.dl checksum file from S3 failed!")
 
     #  compare *md5.dl with md5 local
     with open(testfiles_path+"/"+testfiles_name+".md5", 'r') as f:
