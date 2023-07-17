@@ -1,7 +1,7 @@
 !-------------------------------------------------------
 !
 ! Description:
-!	Simple test program to inspect the CRTM AerosolCoeff
+!	Simple test program to inspect the CRTM CloudCoeff
 !	files.
 !
 !	Date: 2018-08-14	Author: P. Stegmann
@@ -13,11 +13,11 @@
 ! =======           =====          ============
 ! Patrick Stegmann  2021-02-05     Refactored as a CRTM
 !                                  unit test.
-! Cheng Dang        2021-07-28     Modified for Aerosol
+! Cheng Dang        2021-07-28     Modified for Cloud
 !                                  Coeff look-up table
 !-------------------------------------------------------
 
-PROGRAM test_aerosol_coeff_io_nc
+PROGRAM test_cloud_coeff_io
 
   ! ====================================================
   ! **** ENVIRONMENT SETUP FOR RTM USAGE ****
@@ -29,49 +29,47 @@ PROGRAM test_aerosol_coeff_io_nc
                              UnitTest_Setup,  &
                              UnitTest_Assert, &
                              UnitTest_Passed
-  !USE AerosolCoeff_Define, ONLY: AerosolCoeff_type
-  USE CRTM_AerosolCoeff
+  !USE CloudCoeff_Define, ONLY: CloudCoeff_type
+  USE CRTM_CloudCoeff
   USE Message_Handler, ONLY: SUCCESS, Display_Message
 
   ! Disable all implicit typing
   IMPLICIT NONE
 
   ! Data dictionary:
-  !TYPE(AerosolCoeff_type) :: aero_coeff
   CHARACTER(2000)         :: info
-  CHARACTER(*), PARAMETER :: Aerosol_Model = 'CRTM'
-  CHARACTER(*), PARAMETER :: AerosolCoeff_File = 'AerosolCoeff.nc4'
+  CHARACTER(*), PARAMETER :: Cloud_Model = 'CRTM'
+  CHARACTER(*), PARAMETER :: CloudCoeff_File = 'CloudCoeff.bin'
   CHARACTER(*), PARAMETER :: File_Path = './testinput/'
-  LOGICAL,      PARAMETER :: netCDF = .TRUE.
-  LOGICAL,      PARAMETER :: Quiet = .TRUE.
-  LOGICAL,      PARAMETER :: netCDF = .TRUE.
+  LOGICAL,      PARAMETER :: Quiet  = .TRUE.
+  LOGICAL,      PARAMETER :: netCDF = .FALSE.
   INTEGER                 :: err_stat
   TYPE(UnitTest_type)     :: ioTest
   LOGICAL                 :: testPassed
-  CHARACTER(*), PARAMETER :: Program_Name = 'Test_Aerosol_Coeff_IO_NetCDF'
+  CHARACTER(*), PARAMETER :: Program_Name = 'Test_Cloud_Coeff_IO_Binary'
 
   ! Initialize Unit test:
   CALL UnitTest_Init(ioTest, .TRUE.)
-  CALL UnitTest_Setup(ioTest, 'Aerosol_Coeff_IO_Test_NetCDF', Program_Name, .TRUE.)
+  CALL UnitTest_Setup(ioTest, 'Test_Cloud_Coeff_IO_Binary', Program_Name, .TRUE.)
 
   ! Greeting:
-  WRITE(*,*) 'HELLO, THIS IS A TEST CODE TO INSPECT AerosolCoeff files.'
-  WRITE(*,*) 'test_aerosol_coeff_io_nc', 'The following aerosol scheme is investigated: ', Aerosol_Model
-  ! Load the aerosol coefficient look-up table:
+  WRITE(*,*) 'HELLO, THIS IS A TEST CODE TO INSPECT CloudCoefff files.'
+  WRITE(*,*) 'test_cloud_coeff_io', 'The following Cloud scheme is investigated: ', Cloud_Model
+  ! Load the Cloud coefficient look-up table:
   err_stat = 3
-  err_stat = CRTM_AerosolCoeff_Load( &
-                Aerosol_Model              , &
-                AerosolCoeff_File          , &
-                File_Path                  , &
-                netCDF            = netCDF , &
-                Quiet             = Quiet    )
+  err_stat = CRTM_CloudCoeff_Load( &
+                Cloud_Model              , &
+                CloudCoeff_File          , &
+                File_Path                , &
+                netCDF          = netCDF , &
+                Quiet           = Quiet    )
   CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
   testPassed = UnitTest_Passed(ioTest)
 
   IF ( err_stat /= SUCCESS ) THEN
-    CALL Display_Message( 'CRTM_Load_Aerosol_Coeff' ,'Error loading AerosolCoeff data', err_stat )
+    CALL Display_Message( 'CRTM_Load_Cloud_Coeff' ,'Error loading CloudCoeff data', err_stat )
     STOP 1
   END IF
   STOP 0
 
-END PROGRAM test_aerosol_coeff_io_nc
+END PROGRAM test_cloud_coeff_io

@@ -1,24 +1,24 @@
 !-------------------------------------------------------
 !
 ! Description:
-!	Simple test program to inspect the CRTM AerosolCoeff 
+!	Simple test program to inspect the CRTM AerosolCoeff
 !	files.
-!	
+!
 !	Date: 2018-08-14	Author: P. Stegmann
 !
 ! MODIFICATION HISTORY:
 ! =====================
-! 
+!
 ! Author:           Date:          Description:
 ! =======           =====          ============
 ! Patrick Stegmann  2021-02-05     Refactored as a CRTM
 !                                  unit test.
-! Cheng Dang        2021-07-28     Modified for Aerosol 
+! Cheng Dang        2021-07-28     Modified for Aerosol
 !                                  Coeff look-up table
 !-------------------------------------------------------
 
 PROGRAM test_aerosol_coeff_io
-  
+
   ! ====================================================
   ! **** ENVIRONMENT SETUP FOR RTM USAGE ****
   !
@@ -54,7 +54,7 @@ PROGRAM test_aerosol_coeff_io
   CALL UnitTest_Setup(ioTest, 'Aerosol_Coeff_IO_Test', Program_Name, .TRUE.)
 
   ! Greeting:
-  WRITE(*,*) 'HELLO, THIS IS A TEST CODE TO INSPECT AerosolCoeff files.' 
+  WRITE(*,*) 'HELLO, THIS IS A TEST CODE TO INSPECT AerosolCoeff files.'
   WRITE(*,*) 'test_aerosol_coeff_io', 'The following aerosol scheme is investigated: ', Aerosol_Model
   ! Load the aerosol coefficient look-up table:
   err_stat = 3
@@ -63,10 +63,10 @@ PROGRAM test_aerosol_coeff_io
                 AerosolCoeff_File          , &
                 File_Path                  , &
                 netCDF            = netCDF , &
-                Quiet             = Quiet    ) 
+                Quiet             = Quiet    )
   CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
   testPassed = UnitTest_Passed(ioTest)
-  
+
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_Load_Aerosol_Coeff' ,'Error loading AerosolCoeff data', err_stat )
     STOP 1
