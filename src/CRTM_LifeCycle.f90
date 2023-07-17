@@ -623,7 +623,9 @@ CONTAINS
         netCDF = .TRUE.
       END IF
     END IF
-    WRITE(*,*) "Loading"//SpcCoeff_Format//" spectral coefficients."
+    IF (PRESENT(Quiet) .AND. (.NOT. Quiet)) THEN
+      WRITE(*,*) "Loading"//SpcCoeff_Format//" spectral coefficients."
+    END IF
     err_stat = CRTM_SpcCoeff_Load( &
                  Sensor_ID                            , &
                  File_Path         = File_Path        , &
@@ -644,7 +646,9 @@ CONTAINS
         netCDF = .TRUE.
       END IF
     END IF
-    WRITE(*,*) "Loading "//TauCoeff_Format//" transmittance coefficients."
+    IF (PRESENT(Quiet) .AND. (.NOT. Quiet)) THEN
+      WRITE(*,*) "Loading "//TauCoeff_Format//" transmittance coefficients."
+    END IF
     err_stat = CRTM_Load_TauCoeff( &
                  Sensor_ID         = Sensor_ID        , &
                  File_Path         = File_Path        , &
@@ -667,8 +671,10 @@ CONTAINS
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
       END IF
-      ! Default_CloudCoeff_File = TRIM(ADJUSTL(Default_File_Path)) // TRIM(Default_CloudCoeff_File)
-      WRITE(*, '("Loading cloud coefficients: ", a) ') TRIM(Default_CloudCoeff_File)
+      ! Default_CloudCoeff_File = TRIM(ADJUSTL(Default_File_Path)) // TRIM(Default_CloudCoeff_File)\
+      IF (PRESENT(Quiet) .AND. (.NOT. Quiet)) THEN
+        WRITE(*, '("Loading cloud coefficients: ", a) ') TRIM(Default_CloudCoeff_File)
+      END IF
       err_stat = CRTM_CloudCoeff_Load( &
                    Default_Cloud_Model                  , &
                    Default_CloudCoeff_File              , &
@@ -695,7 +701,9 @@ CONTAINS
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
       END IF
       ! Default_AerosolCoeff_File = TRIM(ADJUSTL(Default_File_Path)) // TRIM(Default_AerosolCoeff_File)
-      WRITE(*, '("Loading aerosol coefficients: ", a) ') TRIM(Default_AerosolCoeff_File)
+      IF (PRESENT(Quiet) .AND. (.NOT. Quiet)) THEN
+        WRITE(*, '("Loading aerosol coefficients: ", a) ') TRIM(Default_AerosolCoeff_File)
+      END IF
       err_stat = CRTM_AerosolCoeff_Load( &
                    Default_Aerosol_Model                , &
                    Default_AerosolCoeff_File            , &
