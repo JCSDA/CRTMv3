@@ -44,7 +44,6 @@ PROGRAM test_aerosol_coeff_io_nc
   CHARACTER(*), PARAMETER :: File_Path = './testinput/'
   LOGICAL,      PARAMETER :: netCDF = .TRUE.
   LOGICAL,      PARAMETER :: Quiet = .TRUE.
-  LOGICAL,      PARAMETER :: netCDF = .TRUE.
   INTEGER                 :: err_stat
   TYPE(UnitTest_type)     :: ioTest
   LOGICAL                 :: testPassed
