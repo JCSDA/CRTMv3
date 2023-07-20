@@ -513,6 +513,7 @@ CONTAINS
     CHARACTER(SL) :: Default_VISsnowCoeff_File
     CHARACTER(SL) :: Default_VISiceCoeff_File
     CHARACTER(SL) :: Default_MWwaterCoeff_File
+    CHARACTER(SL) :: Default_File_Path
 
 
     INTEGER :: l, n, n_Sensors
@@ -561,15 +562,13 @@ CONTAINS
 
 
     ! Specify sensor-independent coefficient filenames
+    ! ...Default File_Path
+    Default_File_Path = ''
     ! ...Default filenames
     Default_Aerosol_Model       = 'CRTM'
-    Default_AerosolCoeff_Format = 'Binary'
     Default_AerosolCoeff_File   = 'AerosolCoeff.bin'
     Default_Cloud_Model         = 'CRTM'
-    Default_CloudCoeff_Format   = 'Binary'
     Default_CloudCoeff_File     = 'CloudCoeff.bin'
-    Default_SpcCoeff_Format     = 'Binary'
-    Default_TauCoeff_Format     = 'Binary'
     Default_IRwaterCoeff_File   = 'Nalli.IRwater.EmisCoeff.bin'
     Default_IRlandCoeff_File    = 'NPOESS.IRland.EmisCoeff.bin'
     Default_IRsnowCoeff_File    = 'NPOESS.IRsnow.EmisCoeff.bin'
@@ -579,12 +578,16 @@ CONTAINS
     Default_VISsnowCoeff_File   = 'NPOESS.VISsnow.EmisCoeff.bin'
     Default_VISiceCoeff_File    = 'NPOESS.VISice.EmisCoeff.bin'
     Default_MWwaterCoeff_File   = 'FASTEM6.MWwater.EmisCoeff.bin'
-    ! ...Were other filenames specified?
+    ! ... Default file formats
+    Default_AerosolCoeff_Format = 'Binary'
+    Default_CloudCoeff_Format   = 'Binary'
+    Default_SpcCoeff_Format     = 'Binary'
+    Default_TauCoeff_Format     = 'Binary'
+    ! ...Were other coefficient schemes specified?
     IF ( PRESENT(Aerosol_Model       ) ) Default_Aerosol_Model       = TRIM(ADJUSTL(Aerosol_Model))
-    IF ( PRESENT(AerosolCoeff_Format ) ) Default_AerosolCoeff_Format = TRIM(ADJUSTL(AerosolCoeff_Format))
-    IF ( PRESENT(AerosolCoeff_File   ) ) Default_AerosolCoeff_File   = TRIM(ADJUSTL(AerosolCoeff_File))
     IF ( PRESENT(Cloud_Model         ) ) Default_Cloud_Model         = TRIM(ADJUSTL(Cloud_Model))
-    IF ( PRESENT(CloudCoeff_Format   ) ) Default_CloudCoeff_Format   = TRIM(ADJUSTL(CloudCoeff_Format))
+    ! ...Were other filenames specified?
+    IF ( PRESENT(AerosolCoeff_File   ) ) Default_AerosolCoeff_File   = TRIM(ADJUSTL(AerosolCoeff_File))
     IF ( PRESENT(CloudCoeff_File     ) ) Default_CloudCoeff_File     = TRIM(ADJUSTL(CloudCoeff_File))
     IF ( PRESENT(SpcCoeff_Format     ) ) Default_SpcCoeff_Format     = TRIM(ADJUSTL(SpcCoeff_Format))
     IF ( PRESENT(TauCoeff_Format     ) ) Default_TauCoeff_Format     = TRIM(ADJUSTL(TauCoeff_Format))
@@ -597,6 +600,9 @@ CONTAINS
     IF ( PRESENT(VISsnowCoeff_File   ) ) Default_VISsnowCoeff_File   = TRIM(ADJUSTL(VISsnowCoeff_File))
     IF ( PRESENT(VISiceCoeff_File    ) ) Default_VISiceCoeff_File    = TRIM(ADJUSTL(VISiceCoeff_File))
     IF ( PRESENT(MWwaterCoeff_File   ) ) Default_MWwaterCoeff_File   = TRIM(ADJUSTL(MWwaterCoeff_File))
+    ! ...Were data formats specificed?
+    IF ( PRESENT(AerosolCoeff_Format ) ) Default_AerosolCoeff_Format  = TRIM(ADJUSTL(AerosolCoeff_Format))
+    IF ( PRESENT(CloudCoeff_Format   ) ) Default_CloudCoeff_Format    = TRIM(ADJUSTL(CloudCoeff_Format))
     ! ...Was a path specified?
     IF ( PRESENT(File_Path) ) THEN
       Default_IRwaterCoeff_File  = TRIM(ADJUSTL(File_Path)) // TRIM(Default_IRwaterCoeff_File)
@@ -609,22 +615,6 @@ CONTAINS
       Default_VISiceCoeff_File   = TRIM(ADJUSTL(File_Path)) // TRIM(Default_VISiceCoeff_File)
       Default_MWwaterCoeff_File  = TRIM(ADJUSTL(File_Path)) // TRIM(Default_MWwaterCoeff_File)
     END IF
-    ! ...Was aerosol or cloud lookup table in netCDF or Binary format?
-    IF ( PRESENT(AerosolCoeff_Format) .AND. AerosolCoeff_Format == 'netCDF' ) THEN
-      IF ( PRESENT(NC_File_Path) ) THEN
-        Default_AerosolCoeff_File  = TRIM(ADJUSTL(NC_File_Path)) // TRIM(Default_AerosolCoeff_File)
-      END IF
-    ELSE IF ( PRESENT(File_Path) ) THEN
-        Default_AerosolCoeff_File  = TRIM(ADJUSTL(File_Path)) // TRIM(Default_AerosolCoeff_File)
-    END IF
-
-    IF ( PRESENT(CloudCoeff_Format) .AND. CloudCoeff_Format == 'netCDF' ) THEN
-      IF ( PRESENT(NC_File_Path) ) THEN
-        Default_CloudCoeff_File    = TRIM(ADJUSTL(NC_File_Path)) // TRIM(Default_CloudCoeff_File)
-      END IF
-    ELSE IF ( PRESENT(File_Path) ) THEN
-        Default_CloudCoeff_File  = TRIM(ADJUSTL(File_Path)) // TRIM(Default_CloudCoeff_File)
-    END IF
 
     ! Load the spectral coefficients
     netCDF = .FALSE.
@@ -633,7 +623,9 @@ CONTAINS
         netCDF = .TRUE.
       END IF
     END IF
-    WRITE(*,*) "Loading"//SpcCoeff_Format//" spectral coefficients."
+    IF (PRESENT(Quiet) .AND. (.NOT. Quiet)) THEN
+      WRITE(*,*) "Loading"//SpcCoeff_Format//" spectral coefficients."
+    END IF
     err_stat = CRTM_SpcCoeff_Load( &
                  Sensor_ID                            , &
                  File_Path         = File_Path        , &
@@ -654,7 +646,9 @@ CONTAINS
         netCDF = .TRUE.
       END IF
     END IF
-    WRITE(*,*) "Loading "//TauCoeff_Format//" transmittance coefficients."
+    IF (PRESENT(Quiet) .AND. (.NOT. Quiet)) THEN
+      WRITE(*,*) "Loading "//TauCoeff_Format//" transmittance coefficients."
+    END IF
     err_stat = CRTM_Load_TauCoeff( &
                  Sensor_ID         = Sensor_ID        , &
                  File_Path         = File_Path        , &
@@ -670,15 +664,22 @@ CONTAINS
 
     ! Load the cloud coefficients
     IF ( Local_Load_CloudCoeff ) THEN
-      ! IF ( iQuiet == 0 ) THEN ! IF ( .not. Quiet) THEN
-      !   WRITE(*, '("Load the cloud coefficients: ") ')
-      !   WRITE(*, '("...Cloud model: ", a) ') TRIM(Default_Cloud_Model)
-      !   WRITE(*, '("...CloudCoeff file: ", a) ') TRIM(Default_CloudCoeff_File)
-      ! END IF
+      IF ( Default_CloudCoeff_Format == 'netCDF' ) THEN
+        netCDF = .TRUE.
+        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
+      ELSE
+        netCDF = .FALSE.
+        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
+      END IF
+      ! Default_CloudCoeff_File = TRIM(ADJUSTL(Default_File_Path)) // TRIM(Default_CloudCoeff_File)\
+      IF (PRESENT(Quiet) .AND. (.NOT. Quiet)) THEN
+        WRITE(*, '("Loading cloud coefficients: ", a) ') TRIM(Default_CloudCoeff_File)
+      END IF
       err_stat = CRTM_CloudCoeff_Load( &
                    Default_Cloud_Model                  , &
-                   Default_CloudCoeff_Format            , &
                    Default_CloudCoeff_File              , &
+                   File_Path         = Default_File_Path, &
+                   netCDF            = netCDF           , &
                    Quiet             = Quiet            , &
                    Process_ID        = Process_ID       , &
                    Output_Process_ID = Output_Process_ID  )
@@ -689,17 +690,25 @@ CONTAINS
       END IF
     END IF
 
+
     ! Load the aerosol coefficients
     IF ( Local_Load_AerosolCoeff ) THEN
-      ! IF ( iQuiet == 0 ) THEN ! IF ( .not. Quiet) THEN
-      !   WRITE(*, '("Load the aerosol coefficients: ") ')
-      !   WRITE(*, '("...Aerosol model: ", a) ') TRIM(Default_Aerosol_Model)
-      !   WRITE(*, '("...AerosolCoeff file: ", a) ') TRIM(Default_AerosolCoeff_File)
-      ! END IF
+      IF ( Default_AerosolCoeff_Format == 'netCDF' ) THEN
+        netCDF = .TRUE.
+        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
+      ELSE
+        netCDF = .FALSE.
+        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
+      END IF
+      ! Default_AerosolCoeff_File = TRIM(ADJUSTL(Default_File_Path)) // TRIM(Default_AerosolCoeff_File)
+      IF (PRESENT(Quiet) .AND. (.NOT. Quiet)) THEN
+        WRITE(*, '("Loading aerosol coefficients: ", a) ') TRIM(Default_AerosolCoeff_File)
+      END IF
       err_stat = CRTM_AerosolCoeff_Load( &
                    Default_Aerosol_Model                , &
-                   Default_AerosolCoeff_Format          , &
                    Default_AerosolCoeff_File            , &
+                   File_Path         = Default_File_Path, &
+                   netCDF            = netCDF           , &
                    Quiet             = Quiet            , &
                    Process_ID        = Process_ID       , &
                    Output_Process_ID = Output_Process_ID  )

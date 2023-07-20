@@ -24,7 +24,7 @@
 !                       Implemented CMAQ aerosol
 !
 
-MODULE CRTM_AerosolCoeff  !yma 20/6/16: consider using submodule(AerosolCoeff_Define) in the future
+MODULE CRTM_AerosolCoeff
 
   ! ----------------
   ! Enviroment setup
@@ -34,8 +34,7 @@ MODULE CRTM_AerosolCoeff  !yma 20/6/16: consider using submodule(AerosolCoeff_De
   USE AerosolCoeff_Define   , ONLY: AerosolCoeff_type, &
                                     AerosolCoeff_Associated, &
                                     AerosolCoeff_Destroy
-  USE AerosolCoeff_Binary_IO, ONLY: AerosolCoeff_Binary_ReadFile
-  USE AerosolCoeff_netCDF_IO, ONLY: AerosolCoeff_netCDF_ReadFile
+  USE AerosolCoeff_IO       , ONLY: AerosolCoeff_ReadFile
   ! Disable all implicit typing
   IMPLICIT NONE
 
@@ -82,10 +81,10 @@ CONTAINS
 !
 ! CALLING SEQUENCE:
 !       Error_Status = CRTM_AerosolCoeff_Load( &
-!                        Aerosol_Model   , &
-!                        AerosolCoeff_IO , &
+!                        Aerosol_Model , &
 !                        Filename , &
 !                        File_Path         = File_Path        , &
+!                        netCDF            = netCDF           , &
 !                        Quiet             = Quiet            , &
 !                        Process_ID        = Process_ID       , &
 !                        Output_Process_ID = Output_Process_ID  )
@@ -97,15 +96,6 @@ CONTAINS
 !                           - CMAQ
 !                           - GOCART-GEOS5
 !                           - NAAPS
-!                           UNITS:      N/A
-!                           TYPE:       CHARACTER(*)
-!                           DIMENSION:  Scalar
-!                           ATTRIBUTES: INTENT(IN), OPTIONAL
-!
-!       AerosolCoeff_IO:    Format of the aerosol optical properties data
-!                           Available options:
-!                           - Binary  [DEFAULT]
-!                           - netCDF
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -137,6 +127,15 @@ CONTAINS
 !                           directory is the default.
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
+!                           DIMENSION:  Scalar
+!                           ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+!       netCDF:             Set this logical argument to specify file format.
+!                           If == .FALSE., Binary [DEFAULT].
+!                              == .TRUE.,  netCDF
+!                           If not specified, default is .FALSE.
+!                           UNITS:      N/A
+!                           TYPE:       LOGICAL
 !                           DIMENSION:  Scalar
 !                           ATTRIBUTES: INTENT(IN), OPTIONAL
 !
@@ -189,9 +188,9 @@ CONTAINS
 
   FUNCTION CRTM_AerosolCoeff_Load( &
     Aerosol_Model    , &  ! Input
-    AerosolCoeff_IO  , &  ! Input
     Filename         , &  ! Input
     File_Path        , &  ! Optional input
+    netCDF           , &  ! Optional input
     Quiet            , &  ! Optional input
     Process_ID       , &  ! Optional input
     Output_Process_ID) &  ! Optional input
@@ -199,8 +198,8 @@ CONTAINS
     ! Arguments
     CHARACTER(*),           INTENT(IN) :: Aerosol_Model
     CHARACTER(*),           INTENT(IN) :: Filename
-    CHARACTER(*),           INTENT(IN) :: AerosolCoeff_IO
     CHARACTER(*), OPTIONAL, INTENT(IN) :: File_Path
+    LOGICAL,      OPTIONAL, INTENT(IN) :: netCDF
     LOGICAL     , OPTIONAL, INTENT(IN) :: Quiet
     INTEGER     , OPTIONAL, INTENT(IN) :: Process_ID
     INTEGER     , OPTIONAL, INTENT(IN) :: Output_Process_ID
@@ -212,6 +211,8 @@ CONTAINS
     CHARACTER(ML) :: msg, pid_msg
     CHARACTER(ML) :: AerosolCoeff_File
     LOGICAL :: noisy
+    ! Function variables
+    LOGICAL :: Binary
 
     ! Setup
     err_stat = SUCCESS
@@ -232,39 +233,31 @@ CONTAINS
     ELSE
       pid_msg = ''
     END IF
+    ! ...Check netCDF argument
+    Binary = .TRUE.
+    IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
-    ! Read the AerosolCoeff data file
-    IF ( TRIM(AerosolCoeff_IO) == 'Binary' ) THEN
-      ! ...Binary IO
-      WRITE( msg, '("Reading AerosolCoeff file:  ",a)') TRIM(AerosolCoeff_File)
-      err_stat = AerosolCoeff_Binary_ReadFile( &
-                   Aerosol_Model, &
-                   AerosolCoeff_File, &
-                   AeroC, &
-                   Quiet = .NOT. noisy )
 
-      IF ( err_stat /= SUCCESS ) THEN
-        WRITE( msg,'("Error reading AerosolCoeff file ",a)') TRIM(AerosolCoeff_File)
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-      RETURN
-      END IF
-    ELSEIF ( TRIM(AerosolCoeff_IO) == 'netCDF' ) THEN
-      ! ...netCDF IO
-      WRITE( msg, '("Reading AerosolCoeff file:  ",a)') TRIM(AerosolCoeff_File)
-      err_stat = AerosolCoeff_netCDF_ReadFile( &
-                   Aerosol_Model, &
-                   AerosolCoeff_File, &
-                   AeroC, &
-                   Quiet = .NOT. noisy )
-      IF ( err_stat /= SUCCESS ) THEN
-        WRITE( msg,'("Error reading AerosolCoeff file: ",a)') TRIM(AerosolCoeff_File)
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-      RETURN
-      END IF
-    ELSE
-        WRITE( msg,'("Invalid AerosolCoeff file format: ",a)') TRIM(AerosolCoeff_IO)
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-    END IF ! AerosolCoeff_IO
+    ! Read the AerosolCoeff file
+    err_stat = AerosolCoeff_ReadFile( &
+                 Aerosol_Model, &
+                 AerosolCoeff_File, &
+                 AeroC, &
+                 netCDF = .NOT. Binary, &
+                 Quiet  = .NOT. noisy )
+     IF ( err_stat /= SUCCESS ) THEN
+       WRITE( msg,'("Error reading AerosolCoeff file ",a)') TRIM(AerosolCoeff_File)
+       CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+       RETURN
+     END IF
+
+   CONTAINS
+
+     SUBROUTINE Load_CleanUp()
+       CALL AerosolCoeff_Destroy( AeroC )
+       err_stat = FAILURE
+       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+     END SUBROUTINE Load_CleanUp
 
   END FUNCTION CRTM_AerosolCoeff_Load
 
