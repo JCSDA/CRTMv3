@@ -1289,10 +1289,14 @@ CONTAINS
     REAL(fp)                  , INTENT(IN OUT) :: pcoeff(0:,:)
     TYPE(CSinterp_type)       , INTENT(IN OUT) :: csi
 
-    INTEGER :: cloud_state, cloud_loc
-
     ! Local variables
+    INTEGER :: cloud_state, cloud_loc
+    INTEGER :: Error_Status 
     INTEGER  :: j, k, l, m
+    CHARACTER(ML) :: Message
+
+    ! Local parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Get_Cloud_Opt_MW'
 
     ! Initialise results that may
     ! not be interpolated

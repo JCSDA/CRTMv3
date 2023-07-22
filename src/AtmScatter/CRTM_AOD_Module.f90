@@ -37,7 +37,8 @@ MODULE CRTM_AOD_Module
                                       CRTM_Compute_AerosolScatter_AD
   USE CRTM_RTSolution_Define,   ONLY: CRTM_RTSolution_type, &
                                       CRTM_RTSolution_Associated
-  USE CRTM_AerosolCoeff,        ONLY: CRTM_AerosolCoeff_IsLoaded
+  USE CRTM_AerosolCoeff,        ONLY: CRTM_AerosolCoeff_IsLoaded, &
+                                      AeroC
 
   ! Internal variable definition modules
   ! ...AerosolScatter
@@ -268,7 +269,7 @@ CONTAINS
       CALL CRTM_AtmOptics_Create( AtmOptics, &
                                   Atmosphere(m)%n_Layers, &
                                   MAX_N_LEGENDRE_TERMS, &
-                                  MAX_N_PHASE_ELEMENTS  )
+                                  AeroC%N_PHASE_ELEMENTS  )
       IF ( .NOT. CRTM_AtmOptics_Associated( Atmoptics ) ) THEN
         Error_Status = FAILURE
         WRITE( Message,'("Error allocating AtmOptics data structure for profile #",i0)' ) m
@@ -572,11 +573,11 @@ CONTAINS
       CALL CRTM_AtmOptics_Create( AtmOptics, &
                                   Atmosphere(m)%n_Layers, &
                                   MAX_N_LEGENDRE_TERMS  , &
-                                  MAX_N_PHASE_ELEMENTS    )
+                                  AeroC%N_PHASE_ELEMENTS    )
       CALL CRTM_AtmOptics_Create( AtmOptics_TL, &
                                   Atmosphere(m)%n_Layers, &
                                   MAX_N_LEGENDRE_TERMS  , &
-                                  MAX_N_PHASE_ELEMENTS    )
+                                  AeroC%N_PHASE_ELEMENTS    )
       IF ( .NOT. CRTM_AtmOptics_Associated( Atmoptics ) .OR. &
            .NOT. CRTM_AtmOptics_Associated( Atmoptics_TL ) ) THEN
         Error_Status = FAILURE
@@ -905,11 +906,11 @@ CONTAINS
       CALL CRTM_AtmOptics_Create( AtmOptics, &
                                   Atmosphere(m)%n_Layers, &
                                   MAX_N_LEGENDRE_TERMS  , &
-                                  MAX_N_PHASE_ELEMENTS    )
+                                  AeroC%N_PHASE_ELEMENTS    )
       CALL CRTM_AtmOptics_Create( AtmOptics_AD, &
                                   Atmosphere(m)%n_Layers, &
                                   MAX_N_LEGENDRE_TERMS  , &
-                                  MAX_N_PHASE_ELEMENTS    )
+                                  AeroC%N_PHASE_ELEMENTS    )
       IF ( .NOT. CRTM_AtmOptics_Associated( Atmoptics ) .OR. &
            .NOT. CRTM_AtmOptics_Associated( Atmoptics_AD ) ) THEN
         Error_Status = FAILURE
@@ -1257,11 +1258,11 @@ CONTAINS
       CALL CRTM_AtmOptics_Create( AtmOptics, &
                                   Atmosphere(m)%n_Layers, &
                                   MAX_N_LEGENDRE_TERMS  , &
-                                  MAX_N_PHASE_ELEMENTS    )
+                                  AeroC%N_PHASE_ELEMENTS    )
       CALL CRTM_AtmOptics_Create( AtmOptics_K, &
                                   Atmosphere(m)%n_Layers, &
                                   MAX_N_LEGENDRE_TERMS  , &
-                                  MAX_N_PHASE_ELEMENTS    )
+                                  AeroC%N_PHASE_ELEMENTS    )
       IF ( .NOT. CRTM_AtmOptics_Associated( Atmoptics ) .OR. &
            .NOT. CRTM_AtmOptics_Associated( Atmoptics_K ) ) THEN
         Error_Status = FAILURE
