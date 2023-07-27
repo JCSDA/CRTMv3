@@ -671,7 +671,7 @@ CONTAINS
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
       END IF
-      ! Default_CloudCoeff_File = TRIM(ADJUSTL(Default_File_Path)) // TRIM(Default_CloudCoeff_File)\
+      ! Default_CloudCoeff_File = TRIM(ADJUSTL(Default_File_Path)) // TRIM(Default_CloudCoeff_File)
       IF (PRESENT(Quiet) .AND. (.NOT. Quiet)) THEN
         WRITE(*, '("Loading cloud coefficients: ", a) ') TRIM(Default_CloudCoeff_File)
       END IF
