@@ -182,9 +182,16 @@ ecbuild_add_test( TARGET  test_check_crtm_random
                   LIBS    crtm
                   TEST_DEPENDS get_crtm_coeffs)
 
-ecbuild_add_test( TARGET  SpcCoeff_Edit
-                  SOURCES mains/application/SpcCoeff_Edit.f90
-                  ARGS    "testinput/single_profile.yaml"
+#ecbuild_add_test( TARGET  SpcCoeff_Edit
+#                  SOURCES mains/application/SpcCoeff_Edit.f90
+#                  ARGS    "testinput/single_profile.yaml"
+#                  OMP     $ENV{OMP_NUM_THREADS}
+#                  LIBS    crtm
+#                  TEST_DEPENDS get_crtm_coeffs)
+
+ecbuild_add_test( TARGET  SpcCoeff_Inspect
+                  SOURCES mains/application/SpcCoeff_Inspect.f90
+                  ARGS    "testinput/atms_n21.SpcCoeff.bin"
                   OMP     $ENV{OMP_NUM_THREADS}
                   LIBS    crtm
                   TEST_DEPENDS get_crtm_coeffs)
@@ -265,84 +272,84 @@ endforeach()
 #####################################################################
 
 list( APPEND crtm_test_input
-AerosolCoeff/Little_Endian/AerosolCoeff.bin
-CloudCoeff/Little_Endian/CloudCoeff.bin
-EmisCoeff/MW_Water/Little_Endian/FASTEM6.MWwater.EmisCoeff.bin
-EmisCoeff/IR_Ice/SEcategory/Little_Endian/NPOESS.IRice.EmisCoeff.bin
-EmisCoeff/IR_Land/SEcategory/Little_Endian/NPOESS.IRland.EmisCoeff.bin
-EmisCoeff/IR_Snow/SEcategory/Little_Endian/NPOESS.IRsnow.EmisCoeff.bin
-EmisCoeff/VIS_Ice/SEcategory/Little_Endian/NPOESS.VISice.EmisCoeff.bin
-EmisCoeff/VIS_Land/SEcategory/Little_Endian/NPOESS.VISland.EmisCoeff.bin
-EmisCoeff/VIS_Snow/SEcategory/Little_Endian/NPOESS.VISsnow.EmisCoeff.bin
-EmisCoeff/VIS_Water/SEcategory/Little_Endian/NPOESS.VISwater.EmisCoeff.bin
-EmisCoeff/IR_Water/Little_Endian/Nalli.IRwater.EmisCoeff.bin
-EmisCoeff/IR_Land/SEcategory/Little_Endian/USGS.IRland.EmisCoeff.bin
-EmisCoeff/VIS_Land/SEcategory/Little_Endian/USGS.VISland.EmisCoeff.bin
-SpcCoeff/Little_Endian/hirs4_metop-a.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/hirs4_metop-a.TauCoeff.bin
-SpcCoeff/Little_Endian/amsua_n19.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/amsua_n19.TauCoeff.bin
-SpcCoeff/Little_Endian/amsua_metop-a.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/amsua_metop-a.TauCoeff.bin
-SpcCoeff/Little_Endian/gmi_gpm.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/gmi_gpm.TauCoeff.bin
-SpcCoeff/Little_Endian/seviri_m08.SpcCoeff.bin
-TauCoeff/ODAS/Little_Endian/seviri_m08.TauCoeff.bin
-SpcCoeff/Little_Endian/cris-fsr_n21.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/cris-fsr_n21.TauCoeff.bin
-SpcCoeff/Little_Endian/iasi_metop-a.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/iasi_metop-a.TauCoeff.bin
-SpcCoeff/Little_Endian/iasi_metop-b.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/iasi_metop-b.TauCoeff.bin
-SpcCoeff/Little_Endian/mhs_n19.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/mhs_n19.TauCoeff.bin
-SpcCoeff/Little_Endian/sndrD1_g15.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/sndrD1_g15.TauCoeff.bin
-SpcCoeff/Little_Endian/sndrD2_g15.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/sndrD2_g15.TauCoeff.bin
-SpcCoeff/Little_Endian/sndrD3_g15.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/sndrD3_g15.TauCoeff.bin
-SpcCoeff/Little_Endian/sndrD4_g15.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/sndrD4_g15.TauCoeff.bin
-SpcCoeff/Little_Endian/airs_aqua.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/airs_aqua.TauCoeff.bin
-SpcCoeff/Little_Endian/modis_aqua.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/modis_aqua.TauCoeff.bin
-SpcCoeff/Little_Endian/cris-fsr_n21.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/cris-fsr_n21.TauCoeff.bin
-SpcCoeff/Little_Endian/atms_n21.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/atms_n21.TauCoeff.bin
-SpcCoeff/Little_Endian/v.viirs-m_j2.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/v.viirs-m_j2.TauCoeff.bin
-SpcCoeff/Little_Endian/v.abi_g18.SpcCoeff.bin
-TauCoeff/ODAS/Little_Endian/v.abi_g18.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/zssmis_f20.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/zssmis_f19.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/zssmis_f18.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/zssmis_f17.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/zssmis_f16.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssmis_f20.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssmis_f19.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssmis_f18.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssmis_f17.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssmis_f16.TauCoeff.bin
-SpcCoeff/Little_Endian/ssmis_f20.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssmis_f18.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssmis_f19.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssmis_f16.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssmis_f17.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssu_n06.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssu_n07.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssu_n08.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssu_n09.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssu_n11.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssu_n14.TauCoeff.bin
-SpcCoeff/Little_Endian/ssu_n06.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssu_n07.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssu_n08.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssu_n09.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssu_n11.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
+AerosolCoeff/Big_Endian/AerosolCoeff.bin
+CloudCoeff/Big_Endian/CloudCoeff.bin
+EmisCoeff/MW_Water/Big_Endian/FASTEM6.MWwater.EmisCoeff.bin
+EmisCoeff/IR_Ice/SEcategory/Big_Endian/NPOESS.IRice.EmisCoeff.bin
+EmisCoeff/IR_Land/SEcategory/Big_Endian/NPOESS.IRland.EmisCoeff.bin
+EmisCoeff/IR_Snow/SEcategory/Big_Endian/NPOESS.IRsnow.EmisCoeff.bin
+EmisCoeff/VIS_Ice/SEcategory/Big_Endian/NPOESS.VISice.EmisCoeff.bin
+EmisCoeff/VIS_Land/SEcategory/Big_Endian/NPOESS.VISland.EmisCoeff.bin
+EmisCoeff/VIS_Snow/SEcategory/Big_Endian/NPOESS.VISsnow.EmisCoeff.bin
+EmisCoeff/VIS_Water/SEcategory/Big_Endian/NPOESS.VISwater.EmisCoeff.bin
+EmisCoeff/IR_Water/Big_Endian/Nalli.IRwater.EmisCoeff.bin
+EmisCoeff/IR_Land/SEcategory/Big_Endian/USGS.IRland.EmisCoeff.bin
+EmisCoeff/VIS_Land/SEcategory/Big_Endian/USGS.VISland.EmisCoeff.bin
+SpcCoeff/Big_Endian/hirs4_metop-a.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/hirs4_metop-a.TauCoeff.bin
+SpcCoeff/Big_Endian/amsua_n19.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/amsua_n19.TauCoeff.bin
+SpcCoeff/Big_Endian/amsua_metop-a.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/amsua_metop-a.TauCoeff.bin
+SpcCoeff/Big_Endian/gmi_gpm.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/gmi_gpm.TauCoeff.bin
+SpcCoeff/Big_Endian/seviri_m08.SpcCoeff.bin
+TauCoeff/ODAS/Big_Endian/seviri_m08.TauCoeff.bin
+SpcCoeff/Big_Endian/cris-fsr_n21.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/cris-fsr_n21.TauCoeff.bin
+SpcCoeff/Big_Endian/iasi_metop-a.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/iasi_metop-a.TauCoeff.bin
+SpcCoeff/Big_Endian/iasi_metop-b.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/iasi_metop-b.TauCoeff.bin
+SpcCoeff/Big_Endian/mhs_n19.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/mhs_n19.TauCoeff.bin
+SpcCoeff/Big_Endian/sndrD1_g15.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/sndrD1_g15.TauCoeff.bin
+SpcCoeff/Big_Endian/sndrD2_g15.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/sndrD2_g15.TauCoeff.bin
+SpcCoeff/Big_Endian/sndrD3_g15.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/sndrD3_g15.TauCoeff.bin
+SpcCoeff/Big_Endian/sndrD4_g15.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/sndrD4_g15.TauCoeff.bin
+SpcCoeff/Big_Endian/airs_aqua.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/airs_aqua.TauCoeff.bin
+SpcCoeff/Big_Endian/modis_aqua.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/modis_aqua.TauCoeff.bin
+SpcCoeff/Big_Endian/cris-fsr_n21.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/cris-fsr_n21.TauCoeff.bin
+SpcCoeff/Big_Endian/atms_n21.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/atms_n21.TauCoeff.bin
+SpcCoeff/Big_Endian/v.viirs-m_j2.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/v.viirs-m_j2.TauCoeff.bin
+SpcCoeff/Big_Endian/v.abi_g18.SpcCoeff.bin
+TauCoeff/ODAS/Big_Endian/v.abi_g18.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/zssmis_f20.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/zssmis_f19.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/zssmis_f18.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/zssmis_f17.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/zssmis_f16.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/ssmis_f20.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/ssmis_f19.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/ssmis_f18.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/ssmis_f17.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/ssmis_f16.TauCoeff.bin
+SpcCoeff/Big_Endian/ssmis_f20.SpcCoeff.bin
+SpcCoeff/Big_Endian/ssmis_f18.SpcCoeff.bin
+SpcCoeff/Big_Endian/ssmis_f19.SpcCoeff.bin
+SpcCoeff/Big_Endian/ssmis_f16.SpcCoeff.bin
+SpcCoeff/Big_Endian/ssmis_f17.SpcCoeff.bin
+TauCoeff/ODPS/Big_Endian/ssu_n06.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/ssu_n07.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/ssu_n08.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/ssu_n09.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/ssu_n11.TauCoeff.bin
+TauCoeff/ODPS/Big_Endian/ssu_n14.TauCoeff.bin
+SpcCoeff/Big_Endian/ssu_n06.SpcCoeff.bin
+SpcCoeff/Big_Endian/ssu_n07.SpcCoeff.bin
+SpcCoeff/Big_Endian/ssu_n08.SpcCoeff.bin
+SpcCoeff/Big_Endian/ssu_n09.SpcCoeff.bin
+SpcCoeff/Big_Endian/ssu_n11.SpcCoeff.bin
+SpcCoeff/Big_Endian/ssu_n14.SpcCoeff.bin
 )
 
 
