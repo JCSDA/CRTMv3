@@ -57,6 +57,7 @@ PROGRAM test_emis_coeff_io_nc
   CHARACTER(*), PARAMETER :: Default_VISiceCoeff_File    = 'NPOESS.VISice.EmisCoeff.nc4'
   CHARACTER(*), PARAMETER :: Optional_IRwaterCoeff_File  = 'Nalli2.IRwater.EmisCoeff.nc4'
   CHARACTER(*), PARAMETER :: Optional_IRsnowCoeff_File   = 'Nalli.IRsnow.EmisCoeff.nc4'
+  CHARACTER(*), PARAMETER :: Optional_IRsnowCoeff_File_Nalli2 = 'Nalli2.IRsnow.EmisCoeff.nc4'
   LOGICAL,      PARAMETER :: netCDF = .TRUE.
   CHARACTER(*), PARAMETER :: NC_File_Path = './testinput/'
   LOGICAL,      PARAMETER :: Quiet = .TRUE.
@@ -209,6 +210,21 @@ PROGRAM test_emis_coeff_io_nc
   err_stat = 3
   err_stat = CRTM_IRsnowCoeff_Load( &
                Optional_IRsnowCoeff_File, &
+               netCDF       = netCDF, &
+               isSEcategory = .FALSE., &
+               Quiet        = Quiet, &
+               File_Path    = NC_File_Path)
+  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
+  testPassed = UnitTest_Passed(ioTest)
+  IF ( err_stat /= SUCCESS ) THEN
+    CALL Display_Message( 'CRTM_IRsnowCoeff_Load' ,'Error loading IRsnowCoeff data', err_stat )
+    STOP 1
+  END IF
+
+  WRITE(*,*) '...loading: ', Optional_IRsnowCoeff_File_Nalli2
+  err_stat = 3
+  err_stat = CRTM_IRsnowCoeff_Load( &
+               Optional_IRsnowCoeff_File_Nalli2, &
                netCDF       = netCDF, &
                isSEcategory = .FALSE., &
                Quiet        = Quiet, &
