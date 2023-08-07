@@ -1,4 +1,4 @@
-foldername="fix_REL-3.0.0_20230303"
+foldername="fix_REL-3.0.0_20230802"
 
 filename="${foldername}.tgz"
 if test -f "$filename"; then
