@@ -1233,6 +1233,9 @@ CONTAINS
              RTSolution%Radiance,              & ! Input
              RTSolution%Brightness_Temperature ) ! Output  
              
+     ! n_Layers
+     RTSolution%n_Layers = Atmosphere%n_Layers
+ 
   END FUNCTION Assign_Common_Output   
 !-------------------------------------------------------------------------
 !
