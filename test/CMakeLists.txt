@@ -75,8 +75,8 @@ else()
 	# it is my intention is to not have any difference between jedi/ufo versions of CRTM and stand-alond versions of CRTM -- they should both work "out of the box"
   set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})   #this is where the symlinks point to binary files for the testinput/* directory after ecbuild.
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
-#  set( ECBUILD_DOWNLOAD_BASE_URL https://gdex.ucar.edu/dataset/jedi-skylab )
-  set( ECBUILD_DOWNLOAD_BASE_URL ftp://ftp.ssec.wisc.edu/pub/s4/CRTM )
+
+  set( ECBUILD_DOWNLOAD_BASE_URL https://bin.ssec.wisc.edu/pub/s4/CRTM )
   message(STATUS "download CRTM coeffs files from: ${ECBUILD_DOWNLOAD_BASE_URL}/file to ${CRTM_COEFFS_PATH}")
   ecbuild_get_test_multidata( TARGET   get_crtm_coeffs
                               NAMES    crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz:9cf4b1cc57e20802e608a597d7f53073  #i'm assuming these are md5sums, this is the md5sum for crtm_coefficients_3.0.0_skylab_4.0.tar.gz as of March 8, 2023 that was sent to gdex
