@@ -256,6 +256,14 @@ PROGRAM check_crtm
       CALL Display_Message( PROGRAM_NAME, message, FAILURE )
       STOP
     END IF
+
+    ! The output structure
+    CALL CRTM_RTSolution_Create( rts, N_LAYERS )
+    IF ( ANY(.NOT. CRTM_RTSolution_Associated(rts)) ) THEN
+      Message = 'Error allocating CRTM RTSolution structures'
+      CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+      STOP 1
+    END IF
     ! ==========================================================================
 
     ! ==========================================================================
@@ -347,6 +355,17 @@ PROGRAM check_crtm
       message = 'Error calling CRTM K-Matrix Model for '//TRIM(SENSOR_ID(n))
       CALL Display_Message( PROGRAM_NAME, message, FAILURE )
       STOP
+    END IF
+
+    ! 8b. The AOD model
+    ! ----------------------
+    err_stat = CRTM_AOD( atm        , &
+                         chinfo(n:n), &
+                         rts )
+    IF ( err_stat /= SUCCESS ) THEN
+      Message = 'Error in CRTM AOD Model'
+      CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+      STOP 1
     END IF
     ! ==========================================================================
 

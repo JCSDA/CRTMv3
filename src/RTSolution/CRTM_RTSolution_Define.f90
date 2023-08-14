@@ -11,7 +11,7 @@
 !
 !  Modified by:    James Rosinski, 08-Feb-2019
 !                  Rosinski@ucar.edu
-!  
+!
 !  Modified by:    Cheng Dang, 09-Aug-2023, add CRTM_RTSolution_WriteFile_netCDF
 !                  dangch@ucar.edu
 !
@@ -106,7 +106,7 @@ MODULE CRTM_RTSolution_Define
   ! Module parameters
   ! -----------------
   CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
-  '$Id: CRTM_RTSolution_Define.f90 100697 2018-12-21 18:33:44Z tong.zhu@noaa.gov $'  
+  '$Id: CRTM_RTSolution_Define.f90 100697 2018-12-21 18:33:44Z tong.zhu@noaa.gov $'
   ! Literal constants
   REAL(fp), PARAMETER :: ZERO = 0.0_fp
   REAL(fp), PARAMETER :: ONE  = 1.0_fp
@@ -204,7 +204,7 @@ MODULE CRTM_RTSolution_Define
     ! Forward radiative transfer intermediate results for a single channel
     !    These components are not defined when they are used as TL, AD
     !    and K variables
-    REAL(fp) :: SSA_Max                 = ZERO  ! Max Single Scattering Albedo in the profile                      
+    REAL(fp) :: SSA_Max                 = ZERO  ! Max Single Scattering Albedo in the profile
     REAL(fp) :: SOD                     = ZERO  ! Scattering Optical Depth
     REAL(fp) :: Surface_Emissivity      = ZERO
 !  For UV/Visible, Surface_Reflectivity,Up_Radiance,Down_Radiance are used, but their meanings are changed.
@@ -219,11 +219,11 @@ MODULE CRTM_RTSolution_Define
     REAL(fp), ALLOCATABLE :: Upwelling_Overcast_Radiance(:)   ! K
     REAL(fp), ALLOCATABLE :: Upwelling_Radiance(:)   ! K
     REAL(fp), ALLOCATABLE :: Layer_Optical_Depth(:)  ! K
-    REAL(fp), ALLOCATABLE :: Single_Scatter_Albedo(:)  ! K  
+    REAL(fp), ALLOCATABLE :: Single_Scatter_Albedo(:)  ! K
     ! Radiative transfer results for a single channel
     REAL(fp) :: Radiance               = ZERO
     REAL(fp) :: Brightness_Temperature = ZERO
-    REAL(fp) :: Stokes(4) 
+    REAL(fp) :: Stokes(4)
     REAL(fp) :: SolarIrradiance        = ZERO
   END TYPE CRTM_RTSolution_type
   !:tdoc-:
@@ -353,7 +353,7 @@ CONTAINS
     ALLOCATE( RTSolution%Upwelling_Radiance(n_Layers), &
               RTSolution%Upwelling_Overcast_Radiance(n_Layers), &
               RTSolution%Layer_Optical_Depth(n_Layers), &
-              RTSolution%Single_Scatter_Albedo(n_Layers), & 
+              RTSolution%Single_Scatter_Albedo(n_Layers), &
               STAT = alloc_stat )
     IF ( alloc_stat /= 0 ) RETURN
 
@@ -364,7 +364,7 @@ CONTAINS
     RTSolution%Upwelling_Radiance  = ZERO
     RTSolution%Upwelling_Overcast_Radiance  = ZERO
     RTSolution%Layer_Optical_Depth = ZERO
-    RTSolution%Single_Scatter_Albedo = ZERO 
+    RTSolution%Single_Scatter_Albedo = ZERO
 
     ! Set allocation indicator
     RTSolution%Is_Allocated = .TRUE.
@@ -405,7 +405,7 @@ CONTAINS
     TYPE(CRTM_RTSolution_type), INTENT(IN OUT) :: RTSolution
 
     ! Zero out the scalar data components
-    RTSolution%SSA_Max                 = ZERO 
+    RTSolution%SSA_Max                 = ZERO
     RTSolution%SOD                     = ZERO
     RTSolution%Surface_Emissivity      = ZERO
     RTSolution%Surface_Reflectivity    = ZERO
@@ -419,13 +419,13 @@ CONTAINS
     RTSolution%Radiance                = ZERO
     RTSolution%Brightness_Temperature  = ZERO
     RTSolution%Stokes  = ZERO
-    
+
     ! Zero out the array data components
     IF ( CRTM_RTSolution_Associated(RTSolution) ) THEN
       RTSolution%Upwelling_Radiance  = ZERO
       RTSolution%Upwelling_Overcast_Radiance  = ZERO
       RTSolution%Layer_Optical_Depth = ZERO
-      RTSolution%Single_Scatter_Albedo = ZERO  
+      RTSolution%Single_Scatter_Albedo = ZERO
     END IF
 
   END SUBROUTINE CRTM_RTSolution_Zero
@@ -1391,14 +1391,12 @@ CONTAINS
         Tb_clear(l)                = RTSolution(l,m)%Tb_clear
         Radiance(l)                = RTSolution(l,m)%Radiance
         Brightness_Temperature(l)  = RTSolution(l,m)%Brightness_Temperature
-
-        ! CD: Not working, need to come back and check the size of these RT 2D arrays
-        ! DO c = 1, n_Layers
-        ! Upwelling_Overcast_Radiance(l,c) = RTSolution(l,m)%Upwelling_Overcast_Radiance(c)
-        ! Upwelling_Radiance(l,c)          = RTSolution(l,m)%Upwelling_Radiance(c)
-        ! Layer_Optical_Depth(l,c)         = RTSolution(l,m)%Layer_Optical_Depth(c)
-        ! Single_Scatter_Albedo(l,c)       = RTSolution(l,m)%Single_Scatter_Albedo(c)
-        ! END DO
+        DO c = 1, n_Layers
+          Upwelling_Overcast_Radiance(l,c) = RTSolution(l,m)%Upwelling_Overcast_Radiance(c)
+          Upwelling_Radiance(l,c)          = RTSolution(l,m)%Upwelling_Radiance(c)
+          Layer_Optical_Depth(l,c)         = RTSolution(l,m)%Layer_Optical_Depth(c)
+          Single_Scatter_Albedo(l,c)       = RTSolution(l,m)%Single_Scatter_Albedo(c)
+        END DO
       END DO Channel_Loop
 
       ! Output file name
@@ -1624,9 +1622,57 @@ CONTAINS
 
     ! 2D layered outputs
     ! ... Upwelling_Overcast_Radiance variable
+    NF90_Status = NF90_INQ_VARID( FileId,UPOR_PRF_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//UPOR_PRF_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_PUT_VAR( FileId,VarID, Upwelling_Overcast_Radiance)
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error writing '//UPOR_PRF_VARNAME//' to '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
     ! ... Upwelling_Radiance variable
+    NF90_Status = NF90_INQ_VARID( FileId,UPR_PRF_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//UPR_PRF_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_PUT_VAR( FileId,VarID, Upwelling_Radiance)
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error writing '//UPR_PRF_VARNAME//' to '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
     ! ... Layer_Optical_Depth variable
+    NF90_Status = NF90_INQ_VARID( FileId,LOP_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//LOP_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_PUT_VAR( FileId,VarID, Layer_Optical_Depth)
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error writing '//LOP_VARNAME//' to '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
     ! ... Single_Scatter_Albedo variable
+    NF90_Status = NF90_INQ_VARID( FileId,SSA_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//SSA_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_PUT_VAR( FileId,VarID, Single_Scatter_Albedo)
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error writing '//SSA_VARNAME//' to '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
 
      ! Close the file
      NF90_Status = NF90_CLOSE( FileId )
@@ -2372,7 +2418,7 @@ CONTAINS
 
   END FUNCTION Write_Record
 
-  
+
 
   FUNCTION CreateFile_netCDF( &
     Filename     , &  ! Input
