@@ -188,7 +188,7 @@ MODULE CRTM_Surface_Define
   REAL(fp), PARAMETER :: DEFAULT_SNOW_TEMPERATURE = 263.0_fp   ! K
   REAL(fp), PARAMETER :: DEFAULT_SNOW_DEPTH       = 50.0_fp    ! mm
   REAL(fp), PARAMETER :: DEFAULT_SNOW_DENSITY     = 0.2_fp     ! g/cm^3
-  REAL(fp), PARAMETER :: DEFAULT_SNOW_GRAIN_SIZE  = 2.0_fp     ! mm
+  REAL(fp), PARAMETER :: DEFAULT_SNOW_GRAIN_SIZE  = 2.0e3_fp   ! um (microns)
   ! ...Ice surface type data
   INTEGER,  PARAMETER :: DEFAULT_ICE_TYPE        = 1         ! First item in list
   REAL(fp), PARAMETER :: DEFAULT_ICE_TEMPERATURE = 263.0_fp  ! K
@@ -421,12 +421,12 @@ CONTAINS
     modified_sfc%Water_Coverage = sfc%Water_Coverage
     modified_sfc%Snow_Coverage  = sfc%Snow_Coverage
     modified_sfc%Ice_Coverage   = sfc%Ice_Coverage
-    
+
     modified_sfc%Land_Type  = sfc%Land_Type
     modified_sfc%Water_Type = sfc%Water_Type
     modified_sfc%Snow_Type  = sfc%Snow_Type
     modified_sfc%Ice_Type   = sfc%Ice_Type
-    
+
   END SUBROUTINE CRTM_Surface_NonVariableCopy
 
 
@@ -584,14 +584,14 @@ CONTAINS
     INTEGER,       OPTIONAL, INTENT(IN) :: Unit
     ! Local variables
     INTEGER :: fid
-    
+
     ! Setup
     fid = OUTPUT_UNIT
     IF ( PRESENT(Unit) ) THEN
       IF ( File_Open(Unit) ) fid = Unit
     END IF
 
-    
+
     WRITE(fid,'(1x,"Surface OBJECT")')
     ! Surface coverage
     WRITE(fid,'(3x,"Land Coverage :",1x,f6.3)') Sfc%Land_Coverage
@@ -1166,7 +1166,7 @@ CONTAINS
         IF ( io_stat /= 0 ) &
           msg = TRIM(msg)//'; Error closing input file during error cleanup - '//TRIM(io_msg)
       END IF
-      IF ( ALLOCATED(Surface) ) THEN 
+      IF ( ALLOCATED(Surface) ) THEN
        !DEALLOCATE(Surface, STAT=alloc_stat, ERRMSG=alloc_msg)
         DEALLOCATE(Surface, STAT=alloc_stat)
         IF ( alloc_stat /= 0 ) &
@@ -1286,7 +1286,7 @@ CONTAINS
         IF ( io_stat /= 0 ) &
           msg = TRIM(msg)//'; Error closing input file during error cleanup - '//TRIM(io_msg)
       END IF
-      IF ( ALLOCATED(Surface) ) THEN 
+      IF ( ALLOCATED(Surface) ) THEN
        !DEALLOCATE(Surface, STAT=alloc_stat, ERRMSG=alloc_msg)
         DEALLOCATE(Surface, STAT=alloc_stat)
         IF ( alloc_stat /= 0 ) &
@@ -2396,7 +2396,7 @@ CONTAINS
     IF ( PRESENT(Debug) ) THEN
       IF ( Debug ) noisy = .TRUE.
     END IF
-    
+
 
     ! Write the gross surface type coverage
     WRITE( fid,IOSTAT=io_stat,IOMSG=io_msg ) &

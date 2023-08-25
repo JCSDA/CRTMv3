@@ -17,10 +17,10 @@
 ! Author:          Date:          Description:
 ! =======          =====          ============
 ! Patrick Stegmann 2021-01-22     Added CONST_MIXED_POLARIZATION scheme.
-! 
+!
 ! Patrick Stegmann 2021-08-31     Added PRA_POLARIZATION scheme for GEMS-1.
 !
-!
+! Cheng Dang       2022-05-31     Added IRsnowCoeff TL and AD modules
 
 MODULE CRTM_SfcOptics
 
@@ -84,6 +84,7 @@ MODULE CRTM_SfcOptics
                                       Compute_IR_Water_SfcOptics_TL, &
                                       Compute_IR_Water_SfcOptics_AD
   USE CRTM_IR_Snow_SfcOptics,   ONLY: IRSSOVar_type => iVar_type, &
+                                      IRSSOVar_SE_type => iVar_SE_type, &
                                       Compute_IR_Snow_SfcOptics, &
                                       Compute_IR_Snow_SfcOptics_TL, &
                                       Compute_IR_Snow_SfcOptics_AD
@@ -146,10 +147,11 @@ MODULE CRTM_SfcOptics
     TYPE(MWSSOVar_type)  :: MWSSOV ! Snow
     TYPE(MWISOVar_type)  :: MWISOV ! Ice
     ! Infrared
-    TYPE(IRLSOVar_type)  :: IRLSOV ! Land
-    TYPE(IRWSOVar_type)  :: IRWSOV ! Water
-    TYPE(IRSSOVar_type)  :: IRSSOV ! Snow
-    TYPE(IRISOVar_type)  :: IRISOV ! Ice
+    TYPE(IRLSOVar_type)     :: IRLSOV    ! Land
+    TYPE(IRWSOVar_type)     :: IRWSOV    ! Water
+    TYPE(IRSSOVar_type)     :: IRSSOV    ! Snow
+    TYPE(IRSSOVar_SE_type)  :: IRSSOV_SE ! Snow, SE category
+    TYPE(IRISOVar_type)     :: IRISOV    ! Ice
     ! Visible
     TYPE(VISLSOVar_type) :: VISLSOV ! Land
     TYPE(VISWSOVar_type) :: VISWSOV ! Water
@@ -463,7 +465,7 @@ CONTAINS
     INTEGER                     , INTENT(IN)     :: SensorIndex
     INTEGER                     , INTENT(IN)     :: ChannelIndex
     TYPE(CRTM_SfcOptics_type)   , INTENT(IN OUT) :: SfcOptics
-    TYPE(iVar_type)             , INTENT(IN OUT)    :: iVar
+    TYPE(iVar_type)             , INTENT(OUT)    :: iVar
     ! Function result
     INTEGER :: Error_Status
     ! Local parameters
@@ -635,6 +637,7 @@ CONTAINS
         !# If the SfcOptics n_Stokes dimension == 1, the polarisations are      #
         !# decoupled.                                                           #
         !#----------------------------------------------------------------------#
+
         Decoupled_Polarization: IF( SfcOptics%n_Stokes == 1 ) THEN
 
 
@@ -739,7 +742,7 @@ CONTAINS
             ! ==========
             ! Leslie, V. (2020): TROPICS Polarization Description, 20 November 2020.
             ! (Personal Communication)
-            ! 
+            !
             CASE ( CONST_MIXED_POLARIZATION )
               SIN2_Angle = (GeometryInfo%Distance_Ratio * &
                            SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)))**2
@@ -749,18 +752,18 @@ CONTAINS
                 SfcOptics%Reflectivity(i,1,i,1) = (Reflectivity(i,1,i,1)*SIN2_Angle) + &
                                                   (Reflectivity(i,2,i,2)*(ONE-SIN2_Angle))
               END DO
-            
+
             !
             ! Description:
             ! ============
-            ! Polarization changing with a defined polarization rotation angle 
+            ! Polarization changing with a defined polarization rotation angle
             ! as instrument zenith angle changes. Implemented for GEMS-1 SmallSat.
             !
             CASE ( PRA_POLARIZATION )
               DO i = 1, nZ
                 ! Alias for the sensor scan angle:
                 phi = GeometryInfo%Sensor_Scan_Radian
-                ! Instrument offset angle: 
+                ! Instrument offset angle:
                 theta_f = DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)
                 ph = SIN(phi) * ( COS(phi) + SIN(theta_f)*(1.0_fp - COS(phi))  ) &
                    ! --------------------------------------------------------------
@@ -775,7 +778,7 @@ CONTAINS
                 SfcOptics%Reflectivity(i,1,i,1) = (Reflectivity(i,1,i,1)*SIN2_Angle) + &
                                                   (Reflectivity(i,2,i,2)*(ONE-SIN2_Angle))
               END DO
- 
+
             ! Serious problem if we got to this points
             CASE DEFAULT
                Error_Status = FAILURE
@@ -876,11 +879,12 @@ CONTAINS
 
           ! Compute the surface optics
           Error_Status = Compute_IR_Snow_SfcOptics( &
-                           Surface     , &  ! Input
-                           SensorIndex , &  ! Input
-                           ChannelIndex, &  ! Input
-                           SfcOptics   , &  ! In/Output
-                           iVar%IRSSOV   )  ! Internal variable output
+                           Surface       , &  ! Input
+                           SensorIndex   , &  ! Input
+                           ChannelIndex  , &  ! Input
+                           SfcOptics     , &  ! In/Output
+                           iVar%IRSSOV_SE, &  ! Internal variable output
+                           iVar%IRSSOV     )  ! Internal variable output
           IF ( Error_Status /= SUCCESS ) THEN
             WRITE( Message,'("Error computing IR snow SfcOptics at ",&
                             &"channel index ",i0)' ) ChannelIndex
@@ -1512,14 +1516,14 @@ CONTAINS
             !
             ! Description:
             ! ============
-            ! Polarization changing with a defined polarization rotation angle 
+            ! Polarization changing with a defined polarization rotation angle
             ! as instrument zenith angle changes. Implemented for GEMS-1 SmallSat.
             !
             CASE ( PRA_POLARIZATION )
               DO i = 1, nZ
                 ! Alias for the sensor scan angle:
                 phi = GeometryInfo%Sensor_Scan_Radian
-                ! Instrument offset angle: 
+                ! Instrument offset angle:
                 theta_f = DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)
                 ph = SIN(phi) * ( COS(phi) + SIN(theta_f)*(1.0_fp - COS(phi))  ) &
                    ! --------------------------------------------------------------
@@ -1636,7 +1640,15 @@ CONTAINS
         Infrared_Snow: IF( Surface%Snow_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_IR_Snow_SfcOptics_TL( SfcOptics_TL )
+          Error_Status = Compute_IR_Snow_SfcOptics_TL( &
+                           Surface     , &  ! Input
+                           SfcOptics   , &  ! Input
+                           Surface_TL  , &  ! Input
+                           GeometryInfo, &  ! Input
+                           SensorIndex , &  ! Input
+                           ChannelIndex, &  ! Input
+                           SfcOptics_TL, &  ! In/Output
+                           iVar%IRSSOV   )  ! Internal variable input
           IF ( Error_Status /= SUCCESS ) THEN
             WRITE( Message,'("Error computing IR snow SfcOptics_TL at ",&
                             &"channel index ",i0)' ) ChannelIndex
@@ -2052,14 +2064,14 @@ CONTAINS
             !
             ! Description:
             ! ============
-            ! Polarization changing with a defined polarization rotation angle 
+            ! Polarization changing with a defined polarization rotation angle
             ! as instrument zenith angle changes. Implemented for GEMS-1 SmallSat.
             !
             CASE ( PRA_POLARIZATION )
               DO i = 1, nZ
                 ! Alias for the sensor scan angle:
                 phi = GeometryInfo%Sensor_Scan_Radian
-                ! Instrument offset angle: 
+                ! Instrument offset angle:
                 theta_f = DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)
                 ph = SIN(phi) * ( COS(phi) + SIN(theta_f)*(1.0_fp - COS(phi))  ) &
                    ! --------------------------------------------------------------
@@ -2089,7 +2101,8 @@ CONTAINS
               RETURN
 
           END SELECT Polarization_Type
-   
+
+
         ELSE
 
 
@@ -2232,12 +2245,12 @@ CONTAINS
       ELSE IF ( SpcCoeff_IsInfraredSensor( SC(SensorIndex) ) ) THEN
 
         Reflectivity_AD(1:nZ,1,1:nZ,1:nL) = SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1:nL)
-        SfcOptics_AD%Reflectivity = ZERO        
+        SfcOptics_AD%Reflectivity = ZERO
         Emissivity_AD(1:nZ,1:nL) = SfcOptics_AD%Emissivity(1:nZ,1:nL)
         SfcOptics_AD%Emissivity = ZERO
         Direct_Reflectivity_AD(1:nZ,1) = SfcOptics_AD%Direct_Reflectivity(1:nZ,1)
         SfcOptics_AD%Direct_Reflectivity(1:nZ,1) = ZERO
-                          
+
         ! ------------------------------------
         ! Infrared ICE emissivity/reflectivity
         ! ------------------------------------
@@ -2254,7 +2267,7 @@ CONTAINS
             (Reflectivity_AD(1:nZ,1:nL,1:nZ,1:nL)*Surface%Ice_Coverage)
           SfcOptics_AD%Direct_Reflectivity(1:nZ,1:nL) = &
             SfcOptics_AD%Direct_Reflectivity(1:nZ,1:nL) + &
-            (Direct_Reflectivity_AD(1:nZ,1:nL)*Surface%Ice_Coverage) 
+            (Direct_Reflectivity_AD(1:nZ,1:nL)*Surface%Ice_Coverage)
           ! Compute the surface optics adjoints
           Error_Status = Compute_IR_Ice_SfcOptics_AD( SfcOptics_AD )
           IF ( Error_Status /= SUCCESS ) THEN
@@ -2283,9 +2296,17 @@ CONTAINS
             (Reflectivity_AD(1:nZ,1:nL,1:nZ,1:nL)*Surface%Snow_Coverage)
           SfcOptics_AD%Direct_Reflectivity(1:nZ,1:nL) = &
             SfcOptics_AD%Direct_Reflectivity(1:nZ,1:nL) + &
-            (Direct_Reflectivity_AD(1:nZ,1:nL)*Surface%Snow_Coverage) 
+            (Direct_Reflectivity_AD(1:nZ,1:nL)*Surface%Snow_Coverage)
           ! Compute the surface optics adjoints
-          Error_Status = Compute_IR_Snow_SfcOptics_AD( SfcOptics_AD )
+          Error_Status = Compute_IR_Snow_SfcOptics_AD( &
+                           Surface     , &  ! Input
+                           SfcOptics   , &  ! Input
+                           SfcOptics_AD, &  ! Input
+                           GeometryInfo, &  ! Input
+                           SensorIndex , &  ! Input
+                           ChannelIndex, &  ! Input
+                           Surface_AD  , &  ! Output
+                           iVar%IRSSOV   )  ! Internal variable input
           IF ( Error_Status /= SUCCESS ) THEN
             WRITE( Message,'("Error computing IR snow SfcOptics_AD at ",&
                             &"channel index ",i0)' ) ChannelIndex
@@ -2312,7 +2333,7 @@ CONTAINS
             (Reflectivity_AD(1:nZ,1:nL,1:nZ,1:nL)*Surface%Water_Coverage)
           SfcOptics_AD%Direct_Reflectivity(1:nZ,1:nL) = &
             SfcOptics_AD%Direct_Reflectivity(1:nZ,1:nL) + &
-            (Direct_Reflectivity_AD(1:nZ,1:nL)*Surface%Water_Coverage) 
+            (Direct_Reflectivity_AD(1:nZ,1:nL)*Surface%Water_Coverage)
           ! Compute the surface optics adjoints
           Error_Status = Compute_IR_Water_SfcOptics_AD( &
                            Surface     , &  ! Input
@@ -2349,7 +2370,7 @@ CONTAINS
             (Reflectivity_AD(1:nZ,1:nL,1:nZ,1:nL)*Surface%Land_Coverage)
           SfcOptics_AD%Direct_Reflectivity(1:nZ,1:nL) = &
             SfcOptics_AD%Direct_Reflectivity(1:nZ,1:nL) + &
-            (Direct_Reflectivity_AD(1:nZ,1:nL)*Surface%Land_Coverage) 
+            (Direct_Reflectivity_AD(1:nZ,1:nL)*Surface%Land_Coverage)
           ! Compute the surface optics adjoints
           ! **STUB PROCEDURE**
           Error_Status = Compute_IR_Land_SfcOptics_AD( SfcOptics_AD )
