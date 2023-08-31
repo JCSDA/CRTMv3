@@ -75,10 +75,11 @@ CONTAINS
 !                        netCDF           = netCDF          , &
 !                        n_MW_Frequencies = n_MW_Frequencies, &
 !                        n_MW_Radii       = n_MW_Radii      , &
+!                        n_MW_Densities   = n_MW_Densities  , &
 !                        n_IR_Frequencies = n_IR_Frequencies, &
 !                        n_IR_Radii       = n_IR_Radii      , &
+!                        n_IR_Densities   = n_IR_Densities  , &
 !                        n_Temperatures   = n_Temperatures  , &
-!                        n_Densities      = n_Densities     , &
 !                        n_Legendre_Terms = n_Legendre_Terms, &
 !                        n_Phase_Elements = n_Phase_Elements, &
 !                        Release          = Release         , &
@@ -120,9 +121,15 @@ CONTAINS
 !                          TYPE:       INTEGER
 !                          DIMENSION:  Scalar
 !                          ATTRIBUTES: INTENT(OUT), OPTIONAL
+!       n_MW_Densities:    The number of fixed densities for snow, graupel,
+!                          and hail/ice in the MW LUT.
+!                          UNITS:      N/A
+!                          TYPE:       INTEGER
+!                          DIMENSION:  Scalar
+!                          ATTRIBUTES: INTENT(OUT), OPTIONAL
 !
 !       n_IR_Frequencies:  The number of infrared frequencies in
-!                          the LUT 
+!                          the LUT
 !                          UNITS:      N/A
 !                          TYPE:       INTEGER
 !                          DIMENSION:  Scalar
@@ -134,16 +141,16 @@ CONTAINS
 !                          TYPE:       INTEGER
 !                          DIMENSION:  Scalar
 !                          ATTRIBUTES: INTENT(OUT), OPTIONAL
-!
-!       n_Temperatures:    The number of discrete layer temperatures
-!                          in the LUT. 
+!       n_IR_Densities:    The number of fixed densities for snow, graupel,
+!                          and hail/ice in the IR LUT.
 !                          UNITS:      N/A
 !                          TYPE:       INTEGER
 !                          DIMENSION:  Scalar
 !                          ATTRIBUTES: INTENT(OUT), OPTIONAL
 !
-!       n_Densities:       The number of fixed densities for snow, graupel,
-!                          and hail/ice in the LUT. 
+!
+!       n_Temperatures:    The number of discrete layer temperatures
+!                          in the LUT.
 !                          UNITS:      N/A
 !                          TYPE:       INTEGER
 !                          DIMENSION:  Scalar
@@ -217,10 +224,11 @@ CONTAINS
     netCDF          , &  ! Optional input
     n_MW_Frequencies, &  ! Optional Output
     n_MW_Radii      , &  ! Optional Output
+    n_MW_Densities  , &  ! Optional Output
     n_IR_Frequencies, &  ! Optional Output
     n_IR_Radii      , &  ! Optional Output
+    n_IR_Densities  , &  ! Optional Output
     n_Temperatures  , &  ! Optional Output
-    n_Densities     , &  ! Optional Output
     n_Legendre_Terms, &  ! Optional Output
     n_Phase_Elements, &  ! Optional Output
     Release         , &  ! Optional output
@@ -232,15 +240,16 @@ CONTAINS
     ! Arguments
     CHARACTER(*),           INTENT(IN)  :: Filename
     LOGICAL,      OPTIONAL, INTENT(IN)  :: netCDF
-    INTEGER,      OPTIONAL, INTENT(OUT) :: n_MW_Frequencies    
-    INTEGER,      OPTIONAL, INTENT(OUT) :: n_MW_Radii          
-    INTEGER,      OPTIONAL, INTENT(OUT) :: n_IR_Frequencies    
-    INTEGER,      OPTIONAL, INTENT(OUT) :: n_IR_Radii          
-    INTEGER,      OPTIONAL, INTENT(OUT) :: n_Temperatures      
-    INTEGER,      OPTIONAL, INTENT(OUT) :: n_Densities         
-    INTEGER,      OPTIONAL, INTENT(OUT) :: n_Legendre_Terms    
-    INTEGER,      OPTIONAL, INTENT(OUT) :: n_Phase_Elements    
-    INTEGER,      OPTIONAL, INTENT(OUT) :: Release         
+    INTEGER,      OPTIONAL, INTENT(OUT) :: n_MW_Frequencies
+    INTEGER,      OPTIONAL, INTENT(OUT) :: n_MW_Radii
+    INTEGER,      OPTIONAL, INTENT(OUT) :: n_MW_Densities
+    INTEGER,      OPTIONAL, INTENT(OUT) :: n_IR_Frequencies
+    INTEGER,      OPTIONAL, INTENT(OUT) :: n_IR_Radii
+    INTEGER,      OPTIONAL, INTENT(OUT) :: n_IR_Densities
+    INTEGER,      OPTIONAL, INTENT(OUT) :: n_Temperatures
+    INTEGER,      OPTIONAL, INTENT(OUT) :: n_Legendre_Terms
+    INTEGER,      OPTIONAL, INTENT(OUT) :: n_Phase_Elements
+    INTEGER,      OPTIONAL, INTENT(OUT) :: Release
     INTEGER,      OPTIONAL, INTENT(OUT) :: Version         
     CHARACTER(*), OPTIONAL, INTENT(OUT) :: Title           
     CHARACTER(*), OPTIONAL, INTENT(OUT) :: History         
@@ -265,21 +274,23 @@ CONTAINS
                    n_MW_Radii       = n_MW_Radii      , &
                    n_IR_Frequencies = n_IR_Frequencies, &
                    n_IR_Radii       = n_IR_Radii      , &
+                   n_Densities      = n_IR_Densities  , &
                    n_Temperatures   = n_Temperatures  , &
-                   n_Densities      = n_Densities     , &
                    n_Legendre_Terms = n_Legendre_Terms, &
                    n_Phase_Elements = n_Phase_Elements, &
                    Release          = Release         , &
                    Version          = Version           )
+      n_MW_Densities = n_IR_Densities
     ELSE
       err_stat = CloudCoeff_netCDF_InquireFile( &
                    Filename, &
                    n_MW_Frequencies = n_MW_Frequencies, &
                    n_MW_Radii       = n_MW_Radii      , &
+                   n_MW_Densities   = n_MW_Densities  , &
                    n_IR_Frequencies = n_IR_Frequencies, &
                    n_IR_Radii       = n_IR_Radii      , &
                    n_Temperatures   = n_Temperatures  , &
-                   n_Densities      = n_Densities     , &
+                   n_IR_Densities   = n_IR_Densities  , &
                    n_Legendre_Terms = n_Legendre_Terms, &
                    n_Phase_Elements = n_Phase_Elements, &
                    Release          = Release         , &

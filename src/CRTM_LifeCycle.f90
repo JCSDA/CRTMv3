@@ -733,6 +733,7 @@ CONTAINS
     IF ( PRESENT(VISlandCoeff_Format ) ) Default_VISlandCoeff_Format  = TRIM(ADJUSTL(VISlandCoeff_Format))
     IF ( PRESENT(VISsnowCoeff_Format ) ) Default_VISsnowCoeff_Format  = TRIM(ADJUSTL(VISsnowCoeff_Format))
     IF ( PRESENT(VISiceCoeff_Format  ) ) Default_VISiceCoeff_Format   = TRIM(ADJUSTL(VISiceCoeff_Format))
+
     ! ...Was a path specified?
     IF ( PRESENT(File_Path) ) THEN
       Default_MWwaterCoeff_File  = TRIM(ADJUSTL(File_Path)) // TRIM(Default_MWwaterCoeff_File)

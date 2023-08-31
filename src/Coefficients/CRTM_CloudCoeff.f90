@@ -30,7 +30,10 @@ MODULE CRTM_CloudCoeff
   USE Message_Handler,      ONLY: SUCCESS, FAILURE, Display_Message
   USE CloudCoeff_Define,    ONLY: CloudCoeff_type, &
                                   CloudCoeff_Associated, &
-                                  CloudCoeff_Destroy
+                                  CloudCoeff_Destroy, &
+                                  INVALID_CLOUDCOEFF, &
+                                  MIE_TAMU_CLOUDCOEFF, &
+                                  DDA_ARTS_CLOUDCOEFF
   USE CloudCoeff_IO       , ONLY: CloudCoeff_ReadFile
   ! Disable all implicit typing
   IMPLICIT NONE
@@ -41,6 +44,11 @@ MODULE CRTM_CloudCoeff
   ! ------------
   ! Everything private by default
   PRIVATE
+  ! The shared variables
+  PUBLIC :: INVALID_CLOUDCOEFF
+  PUBLIC :: MIE_TAMU_CLOUDCOEFF
+  PUBLIC :: DDA_ARTS_CLOUDCOEFF
+
   ! The shared data
   PUBLIC :: CloudC
   ! Procedures
