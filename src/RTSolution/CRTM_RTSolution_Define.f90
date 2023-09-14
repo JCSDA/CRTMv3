@@ -1817,7 +1817,6 @@ CONTAINS
        STOP
      END IF
 
-     print *, 'DEALLOCATE'
 
    END DO Profile_Loop
 
