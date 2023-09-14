@@ -49,7 +49,7 @@ PROGRAM check_crtm
   !
   ! Module usage
   USE CRTM_Module
-  USE CRTM_RTSolution_Define, ONLY: CRTM_RTSolution_WriteFile_netCDF
+  USE CRTM_RTSolution_Define, ONLY: CRTM_RTSolution_WriteFile
   ! Disable all implicit typing
   IMPLICIT NONE
   ! ============================================================================
@@ -369,35 +369,37 @@ PROGRAM check_crtm
     END IF
     ! ==========================================================================
 
-   ! ============================================================================
-   ! 8c. **** OUTPUT THE RESULTS TO SCREEN ****
-   !
-   ! User should read the user guide or the source code of the routine
-   ! CRTM_RTSolution_Inspect in the file CRTM_RTSolution_Define.f90 to
-   ! select the needed variables for outputs.  These variables are contained
-   ! in the structure RTSolution.
-   DO m = 1, N_PROFILES
-     WRITE( *,'(//7x,"Profile ",i0," output for ",a )') m, TRIM(Sensor_Id(n))
-     DO l = 1, n_Channels
-       WRITE( *, '(/5x,"Channel ",i0," results")') chinfo(n)%Sensor_Channel(l)
-       CALL CRTM_RTSolution_Inspect(rts(l,m))
-       CALL CRTM_RTSolution_Inspect(rts_K(l,m))
-       CALL CRTM_Atmosphere_Inspect(atm_K(l,m))
-       CALL CRTM_Surface_Inspect(sfc_K(l,m))
+    ! ============================================================================
+    ! 8c. **** OUTPUT THE RESULTS TO SCREEN ****
+    !
+    ! User should read the user guide or the source code of the routine
+    ! CRTM_RTSolution_Inspect in the file CRTM_RTSolution_Define.f90 to
+    ! select the needed variables for outputs.  These variables are contained
+    ! in the structure RTSolution.
+    DO m = 1, N_PROFILES
+      WRITE( *,'(//7x,"Profile ",i0," output for ",a )') m, TRIM(Sensor_Id(n))
+      DO l = 1, n_Channels
+        WRITE( *, '(/5x,"Channel ",i0," results")') chinfo(n)%Sensor_Channel(l)
+        CALL CRTM_RTSolution_Inspect(rts(l,m))
+        CALL CRTM_RTSolution_Inspect(rts_K(l,m))
+        CALL CRTM_Atmosphere_Inspect(atm_K(l,m))
+        CALL CRTM_Surface_Inspect(sfc_K(l,m))
 
-     END DO
-     CALL CRTM_Atmosphere_Inspect(atm(m))
-     CALL CRTM_Surface_Inspect(sfc(m))
-   END DO
+      END DO
+      CALL CRTM_Atmosphere_Inspect(atm(m))
+      CALL CRTM_Surface_Inspect(sfc(m))
+    END DO
 
     ! Uncomment to write crtm outputs in a netCDF file
-    ! ! 8d. **** OUTPUT THE RESULTS TO NetCDF files ****
+    ! 8d. **** OUTPUT THE RESULTS TO NetCDF files ****
     ! output_nc_file = TRIM(SENSOR_ID(n))
-    ! err_stat = CRTM_RTSolution_WriteFile_netCDF( &
+    ! print *, 'start CRTM_RTSolution_WriteFile'
+    ! err_stat = CRTM_RTSolution_WriteFile( &
     !                    output_nc_file     , &  ! Input
-    !                    rts                  )  ! Input
+    !                    rts                , &  ! Input
+    !                    NetCDF=.TRUE.        )    ! Optional Input
     !  IF ( err_stat /= SUCCESS ) THEN
-    !    message = 'Error calling CRTM_RTSolution_WriteFile_netCDF for '//TRIM(SENSOR_ID(n))
+    !    message = 'Error calling CRTM_RTSolution_WriteFile for '//TRIM(SENSOR_ID(n))
     !    CALL Display_Message( PROGRAM_NAME, message, FAILURE )
     !    STOP
     !  END IF

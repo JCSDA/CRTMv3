@@ -67,7 +67,6 @@ MODULE CRTM_RTSolution_Define
   PUBLIC :: CRTM_RTSolution_InquireFile
   PUBLIC :: CRTM_RTSolution_ReadFile
   PUBLIC :: CRTM_RTSolution_WriteFile
-  PUBLIC :: CRTM_RTSolution_WriteFile_netCDF
 
   ! ---------------------
   ! Procedure overloading
@@ -1077,7 +1076,9 @@ CONTAINS
 ! CALLING SEQUENCE:
 !   Error_Status = CRTM_RTSolution_WriteFile( Filename     , &
 !                                             RTSolution   , &
-!                                             Quiet = Quiet  )
+!                                             NetCDF       , &
+!                                             Quiet        , &
+!                                             Debug)
 !
 ! INPUTS:
 !   Filename:     Character string specifying the name of the
@@ -1095,6 +1096,15 @@ CONTAINS
 !                 ATTRIBUTES: INTENT(IN)
 !
 ! OPTIONAL INPUTS:
+!   NetCDF:        Set this logical argument to set output file format.
+!                 If == .FALSE., Binary [DEFAULT].
+!                    == .TRUE.,  NetCDF
+!                 If not specified, default is .FALSE.
+!                 UNITS:      N/A
+!                 TYPE:       LOGICAL
+!                 DIMENSION:  Scalar
+!                 ATTRIBUTES: INTENT(IN), OPTIONAL
+
 !   Quiet:        Set this logical argument to suppress INFORMATION
 !                 messages being printed to stdout
 !                 If == .FALSE., INFORMATION messages are OUTPUT [DEFAULT].
@@ -1125,12 +1135,14 @@ CONTAINS
   FUNCTION CRTM_RTSolution_WriteFile( &
     Filename   , &  ! Input
     RTSolution , &  ! Input
+    NetCDF     , &  ! Optional input
     Quiet      , &  ! Optional input
     Debug      ) &  ! Optional input (Debug output control)
   RESULT( err_stat )
     ! Arguments
     CHARACTER(*),               INTENT(IN) :: Filename
     TYPE(CRTM_RTSolution_type), INTENT(IN) :: RTSolution(:,:)
+    LOGICAL,          OPTIONAL, INTENT(IN) :: NetCDF
     LOGICAL,          OPTIONAL, INTENT(IN) :: Quiet
     LOGICAL,          OPTIONAL, INTENT(IN) :: Debug
     ! Function result
@@ -1139,12 +1151,9 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_RTSolution_WriteFile'
     ! Function variables
     CHARACTER(ML) :: msg
-    CHARACTER(ML) :: io_msg
-    INTEGER :: io_stat
     LOGICAL :: noisy
-    INTEGER :: fid
-    INTEGER :: l, n_output_channels
-    INTEGER :: m, n_output_profiles
+    LOGICAL :: Binary
+
 
     ! Set up
     err_stat = SUCCESS
@@ -1153,82 +1162,177 @@ CONTAINS
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
     ! ...Override Quiet settings if debug set.
     IF ( PRESENT(Debug) ) noisy = Debug
-    n_output_channels = SIZE(RTSolution,DIM=1)
-    n_output_profiles = SIZE(RTSolution,DIM=2)
+    ! ...Check output format
+    Binary = .True.
+    if ( PRESENT(NetCDF) ) Binary = .NOT. NetCDF
 
 
-    ! Open the file
-    err_stat = Open_Binary_File( Filename, fid, For_Output = .TRUE. )
+    IF (Binary) THEN
+      err_stat = CRTM_RTSolution_WriteFile_Binary(Filename, RTSolution, noisy)
+    ELSE
+      err_stat = CRTM_RTSolution_WriteFile_NetCDF(Filename, RTSolution, noisy)
+    END IF
     IF ( err_stat /= SUCCESS ) THEN
-      msg = 'Error opening '//TRIM(Filename)
-      CALL Write_Cleanup(); RETURN
+      WRITE( msg,'("Error writing RTSolution into:  ",a)' ) TRIM(Filename)
+      RETURN
     END IF
-
-
-    ! Write the dimensions
-    WRITE( fid,IOSTAT=io_stat,IOMSG=io_msg ) n_output_channels, n_output_profiles
-    IF ( io_stat /= 0 ) THEN
-      msg = 'Error writing dimensions to '//TRIM(Filename)//' - '//TRIM(io_msg)
-      CALL Write_Cleanup(); RETURN
-    END IF
-
-
-    ! Write the data
-    Profile_Loop: DO m = 1, n_output_profiles
-      Channel_Loop: DO l = 1, n_output_channels
-        err_stat = Write_Record( fid, RTSolution(l,m) )
-        IF ( err_stat /= SUCCESS ) THEN
-          WRITE( msg,'("Error writing RTSolution element (",i0,",",i0,") to ",a)' ) &
-                 l, m, TRIM(Filename)
-          CALL Write_Cleanup(); RETURN
-        END IF
-      END DO Channel_Loop
-    END DO Profile_Loop
-
-
-    ! Close the file (if error, no delete)
-    CLOSE( fid,STATUS='KEEP',IOSTAT=io_stat,IOMSG=io_msg )
-    IF ( io_stat /= 0 ) THEN
-      msg = 'Error closing '//TRIM(Filename)//' - '//TRIM(io_msg)
-      CALL Write_Cleanup(); RETURN
-    END IF
-
-
-    ! Output an info message
-    IF ( noisy ) THEN
-      WRITE( msg,'("Number of channels and profiles written to ",a,": ",i0,1x,i0 )' ) &
-             TRIM(Filename), n_output_channels, n_output_profiles
-      CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
-    END IF
-
-  CONTAINS
-
-    SUBROUTINE Write_CleanUp()
-      IF ( File_Open( Filename ) ) THEN
-        CLOSE( fid,STATUS=WRITE_ERROR_STATUS,IOSTAT=io_stat,IOMSG=io_msg )
-        IF ( io_stat /= 0 ) &
-          msg = TRIM(msg)//'; Error deleting output file during error cleanup - '//TRIM(io_msg)
-      END IF
-      err_stat = FAILURE
-      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
-    END SUBROUTINE Write_CleanUp
 
   END FUNCTION CRTM_RTSolution_WriteFile
 
+  !------------------------------------------------------------------------------
+  !:sdoc+:
+  !
+  ! NAME:
+  !   CRTM_RTSolution_WriteFile_Binary
+  !
+  ! PURPOSE:
+  !   Function to write CRTM RTSolution object files (Binary format)
+  !
+  ! CALLING SEQUENCE:
+  !   Error_Status = CRTM_RTSolution_WriteFile_Binary( Filename     , &
+  !                                                    RTSolution   , &
+  !                                                    noisy  )
+  !
+  ! INPUTS:
+  !   Filename:     Character string specifying the name of the
+  !                 RTSolution format data file to write.
+  !                 UNITS:      N/A
+  !                 TYPE:       CHARACTER(*)
+  !                 DIMENSION:  Scalar
+  !                 ATTRIBUTES: INTENT(IN)
+  !
+  !   RTSolution:   CRTM RTSolution object array containing the RTSolution
+  !                 data.
+  !                 UNITS:      N/A
+  !                 TYPE:       CRTM_RTSolution_type
+  !                 DIMENSION:  Rank-2 (n_Channels x n_Profiles)
+  !                 ATTRIBUTES: INTENT(IN)
+  !
+  ! OPTIONAL INPUTS:
+  !   noisy:        Set this logical argument to suppress INFORMATION
+  !                 messages being printed to stdout
+  !                 If == .TRUE.,   INFORMATION messages are OUTPUT [DEFAULT].
+  !                    == .FALSE.,  INFORMATION messages are SUPPRESSED.
+  !                 If not specified, default is .FALSE.
+  !                 UNITS:      N/A
+  !                 TYPE:       LOGICAL
+  !                 DIMENSION:  Scalar
+  !                 ATTRIBUTES: INTENT(IN), OPTIONAL
+  !
+  ! FUNCTION RESULT:
+  !   Error_Status: The return value is an integer defining the error status.
+  !                 The error codes are defined in the Message_Handler module.
+  !                 If == SUCCESS, the file write was successful
+  !                    == FAILURE, an unrecoverable error occurred.
+  !                 UNITS:      N/A
+  !                 TYPE:       INTEGER
+  !                 DIMENSION:  Scalar
+  !
+  ! SIDE EFFECTS:
+  !   - If the output file already exists, it is overwritten.
+  !   - If an error occurs during *writing*, the output file is deleted before
+  !     returning to the calling routine.
+  !
+  !:sdoc-:
+  !------------------------------------------------------------------------------
+
+    FUNCTION CRTM_RTSolution_WriteFile_Binary( &
+      Filename   , &  ! Input
+      RTSolution , &  ! Input
+      noisy      ) &  ! Input
+    RESULT( err_stat )
+      ! Arguments
+      CHARACTER(*),               INTENT(IN) :: Filename
+      TYPE(CRTM_RTSolution_type), INTENT(IN) :: RTSolution(:,:)
+      LOGICAL,                    INTENT(IN) :: noisy
+      ! Function result
+      INTEGER :: err_stat
+      ! Function parameters
+      CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_RTSolution_WriteFile'
+      ! Function variables
+      CHARACTER(ML) :: msg
+      CHARACTER(ML) :: io_msg
+      INTEGER :: io_stat
+      INTEGER :: fid
+      INTEGER :: l, n_output_channels
+      INTEGER :: m, n_output_profiles
+
+      ! Set up
+      err_stat = SUCCESS
+      n_output_channels = SIZE(RTSolution,DIM=1)
+      n_output_profiles = SIZE(RTSolution,DIM=2)
+
+      ! Open the file
+      err_stat = Open_Binary_File( Filename, fid, For_Output = .TRUE. )
+      IF ( err_stat /= SUCCESS ) THEN
+        msg = 'Error opening '//TRIM(Filename)
+        CALL Write_Cleanup(); RETURN
+      END IF
+
+
+      ! Write the dimensions
+      WRITE( fid,IOSTAT=io_stat,IOMSG=io_msg ) n_output_channels, n_output_profiles
+      IF ( io_stat /= 0 ) THEN
+        msg = 'Error writing dimensions to '//TRIM(Filename)//' - '//TRIM(io_msg)
+        CALL Write_Cleanup(); RETURN
+      END IF
+
+
+      ! Write the data
+      Profile_Loop: DO m = 1, n_output_profiles
+        Channel_Loop: DO l = 1, n_output_channels
+          err_stat = Write_Record( fid, RTSolution(l,m) )
+          IF ( err_stat /= SUCCESS ) THEN
+            WRITE( msg,'("Error writing RTSolution element (",i0,",",i0,") to ",a)' ) &
+                   l, m, TRIM(Filename)
+            CALL Write_Cleanup(); RETURN
+          END IF
+        END DO Channel_Loop
+      END DO Profile_Loop
+
+
+      ! Close the file (if error, no delete)
+      CLOSE( fid,STATUS='KEEP',IOSTAT=io_stat,IOMSG=io_msg )
+      IF ( io_stat /= 0 ) THEN
+        msg = 'Error closing '//TRIM(Filename)//' - '//TRIM(io_msg)
+        CALL Write_Cleanup(); RETURN
+      END IF
+
+
+      ! Output an info message
+      IF ( noisy ) THEN
+        WRITE( msg,'("Number of channels and profiles written to ",a,": ",i0,1x,i0 )' ) &
+               TRIM(Filename), n_output_channels, n_output_profiles
+        CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
+      END IF
+
+    CONTAINS
+
+      SUBROUTINE Write_CleanUp()
+        IF ( File_Open( Filename ) ) THEN
+          CLOSE( fid,STATUS=WRITE_ERROR_STATUS,IOSTAT=io_stat,IOMSG=io_msg )
+          IF ( io_stat /= 0 ) &
+            msg = TRIM(msg)//'; Error deleting output file during error cleanup - '//TRIM(io_msg)
+        END IF
+        err_stat = FAILURE
+        CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      END SUBROUTINE Write_CleanUp
+
+    END FUNCTION CRTM_RTSolution_WriteFile_Binary
 
 !------------------------------------------------------------------------------
 !:sdoc+:
 !
 ! NAME:
-!   CRTM_RTSolution_WriteFile_netCDF
+!   CRTM_RTSolution_WriteFile_NetCDF
 !
 ! PURPOSE:
-!   Function to write CRTM RTSolution object files.
+!   Function to write CRTM RTSolution object files (NetCDf format)
 !
 ! CALLING SEQUENCE:
 !   Error_Status = CRTM_RTSolution_WriteFile_netCDF( Filename     , &
 !                                                    RTSolution   , &
-!                                                    Quiet = Quiet  )
+!                                                    noisy  )
 !
 ! INPUTS:
 !   Filename:     Character string specifying the name of the
@@ -1246,10 +1350,10 @@ CONTAINS
 !                 ATTRIBUTES: INTENT(IN)
 !
 ! OPTIONAL INPUTS:
-!   Quiet:        Set this logical argument to suppress INFORMATION
+!   noisy:        Set this logical argument to suppress INFORMATION
 !                 messages being printed to stdout
-!                 If == .FALSE., INFORMATION messages are OUTPUT [DEFAULT].
-!                    == .TRUE.,  INFORMATION messages are SUPPRESSED.
+!                 If == .TRUE.,   INFORMATION messages are OUTPUT [DEFAULT].
+!                    == .FALSE.,  INFORMATION messages are SUPPRESSED.
 !                 If not specified, default is .FALSE.
 !                 UNITS:      N/A
 !                 TYPE:       LOGICAL
@@ -1273,17 +1377,15 @@ CONTAINS
 !:sdoc-:
 !------------------------------------------------------------------------------
 
-  FUNCTION CRTM_RTSolution_WriteFile_netCDF( &
+  FUNCTION CRTM_RTSolution_WriteFile_NetCDF( &
     Sensor_Filename   , &  ! Input
     RTSolution        , &  ! Input
-    Quiet             , &  ! Optional input
-    Debug             ) &  ! Optional input (Debug output control)
+    noisy             ) &  ! Input (Debug output control)
   RESULT( err_stat )
     ! Arguments
     CHARACTER(*),               INTENT(IN) :: Sensor_Filename
     TYPE(CRTM_RTSolution_type), INTENT(IN) :: RTSolution(:,:)
-    LOGICAL,          OPTIONAL, INTENT(IN) :: Quiet
-    LOGICAL,          OPTIONAL, INTENT(IN) :: Debug
+    LOGICAL,                    INTENT(IN) :: noisy
     ! Function result
     INTEGER :: err_stat
     ! Function parameters
@@ -1294,7 +1396,6 @@ CONTAINS
     CHARACTER(ML) :: Filename
     CHARACTER(2)  :: STR_PROFILE
     INTEGER :: io_stat
-    LOGICAL :: noisy
     INTEGER :: fid
     INTEGER :: l,m,c
     INTEGER :: n_output_profiles
@@ -1329,11 +1430,8 @@ CONTAINS
 
     ! Set up
     err_stat = SUCCESS
-    ! ...Check Quiet argument
-    noisy = .TRUE.
-    IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
-    ! ...Override Quiet settings if debug set.
-    IF ( PRESENT(Debug) ) noisy = Debug
+
+    ! Check number of sensor and profiles
     n_Channels        = SIZE(RTSolution,DIM=1)
     n_output_profiles = SIZE(RTSolution,DIM=2)
 
@@ -1373,6 +1471,7 @@ CONTAINS
         CALL Display_Message( ROUTINE_NAME, msg, FAILURE )
         STOP
       END IF
+
 
       ! arrange RT output
       Channel_Loop: DO l = 1, n_Channels
@@ -1593,86 +1692,87 @@ CONTAINS
              ' - '//TRIM(NF90_STRERROR( NF90_Status ))
        CALL Write_Cleanup(); RETURN
      END IF
-    ! ...Radiance variable
-    NF90_Status = NF90_INQ_VARID( FileId,RADIANCE_VARNAME,VarId )
-    IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error inquiring '//TRIM(Filename)//' for '//RADIANCE_VARNAME//&
-            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
-      CALL Write_Cleanup(); RETURN
-    END IF
-    NF90_Status = NF90_PUT_VAR( FileId,VarID, Radiance)
-    IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error writing '//RADIANCE_VARNAME//' to '//TRIM(Filename)//&
-            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
-      CALL Write_Cleanup(); RETURN
-    END IF
-    ! ....Brightness_Temperature variable
-    NF90_Status = NF90_INQ_VARID( FileId,BT_VARNAME,VarId )
-    IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error inquiring '//TRIM(Filename)//' for '//BT_VARNAME//&
-            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
-      CALL Write_Cleanup(); RETURN
-    END IF
-    NF90_Status = NF90_PUT_VAR( FileId,VarID, Brightness_Temperature)
-    IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error writing '//BT_VARNAME//' to '//TRIM(Filename)//&
-            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
-      CALL Write_Cleanup(); RETURN
-    END IF
+     ! ...Radiance variable
+     NF90_Status = NF90_INQ_VARID( FileId,RADIANCE_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//RADIANCE_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Radiance)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//RADIANCE_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ....Brightness_Temperature variable
+     NF90_Status = NF90_INQ_VARID( FileId,BT_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//BT_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Brightness_Temperature)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//BT_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
 
-    ! 2D layered outputs
-    ! ... Upwelling_Overcast_Radiance variable
-    NF90_Status = NF90_INQ_VARID( FileId,UPOR_PRF_VARNAME,VarId )
-    IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error inquiring '//TRIM(Filename)//' for '//UPOR_PRF_VARNAME//&
-            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
-      CALL Write_Cleanup(); RETURN
-    END IF
-    NF90_Status = NF90_PUT_VAR( FileId,VarID, Upwelling_Overcast_Radiance)
-    IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error writing '//UPOR_PRF_VARNAME//' to '//TRIM(Filename)//&
-            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
-      CALL Write_Cleanup(); RETURN
-    END IF
-    ! ... Upwelling_Radiance variable
-    NF90_Status = NF90_INQ_VARID( FileId,UPR_PRF_VARNAME,VarId )
-    IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error inquiring '//TRIM(Filename)//' for '//UPR_PRF_VARNAME//&
-            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
-      CALL Write_Cleanup(); RETURN
-    END IF
-    NF90_Status = NF90_PUT_VAR( FileId,VarID, Upwelling_Radiance)
-    IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error writing '//UPR_PRF_VARNAME//' to '//TRIM(Filename)//&
-            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
-      CALL Write_Cleanup(); RETURN
-    END IF
-    ! ... Layer_Optical_Depth variable
-    NF90_Status = NF90_INQ_VARID( FileId,LOP_VARNAME,VarId )
-    IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error inquiring '//TRIM(Filename)//' for '//LOP_VARNAME//&
-            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
-      CALL Write_Cleanup(); RETURN
-    END IF
-    NF90_Status = NF90_PUT_VAR( FileId,VarID, Layer_Optical_Depth)
-    IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error writing '//LOP_VARNAME//' to '//TRIM(Filename)//&
-            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
-      CALL Write_Cleanup(); RETURN
-    END IF
-    ! ... Single_Scatter_Albedo variable
-    NF90_Status = NF90_INQ_VARID( FileId,SSA_VARNAME,VarId )
-    IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error inquiring '//TRIM(Filename)//' for '//SSA_VARNAME//&
-            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
-      CALL Write_Cleanup(); RETURN
-    END IF
-    NF90_Status = NF90_PUT_VAR( FileId,VarID, Single_Scatter_Albedo)
-    IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error writing '//SSA_VARNAME//' to '//TRIM(Filename)//&
-            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
-      CALL Write_Cleanup(); RETURN
-    END IF
+     ! 2D layered outputs
+     ! ... Upwelling_Overcast_Radiance variable
+     NF90_Status = NF90_INQ_VARID( FileId,UPOR_PRF_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//UPOR_PRF_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Upwelling_Overcast_Radiance)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//UPOR_PRF_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ... Upwelling_Radiance variable
+     NF90_Status = NF90_INQ_VARID( FileId,UPR_PRF_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//UPR_PRF_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Upwelling_Radiance)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//UPR_PRF_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ... Layer_Optical_Depth variable
+     NF90_Status = NF90_INQ_VARID( FileId,LOP_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//LOP_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Layer_Optical_Depth)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//LOP_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ... Single_Scatter_Albedo variable
+     NF90_Status = NF90_INQ_VARID( FileId,SSA_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//SSA_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Single_Scatter_Albedo)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//SSA_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+
 
      ! Close the file
      NF90_Status = NF90_CLOSE( FileId )
@@ -1683,7 +1783,7 @@ CONTAINS
      END IF
 
      ! Output an info message
-     IF ( Noisy ) THEN
+     IF ( noisy ) THEN
        WRITE( msg,'("Number of channels written to ",a,": ",i0,1x)' ) &
               TRIM(Filename), n_Channels
        CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
@@ -1717,6 +1817,8 @@ CONTAINS
        STOP
      END IF
 
+     print *, 'DEALLOCATE'
+
    END DO Profile_Loop
 
 
@@ -1732,7 +1834,7 @@ CONTAINS
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
     END SUBROUTINE Write_CleanUp
 
-  END FUNCTION CRTM_RTSolution_WriteFile_netCDF
+  END FUNCTION CRTM_RTSolution_WriteFile_NetCDF
 
 
 !##################################################################################
