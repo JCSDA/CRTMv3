@@ -1521,15 +1521,15 @@ CONTAINS
        END DO
        !
        ! specific treatment for downeward source function
-!!       IF( abs( V0(N2,N2) ) > 0.0001_fp ) THEN
-!!         source_down(nZ) =source_down(nZ) +(EXPfactor-trans(nZ,nZ))*Sfac2/V0(N2,N2)
-!!         source_down_TL(nZ) =source_down_TL(nZ) +(EXPfactor_TL-trans_TL(nZ,nZ))*Sfac2/V0(N2,N2) &
-!!          +(EXPfactor-trans(nZ,nZ))*Sfac2_TL/V0(N2,N2)-(EXPfactor-trans(nZ,nZ))*Sfac2*V0_TL(N2,N2)/V0(N2,N2)/V0(N2,N2)
-!!       ELSE
-!!         source_down(nZ) =source_down(nZ) -EXPfactor*Sfac2*optical_depth/COS_Angle(nZ)
-!!         source_down_TL(nZ) =source_down_TL(nZ) -EXPfactor_TL*Sfac2*optical_depth/COS_Angle(nZ)  &
-!!         -EXPfactor*Sfac2_TL*optical_depth/COS_Angle(nZ)-EXPfactor*Sfac2*optical_depth_TL/COS_Angle(nZ)
-!!       END IF
+       IF( abs( V0(N2,N2) ) > 0.0001_fp ) THEN
+         source_down(nZ) =source_down(nZ) +(EXPfactor-trans(nZ,nZ))*Sfac2/V0(N2,N2)
+         source_down_TL(nZ) =source_down_TL(nZ) +(EXPfactor_TL-trans_TL(nZ,nZ))*Sfac2/V0(N2,N2) &
+          +(EXPfactor-trans(nZ,nZ))*Sfac2_TL/V0(N2,N2)-(EXPfactor-trans(nZ,nZ))*Sfac2*V0_TL(N2,N2)/V0(N2,N2)/V0(N2,N2)
+       ELSE
+         source_down(nZ) =source_down(nZ) -EXPfactor*Sfac2*optical_depth/COS_Angle(nZ)
+         source_down_TL(nZ) =source_down_TL(nZ) -EXPfactor_TL*Sfac2*optical_depth/COS_Angle(nZ)  &
+         -EXPfactor*Sfac2_TL*optical_depth/COS_Angle(nZ)-EXPfactor*Sfac2*optical_depth_TL/COS_Angle(nZ)
+       END IF
         
        ! source_up(1:nZ) = source_up(1:nZ)*s_transmittance
         source_up_TL(1:nZ) = source_up_TL(1:nZ)*s_transmittance+source_up(1:nZ)*s_transmittance_TL
@@ -1927,11 +1927,11 @@ CONTAINS
          END DO
        END DO
        ! specific treatment for downeward source function
-!!       IF( abs( V0(N2,N2) ) > 0.0001_fp ) THEN
-!!         source_down(nZ) =source_down(nZ) +(EXPfactor-trans(nZ,nZ))*Sfac2/V0(N2,N2)
-!!       ELSE
-!!         source_down(nZ) =source_down(nZ) -EXPfactor*Sfac2*optical_depth/COS_Angle(nZ)
-!!       END IF
+       IF( abs( V0(N2,N2) ) > 0.0001_fp ) THEN
+         source_down(nZ) =source_down(nZ) +(EXPfactor-trans(nZ,nZ))*Sfac2/V0(N2,N2)
+       ELSE
+         source_down(nZ) =source_down(nZ) -EXPfactor*Sfac2*optical_depth/COS_Angle(nZ)
+       END IF
         
        ! forward part end  ********      
        !
@@ -1941,16 +1941,16 @@ CONTAINS
        source_up_AD(1:nZ) = source_up_AD(1:nZ)*s_transmittance
        !
        ! specific treatment for downeward source function
-!!       IF( abs( V0(N2,N2) ) > 0.0001_fp ) THEN
-!!         V0_AD(N2,N2)=V0_AD(N2,N2)-(EXPfactor-trans(nZ,nZ))*Sfac2*source_down_AD(nZ)/V0(N2,N2)/V0(N2,N2)
-!!         Sfac2_AD = Sfac2_AD+(EXPfactor-trans(nZ,nZ))*source_down_AD(nZ)/V0(N2,N2)
-!!         EXPfactor_AD = EXPfactor_AD+source_down_AD(nZ)*Sfac2/V0(N2,N2)
-!!         trans_AD(nZ,nZ) = trans_AD(nZ,nZ)-source_down_AD(nZ)*Sfac2/V0(N2,N2)
-!!       ELSE
-!!         optical_depth_AD = optical_depth_AD -EXPfactor*Sfac2*source_down_AD(nZ)/COS_Angle(nZ)
-!!         Sfac2_AD = Sfac2_AD-EXPfactor*source_down_AD(nZ)*optical_depth/COS_Angle(nZ)
-!!         EXPfactor_AD = EXPfactor_AD-source_down_AD(nZ)*Sfac2*optical_depth/COS_Angle(nZ)
-!!       END IF
+       IF( abs( V0(N2,N2) ) > 0.0001_fp ) THEN
+         V0_AD(N2,N2)=V0_AD(N2,N2)-(EXPfactor-trans(nZ,nZ))*Sfac2*source_down_AD(nZ)/V0(N2,N2)/V0(N2,N2)
+         Sfac2_AD = Sfac2_AD+(EXPfactor-trans(nZ,nZ))*source_down_AD(nZ)/V0(N2,N2)
+         EXPfactor_AD = EXPfactor_AD+source_down_AD(nZ)*Sfac2/V0(N2,N2)
+         trans_AD(nZ,nZ) = trans_AD(nZ,nZ)-source_down_AD(nZ)*Sfac2/V0(N2,N2)
+       ELSE
+         optical_depth_AD = optical_depth_AD -EXPfactor*Sfac2*source_down_AD(nZ)/COS_Angle(nZ)
+         Sfac2_AD = Sfac2_AD-EXPfactor*source_down_AD(nZ)*optical_depth/COS_Angle(nZ)
+         EXPfactor_AD = EXPfactor_AD-source_down_AD(nZ)*Sfac2*optical_depth/COS_Angle(nZ)
+       END IF
 
        DO i = nZ, 1, -1
          DO j = nZ, 1, -1
