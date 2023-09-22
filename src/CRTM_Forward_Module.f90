@@ -98,7 +98,7 @@ MODULE CRTM_Forward_Module
   USE CRTM_CloudCover_Define,     ONLY: CRTM_CloudCover_type
   USE CRTM_Active_Sensor,         ONLY: CRTM_Compute_Reflectivity, &
                                         Calculate_Cloud_Water_Density
-
+                                        
   ! Internal variable definition modules
   ! ...AtmOptics
   USE AOvar_Define, ONLY: AOvar_type, &
@@ -277,8 +277,8 @@ CONTAINS
     ! ------
     Error_Status = SUCCESS
     IF (enable_timing) THEN
-      CALL SYSTEM_CLOCK (count_rate=count_rate)
-      CALL SYSTEM_CLOCK (count=count_start)
+       CALL SYSTEM_CLOCK (count_rate=count_rate)
+       CALL SYSTEM_CLOCK (count=count_start)
     END IF
 
     ! If no sensors or channels, simply return
@@ -289,12 +289,12 @@ CONTAINS
 
     ! Check output array
     IF ( SIZE(RTSolution,DIM=1) < n_Channels ) THEN
-      Error_Status = FAILURE
-      WRITE( Message,'("Output RTSolution structure array too small (",i0,&
-             &") to hold results for the number of requested channels (",i0,")")') &
-             SIZE(RTSolution,DIM=1), n_Channels
-      CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-      RETURN
+       Error_Status = FAILURE
+       WRITE( Message,'("Output RTSolution structure array too small (",i0,&
+            &") to hold results for the number of requested channels (",i0,")")') &
+            SIZE(RTSolution,DIM=1), n_Channels
+       CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+       RETURN
     END IF
 
 
@@ -305,67 +305,66 @@ CONTAINS
     IF ( SIZE(Surface)          /= n_Profiles .OR. &
          SIZE(Geometry)         /= n_Profiles .OR. &
          SIZE(RTSolution,DIM=2) /= n_Profiles      ) THEN
-      Error_Status = FAILURE
-      Message = 'Inconsistent profile dimensionality for input arguments.'
-      CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-      RETURN
+       Error_Status = FAILURE
+       Message = 'Inconsistent profile dimensionality for input arguments.'
+       CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+       RETURN
     END IF
     ! ...Check the profile dimensionality of the other optional arguments
     Options_Present = .FALSE.
     IF ( PRESENT(Options) ) THEN
-      Options_Present = .TRUE.
-      IF ( SIZE(Options) /= n_Profiles ) THEN
-        Error_Status = FAILURE
-        Message = 'Inconsistent profile dimensionality for Options optional input argument.'
-        CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-        RETURN
-      END IF
+       Options_Present = .TRUE.
+       IF ( SIZE(Options) /= n_Profiles ) THEN
+          Error_Status = FAILURE
+          Message = 'Inconsistent profile dimensionality for Options optional input argument.'
+          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+          RETURN
+       END IF
     END IF
 
     ! -------
     ! OpenMP
     ! -------
-!$OMP PARALLEL
-!$OMP SINGLE
+    !$OMP PARALLEL
+    !$OMP SINGLE
     n_omp_threads = OMP_GET_NUM_THREADS()
-!$OMP END SINGLE
-!$OMP END PARALLEL
+    !$OMP END SINGLE
+    !$OMP END PARALLEL
 
     ! Determine how many threads to use for profiles and channels
     ! After profiles get what they need, we use the left-over threads
     ! to parallelize channels
-    IF ( n_omp_threads <= n_Profiles ) THEN
-      n_profile_threads = n_omp_threads
-      n_channel_threads = 1
-      CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
+    IF ( n_omp_threads <= n_Profiles .OR. n_Profiles == 0) THEN
+       n_profile_threads = n_omp_threads
+       n_channel_threads = 1
+       CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
     ELSE
-      n_profile_threads = n_Profiles
-      n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
+       n_profile_threads = n_Profiles
+       n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
 
-!    IF(SpcCoeff_IsInfraredSensor(SC(1)) .OR. &
-!                SpcCoeff_IsMicrowaveSensor(SC(1)) ) THEN
-!      n_channel_threads = 1
-!    END IF
+       !    IF(SpcCoeff_IsInfraredSensor(SC(1)) .OR. &
+       !                SpcCoeff_IsMicrowaveSensor(SC(1)) ) THEN
+       !      n_channel_threads = 1
+       !    END IF
 
-!    IF( SpcCoeff_IsMicrowaveSensor(SC(1)) ) n_channel_threads = 1
+       !    IF( SpcCoeff_IsMicrowaveSensor(SC(1)) ) n_channel_threads = 1
 
-      IF(n_channel_threads > 1) THEN
-        CALL OMP_SET_MAX_ACTIVE_LEVELS(2)
-      ELSE
-        CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
-      END IF
+       IF(n_channel_threads > 1) THEN
+          CALL OMP_SET_MAX_ACTIVE_LEVELS(2)
+       ELSE
+          CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
+       END IF
     END IF
 
-!    WRITE(6,*) 
-!    WRITE(6,'("   Using",i3," OpenMP threads =",i3," for profiles and",i3," for channels.")') &
-!         n_omp_threads, n_profile_threads, n_channel_threads
+    !    WRITE(6,*)
+    !    WRITE(6,'("   Using",i3," OpenMP threads =",i3," for profiles and",i3," for channels.")') &
+    !         n_omp_threads, n_profile_threads, n_channel_threads
 
     ! ------------
     ! PROFILE LOOPS
     ! ------------
-
-!JR First loop just checks validity of Atmosphere(m) contents
-!$OMP PARALLEL DO PRIVATE ( nc, Message ) NUM_THREADS(n_profile_threads)
+    !JR First loop just checks validity of Atmosphere(m) contents
+    !$OMP PARALLEL DO PRIVATE ( nc, Message ) NUM_THREADS(n_profile_threads)
     Profile_Loop1: DO m = 1, n_Profiles
        ! Fix for cloud_Fraction < MIN_COVERAGE_THRESHOLD
        IF ( Atmosphere(m)%n_Clouds > 0) THEN
@@ -378,65 +377,63 @@ CONTAINS
              END WHERE
           END DO
 
-         ! Check the cloud and aerosol coeff. data for cases with clouds and aerosol
-         IF( .NOT. CRTM_CloudCoeff_IsLoaded() )THEN
-            Error_Status = FAILURE
-            WRITE( Message,'("The CloudCoeff data must be loaded (with CRTM_Init routine) ", &
-                 &"for the cloudy case profile #",i0)' ) m
-            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-            CYCLE Profile_Loop1
-         END IF
-      END IF
-      IF( Atmosphere(m)%n_Aerosols > 0 .AND. .NOT. CRTM_AerosolCoeff_IsLoaded() )THEN
-         Error_Status = FAILURE
-         WRITE( Message,'("The AerosolCoeff data must be loaded (with CRTM_Init routine) ", &
-                &"for the aerosol case profile #",i0)' ) m
-         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-         CYCLE Profile_Loop1
-      END IF
+          ! Check the cloud and aerosol coeff. data for cases with clouds and aerosol
+          IF( .NOT. CRTM_CloudCoeff_IsLoaded() )THEN
+             Error_Status = FAILURE
+             WRITE( Message,'("The CloudCoeff data must be loaded (with CRTM_Init routine) ", &
+                  &"for the cloudy case profile #",i0)' ) m
+             CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+             CYCLE Profile_Loop1
+          END IF
+       END IF
+       IF( Atmosphere(m)%n_Aerosols > 0 .AND. .NOT. CRTM_AerosolCoeff_IsLoaded() )THEN
+          Error_Status = FAILURE
+          WRITE( Message,'("The AerosolCoeff data must be loaded (with CRTM_Init routine) ", &
+               &"for the aerosol case profile #",i0)' ) m
+          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+          CYCLE Profile_Loop1
+       END IF
     END DO Profile_Loop1
-!$OMP END PARALLEL DO 
+    !$OMP END PARALLEL DO
 
     IF (Error_Status == FAILURE) THEN
-      RETURN
+       RETURN
     END IF
-
-!$OMP PARALLEL DO PRIVATE ( m, Opt, AncillaryInput ) NUM_THREADS(n_profile_threads) SCHEDULE ( runtime )
+    !$OMP PARALLEL DO PRIVATE ( m, Opt, AncillaryInput ) NUM_THREADS(n_profile_threads) SCHEDULE ( runtime )
     Profile_Loop2: DO m = 1, n_Profiles
-      ! Check the optional Options structure argument
-      Opt = Default_Options
-      IF ( Options_Present ) THEN
-        Opt = Options(m)
-        ! Copy over ancillary input (just add AncillaryInput structure to options?)
-        AncillaryInput%SSU    = Options(m)%SSU
-        AncillaryInput%Zeeman = Options(m)%Zeeman
-      END IF
-      ret(m) = profile_solution (m, Opt, AncillaryInput)
+       ! Check the optional Options structure argument
+       Opt = Default_Options
+       IF ( Options_Present ) THEN
+          Opt = Options(m)
+          ! Copy over ancillary input (just add AncillaryInput structure to options?)
+          AncillaryInput%SSU    = Options(m)%SSU
+          AncillaryInput%Zeeman = Options(m)%Zeeman
+       END IF
+       ret(m) = profile_solution (m, Opt, AncillaryInput)
     END DO Profile_Loop2
-!$OMP END PARALLEL DO
-
+    !$OMP END PARALLEL DO
     nfailure = COUNT (ret(:) /= SUCCESS)
     IF (nfailure > 0) THEN
-      Error_Status = FAILURE
-      WRITE(Message,'(i0," profiles failed")') nfailure
-      CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-      RETURN
+       Error_Status = FAILURE
+       WRITE(Message,'(i0," profiles failed")') nfailure
+       CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+       RETURN
     END IF
 
     IF (enable_timing) THEN
-      CALL SYSTEM_CLOCK (count=count_end)
-      elapsed = REAL (count_end - count_start) / REAL (count_rate)
-      elapsed_running = elapsed_running + elapsed
-      WRITE(6,*) 'CRTM_Forward elapsed              =',elapsed
-      WRITE(6,*) 'CRTM_Forward elapsed running total=',elapsed_running
+       CALL SYSTEM_CLOCK (count=count_end)
+       elapsed = REAL (count_end - count_start) / REAL (count_rate)
+       elapsed_running = elapsed_running + elapsed
+       WRITE(6,*) 'CRTM_Forward elapsed              =',elapsed
+       WRITE(6,*) 'CRTM_Forward elapsed running total=',elapsed_running
     END IF
 
     IF (output_verification) THEN
-      WRITE(6,*)'CRTM_Forward inspecting RTSolution...'
-      CALL CRTM_RTSolution_Inspect (RTSolution(:,:))
+       WRITE(6,*)'CRTM_Forward inspecting RTSolution...'
+       CALL CRTM_RTSolution_Inspect (RTSolution(:,:))
     END IF
     RETURN
-    
+
   CONTAINS
 
     ! Function profile_solution contains all the computational code inside of CRTM_Forward that
@@ -449,7 +446,7 @@ CONTAINS
       INTEGER, INTENT(in) :: m               ! profile index
       TYPE(CRTM_Options_type), INTENT(IN) :: Opt
       TYPE(CRTM_AncillaryInput_type), INTENT(IN) :: AncillaryInput
-    
+
       ! Local variables
       INTEGER :: Error_Status
       CHARACTER(256) :: Message
@@ -480,7 +477,7 @@ CONTAINS
       TYPE(RTV_type)             :: RTV_Clear(n_channel_threads)
       ! Component variables
       TYPE(CRTM_GeometryInfo_type) :: GeometryInfo
-!!      TYPE(CRTM_Predictor_type)    :: Predictor(n_channel_threads)
+      !!      TYPE(CRTM_Predictor_type)    :: Predictor(n_channel_threads)
       TYPE(CRTM_Predictor_type)    :: Predictor
       TYPE(CRTM_AtmOptics_type)    :: AtmOptics(n_channel_threads)
       TYPE(CRTM_SfcOptics_type)    :: SfcOptics(n_channel_threads)
@@ -495,247 +492,242 @@ CONTAINS
       TYPE(NLTE_Predictor_type)   :: NLTE_Predictor
       ! Cloud cover object
       TYPE(CRTM_CloudCover_type) :: CloudCover
-
       Error_Status = SUCCESS
 
       ! Reinitialise the output RTSolution
       CALL CRTM_RTSolution_Zero(RTSolution(:,m))
-
       IF ( Options_Present ) THEN
-      ! ...Assign the option specific SfcOptics input
+         ! ...Assign the option specific SfcOptics input
          IF( Opt%n_Stokes > 0 ) THEN
-           RTV(:)%n_Stokes = Opt%n_Stokes
-           RTV_Clear(:)%n_Stokes = Opt%n_Stokes
+            RTV(:)%n_Stokes = Opt%n_Stokes
+            RTV_Clear(:)%n_Stokes = Opt%n_Stokes
          END IF
          RTV(:)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
-!         IF( Opt%RT_Algorithm_Id == RT_VMOM .and. RTV(1)%n_Stokes == 1) THEN
-!          Error_Status = FAILURE
-!          Message = 'Error of using RT_VMOM not allowed for n_Stokes = 1'
-!          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )    
-!          RETURN     
-!         END IF
-      END IF   
+         !         IF( Opt%RT_Algorithm_Id == RT_VMOM .and. RTV(1)%n_Stokes == 1) THEN
+         !          Error_Status = FAILURE
+         !          Message = 'Error of using RT_VMOM not allowed for n_Stokes = 1'
+         !          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+         !          RETURN
+         !         END IF
+      END IF
 
       ! Allocate the profile independent surface opticss local structure
-!$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
+      !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
       DO nt = 1, n_channel_threads
-        CALL CRTM_SfcOptics_Create( SfcOptics(nt)  , MAX_N_ANGLES, MAX_N_STOKES )
-        IF ( .NOT. CRTM_SfcOptics_Associated(SfcOptics(nt) ) ) THEN
-          Error_Status = FAILURE
-          Message = 'Error allocating SfcOptics data structures'
-          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-          CYCLE
-        END IF
-        SfcOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
+         CALL CRTM_SfcOptics_Create( SfcOptics(nt)  , MAX_N_ANGLES, MAX_N_STOKES )
+         IF ( .NOT. CRTM_SfcOptics_Associated(SfcOptics(nt) ) ) THEN
+            Error_Status = FAILURE
+            Message = 'Error allocating SfcOptics data structures'
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+            CYCLE
+         END IF
+         SfcOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
       END DO
-!$OMP END PARALLEL DO
+      !$OMP END PARALLEL DO
       IF ( Error_Status == FAILURE) RETURN
 
       ! ...Assign the option specific SfcOptics input
-!$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
+      !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
       DO nt = 1, n_channel_threads
-        SfcOptics(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
+         SfcOptics(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
       END DO
-!$OMP END PARALLEL DO
-
+      !$OMP END PARALLEL DO
       ! Check whether to skip this profile
       IF ( Opt%Skip_Profile ) RETURN
 
       ! Check the input data if required
       IF ( Opt%Check_Input ) THEN
-        ! ...Mandatory inputs
-        Atmosphere_Invalid = .NOT. CRTM_Atmosphere_IsValid( Atmosphere(m) )
-        Surface_Invalid    = .NOT. CRTM_Surface_IsValid( Surface(m) )
-        Geometry_Invalid   = .NOT. CRTM_Geometry_IsValid( Geometry(m) )
-        IF ( Atmosphere_Invalid .OR. Surface_Invalid .OR. Geometry_Invalid ) THEN
-          Error_Status = FAILURE
-          WRITE( Message,'("Input data check failed for profile #",i0)' ) m
-          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-          RETURN
-        END IF
-        ! ...Optional input
-        IF ( Options_Present ) THEN
-          Options_Invalid = .NOT. CRTM_Options_IsValid( Options(m) )
-          IF ( Options_Invalid ) THEN
+         ! ...Mandatory inputs
+         Atmosphere_Invalid = .NOT. CRTM_Atmosphere_IsValid( Atmosphere(m) )
+         Surface_Invalid    = .NOT. CRTM_Surface_IsValid( Surface(m) )
+         Geometry_Invalid   = .NOT. CRTM_Geometry_IsValid( Geometry(m) )
+         IF ( Atmosphere_Invalid .OR. Surface_Invalid .OR. Geometry_Invalid ) THEN
             Error_Status = FAILURE
-            WRITE( Message,'("Options data check failed for profile #",i0)' ) m
+            WRITE( Message,'("Input data check failed for profile #",i0)' ) m
             CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
-          END IF
-
-          ! Are the channel dimensions consistent if emissivity is passed?
-          IF ( Options(m)%Use_Emissivity ) THEN
-            IF ( Options(m)%n_Channels < n_Channels ) THEN
-              Error_Status = FAILURE
-              WRITE( Message,'( "Input Options channel dimension (", i0, ") is less ", &
-                     &"than the number of requested channels (",i0, ")" )' ) &
-                     Options(m)%n_Channels, n_Channels
-              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-              RETURN
+         END IF
+         ! ...Optional input
+         IF ( Options_Present ) THEN
+            Options_Invalid = .NOT. CRTM_Options_IsValid( Options(m) )
+            IF ( Options_Invalid ) THEN
+               Error_Status = FAILURE
+               WRITE( Message,'("Options data check failed for profile #",i0)' ) m
+               CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+               RETURN
             END IF
-          END IF
-          ! Check value for user-defined n_Streams
-          IF ( Options(m)%Use_N_Streams ) THEN
-            IF ( Options(m)%n_Streams <= 0 .OR. MOD(Options(m)%n_Streams,2) /= 0 .OR. &
-                 Options(m)%n_Streams > MAX_N_STREAMS ) THEN
-                Error_Status = FAILURE
-                WRITE( Message,'( "Input Options n_Streams (", i0, ") is invalid" )' ) &
+            ! Are the channel dimensions consistent if emissivity is passed?
+            IF ( Options(m)%Use_Emissivity ) THEN
+               IF ( Options(m)%n_Channels < n_Channels ) THEN
+                  Error_Status = FAILURE
+                  WRITE( Message,'( "Input Options channel dimension (", i0, ") is less ", &
+                       &"than the number of requested channels (",i0, ")" )' ) &
+                       Options(m)%n_Channels, n_Channels
+                  CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                  RETURN
+               END IF
+            END IF
+            ! Check value for user-defined n_Streams
+            IF ( Options(m)%Use_N_Streams ) THEN
+               IF ( Options(m)%n_Streams <= 0 .OR. MOD(Options(m)%n_Streams,2) /= 0 .OR. &
+                    Options(m)%n_Streams > MAX_N_STREAMS ) THEN
+                  Error_Status = FAILURE
+                  WRITE( Message,'( "Input Options n_Streams (", i0, ") is invalid" )' ) &
                        Options(m)%n_Streams
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-                RETURN
+                  CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                  RETURN
+               END IF
             END IF
-          END IF
-        END IF
+         END IF
       END IF
-
       ! Process geometry
       ! ...Compute derived geometry
       CALL CRTM_GeometryInfo_SetValue( GeometryInfo, Geometry=Geometry(m) )
       CALL CRTM_GeometryInfo_Compute( GeometryInfo )
       ! ...Retrieve components into local variable
       CALL CRTM_GeometryInfo_GetValue( &
-             GeometryInfo, &
-             iFOV = iFOV, &
-             Source_Zenith_Angle = Source_ZA )
+           GeometryInfo, &
+           iFOV = iFOV, &
+           Source_Zenith_Angle = Source_ZA )
 
       ! Add extra layers to current atmosphere profile
       ! if necessary to handle upper atmosphere
       Error_Status = CRTM_Atmosphere_AddLayers( Atmosphere(m), Atm )
       IF ( Error_Status /= SUCCESS ) THEN
-        Error_Status = FAILURE
-        WRITE( Message,'("Error adding extra layers to profile #",i0)' ) m
-        CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-        RETURN
+         Error_Status = FAILURE
+         WRITE( Message,'("Error adding extra layers to profile #",i0)' ) m
+         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+         RETURN
       END IF
 
       IF ( Atm%n_Layers > MAX_N_LAYERS ) THEN
-        Error_Status = FAILURE
-        WRITE( Message,'("Added layers [",i0,"] cause total [",i0,"] to exceed the ",&
-               &"maximum allowed [",i0,"] for profile #",i0)' ) &
-               Atm%n_Added_Layers, Atm%n_Layers, MAX_N_LAYERS, m
-        CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-        RETURN
+         Error_Status = FAILURE
+         WRITE( Message,'("Added layers [",i0,"] cause total [",i0,"] to exceed the ",&
+              &"maximum allowed [",i0,"] for profile #",i0)' ) &
+              Atm%n_Added_Layers, Atm%n_Layers, MAX_N_LAYERS, m
+         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+         RETURN
       END IF
 
-      IF( (CloudC%N_PHASE_ELEMENTS /= AeroC%N_PHASE_ELEMENTS) .or. &
-         (RTV(1)%n_Stokes > 1.and.CloudC%N_PHASE_ELEMENTS < 6) ) THEN
-        Error_Status = FAILURE
+      IF( (CloudC%N_PHASE_ELEMENTS /= AeroC%N_PHASE_ELEMENTS) .OR. &
+           (RTV(1)%n_Stokes > 1.AND.CloudC%N_PHASE_ELEMENTS < 6) ) THEN
+         Error_Status = FAILURE
 
-        WRITE( Message,'("N_PHASE_ELEMENTS NOT RIGHT FW ",i0)' ) CloudC%N_PHASE_ELEMENTS
-        CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-        RETURN
+         WRITE( Message,'("N_PHASE_ELEMENTS NOT RIGHT FW ",i0)' ) CloudC%N_PHASE_ELEMENTS
+         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+         RETURN
       END IF
-     
+      
       ! Calculate cloud water density 
       CALL Calculate_Cloud_Water_Density(Atm)
-
-!$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
+      
+      !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
       DO nt = 1, n_channel_threads
-        ! Prepare the atmospheric optics structures
-        ! ...Allocate the AtmOptics structure based on Atm extension
-        CALL CRTM_AtmOptics_Create( AtmOptics(nt), &
-                                    Atm%n_Layers        , &
-                                    MAX_N_LEGENDRE_TERMS, &
-                                    CloudC%N_PHASE_ELEMENTS  )
+         ! Prepare the atmospheric optics structures
+         ! ...Allocate the AtmOptics structure based on Atm extension
+         CALL CRTM_AtmOptics_Create( AtmOptics(nt), &
+              Atm%n_Layers        , &
+              MAX_N_LEGENDRE_TERMS, &
+              CloudC%N_PHASE_ELEMENTS  )
 
-        IF ( .NOT. CRTM_AtmOptics_Associated( Atmoptics(nt) ) ) THEN
-          Error_Status = FAILURE
-          WRITE( Message,'("Error allocating AtmOptics data structure for profile #",i0)' ) m
-          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-        END IF
-        ! ...Set the scattering switch
-        AtmOptics(nt)%Include_Scattering = Opt%Include_Scattering
-        AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
-        AtmOptics(nt)%depolarization = Opt%depolarization
-        ! ...Allocate the atmospheric optics internal structure
-        CALL AOvar_Create( AOvar(nt), Atm%n_Layers )
+         IF ( .NOT. CRTM_AtmOptics_Associated( Atmoptics(nt) ) ) THEN
+            Error_Status = FAILURE
+            WRITE( Message,'("Error allocating AtmOptics data structure for profile #",i0)' ) m
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+         END IF
+         ! ...Set the scattering switch
+         AtmOptics(nt)%Include_Scattering = Opt%Include_Scattering
+         AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
+         AtmOptics(nt)%depolarization = Opt%depolarization
+         ! ...Allocate the atmospheric optics internal structure
+         CALL AOvar_Create( AOvar(nt), Atm%n_Layers )
 
-        ! Allocate the scattering internal variables if necessary
-        ! ...Cloud
-        IF ( Atm%n_Clouds > 0 ) THEN
-          CALL CSvar_Create( CSvar(nt), &
-                             MAX_N_LEGENDRE_TERMS, &
-                             CloudC%N_PHASE_ELEMENTS, &
-                             Atm%n_Layers        , &
-                             Atm%n_Clouds          )
-        END IF
-        ! ...Aerosol
-        IF ( Atm%n_Aerosols > 0 ) THEN
-          CALL ASvar_Create( ASvar(nt), &
-                             MAX_N_LEGENDRE_TERMS, &
-                             AeroC%N_PHASE_ELEMENTS, &
-                             Atm%n_Layers        , &
-                             Atm%n_Aerosols        )
-        END IF
-      END DO 
-!$OMP END PARALLEL DO 
-
+         ! Allocate the scattering internal variables if necessary
+         ! ...Cloud
+         IF ( Atm%n_Clouds > 0 ) THEN
+            CALL CSvar_Create( CSvar(nt), &
+                 MAX_N_LEGENDRE_TERMS, &
+                 CloudC%N_PHASE_ELEMENTS, &
+                 Atm%n_Layers        , &
+                 Atm%n_Clouds          )
+         END IF
+         ! ...Aerosol
+         IF ( Atm%n_Aerosols > 0 ) THEN
+            CALL ASvar_Create( ASvar(nt), &
+                 MAX_N_LEGENDRE_TERMS, &
+                 AeroC%N_PHASE_ELEMENTS, &
+                 Atm%n_Layers        , &
+                 Atm%n_Aerosols        )
+         END IF
+      END DO
+      !$OMP END PARALLEL DO
       IF ( Error_Status == FAILURE) RETURN
 
       ! Determine the type of cloud coverage
       cloud_coverage_flag = CRTM_Atmosphere_Coverage( atm )
 
+
       ! Setup for fractional cloud coverage
       IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-        ! Compute cloudcover
-        Error_Status = CloudCover%Compute_CloudCover(atm, Overlap = opt%Overlap_Id)
-        IF ( Error_Status /= SUCCESS ) THEN
-          WRITE( Message,'("Error computing cloud cover in profile #",i0)' ) m
-          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-          RETURN
-        END IF
-        ! Allocate all the CLEAR sky structures for fractional cloud coverage
-        ! ...A clear sky atmosphere
-        Error_Status = CRTM_Atmosphere_ClearSkyCopy(Atm, Atm_Clear)
-        IF ( Error_Status /= SUCCESS ) THEN
-          WRITE( Message,'("Error copying CLEAR SKY atmopshere in profile #",i0)' ) m
-          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-          RETURN
-        END IF
 
-!$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
-        DO nt = 1, n_channel_threads
-          ! ...Clear sky SfcOptics
-          CALL CRTM_SfcOptics_Create( SfcOptics_Clear(nt), MAX_N_ANGLES, MAX_N_STOKES )
-          IF ( .NOT. CRTM_SfcOptics_Associated(SfcOptics_Clear(nt)) ) THEN
-            Error_Status = FAILURE
-            WRITE( Message,'("Error allocating CLEAR SKY SfcOptics data structures for profile #",i0)' ) m
+         ! Compute cloudcover
+         Error_Status = CloudCover%Compute_CloudCover(atm, Overlap = opt%Overlap_Id)
+         IF ( Error_Status /= SUCCESS ) THEN
+            WRITE( Message,'("Error computing cloud cover in profile #",i0)' ) m
             CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-            CYCLE
-          END IF
-          ! ...Copy over surface optics input
-          SfcOptics_Clear(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
-         SfcOptics_Clear(nt)%n_Stokes = RTV_Clear(nt)%n_Stokes
-          ! ...CLEAR SKY average surface skin temperature for multi-surface types
-          CALL CRTM_Compute_SurfaceT( Surface(m), SfcOptics_Clear(nt) )
-        END DO
-!$OMP END PARALLEL DO
-        IF ( Error_Status == FAILURE) RETURN
-      END IF
+            RETURN
+         END IF
 
+         ! Allocate all the CLEAR sky structures for fractional cloud coverage
+         ! ...A clear sky atmosphere
+         Error_Status = CRTM_Atmosphere_ClearSkyCopy(Atm, Atm_Clear)
+         IF ( Error_Status /= SUCCESS ) THEN
+            WRITE( Message,'("Error copying CLEAR SKY atmopshere in profile #",i0)' ) m
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+            RETURN
+         END IF
+         !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
+         DO nt = 1, n_channel_threads
+            ! ...Clear sky SfcOptics
+            CALL CRTM_SfcOptics_Create( SfcOptics_Clear(nt), MAX_N_ANGLES, MAX_N_STOKES )
+            IF ( .NOT. CRTM_SfcOptics_Associated(SfcOptics_Clear(nt)) ) THEN
+               Error_Status = FAILURE
+               WRITE( Message,'("Error allocating CLEAR SKY SfcOptics data structures for profile #",i0)' ) m
+               CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+               CYCLE
+            END IF
+            ! ...Copy over surface optics input
+            SfcOptics_Clear(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
+            SfcOptics_Clear(nt)%n_Stokes = RTV_Clear(nt)%n_Stokes
+            ! ...CLEAR SKY average surface skin temperature for multi-surface types
+            CALL CRTM_Compute_SurfaceT( Surface(m), SfcOptics_Clear(nt) )
+         END DO
+         !$OMP END PARALLEL DO
+         IF ( Error_Status == FAILURE) RETURN
+      END IF
       ! Average surface skin temperature for multi-surface types
-!$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
+      !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
       DO nt = 1, n_channel_threads
-        CALL CRTM_Compute_SurfaceT( Surface(m), SfcOptics(nt) )
-        ! Process aircraft pressure altitude
-        IF ( Opt%Aircraft_Pressure > ZERO ) THEN
-          RTV(nt)%aircraft%rt = .TRUE.
-          RTV(nt)%aircraft%idx = CRTM_Get_PressureLevelIdx(Atm, Opt%Aircraft_Pressure)
-          ! ...Issue warning if profile level is TOO different from flight level
-          IF ( ABS(Atm%Level_Pressure(RTV(nt)%aircraft%idx)-Opt%Aircraft_Pressure) > AIRCRAFT_PRESSURE_THRESHOLD ) THEN
-            WRITE( Message,'("Difference between aircraft pressure level (",es22.15,&
-                            &"hPa) and closest input profile level (",es22.15,&
-                            &"hPa) is larger than recommended (",f4.1,"hPa) for profile #",i0)') &
-                            Opt%Aircraft_Pressure, Atm%Level_Pressure(RTV(nt)%aircraft%idx), &
-                            AIRCRAFT_PRESSURE_THRESHOLD, m
-            CALL Display_Message( ROUTINE_NAME, Message, WARNING )
-          END IF
-        ELSE
-          RTV(nt)%aircraft%rt = .FALSE.
-        END IF
+         CALL CRTM_Compute_SurfaceT( Surface(m), SfcOptics(nt) )
+         ! Process aircraft pressure altitude
+         IF ( Opt%Aircraft_Pressure > ZERO ) THEN
+            RTV(nt)%aircraft%rt = .TRUE.
+            RTV(nt)%aircraft%idx = CRTM_Get_PressureLevelIdx(Atm, Opt%Aircraft_Pressure)
+            ! ...Issue warning if profile level is TOO different from flight level
+            IF ( ABS(Atm%Level_Pressure(RTV(nt)%aircraft%idx)-Opt%Aircraft_Pressure) > AIRCRAFT_PRESSURE_THRESHOLD ) THEN
+               WRITE( Message,'("Difference between aircraft pressure level (",es22.15,&
+                    &"hPa) and closest input profile level (",es22.15,&
+                    &"hPa) is larger than recommended (",f4.1,"hPa) for profile #",i0)') &
+                    Opt%Aircraft_Pressure, Atm%Level_Pressure(RTV(nt)%aircraft%idx), &
+                    AIRCRAFT_PRESSURE_THRESHOLD, m
+               CALL Display_Message( ROUTINE_NAME, Message, WARNING )
+            END IF
+         ELSE
+            RTV(nt)%aircraft%rt = .FALSE.
+         END IF
 
       END DO
-!$OMP END PARALLEL DO
+      !$OMP END PARALLEL DO
 
       ! -----------
       ! SENSOR LOOP
@@ -746,408 +738,402 @@ CONTAINS
       Sensor_Loop: DO n = 1, n_Sensors
 
 
-        ! Shorter name
-        SensorIndex = ChannelInfo(n)%Sensor_Index
+         ! Shorter name
+         SensorIndex = ChannelInfo(n)%Sensor_Index
 
 
-        ! Check if antenna correction to be applied for current sensor
-        compute_antenna_correction = ( Opt%Use_Antenna_Correction               .AND. &
-                                       ACCoeff_Associated( SC(SensorIndex)%AC ) .AND. &
-                                       iFOV /= 0 )
+         ! Check if antenna correction to be applied for current sensor
+         compute_antenna_correction = ( Opt%Use_Antenna_Correction               .AND. &
+              ACCoeff_Associated( SC(SensorIndex)%AC ) .AND. &
+              iFOV /= 0 )
 
-          CALL CRTM_Predictor_Create( &
-                   Predictor, &
-                   atm%n_Layers,  &
-                   SensorIndex    )
-          IF ( .NOT. CRTM_Predictor_Associated(Predictor) ) THEN
+         CALL CRTM_Predictor_Create( &
+              Predictor, &
+              atm%n_Layers,  &
+              SensorIndex    )
+         IF ( .NOT. CRTM_Predictor_Associated(Predictor) ) THEN
             Error_Status=FAILURE
             WRITE( Message,'("Error allocating predictor structure for profile #",i0, &
-                   &" and ",a," sensor.")' ) m, SC(SensorIndex)%Sensor_Id
+                 &" and ",a," sensor.")' ) m, SC(SensorIndex)%Sensor_Id
             CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-          END IF
+         END IF
 
-          ! ...And now fill them
-          CALL CRTM_Compute_Predictors( SensorIndex   , &  ! Input
-                                        Atm           , &  ! Input
-                                        GeometryInfo  , &  ! Input
-                                        AncillaryInput, &  ! Input
-                                        Predictor , &  ! Output
-                                        PVar        )  ! Internal variable output
+         ! ...And now fill them
+         CALL CRTM_Compute_Predictors( SensorIndex   , &  ! Input
+              Atm           , &  ! Input
+              GeometryInfo  , &  ! Input
+              AncillaryInput, &  ! Input
+              Predictor , &  ! Output
+              PVar        )  ! Internal variable output
+         !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
+         DO nt = 1, n_channel_threads
 
-!$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
-        DO nt = 1, n_channel_threads
+            ! Compute predictors for AtmAbsorption calcs
+            ! ...Allocate the predictor structure
 
-          ! Compute predictors for AtmAbsorption calcs
-          ! ...Allocate the predictor structure
+            ! Allocate the RTV structure if necessary
+            IF( ( Atm%n_Clouds   > 0 .OR. &
+                 Atm%n_Aerosols > 0 .OR. &
+                 SpcCoeff_IsUltravioletSensor(SC(SensorIndex)) .OR. &
+                 SpcCoeff_IsVisibleSensor(SC(SensorIndex)) ) .AND. &
+                 AtmOptics(nt)%Include_Scattering ) THEN
+               CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
 
-          ! Allocate the RTV structure if necessary
-          IF( ( Atm%n_Clouds   > 0 .OR. &
-                Atm%n_Aerosols > 0 .OR. &
-                SpcCoeff_IsUltravioletSensor(SC(SensorIndex)) .OR. &
-                SpcCoeff_IsVisibleSensor(SC(SensorIndex)) ) .AND. &
-                AtmOptics(nt)%Include_Scattering ) THEN
-            CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
-
-            IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
-              Error_Status=FAILURE
-              WRITE( Message,'("Error allocating RTV structure for profile #",i0, &
-                     &" and ",a," sensor.")' ) m, TRIM(SC(SensorIndex)%Sensor_Id)
-              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+               IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
+                  Error_Status=FAILURE
+                  WRITE( Message,'("Error allocating RTV structure for profile #",i0, &
+                       &" and ",a," sensor.")' ) m, TRIM(SC(SensorIndex)%Sensor_Id)
+                  CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+               END IF
             END IF
-          END IF
-        END DO
-!$OMP END PARALLEL DO 
+         END DO
+         !$OMP END PARALLEL DO
+         IF ( Error_Status == FAILURE ) RETURN
 
-        IF ( Error_Status == FAILURE ) RETURN
-
-        ! Compute NLTE correction predictors
-        IF ( Opt%Apply_NLTE_Correction ) THEN
-          CALL Compute_NLTE_Predictor( &
+         ! Compute NLTE correction predictors
+         IF ( Opt%Apply_NLTE_Correction ) THEN
+            CALL Compute_NLTE_Predictor( &
                  SC(SensorIndex)%NC, &  ! Input
                  Atm               , &  ! Input
                  GeometryInfo      , &  ! Input
                  NLTE_Predictor      )  ! Output
-        END IF
+         END IF
 
-        ! ----------------------------
-        ! counters for thread loop
-        ! -----------------------------
-        n_sensor_channels = ChannelInfo(n)%n_Channels
-!        chunk_ch = n_sensor_channels / n_channel_threads
-        chunk_ch = CEILING( REAL(n_sensor_channels) / REAL(n_channel_threads) )
-        !count inactive channels in each chunk
-        n_inactive_channels(:) = 0
-        DO l = 1, n_sensor_channels
-          IF ( .NOT. ChannelInfo(n)%Process_Channel(l) ) THEN
-!            nt = l / chunk_ch + 1
-            nt = FLOOR( REAL(l) / REAL(chunk_ch) ) + 1
-            n_inactive_channels(nt) = n_inactive_channels(nt) + 1
-          END IF
-        END DO
-        DO nt = 2, n_channel_threads
-          n_inactive_channels(nt) = n_inactive_channels(nt) + n_inactive_channels(nt - 1)
-        END DO
-        DO nt = n_channel_threads+1, 2, -1
-          n_inactive_channels(nt) = n_inactive_channels(nt - 1)
-        END DO
-        n_inactive_channels(1) = 0
-        !end count
+         ! ----------------------------
+         ! counters for thread loop
+         ! -----------------------------
+         n_sensor_channels = ChannelInfo(n)%n_Channels
+         !        chunk_ch = n_sensor_channels / n_channel_threads
+         chunk_ch = CEILING( REAL(n_sensor_channels) / REAL(n_channel_threads) )
+         !count inactive channels in each chunk
+         n_inactive_channels(:) = 0
+         DO l = 1, n_sensor_channels
+            IF ( .NOT. ChannelInfo(n)%Process_Channel(l) ) THEN
+               !            nt = l / chunk_ch + 1
+               nt = FLOOR( REAL(l) / REAL(chunk_ch) ) + 1
+               n_inactive_channels(nt) = n_inactive_channels(nt) + 1
+            END IF
+         END DO
+         DO nt = 2, n_channel_threads
+            n_inactive_channels(nt) = n_inactive_channels(nt) + n_inactive_channels(nt - 1)
+         END DO
+         DO nt = n_channel_threads+1, 2, -1
+            n_inactive_channels(nt) = n_inactive_channels(nt - 1)
+         END DO
+         n_inactive_channels(1) = 0
+         !end count
 
-        ! ------------
-        ! THREAD LOOP
-        ! ------------
-!$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
-!$OMP    FIRSTPRIVATE(ln)                                               &
-!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,    &
-!$OMP          start_ch, end_ch, Wavenumber, transmittance,             &
-!$OMP          transmittance_clear, l, mth_Azi, ks)
-        Thread_Loop: DO nt = 1, n_channel_threads
+         ! ------------
+         ! THREAD LOOP
+         ! ------------
+         !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
+         !$OMP    FIRSTPRIVATE(ln)                                               &
+         !$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,    &
+         !$OMP          start_ch, end_ch, Wavenumber, transmittance,             &
+         !$OMP          transmittance_clear, l, mth_Azi, ks)
+         Thread_Loop: DO nt = 1, n_channel_threads
 
-          start_ch = (nt - 1) * chunk_ch + 1
-          IF ( nt == n_channel_threads) THEN
-            end_ch = n_sensor_channels
-          ELSE
-            end_ch = start_ch + chunk_ch - 1
-          END IF
-          ln = (start_ch - 1) - n_inactive_channels(nt)
-
-          ! -------------
-          ! CHANNEL LOOP
-          ! -------------
-          Channel_Loop: DO l = start_ch, end_ch
-
-            ! Channel setup
-            ! ...Skip channel if requested
-            IF ( .NOT. ChannelInfo(n)%Process_Channel(l) ) CYCLE Channel_Loop
-            ! ...Shorter name
-            ChannelIndex = ChannelInfo(n)%Channel_Index(l)
-            ! ...Increment the processed channel counter
-            ln = ln + 1
-            ! ...Assign sensor+channel information to output
-            RTSolution(ln,m)%Sensor_Id        = ChannelInfo(n)%Sensor_Id
-            RTSolution(ln,m)%WMO_Satellite_Id = ChannelInfo(n)%WMO_Satellite_Id
-            RTSolution(ln,m)%WMO_Sensor_Id    = ChannelInfo(n)%WMO_Sensor_Id
-            RTSolution(ln,m)%Sensor_Channel   = ChannelInfo(n)%Sensor_Channel(l)
-
-            ! Initialisations
-            CALL CRTM_AtmOptics_Zero( AtmOptics(nt) )
-            CALL CRTM_AtmOptics_Zero( AtmOptics_Clear(nt) )
-            CALL CRTM_RTSolution_Zero( RTSolution_Clear(nt) )
-
-            ! Determine the number of streams (n_Full_Streams) in up+downward directions
-            IF ( Opt%Use_N_Streams ) THEN
-              n_Full_Streams = Opt%n_Streams
-              RTSolution(ln,m)%n_Full_Streams = n_Full_Streams + 2
-              RTSolution(ln,m)%Scattering_Flag = .TRUE.
+            start_ch = (nt - 1) * chunk_ch + 1
+            IF ( nt == n_channel_threads) THEN
+               end_ch = n_sensor_channels
             ELSE
-              n_Full_Streams = CRTM_Compute_nStreams( Atm             , &  ! Input
-                                                      SensorIndex     , &  ! Input
-                                                      ChannelIndex    , &  ! Input
-                                                      RTSolution(ln,m)  )  ! Output
+               end_ch = start_ch + chunk_ch - 1
             END IF
-            ! ...Transfer stream count to scattering structure
-            AtmOptics(nt)%n_Legendre_Terms = n_Full_Streams
+            ln = (start_ch - 1) - n_inactive_channels(nt)
+            ! -------------
+            ! CHANNEL LOOP
+            ! -------------
+            Channel_Loop: DO l = start_ch, end_ch
 
-            ! Compute the gas absorption
-            CALL CRTM_Compute_AtmAbsorption( SensorIndex   , &  ! Input
-                                             ChannelIndex  , &  ! Input
-                                             AncillaryInput, &  ! Input
-                                             Predictor , &  ! Input
-                                             AtmOptics(nt) , &  ! Output
-                                             AAvar(nt)       )  ! Internal variable output
+               ! Channel setup
+               ! ...Skip channel if requested
+               IF ( .NOT. ChannelInfo(n)%Process_Channel(l) ) CYCLE Channel_Loop
+               ! ...Shorter name
+               ChannelIndex = ChannelInfo(n)%Channel_Index(l)
+               ! ...Increment the processed channel counter
+               ln = ln + 1
+               ! ...Assign sensor+channel information to output
+               RTSolution(ln,m)%Sensor_Id        = ChannelInfo(n)%Sensor_Id
+               RTSolution(ln,m)%WMO_Satellite_Id = ChannelInfo(n)%WMO_Satellite_Id
+               RTSolution(ln,m)%WMO_Sensor_Id    = ChannelInfo(n)%WMO_Sensor_Id
+               RTSolution(ln,m)%Sensor_Channel   = ChannelInfo(n)%Sensor_Channel(l)
 
-            ! Compute the molecular scattering properties
-            ! ...Solar radiation
-            IF ( SC(SensorIndex)%Solar_Irradiance(ChannelIndex) > ZERO .AND. &
-                 Source_ZA < MAX_SOURCE_ZENITH_ANGLE ) THEN
-              RTV%Solar_Flag_true = .TRUE.
-              IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) RTV_Clear%Solar_Flag_true = .TRUE.
-            END IF
-            ! ...Visible channel with solar radiation
-          IF ( (SpcCoeff_IsVisibleSensor(SC(SensorIndex)).or.SpcCoeff_IsUltravioletSensor(SC(SensorIndex))) &
-                .AND. RTV(nt)%Solar_Flag_true ) THEN
-              RTV%Visible_Flag_true = .TRUE.
-              ! Rayleigh phase function has 0, 1, 2 components.
-              IF( AtmOptics(nt)%n_Legendre_Terms < 4 ) THEN
-                AtmOptics(nt)%n_Legendre_Terms = 4
-                RTSolution(ln,m)%Scattering_FLAG = .TRUE.
-                RTSolution(ln,m)%n_Full_Streams = AtmOptics(nt)%n_Legendre_Terms + 2
-              END IF
-              RTV(nt)%n_Azi = MIN( AtmOptics(nt)%n_Legendre_Terms - 1, MAX_N_AZIMUTH_FOURIER )
-              ! Get molecular scattering and extinction
-              Wavenumber = SC(SensorIndex)%Wavenumber(ChannelIndex)
-              Error_Status = CRTM_Compute_MoleculeScatter( &
-                               Wavenumber, &
-                               Atm       , &
-                               AtmOptics(nt) )
-              IF ( Error_Status /= SUCCESS ) THEN
-                WRITE( Message,'("Error computing MoleculeScatter for ",a,&
-                       &", channel ",i0,", profile #",i0)') &
-                       TRIM(ChannelInfo(n)%Sensor_ID), &
-                       ChannelInfo(n)%Sensor_Channel(l), &
-                       m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-              END IF
-            ELSE
-              RTV(nt)%Visible_Flag_true = .FALSE.
-              RTV(nt)%n_Azi = 0
-              IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-                RTV_Clear(nt)%Visible_Flag_true = .FALSE.
-                RTV_Clear(nt)%n_Azi = 0
-              END IF
-            END IF
+               ! Initialisations
+               CALL CRTM_AtmOptics_Zero( AtmOptics(nt) )
+               CALL CRTM_AtmOptics_Zero( AtmOptics_Clear(nt) )
+               CALL CRTM_RTSolution_Zero( RTSolution_Clear(nt) )
 
-            ! Copy the clear-sky AtmOptics
-            IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-              Error_Status = CRTM_AtmOptics_NoScatterCopy( AtmOptics(nt), AtmOptics_Clear(nt) )
-              IF ( Error_Status /= SUCCESS ) THEN
-                WRITE( Message,'("Error copying CLEAR SKY AtmOptics for ",a,&
-                       &", channel ",i0,", profile #",i0)' ) &
-                       TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-              END IF
-            END IF
+               ! Determine the number of streams (n_Full_Streams) in up+downward directions
+               IF ( Opt%Use_N_Streams ) THEN
+                  n_Full_Streams = Opt%n_Streams
+                  RTSolution(ln,m)%n_Full_Streams = n_Full_Streams + 2
+                  RTSolution(ln,m)%Scattering_Flag = .TRUE.
+               ELSE
+                  n_Full_Streams = CRTM_Compute_nStreams( Atm             , &  ! Input
+                       SensorIndex     , &  ! Input
+                       ChannelIndex    , &  ! Input
+                       RTSolution(ln,m)  )  ! Output
+               END IF
+               ! ...Transfer stream count to scattering structure
+               AtmOptics(nt)%n_Legendre_Terms = n_Full_Streams
 
-          ! Compute the cloud particle absorption/scattering properties
-          IF( Atm%n_Clouds > 0 ) THEN
-            Error_Status = CRTM_Compute_CloudScatter( Atm         , &  ! Input
-                                                      GeometryInfo, &  ! Input
-                                                      SensorIndex , &  ! Input
-                                                      ChannelIndex, &  ! Input
-                                                      AtmOptics(nt)   , &  ! Output
-                                                      CSvar(nt)         )  ! Internal variable output
-            IF ( Error_Status /= SUCCESS ) THEN
-              WRITE( Message,'("Error computing CloudScatter for ",a,&
-                     &", channel ",i0,", profile #",i0)' ) &
-                     TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-            END IF
-          END IF
+               ! Compute the gas absorption
+               CALL CRTM_Compute_AtmAbsorption( SensorIndex   , &  ! Input
+                    ChannelIndex  , &  ! Input
+                    AncillaryInput, &  ! Input
+                    Predictor , &  ! Input
+                    AtmOptics(nt) , &  ! Output
+                    AAvar(nt)       )  ! Internal variable output
 
-          ! Compute the aerosol absorption/scattering properties
-          IF ( Atm%n_Aerosols > 0 ) THEN
-            Error_Status = CRTM_Compute_AerosolScatter( Atm         , &  ! Input
-                                                        SensorIndex , &  ! Input
-                                                        ChannelIndex, &  ! Input
-                                                        AtmOptics(nt)   , &  ! In/Output
-                                                        ASvar(nt)         )  ! Internal variable output
+               ! Compute the molecular scattering properties
+               ! ...Solar radiation
+               IF ( SC(SensorIndex)%Solar_Irradiance(ChannelIndex) > ZERO .AND. &
+                    Source_ZA < MAX_SOURCE_ZENITH_ANGLE ) THEN
+                  RTV%Solar_Flag_true = .TRUE.
+                  IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) RTV_Clear%Solar_Flag_true = .TRUE.
+               END IF
+               ! ...Visible channel with solar radiation
+               IF ( (SpcCoeff_IsVisibleSensor(SC(SensorIndex)).OR.SpcCoeff_IsUltravioletSensor(SC(SensorIndex))) &
+                    .AND. RTV(nt)%Solar_Flag_true ) THEN
+                  RTV%Visible_Flag_true = .TRUE.
+                  ! Rayleigh phase function has 0, 1, 2 components.
+                  IF( AtmOptics(nt)%n_Legendre_Terms < 4 ) THEN
+                     AtmOptics(nt)%n_Legendre_Terms = 4
+                     RTSolution(ln,m)%Scattering_FLAG = .TRUE.
+                     RTSolution(ln,m)%n_Full_Streams = AtmOptics(nt)%n_Legendre_Terms + 2
+                  END IF
+                  RTV(nt)%n_Azi = MIN( AtmOptics(nt)%n_Legendre_Terms - 1, MAX_N_AZIMUTH_FOURIER )
+                  ! Get molecular scattering and extinction
+                  Wavenumber = SC(SensorIndex)%Wavenumber(ChannelIndex)
+                  Error_Status = CRTM_Compute_MoleculeScatter( &
+                       Wavenumber, &
+                       Atm       , &
+                       AtmOptics(nt) )
+                  IF ( Error_Status /= SUCCESS ) THEN
+                     WRITE( Message,'("Error computing MoleculeScatter for ",a,&
+                          &", channel ",i0,", profile #",i0)') &
+                          TRIM(ChannelInfo(n)%Sensor_ID), &
+                          ChannelInfo(n)%Sensor_Channel(l), &
+                          m
+                     CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                  END IF
+               ELSE
+                  RTV(nt)%Visible_Flag_true = .FALSE.
+                  RTV(nt)%n_Azi = 0
+                  IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
+                     RTV_Clear(nt)%Visible_Flag_true = .FALSE.
+                     RTV_Clear(nt)%n_Azi = 0
+                  END IF
+               END IF
 
-            IF ( Error_Status /= SUCCESS ) THEN
-              WRITE( Message,'("Error computing AerosolScatter for ",a,&
-                     &", channel ",i0,", profile #",i0)' ) &
-                     TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-            END IF
-          END IF
+               ! Copy the clear-sky AtmOptics
+               IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
+                  Error_Status = CRTM_AtmOptics_NoScatterCopy( AtmOptics(nt), AtmOptics_Clear(nt) )
+                  IF ( Error_Status /= SUCCESS ) THEN
+                     WRITE( Message,'("Error copying CLEAR SKY AtmOptics for ",a,&
+                          &", channel ",i0,", profile #",i0)' ) &
+                          TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
+                     CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                  END IF
+               END IF
 
-          ! Compute the combined atmospheric optical properties
-          IF( AtmOptics(nt)%Include_Scattering ) THEN
-            CALL CRTM_AtmOptics_Combine( AtmOptics(nt), AOvar(nt) )
-          END IF
-      
-          ! ...Save vertically integrated scattering optical depth for output
-          RTSolution(ln,m)%SOD = AtmOptics(nt)%Scattering_Optical_Depth
+               ! Compute the cloud particle absorption/scattering properties
+               IF( Atm%n_Clouds > 0 ) THEN
+                  Error_Status = CRTM_Compute_CloudScatter( Atm         , &  ! Input
+                       GeometryInfo, &  ! Input
+                       SensorIndex , &  ! Input
+                       ChannelIndex, &  ! Input
+                       AtmOptics(nt)   , &  ! Output
+                       CSvar(nt)         )  ! Internal variable output
+                  IF ( Error_Status /= SUCCESS ) THEN
+                     WRITE( Message,'("Error computing CloudScatter for ",a,&
+                          &", channel ",i0,", profile #",i0)' ) &
+                          TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
+                     CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                  END IF
+               END IF
 
+               ! Compute the aerosol absorption/scattering properties
+               IF ( Atm%n_Aerosols > 0 ) THEN
+                  Error_Status = CRTM_Compute_AerosolScatter( Atm         , &  ! Input
+                       SensorIndex , &  ! Input
+                       ChannelIndex, &  ! Input
+                       AtmOptics(nt)   , &  ! In/Output
+                       ASvar(nt)         )  ! Internal variable output
 
-          ! Compute the all-sky atmospheric transmittance
-          ! for use in FASTEM-X reflection correction
-          CALL CRTM_Compute_Transmittance(AtmOptics(nt),transmittance)
-          SfcOptics(nt)%Transmittance = transmittance
-          ! ...Clear sky for fractional cloud cover
-          IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-            CALL CRTM_Compute_Transmittance(AtmOptics_Clear(nt),transmittance_clear)
-            SfcOptics_Clear(nt)%Transmittance = transmittance_clear
-          END IF
+                  IF ( Error_Status /= SUCCESS ) THEN
+                     WRITE( Message,'("Error computing AerosolScatter for ",a,&
+                          &", channel ",i0,", profile #",i0)' ) &
+                          TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
+                     CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                  END IF
+               END IF
 
-          ! Fill the SfcOptics structures for the optional emissivity input case.
-          SfcOptics(nt)%Compute       = .TRUE.
-          SfcOptics_Clear(nt)%Compute = .TRUE.
-          IF ( Opt%Use_Emissivity ) THEN
-            ! ...Cloudy/all-sky case
-            SfcOptics(nt)%Compute = .FALSE.
-            SfcOptics(nt)%Emissivity(1,1)       = Opt%Emissivity(ln)
-            SfcOptics(nt)%Reflectivity(1,1,1,1) = ONE - Opt%Emissivity(ln)
-            IF ( Opt%Use_Direct_Reflectivity ) THEN
-              SfcOptics(nt)%Direct_Reflectivity(1,1) = Opt%Direct_Reflectivity(ln)
-            ELSE
-              SfcOptics(nt)%Direct_Reflectivity(1,1) = SfcOptics(nt)%Reflectivity(1,1,1,1)
-            END IF
-            ! ...Repeat for fractional clear-sky case
-            IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-              SfcOptics_Clear(nt)%Compute = .FALSE.
-              SfcOptics_Clear(nt)%Emissivity(1,1)       = Opt%Emissivity(ln)
-              SfcOptics_Clear(nt)%Reflectivity(1,1,1,1) = ONE - Opt%Emissivity(ln)
-              IF ( Opt%Use_Direct_Reflectivity ) THEN
-                SfcOptics_Clear(nt)%Direct_Reflectivity(1,1) = Opt%Direct_Reflectivity(ln)
-              ELSE
-                SfcOptics_Clear(nt)%Direct_Reflectivity(1,1) = SfcOptics(nt)%Reflectivity(1,1,1,1)
-              END IF
-            END IF
-          END IF
+               ! Compute the combined atmospheric optical properties
+               IF( AtmOptics(nt)%Include_Scattering ) THEN
+                  CALL CRTM_AtmOptics_Combine( AtmOptics(nt), AOvar(nt) )
+               END IF
 
-!  non scattering case, this condition may be changed for future surface reflectance 
-      IF( .not.RTSolution(ln,m)%Scattering_FLAG .or. .not.AtmOptics(nt)%Include_Scattering ) RTV(nt)%n_Azi = 0
-
-          ! Fourier component loop for azimuth angles (VIS).
-          ! mth_Azi = 0 is for an azimuth-averaged value (IR, MW)
-          ! ...Initialise radiance
-          RTSolution(ln,m)%Radiance = ZERO
-          ! ...Fourier expansion over azimuth angle
-          Azimuth_Fourier_Loop: DO mth_Azi = 0, RTV(nt)%n_Azi
-
-            ! Set dependent component counters
-            RTV(nt)%mth_Azi = mth_Azi
-            SfcOptics(nt)%mth_Azi = mth_Azi
-            ! Solve the radiative transfer problem
-            Error_Status = CRTM_Compute_RTSolution( &
-                             Atm             , &  ! Input
-                             Surface(m)      , &  ! Input
-                             AtmOptics(nt)       , &  ! Input
-                             SfcOptics(nt)      , &  ! Input
-                             GeometryInfo    , &  ! Input
-                             SensorIndex     , &  ! Input
-                             ChannelIndex    , &  ! Input
-                             RTSolution(ln,m), &  ! Output
-                             RTV(nt)               )  ! Internal variable output
-            IF ( Error_Status /= SUCCESS ) THEN
-              WRITE( Message,'( "Error computing RTSolution for ", a, &
-                     &", channel ", i0,", profile #",i0)' ) &
-                     TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-            END IF
-
-!  RTSolution(ln,m)%Surface_Planck_Radiance: alpha; 
-!  RTSolution(ln,m)%Up_Radiance: delta
-!  RTSolution(ln,m)%Down_Radiance: beta
-   IF( Options_Present ) THEN
-     IF(opt%Derive_Surface_Refl.and.RTV(nt)%mth_Azi==0.and.RTV(nt)%COS_SUN>ZERO) THEN
-       CALL CRTM_SurfRef(Atm%n_Layers,sum( AtmOptics(nt)%Optical_Depth(:)), & ! Input  layer optical depth
-        SfcOptics(nt)%Direct_Reflectivity(SfcOptics(nt)%Index_Sat_Ang,1), &
-        SfcOptics(nt)%Index_Sat_Ang, RTSolution(ln,m)%Surface_Planck_Radiance, &
-        RTSolution(ln,m)%Up_Radiance, RTSolution(ln,m)%Down_Radiance,RTV(nt), Error_Status)
-     END IF
-   END IF
-
-            ! Repeat clear sky for fractionally cloudy atmospheres
-            IF (CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV(nt)%mth_Azi==0 ) THEN
-              RTV_Clear(nt)%mth_Azi = mth_Azi
-              SfcOptics_Clear(nt)%mth_Azi = mth_Azi
-              Error_Status = CRTM_Compute_RTSolution( &
-                               Atm_Clear       , &  ! Input
-                               Surface(m)      , &  ! Input
-                               AtmOptics_Clear(nt) , &  ! Input
-                               SfcOptics_Clear(nt) , &  ! Input
-                               GeometryInfo    , &  ! Input
-                               SensorIndex     , &  ! Input
-                               ChannelIndex    , &  ! Input
-                               RTSolution_Clear(nt), &  ! Output
-                               RTV_Clear(nt)         )  ! Internal variable output
-              IF ( Error_Status /= SUCCESS ) THEN
-                WRITE( Message,'( "Error computing CLEAR SKY RTSolution for ", a, &
-                       &", channel ", i0,", profile #",i0)' ) &
-                       TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-              END IF
-
-            END IF
-
-          END DO Azimuth_Fourier_Loop
-
-          ! Combine cloudy and clear radiances for fractional cloud coverage
-          IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-            DO ks = 1, RTV(nt)%n_Stokes
-            RTSolution(ln,m)%Stokes(ks) = &
-                ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Stokes(ks)) + &
-                (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Stokes(ks))
-            ! ...Save the cloud cover in the output structure
-            RTSolution(ln,m)%Total_Cloud_Cover = CloudCover%Total_Cloud_Cover
-            END DO
-            RTSolution(ln,m)%Radiance = RTSolution(ln,m)%Stokes(1)
-          END IF
-      
-          ! The radiance post-processing
-          CALL Post_Process_RTSolution(RTSolution(ln,m), &
-                                       NLTE_Predictor, &
-                                       ChannelIndex, SensorIndex, &
-                                       compute_antenna_correction, GeometryInfo)
-
-          ! Perform clear-sky post-processing
-          IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-            CALL Post_Process_RTSolution(RTSolution_Clear(nt), &
-                                         NLTE_Predictor, &
-                                         ChannelIndex, SensorIndex, &
-                                         compute_antenna_correction, GeometryInfo)
-            ! ...Save the results in the output structure
-            RTSolution(ln,m)%R_Clear  = RTSolution_Clear(nt)%Radiance
-            RTSolution(ln,m)%Tb_Clear = RTSolution_Clear(nt)%Brightness_Temperature
-          END IF
-
-          !** output Tb_clear in the case of n_clouds = 0  (note this is NOT aerosol cleared)
-          IF (Atm%n_Clouds == 0 .OR. CloudCover%Total_Cloud_Cover < MIN_COVERAGE_THRESHOLD) THEN
-             RTSolution(ln,m)%Tb_clear = RTSolution(ln,m)%Brightness_Temperature
-             RTSolution(ln,m)%R_clear  = RTSolution(ln,m)%Radiance
-          END IF
-
-          ! Calculate reflectivity for active instruments
-          IF  ( (SC(SensorIndex)%Is_Active_Sensor) .AND. (AtmOptics(nt)%Include_Scattering)) THEN
-                  CALL CRTM_Compute_Reflectivity(Atm             , & ! Input
-                                             AtmOptics(nt)       , & ! Input
-                                             GeometryInfo    , & ! Input
-                                             SensorIndex     , & ! Input
-                                             ChannelIndex    , & ! Input
-                                             RTSolution(ln,m))   ! Input/Output
-          ENDIF
+               ! ...Save vertically integrated scattering optical depth for output
+               RTSolution(ln,m)%SOD = AtmOptics(nt)%Scattering_Optical_Depth
 
 
-        END DO Channel_Loop
-        END DO Thread_Loop
-!$OMP END PARALLEL DO 
-        IF ( Error_Status == FAILURE ) RETURN
+               ! Compute the all-sky atmospheric transmittance
+               ! for use in FASTEM-X reflection correction
+               CALL CRTM_Compute_Transmittance(AtmOptics(nt),transmittance)
+               SfcOptics(nt)%Transmittance = transmittance
+               ! ...Clear sky for fractional cloud cover
+               IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
+                  CALL CRTM_Compute_Transmittance(AtmOptics_Clear(nt),transmittance_clear)
+                  SfcOptics_Clear(nt)%Transmittance = transmittance_clear
+               END IF
 
-        ln = ln + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
+               ! Fill the SfcOptics structures for the optional emissivity input case.
+               SfcOptics(nt)%Compute       = .TRUE.
+               SfcOptics_Clear(nt)%Compute = .TRUE.
+               IF ( Opt%Use_Emissivity ) THEN
+                  ! ...Cloudy/all-sky case
+                  SfcOptics(nt)%Compute = .FALSE.
+                  SfcOptics(nt)%Emissivity(1,1)       = Opt%Emissivity(ln)
+                  SfcOptics(nt)%Reflectivity(1,1,1,1) = ONE - Opt%Emissivity(ln)
+                  IF ( Opt%Use_Direct_Reflectivity ) THEN
+                     SfcOptics(nt)%Direct_Reflectivity(1,1) = Opt%Direct_Reflectivity(ln)
+                  ELSE
+                     SfcOptics(nt)%Direct_Reflectivity(1,1) = SfcOptics(nt)%Reflectivity(1,1,1,1)
+                  END IF
+                  ! ...Repeat for fractional clear-sky case
+                  IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
+                     SfcOptics_Clear(nt)%Compute = .FALSE.
+                     SfcOptics_Clear(nt)%Emissivity(1,1)       = Opt%Emissivity(ln)
+                     SfcOptics_Clear(nt)%Reflectivity(1,1,1,1) = ONE - Opt%Emissivity(ln)
+                     IF ( Opt%Use_Direct_Reflectivity ) THEN
+                        SfcOptics_Clear(nt)%Direct_Reflectivity(1,1) = Opt%Direct_Reflectivity(ln)
+                     ELSE
+                        SfcOptics_Clear(nt)%Direct_Reflectivity(1,1) = SfcOptics(nt)%Reflectivity(1,1,1,1)
+                     END IF
+                  END IF
+               END IF
+
+               !  non scattering case, this condition may be changed for future surface reflectance
+               IF( .NOT.RTSolution(ln,m)%Scattering_FLAG .OR. .NOT.AtmOptics(nt)%Include_Scattering ) RTV(nt)%n_Azi = 0
+
+               ! Fourier component loop for azimuth angles (VIS).
+               ! mth_Azi = 0 is for an azimuth-averaged value (IR, MW)
+               ! ...Initialise radiance
+               RTSolution(ln,m)%Radiance = ZERO
+               ! ...Fourier expansion over azimuth angle
+               Azimuth_Fourier_Loop: DO mth_Azi = 0, RTV(nt)%n_Azi
+
+                  ! Set dependent component counters
+                  RTV(nt)%mth_Azi = mth_Azi
+                  SfcOptics(nt)%mth_Azi = mth_Azi
+                  ! Solve the radiative transfer problem
+                  Error_Status = CRTM_Compute_RTSolution( &
+                       Atm             , &  ! Input
+                       Surface(m)      , &  ! Input
+                       AtmOptics(nt)       , &  ! Input
+                       SfcOptics(nt)      , &  ! Input
+                       GeometryInfo    , &  ! Input
+                       SensorIndex     , &  ! Input
+                       ChannelIndex    , &  ! Input
+                       RTSolution(ln,m), &  ! Output
+                       RTV(nt)               )  ! Internal variable output
+                  IF ( Error_Status /= SUCCESS ) THEN
+                     WRITE( Message,'( "Error computing RTSolution for ", a, &
+                          &", channel ", i0,", profile #",i0)' ) &
+                          TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
+                     CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                  END IF
+
+                  !  RTSolution(ln,m)%Surface_Planck_Radiance: alpha;
+                  !  RTSolution(ln,m)%Up_Radiance: delta
+                  !  RTSolution(ln,m)%Down_Radiance: beta
+                  IF( Options_Present ) THEN
+                     IF(opt%Derive_Surface_Refl.AND.RTV(nt)%mth_Azi==0.AND.RTV(nt)%COS_SUN>ZERO) THEN
+                        CALL CRTM_SurfRef(Atm%n_Layers,SUM( AtmOptics(nt)%Optical_Depth(:)), & ! Input  layer optical depth
+                             SfcOptics(nt)%Direct_Reflectivity(SfcOptics(nt)%Index_Sat_Ang,1), &
+                             SfcOptics(nt)%Index_Sat_Ang, RTSolution(ln,m)%Surface_Planck_Radiance, &
+                             RTSolution(ln,m)%Up_Radiance, RTSolution(ln,m)%Down_Radiance,RTV(nt), Error_Status)
+                     END IF
+                  END IF
+
+                  ! Repeat clear sky for fractionally cloudy atmospheres
+                  IF (CRTM_Atmosphere_IsFractional(cloud_coverage_flag).AND.RTV(nt)%mth_Azi==0 ) THEN
+                     RTV_Clear(nt)%mth_Azi = mth_Azi
+                     SfcOptics_Clear(nt)%mth_Azi = mth_Azi
+                     Error_Status = CRTM_Compute_RTSolution( &
+                          Atm_Clear       , &  ! Input
+                          Surface(m)      , &  ! Input
+                          AtmOptics_Clear(nt) , &  ! Input
+                          SfcOptics_Clear(nt) , &  ! Input
+                          GeometryInfo    , &  ! Input
+                          SensorIndex     , &  ! Input
+                          ChannelIndex    , &  ! Input
+                          RTSolution_Clear(nt), &  ! Output
+                          RTV_Clear(nt)         )  ! Internal variable output
+                     IF ( Error_Status /= SUCCESS ) THEN
+                        WRITE( Message,'( "Error computing CLEAR SKY RTSolution for ", a, &
+                             &", channel ", i0,", profile #",i0)' ) &
+                             TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
+                        CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                     END IF
+
+                  END IF
+
+               END DO Azimuth_Fourier_Loop
+
+               ! Combine cloudy and clear radiances for fractional cloud coverage
+               IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
+                  DO ks = 1, RTV(nt)%n_Stokes
+                     RTSolution(ln,m)%Stokes(ks) = &
+                          ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Stokes(ks)) + &
+                          (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Stokes(ks))
+                     ! ...Save the cloud cover in the output structure
+                     RTSolution(ln,m)%Total_Cloud_Cover = CloudCover%Total_Cloud_Cover
+                  END DO
+                  RTSolution(ln,m)%Radiance = RTSolution(ln,m)%Stokes(1)
+               END IF
+               ! The radiance post-processing
+               CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), &
+                    NLTE_Predictor, &
+                    ChannelIndex, SensorIndex, &
+                    compute_antenna_correction, GeometryInfo)
+               ! Perform clear-sky post-processing
+               IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
+                  CALL Post_Process_RTSolution(Opt, RTSolution_Clear(nt), &
+                       NLTE_Predictor, &
+                       ChannelIndex, SensorIndex, &
+                       compute_antenna_correction, GeometryInfo)
+                  ! ...Save the results in the output structure
+                  RTSolution(ln,m)%R_Clear  = RTSolution_Clear(nt)%Radiance
+                  RTSolution(ln,m)%Tb_Clear = RTSolution_Clear(nt)%Brightness_Temperature
+               END IF
+               !** output Tb_clear in the case of n_clouds = 0  (note this is NOT aerosol cleared)
+               IF (Atm%n_Clouds == 0 .OR. CloudCover%Total_Cloud_Cover < MIN_COVERAGE_THRESHOLD) THEN
+                  RTSolution(ln,m)%Tb_clear = RTSolution(ln,m)%Brightness_Temperature
+                  RTSolution(ln,m)%R_clear  = RTSolution(ln,m)%Radiance
+               END IF
+               
+                         ! Calculate reflectivity for active instruments
+               IF  ( (SC(SensorIndex)%Is_Active_Sensor) .AND. (AtmOptics(nt)%Include_Scattering)) THEN
+                       CALL CRTM_Compute_Reflectivity(Atm             , & ! Input
+                                                  AtmOptics(nt)       , & ! Input
+                                                  GeometryInfo    , & ! Input
+                                                  SensorIndex     , & ! Input
+                                                  ChannelIndex    , & ! Input
+                                                  RTSolution(ln,m))   ! Input/Output
+               ENDIF
+          
+            END DO Channel_Loop
+         END DO Thread_Loop
+         !$OMP END PARALLEL DO
+
+
+         IF ( Error_Status == FAILURE ) RETURN
+
+         ln = ln + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
 
       END DO Sensor_Loop
-
 
       ! Clean up
       CALL CRTM_Predictor_Destroy( Predictor )
@@ -1164,7 +1150,6 @@ CONTAINS
       CALL RTV_Destroy( RTV )
     END FUNCTION profile_solution
 
-
     ! ----------------------------------------------------------------
     ! Local subroutine to post-process the radiance, as it is the same
     ! for all-sky and fractional clear-sky cases.
@@ -1174,10 +1159,11 @@ CONTAINS
     !   3. Apply antenna correction to brightness temperature
     ! ----------------------------------------------------------------
 
-    SUBROUTINE Post_Process_RTSolution(rts, &
+    SUBROUTINE Post_Process_RTSolution(Opt, rts, &
                                        NLTE_Predictor, &
                                        ChannelIndex, SensorIndex, &
                                        compute_antenna_correction, GeometryInfo)
+      TYPE(CRTM_Options_Type),      INTENT(IN) :: Opt
       TYPE(CRTM_RTSolution_type),   INTENT(IN OUT) :: rts
       TYPE(NLTE_Predictor_type),    INTENT(IN)     :: NLTE_Predictor
       INTEGER,                      INTENT(IN) :: ChannelIndex, SensorIndex
