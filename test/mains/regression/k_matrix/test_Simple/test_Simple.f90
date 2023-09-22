@@ -58,8 +58,8 @@ PROGRAM test_Simple
   INTEGER :: n_la, n_ma
   INTEGER :: n_ls, n_ms
   CHARACTER(256) :: atmk_File, sfck_File
-  TYPE(CRTM_Atmosphere_type), ALLOCATABLE :: atm_k(:,:)
-  TYPE(CRTM_Surface_type)   , ALLOCATABLE :: sfc_k(:,:)
+  TYPE(CRTM_Atmosphere_type), ALLOCATABLE :: atm_K(:,:)
+  TYPE(CRTM_Surface_type)   , ALLOCATABLE :: sfc_K(:,:)
 
 
 
@@ -133,6 +133,7 @@ PROGRAM test_Simple
   ! 3a. Allocate the ARRAYS
   ! -----------------------
   ALLOCATE( RTSolution( n_Channels, N_PROFILES ), &
+            atm_K( n_Channels, N_PROFILES ), &
             Atmosphere_K( n_Channels, N_PROFILES ), &
             Surface_K( n_Channels, N_PROFILES ), &
             RTSolution_K( n_Channels, N_PROFILES ), &
@@ -159,15 +160,15 @@ PROGRAM test_Simple
     Message = 'Error allocating CRTM Atmosphere_K structure'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
-  END IF
-
+  END IF 
+  ! Deleted in V2.4.1
   ! The comparative K-MATRIX structure inside the results file
-  CALL CRTM_Atmosphere_Create( atm_K, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
-  IF ( ANY(.NOT. CRTM_Atmosphere_Associated(atm_K)) ) THEN
-    Message = 'Error allocating CRTM atm_K structure'
-    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-    STOP 1
-  END IF
+  !CALL CRTM_Atmosphere_Create( atm_K, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
+  !IF ( ANY(.NOT. CRTM_Atmosphere_Associated(atm_K)) ) THEN
+  !  Message = 'Error allocating CRTM atm_K structure'
+  !  CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+  !  STOP 1
+  !END IF
 
   ! ============================================================================
 
@@ -201,7 +202,7 @@ PROGRAM test_Simple
   ! 5a. Zero the K-matrix OUTPUT structures
   ! ---------------------------------------
   CALL CRTM_Atmosphere_Zero( Atmosphere_K )
-  CALL CRTM_Atmosphere_Zero( atm_K )
+  !CALL CRTM_Atmosphere_Zero( atm_K ) ! deleted in V2.4.1
   CALL CRTM_Surface_Zero( Surface_K )
 
   ! 5b. Inintialize the K-matrix INPUT so

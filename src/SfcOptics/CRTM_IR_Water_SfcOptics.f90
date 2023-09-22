@@ -13,6 +13,9 @@
 ! CREATION HISTORY:
 !       Written by:     Paul van Delst, 25-Jun-2005
 !                       paul.vandelst@noaa.gov
+!      Modified by:     Cheng Dang, 18-Mar-2022
+!                       dangch@ucar.edu
+!                       Add water temperature
 !
 
 MODULE CRTM_IR_Water_SfcOptics
@@ -209,6 +212,7 @@ CONTAINS
     ! Compute IR sea surface emissivity
     Error_Status = CRTM_Compute_IRSSEM( &
                      IRwaterC                    , &  ! Input model coefficients
+                     Surface%Water_Temperature   , &  ! Input
                      Surface%Wind_Speed          , &  ! Input
                      Frequency                   , &  ! Input
                      SfcOptics%Angle(1:nZ)       , &  ! Input
@@ -220,6 +224,7 @@ CONTAINS
                             Error_Status )
       RETURN
     END IF
+
 
     ! Compute the solar direct BRDF
     IF ( SpcCoeff_IsSolar(SC(SensorIndex), ChannelIndex=ChannelIndex) ) THEN
@@ -392,6 +397,7 @@ CONTAINS
     ! Compute tangent-linear IR sea surface emissivity
     Error_Status = CRTM_Compute_IRSSEM_TL( &
                      IRwaterC                       , &  ! Input model coefficients
+                     Surface_TL%Water_Temperature   , &  ! Input
                      Surface_TL%Wind_Speed          , &  ! Input
                      iVar%IRSSEM                    , &  ! Internal variable input
                      SfcOptics_TL%Emissivity(1:nZ,1)  )  ! Output
@@ -589,7 +595,6 @@ CONTAINS
 
         brdf_AD = SUM(SfcOptics_AD%Direct_Reflectivity(1:nZ,1))
         SfcOptics_AD%Direct_Reflectivity(1:nZ,1) = ZERO
-        
         CALL BRDF_Rough_Sea_AD(Surface%Wind_Speed,                    &
                                brdf_AD,                               &
                                Surface_AD%Wind_Speed,                 &
@@ -597,13 +602,15 @@ CONTAINS
       END IF
       SfcOptics_AD%Direct_Reflectivity(1:nZ,1) = ZERO
 
-    END IF 
+    END IF
+
     ! Compute sdjoint IRSSEM sea surface emissivity
     Error_Status = CRTM_Compute_IRSSEM_AD( &
                      IRwaterC                       , &  ! Input model coefficients
                      SfcOptics_AD%Emissivity(1:nZ,1), &  ! Input
                      iVar%IRSSEM                    , &  ! Internal Variable Input
-                     Surface_AD%Wind_Speed            )  ! Output
+                     Surface_AD%Wind_Speed          , &  ! Output
+                     Surface_AD%Water_Temperature     )  ! Output
     IF ( Error_Status /= SUCCESS ) THEN
       CALL Display_Message( ROUTINE_NAME, &
                             'Error computing Adjoint IR sea surface emissivity', &

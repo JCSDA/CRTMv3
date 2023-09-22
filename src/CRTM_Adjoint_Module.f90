@@ -1141,7 +1141,7 @@ CONTAINS
             END IF
  
             ! The radiance post-processing
-            CALL Post_Process_RTSolution(RTSolution(ln,m), &
+            CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), &
                                          NLTE_Predictor, &
                                          ChannelIndex, SensorIndex, &
                                          compute_antenna_correction, GeometryInfo)  
@@ -1160,7 +1160,7 @@ CONTAINS
             ! Perform clear-sky post and pre-processing
           IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
               ! Radiance post-processing
-              CALL Post_Process_RTSolution(RTSolution_Clear, &
+              CALL Post_Process_RTSolution(Opt, RTSolution_Clear, &
                                            NLTE_Predictor, &
                                            ChannelIndex, SensorIndex, &
                                            compute_antenna_correction, GeometryInfo)
@@ -1476,10 +1476,11 @@ CONTAINS
     !   3. Apply antenna correction to brightness temperature
     ! ----------------------------------------------------------------
 
-    SUBROUTINE Post_Process_RTSolution(rts, &
+    SUBROUTINE Post_Process_RTSolution(Opt, rts, &
                                        NLTE_Predictor, &
                                        ChannelIndex, SensorIndex, &
                                        compute_antenna_correction, GeometryInfo)
+      TYPE(CRTM_Options_type),      INTENT(IN)     :: Opt
       TYPE(CRTM_RTSolution_type),   INTENT(IN OUT) :: rts
       TYPE(NLTE_Predictor_type),    INTENT(IN)     :: NLTE_Predictor
       INTEGER,                      INTENT(IN) :: ChannelIndex, SensorIndex
