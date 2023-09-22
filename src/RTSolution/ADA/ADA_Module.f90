@@ -148,7 +148,6 @@ CONTAINS
 
     RTV%s_Level_Refl_UP(1:nZ,1:nZ,n_Layers)=reflectivity(1:nZ,1:nZ)
 
-    RTV%s_Level_Refl_UP(1:nZ,1:nZ,n_Layers)=reflectivity(1:nZ,1:nZ)
     IF( RTV%mth_Azi == 0 ) THEN
       RTV%s_Level_Rad_UP(1:nZ,n_Layers ) = emissivity(1:nZ)*RTV%Planck_Surface
     END IF
