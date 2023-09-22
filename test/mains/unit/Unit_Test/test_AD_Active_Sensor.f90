@@ -162,7 +162,7 @@ PROGRAM test_AD
   ! if netCDF I/O
   ELSE IF ( Coeff_Format == 'netCDF' ) THEN
     CloudCoeff_Format   = 'netCDF'
-    CloudCoeff_File     = 'CloudCoeff_DDA_ARTS.nc4'
+    CloudCoeff_File     = 'CloudCoeff_DDA_Moradi_2022.nc4'
   ELSE
     message = 'Aerosol/Cloud coefficient format is not supported'
     CALL Display_Message( PROGRAM_NAME, message, FAILURE )

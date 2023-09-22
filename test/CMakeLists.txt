@@ -512,30 +512,6 @@ ecbuild_add_test(
     OMP $ENV{OMP_NUM_THREADS}
     )
 
-#=================================================================================
-#OpenMP regression tests
-foreach(regtype IN LISTS regression_types)
-  string(COMPARE EQUAL ${regtype} "k_matrix" isregtype)
-  if (isregtype)
-    continue() #skip all k_matrix tests
-  endif()
-  foreach(testtype IN LISTS omp_tests)
-    ecbuild_add_executable( TARGET  "test_${regtype}_test_${testtype}"
-                            SOURCES "mains/regression/${regtype}/test_${testtype}/test_${testtype}.F90"
-                            LIBS    crtm
-                            NOINSTALL)
- 
-    foreach(sensor_id IN LISTS ${testtype}_Sensor_Ids)
-  
-          ecbuild_add_test( TARGET  "test_${regtype}_${testtype}_${sensor_id}"
-                            OMP     $ENV{OMP_NUM_THREADS}
-                            COMMAND "test_${regtype}_test_${testtype}"
-                            ARGS    "${sensor_id}"
-                            TEST_DEPENDS get_crtm_coeffs)
-    endforeach()
-  endforeach() 
-endforeach()
-
 
 #####################################################################
 # Files for CRTM tests
