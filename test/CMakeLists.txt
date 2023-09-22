@@ -471,6 +471,71 @@ foreach(regtype IN LISTS regression_types)
 endforeach()
 
 
+#---------------------------------------------------------------------------------
+# Active sensor module AD/TL test
+ecbuild_add_executable (
+    TARGET "test_Active_Sensor"
+    SOURCES mains/unit/Unit_Test/test_active_sensor.f90
+    LIBS crtm
+    NOINSTALL
+    )
+
+ecbuild_add_test(
+    TARGET "test_Active_Sensor"
+    COMMAND "test_Active_Sensor"
+    OMP $ENV{OMP_NUM_THREADS}
+    )
+
+ecbuild_add_executable (
+    TARGET "test_AD_Active_Sensor"
+    SOURCES mains/unit/Unit_Test/test_AD_Active_Sensor.f90
+    LIBS crtm
+    NOINSTALL
+    )
+
+ecbuild_add_test(
+    TARGET "test_AD_Active_Sensor"
+    COMMAND "test_AD_Active_Sensor"
+    OMP $ENV{OMP_NUM_THREADS}
+    )
+
+ecbuild_add_executable (
+    TARGET "test_TL_convergence_active_sensor"
+    SOURCES mains/unit/Unit_Test/test_TL_convergence_active_sensor.f90
+    LIBS crtm
+    NOINSTALL
+    )
+
+ecbuild_add_test(
+    TARGET "test_TL_convergence_active_sensor"
+    COMMAND "test_TL_convergence_active_sensor"
+    OMP $ENV{OMP_NUM_THREADS}
+    )
+
+#=================================================================================
+#OpenMP regression tests
+foreach(regtype IN LISTS regression_types)
+  string(COMPARE EQUAL ${regtype} "k_matrix" isregtype)
+  if (isregtype)
+    continue() #skip all k_matrix tests
+  endif()
+  foreach(testtype IN LISTS omp_tests)
+    ecbuild_add_executable( TARGET  "test_${regtype}_test_${testtype}"
+                            SOURCES "mains/regression/${regtype}/test_${testtype}/test_${testtype}.F90"
+                            LIBS    crtm
+                            NOINSTALL)
+ 
+    foreach(sensor_id IN LISTS ${testtype}_Sensor_Ids)
+  
+          ecbuild_add_test( TARGET  "test_${regtype}_${testtype}_${sensor_id}"
+                            OMP     $ENV{OMP_NUM_THREADS}
+                            COMMAND "test_${regtype}_test_${testtype}"
+                            ARGS    "${sensor_id}"
+                            TEST_DEPENDS get_crtm_coeffs)
+    endforeach()
+  endforeach() 
+endforeach()
+
 
 #####################################################################
 # Files for CRTM tests
@@ -484,6 +549,7 @@ AerosolCoeff/Little_Endian/AerosolCoeff.bin
 AerosolCoeff/netCDF/AerosolCoeff.nc4
 CloudCoeff/Little_Endian/CloudCoeff.bin
 CloudCoeff/netCDF/CloudCoeff.nc4
+CloudCoeff/netCDF/CloudCoeff_DDA_ARTS.nc4
 EmisCoeff/MW_Water/Little_Endian/FASTEM6.MWwater.EmisCoeff.bin
 EmisCoeff/IR_Ice/SEcategory/Little_Endian/NPOESS.IRice.EmisCoeff.bin
 EmisCoeff/IR_Ice/SEcategory/netCDF/NPOESS.IRice.EmisCoeff.nc4
