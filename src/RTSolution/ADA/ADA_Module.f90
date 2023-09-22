@@ -145,6 +145,8 @@ CONTAINS
     RTV%s_Level_Rad_UP = ZERO
     RTV%s_Layer_Source_UP = ZERO
     RTV%s_Layer_Source_DOWN = ZERO
+    refl_down = ZERO
+    temporal_matrix = ZERO
 
     RTV%s_Level_Refl_UP(1:nZ,1:nZ,n_Layers)=reflectivity(1:nZ,1:nZ)
 
@@ -722,11 +724,11 @@ CONTAINS
          END DO
        END DO
        ! specific treatment for downeward source function
-!!       IF( abs( V0(N2,N2) ) > 0.0001_fp ) THEN
-!!         source_down(nZ) =source_down(nZ) +(EXPfactor-trans(nZ,nZ))*Sfac2/V0(N2,N2)
-!!       ELSE
-!!         source_down(nZ) =source_down(nZ) -EXPfactor*Sfac2*optical_depth/COS_Angle(nZ)
-!!       END IF
+       IF( abs( V0(N2,N2) ) > 0.0001_fp ) THEN
+         source_down(nZ) =source_down(nZ) +(EXPfactor-trans(nZ,nZ))*Sfac2/V0(N2,N2)
+       ELSE
+         source_down(nZ) =source_down(nZ) -EXPfactor*Sfac2*optical_depth/COS_Angle(nZ)
+       END IF
 
        source_up(1:nZ) = source_up(1:nZ)*s_transmittance
        source_down(1:nZ) = source_down(1:nZ)*s_transmittance
