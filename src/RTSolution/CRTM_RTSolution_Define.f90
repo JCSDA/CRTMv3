@@ -142,6 +142,8 @@ MODULE CRTM_RTSolution_Define
   CHARACTER(*), PARAMETER :: TBCLEAR_VARNAME    = 'Tb_clear'
   CHARACTER(*), PARAMETER :: RADIANCE_VARNAME   = 'Radiance'
   CHARACTER(*), PARAMETER :: BT_VARNAME         = 'Brightness_Temperature'
+  CHARACTER(*), PARAMETER :: SI_VARNAME         = 'Solar_Irradiance'
+  CHARACTER(*), PARAMETER :: STOKES_VARNAME     = 'Stokes'
   !... FLOAT, ALL VARIABLES ARE IN DIMENSION J * K (n_Channels * n_Layers)
   CHARACTER(*), PARAMETER :: UPOR_PRF_VARNAME   = 'Upwelling_Overcast_Radiance'
   CHARACTER(*), PARAMETER :: UPR_PRF_VARNAME    = 'Upwelling_Radiance'
@@ -165,7 +167,9 @@ MODULE CRTM_RTSolution_Define
   ! SOD, Layer_Optical_Depth
   CHARACTER(*), PARAMETER :: OD_UNITS      =  '1'
   ! ...Radiance, Up_Radiance, Down_Radiance, Down_Solar_Radiance, Surface_Planck_Radiance
-  CHARACTER(*), PARAMETER :: RAD_UNITS = 'Watts per Ssuare Metre per Micron per Rad (W m^-2 micron^-1 rad^-1)'
+  CHARACTER(*), PARAMETER :: RAD_UNITS = 'Watts per Square Metre per Micron per Rad (W m^-2 micron^-1 rad^-1)'
+  ! ...Irradiance
+  CHARACTER(*), PARAMETER :: IRAD_UNITS = 'Watts per Square Metre per Micron (W m^-2 micron^-1)'
   ! ...Brightness_Temperature, Tb_clear
   CHARACTER(*), PARAMETER :: BT_UNITS = 'Kelvin'
 
@@ -223,7 +227,7 @@ MODULE CRTM_RTSolution_Define
     REAL(fp) :: Radiance               = ZERO
     REAL(fp) :: Brightness_Temperature = ZERO
     REAL(fp) :: Stokes(4)
-    REAL(fp) :: SolarIrradiance        = ZERO
+    REAL(fp) :: Solar_Irradiance       = ZERO
   END TYPE CRTM_RTSolution_type
   !:tdoc-:
 
@@ -417,6 +421,7 @@ CONTAINS
     RTSolution%Tb_clear                = ZERO
     RTSolution%Radiance                = ZERO
     RTSolution%Brightness_Temperature  = ZERO
+    RTSolution%Solar_Irradiance        = ZERO
     RTSolution%Stokes  = ZERO
 
     ! Zero out the array data components
@@ -498,6 +503,8 @@ CONTAINS
     WRITE(fid,fmt) "Brightness Temperature (clear): ", RTSolution%Tb_clear
     WRITE(fid,fmt) "Radiance                      : ", RTSolution%Radiance
     WRITE(fid,fmt) "Brightness Temperature        : ", RTSolution%Brightness_Temperature
+    WRITE(fid,fmt) "Solar Irradiance              : ", RTSolution%Solar_Irradiance
+    WRITE(fid,fmt) "Stokes                        : ", RTSolution%Stokes
     IF ( CRTM_RTSolution_Associated(RTSolution) ) THEN
       WRITE(fid,'(3x,"n_Layers : ",i0)') RTSolution%n_Layers
       WRITE(fid,'(3x,"Upwelling Overcast Radiance :")')
@@ -644,7 +651,9 @@ CONTAINS
          .NOT. Compares_Within_Tolerance(x%R_clear                , y%R_clear                , n) .OR. &
          .NOT. Compares_Within_Tolerance(x%Tb_clear               , y%Tb_clear               , n) .OR. &
          .NOT. Compares_Within_Tolerance(x%Radiance               , y%Radiance               , n) .OR. &
-         .NOT. Compares_Within_Tolerance(x%Brightness_Temperature , y%Brightness_Temperature , n) ) RETURN
+         .NOT. Compares_Within_Tolerance(x%Brightness_Temperature , y%Brightness_Temperature , n) .OR. &
+         .NOT. Compares_Within_Tolerance(x%Solar_Irradiance       , y%Solar_Irradiance       , n) .OR. &
+         .NOT. ALL(Compares_Within_Tolerance(x%Stokes             , y%Stokes                 , n))) RETURN
 
     ! Check the array components
     IF ( CRTM_RTSolution_Associated(x) .AND. CRTM_RTSolution_Associated(y) ) THEN
@@ -1422,6 +1431,8 @@ CONTAINS
     REAL(fp), ALLOCATABLE :: Tb_clear(:)
     REAL(fp), ALLOCATABLE :: Radiance(:)
     REAL(fp), ALLOCATABLE :: Brightness_Temperature(:)
+    REAL(fp), ALLOCATABLE :: Solar_Irradiance(:)
+    REAL(fp), ALLOCATABLE :: Stokes(:,:)
     REAL(fp), ALLOCATABLE :: Upwelling_Overcast_Radiance(:,:)
     REAL(fp), ALLOCATABLE :: Upwelling_Radiance(:,:)
     REAL(fp), ALLOCATABLE :: Layer_Optical_Depth(:,:)
@@ -1445,6 +1456,7 @@ CONTAINS
       n_Layers = RTSolution(1,m)%n_Layers
       n_Stokes = RTSolution(1,m)%n_Stokes + 1
 
+
       ! Allocate outputs
       ALLOCATE( Sensor_Channel( n_Channels ), &
                 n_Full_Streams( n_Channels ), &
@@ -1461,6 +1473,8 @@ CONTAINS
                 Tb_clear( n_Channels ), &
                 Radiance( n_Channels ), &
                 Brightness_Temperature( n_Channels ), &
+                Solar_Irradiance( n_Channels ), &
+                Stokes( n_Channels, n_Stokes ), &
                 Upwelling_Overcast_Radiance( n_Channels, n_Layers ), &
                 Upwelling_Radiance( n_Channels, n_Layers ), &
                 Layer_Optical_Depth( n_Channels, n_Layers ), &
@@ -1490,6 +1504,10 @@ CONTAINS
         Tb_clear(l)                = RTSolution(l,m)%Tb_clear
         Radiance(l)                = RTSolution(l,m)%Radiance
         Brightness_Temperature(l)  = RTSolution(l,m)%Brightness_Temperature
+        Solar_Irradiance(l)        = RTSolution(l,m)%Solar_Irradiance
+        DO c = 1, n_Stokes
+          Stokes(l,c) = RTSolution(l,m)%Stokes(c)
+        END DO
         DO c = 1, n_Layers
           Upwelling_Overcast_Radiance(l,c) = RTSolution(l,m)%Upwelling_Overcast_Radiance(c)
           Upwelling_Radiance(l,c)          = RTSolution(l,m)%Upwelling_Radiance(c)
@@ -1718,7 +1736,32 @@ CONTAINS
              ' - '//TRIM(NF90_STRERROR( NF90_Status ))
        CALL Write_Cleanup(); RETURN
      END IF
-
+     ! ....Solar Irradiance variable
+     NF90_Status = NF90_INQ_VARID( FileId,SI_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//SI_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Solar_Irradiance )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//SI_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ....Stokes variable
+     NF90_Status = NF90_INQ_VARID( FileId,STOKES_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//STOKES_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Stokes )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//STOKES_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
      ! 2D layered outputs
      ! ... Upwelling_Overcast_Radiance variable
      NF90_Status = NF90_INQ_VARID( FileId,UPOR_PRF_VARNAME,VarId )
@@ -1806,6 +1849,8 @@ CONTAINS
                  Tb_clear, &
                  Radiance, &
                  Brightness_Temperature, &
+                 Solar_Irradiance, &
+                 Stokes, &
                  Upwelling_Overcast_Radiance, &
                  Upwelling_Radiance, &
                  Layer_Optical_Depth, &
@@ -1907,6 +1952,7 @@ CONTAINS
          (x%Radiance                .EqualTo. y%Radiance               ) .AND. &
          (x%Brightness_Temperature  .EqualTo. y%Brightness_Temperature ) ) &
       is_equal = .TRUE.
+
 
     ! Check arrays (which may or may not be allocated)
     IF ( CRTM_RTSolution_Associated(x) .AND. CRTM_RTSolution_Associated(y) ) THEN
@@ -2393,7 +2439,9 @@ CONTAINS
     ! Read the radiative transfer results
     READ( fid,IOSTAT=io_stat,IOMSG=io_msg ) &
       rts%Radiance              , &
-      rts%Brightness_Temperature
+      rts%Brightness_Temperature, &
+      rts%Solar_Irradiance      , &
+      rts%Stokes
     IF ( io_stat /= 0 ) THEN
       msg = 'Error reading result data - '//TRIM(io_msg)
       CALL Read_Record_Cleanup(); RETURN
@@ -2501,7 +2549,9 @@ CONTAINS
     ! Write the radiative transfer results
     WRITE( fid,IOSTAT=io_stat,IOMSG=io_msg ) &
       rts%Radiance              , &
-      rts%Brightness_Temperature
+      rts%Brightness_Temperature, &
+      rts%Solar_Irradiance      , &
+      rts%Stokes
     IF ( io_stat /= 0 ) THEN
       msg = 'Error writing result data - '//TRIM(io_msg)
       CALL Write_Record_Cleanup(); RETURN
@@ -2866,6 +2916,42 @@ CONTAINS
     Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
     IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
       msg = 'Error writing '//BT_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Solar_Irradiance variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      SI_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//SI_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,IRAD_UNITS )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//SI_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Stokes variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      STOKES_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Stokes_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//STOKES_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,RAD_UNITS  )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//STOKES_VARNAME//' variable attributes to '//TRIM(Filename)
       CALL Create_Cleanup(); RETURN
     END IF
 
