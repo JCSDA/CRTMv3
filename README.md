@@ -6,8 +6,9 @@ CRTM REL-3.0.0
 Preamble
 --------
 
-CRTM v3.0.0 release (`REL-3.0.0`)  
+CRTM v3.0.1 release (`REL-3.0.1`)  
 
+v3.0.1 Released September 23, 2023
 v3.0.0 Released March, 2023  
 v2.4.1-alpha Released on April 1, 2021 (internal realease only)
 v2.4.0 Released on October 23, 2020

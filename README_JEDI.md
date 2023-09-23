@@ -1,21 +1,21 @@
 README_JEDI.md
 
-CRTM REL-3.0.0 
-Released April 1, 2021
+CRTM REL-3.0.1  Released September 23, 2023
+CRTM REL-3.0.0  Released April 1, 2021
 
 
 
 The README.md file contains a lot of general information about this repository and the legacy build system based on autotools.
 
-CRTM REL-3.0.0 JEDI environment build instructions
+CRTM REL-3.0.1 JEDI environment build instructions
 =========================================================
 
 Preamble
 --------
 
-CRTM v3.0.0-alpha release (`REL-3.0.0`)  
+CRTM v3.0.1 release (`REL-3.0.1`)  
 
-This is a fully functional release of CRTM v3.0.0-alpha. 
+This is a fully functional release of CRTM v3.0.1.
 
 Basic requirements:  
 (1) A Fortran 2003 compatible compiler.  
@@ -50,7 +50,7 @@ Contents
 
 Configuration, building, and testing the library
 ================================================  
-JCSDA CRTM v3.0.0 Build Instructions
+JCSDA CRTM v3.0.1 Build Instructions
   
 The CRTM **development** repository directory structure looks like:
 
@@ -109,7 +109,7 @@ In the above list, the directories highlighted in bold (bold in markdown), are t
 
 JEDI Configuration
 ------------------
-As of v3.0.0, binary data is obtained during the ecbuild step, it downloads a tarball from UCAR's GDEX service and unpacks it.  see `test/CMakeLists.txt`.   
+As of v3.0.1, binary data is obtained during the ecbuild step, it downloads a tarball from UCAR's GDEX service and unpacks it.  see `test/CMakeLists.txt`.   
 
 
 **Configuration**
