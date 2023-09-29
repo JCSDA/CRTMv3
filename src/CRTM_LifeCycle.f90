@@ -24,7 +24,7 @@
 ! 2022-03-09      Cheng Dang               Add optional format input for
 !                                          EmisCoeff files.
 !
-! 2022-05-27     Cheng Dang                Add optional input file for
+! 2022-05-27      Cheng Dang               Add optional input file for
 !                                          Snow Emissivity files.
 
 MODULE CRTM_LifeCycle
@@ -632,16 +632,14 @@ CONTAINS
     LOGICAL :: Local_Load_CloudCoeff
     LOGICAL :: Local_Load_AerosolCoeff
     LOGICAL :: netCDF, isSEcategory
-    ! ******
-    ! TEMPORARY UNTIL LOAD ROUTINE INTERFACES HAVE BEEN MODIFIED
-    INTEGER :: iQuiet
+    LOGICAL :: Quiet_
+    INTEGER :: iQuiet ! TODO: iQuiet should be removed once load routine interfaces have been modified
+    Quiet_ = .FALSE.
+    IF ( PRESENT(Quiet) ) Quiet_ = Quiet
     iQuiet = 0
-    IF ( PRESENT(Quiet) ) THEN
-      IF ( Quiet ) THEN
-        iQuiet = 1  ! Set
-      END IF
+    IF ( Quiet_ ) THEN
+      iQuiet = 1
     END IF
-    ! ******
 
     ! Set up
     err_stat = SUCCESS
@@ -743,7 +741,7 @@ CONTAINS
     IF (Default_SpcCoeff_Format == 'netCDF' ) THEN
         netCDF = .TRUE.
     END IF
-    IF (PRESENT(Quiet) .AND. (.NOT. Quiet)) THEN
+    IF ( .NOT. Quiet_ ) THEN
       WRITE(*,*) "Loading"//SpcCoeff_Format//" spectral coefficients."
     END IF
     err_stat = CRTM_SpcCoeff_Load( &
@@ -764,7 +762,7 @@ CONTAINS
     IF (Default_TauCoeff_Format == 'netCDF' ) THEN
         netCDF = .TRUE.
     END IF
-    IF (PRESENT(Quiet) .AND. (.NOT. Quiet)) THEN
+    IF ( .NOT. Quiet_ ) THEN
       WRITE(*,*) "Loading "//TauCoeff_Format//" transmittance coefficients."
     END IF
     err_stat = CRTM_Load_TauCoeff( &
@@ -790,7 +788,7 @@ CONTAINS
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
       END IF
       ! Default_CloudCoeff_File = TRIM(ADJUSTL(Default_File_Path)) // TRIM(Default_CloudCoeff_File)
-      IF (PRESENT(Quiet) .AND. (.NOT. Quiet)) THEN
+      IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading cloud coefficients: ", a) ') TRIM(Default_CloudCoeff_File)
       END IF
       err_stat = CRTM_CloudCoeff_Load( &
@@ -818,7 +816,7 @@ CONTAINS
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
       END IF
-      IF (PRESENT(Quiet) .AND. (.NOT. Quiet)) THEN
+      IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading aerosol coefficients: ", a) ') TRIM(Default_AerosolCoeff_File)
       END IF
       err_stat = CRTM_AerosolCoeff_Load( &
