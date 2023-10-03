@@ -17,7 +17,14 @@ include(GNUInstallDirs)
 if(OPENMP)
   find_package( OpenMP COMPONENTS Fortran )
 endif()
+
+if(DEFINED ENV{NETCDF_PATH})
+  list(APPEND CMAKE_PREFIX_PATH $ENV{NETCDF_PATH})
+elseif(DEFINED ENV{NETCDF})
+  list(APPEND CMAKE_PREFIX_PATH $ENV{NETCDF})
+endif()
 find_package(NetCDF REQUIRED Fortran)
+
 
 ## Sources
 add_subdirectory( src )

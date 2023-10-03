@@ -59,7 +59,6 @@ IF(EXISTS  ${CMAKE_SOURCE_DIR}/fix)
   set( CRTM_COEFFS_PATH ${CMAKE_SOURCE_DIR}/fix )
   message(STATUS "Use CRTM_COEFFS_PATH: ${CRTM_COEFFS_PATH}")
   message(STATUS "Using existing local fix/ directory instead of downloading.")
-  add_custom_target(get_crtm_coeffs) #empty target so tests don't complain about dependency
 
 else()
   # Download CRTM coefficients
@@ -67,35 +66,70 @@ else()
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
 
 	set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  
-  set( CRTM_COEFFS_BRANCH "3.0.0_skylab_4.0" ) 
+  set( CRTM_COEFFS_BRANCH "3.0.0_skylab_6.0" ) 
 
-  set( DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/file")
+#  set( DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/file")
+#
+#  set( test_files_dirname crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz )  #UPDATE TARBALL FILENAME HERE
+#  set( checksum "9cf4b1cc57e20802e608a597d7f53073") #MD5SUM, update this if the file above is updated / changed
+#
+#  message(STATUS "fix/ does not exist, download CRTM coeffs files from: ${DOWNLOAD_BASE_URL} to ${CRTM_COEFFS_PATH}")
+#
+#  list( APPEND CRTM_DATA_DOWNLOADER_ARGS
+#                ${DOWNLOAD_BASE_URL}
+#                ${CRTM_COEFFS_PATH}
+#                ${test_files_dirname}
+#                ${checksum} )
+#
+#  # Create download script for ufo_get_*_test_data test
+#  set ( FILENAME crtm_data_downloader.py)
+#  set ( SOURCE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/${FILENAME} )
+#  set ( DEST_FILE ${CMAKE_BINARY_DIR}/bin/${FILENAME} )
+#
+#  if( EXISTS "${SOURCE_FILE}.in" )
+#    configure_file( ${SOURCE_FILE}.in ${DEST_FILE} @ONLY )
+#  else()
+#    configure_file( ${SOURCE_FILE}    ${DEST_FILE} @ONLY )
+#  endif()
+#
+#  # add command to download coefficient data during build step, rather than as a test
+#  add_custom_target(get_crtm_coeffs
+#    COMMAND ${CMAKE_BINARY_DIR}/bin/crtm_data_downloader.py ${CRTM_DATA_DOWNLOADER_ARGS})
 
-  set( test_files_dirname crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz )  #UPDATE TARBALL FILENAME HERE
-  set( checksum "9cf4b1cc57e20802e608a597d7f53073") #MD5SUM, update this if the file above is updated / changed
+  # Existing definitions
+  set(CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})
+  file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
 
-  message(STATUS "fix/ does not exist, download CRTM coeffs files from: ${DOWNLOAD_BASE_URL} to ${CRTM_COEFFS_PATH}")
+  set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/file")
+  set(test_files_dirname crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz) 
+  set(checksum "5e72e2788acbd7b1a71538ff12ad98b0") # MD5SUM
 
-  list( APPEND CRTM_DATA_DOWNLOADER_ARGS
-                ${DOWNLOAD_BASE_URL}
-                ${CRTM_COEFFS_PATH}
-                ${test_files_dirname}
-                ${checksum} )
+  set(DOWNLOAD_URL "${DOWNLOAD_BASE_URL}/${test_files_dirname}")
+  set(DOWNLOAD_DEST "${CRTM_COEFFS_PATH}/${test_files_dirname}")
 
-  # Create download script for ufo_get_*_test_data test
-  set ( FILENAME crtm_data_downloader.py)
-  set ( SOURCE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/${FILENAME} )
-  set ( DEST_FILE ${CMAKE_BINARY_DIR}/bin/${FILENAME} )
+  # Download during CMake configure step
+  message(STATUS "Downloading CRTM coeffs files from: ${DOWNLOAD_URL} to ${DOWNLOAD_DEST}")
+  file(DOWNLOAD ${DOWNLOAD_URL} ${DOWNLOAD_DEST}
+       EXPECTED_MD5 ${checksum}
+       SHOW_PROGRESS)
 
-  if( EXISTS "${SOURCE_FILE}.in" )
-    configure_file( ${SOURCE_FILE}.in ${DEST_FILE} @ONLY )
+  # -- UNTAR -- 
+
+  # Define the directory to untar into
+  set(UNTAR_DEST "${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION}")
+
+  # Only untar if the CHECK_PATH does not exist
+  if(NOT EXISTS ${UNTAR_DEST}/})
+    execute_process(COMMAND tar -xzf ${DOWNLOAD_DEST} -C ${UNTAR_DEST}
+                    RESULT_VARIABLE result
+                    OUTPUT_QUIET ERROR_QUIET)
+    if(NOT result EQUAL 0)
+      message(FATAL_ERROR "Failed to untar the file.")
+    endif()
   else()
-    configure_file( ${SOURCE_FILE}    ${DEST_FILE} @ONLY )
+    message(STATUS "Files have already been untarred. Skipping.")
   endif()
 
-  # add command to download coefficient data during build step, rather than as a test
-  add_custom_target(get_crtm_coeffs
-    COMMAND ${CMAKE_BINARY_DIR}/bin/crtm_data_downloader.py ${CRTM_DATA_DOWNLOADER_ARGS})
 
 endif()
 
@@ -236,14 +270,12 @@ target_link_libraries(test_check_crtm PRIVATE crtm)
 add_test(NAME test_check_crtm 
          COMMAND test_check_crtm)
 set_tests_properties(test_check_crtm PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-add_dependencies(test_check_crtm get_crtm_coeffs)
 
 add_executable(test_check_crtm_random  mains/application/check_crtm_random_profiles.F90)
 target_link_libraries(test_check_crtm_random PRIVATE crtm)
 add_test(NAME test_check_crtm_random
          COMMAND test_check_crtm_random)
 set_tests_properties(test_check_crtm_random PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-add_dependencies(test_check_crtm_random get_crtm_coeffs)
 
 
 add_executable(Unit_TL_TEST mains/unit/Unit_Test/test_TL.f90)
@@ -251,7 +283,6 @@ target_link_libraries(Unit_TL_TEST PRIVATE crtm)
 add_test(NAME test_Unit_TL_TEST
          COMMAND $<TARGET_FILE:Unit_TL_TEST>)
 set_tests_properties(test_Unit_TL_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-add_dependencies(Unit_TL_TEST get_crtm_coeffs)
 
 
 add_executable(SpcCoeff_Inspect mains/application/SpcCoeff_Inspect.f90)
@@ -259,7 +290,6 @@ target_link_libraries(SpcCoeff_Inspect PRIVATE crtm)
 add_test(NAME run_SpcCoeff_Inspect
          COMMAND $<TARGET_FILE:SpcCoeff_Inspect> "testinput/atms_n21.SpcCoeff.bin")
 set_tests_properties(run_SpcCoeff_Inspect PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-add_dependencies(SpcCoeff_Inspect get_crtm_coeffs)
 
 #---------------------------------------------------------------------------------
 #unit tests
@@ -272,7 +302,6 @@ target_link_libraries(Spc_IO PRIVATE crtm)
 add_test(NAME test_Spc_IO
          COMMAND $<TARGET_FILE:Spc_IO>)
 set_tests_properties(test_Spc_IO PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-add_dependencies(Spc_IO get_crtm_coeffs)
 
 #(PS) SpcCoeff netCDF I/O test
 add_executable(Spc_IO_NC mains/unit/input_output/test_SpcCoeff_NC/test_spc_io_nc.f90)
@@ -280,7 +309,6 @@ target_link_libraries(Spc_IO_NC PRIVATE crtm)
 add_test(NAME test_Spc_IO_NC
          COMMAND $<TARGET_FILE:Spc_IO_NC>)
 set_tests_properties(test_Spc_IO_NC PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-add_dependencies(Spc_IO_NC get_crtm_coeffs)
 
 #(PS) TauCoeff netCDF I/O test
 add_executable(TauCoeff_IO_NC mains/unit/input_output/test_TauCoeff_NC/test_taucoeff_io_nc.f90)
@@ -288,7 +316,6 @@ target_link_libraries(TauCoeff_IO_NC PRIVATE crtm)
 add_test(NAME test_TauCoeff_IO_NC
          COMMAND $<TARGET_FILE:TauCoeff_IO_NC>)
 set_tests_properties(test_TauCoeff_IO_NC PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-add_dependencies(TauCoeff_IO_NC get_crtm_coeffs)
 
 #(CD) AerosolCoeff I/O test
 add_executable(AerosolCoeff_IO mains/unit/input_output/test_AerosolCoeff/test_aerosol_coeff_io.f90)
@@ -296,7 +323,6 @@ target_link_libraries(AerosolCoeff_IO PRIVATE crtm)
 add_test(NAME test_AerosolCoeff_IO
          COMMAND $<TARGET_FILE:AerosolCoeff_IO>)
 set_tests_properties(test_AerosolCoeff_IO PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-add_dependencies(AerosolCoeff_IO get_crtm_coeffs)
 
 #(CD) AerosolCoeff netCDF I/O test
 add_executable(AerosolCoeff_IO_NC mains/unit/input_output/test_AerosolCoeff_NC/test_aerosol_coeff_io_nc.f90)
@@ -304,7 +330,6 @@ target_link_libraries(AerosolCoeff_IO_NC PRIVATE crtm)
 add_test(NAME test_AerosolCoeff_IO_NC
          COMMAND $<TARGET_FILE:AerosolCoeff_IO_NC>)
 set_tests_properties(test_AerosolCoeff_IO_NC PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-add_dependencies(AerosolCoeff_IO_NC get_crtm_coeffs)
 
 #(CD) CloudCoeff Binary I/O test
 add_executable(CloudCoeff_IO mains/unit/input_output/test_CloudCoeff/test_cloud_coeff_io.f90)
@@ -312,7 +337,6 @@ target_link_libraries(CloudCoeff_IO PRIVATE crtm)
 add_test(NAME test_CloudCoeff_IO
          COMMAND $<TARGET_FILE:CloudCoeff_IO>)
 set_tests_properties(test_CloudCoeff_IO PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-add_dependencies(CloudCoeff_IO get_crtm_coeffs)
 
 #(CD) CloudCoeff netCDF I/O test
 add_executable(CloudCoeff_IO_NC mains/unit/input_output/test_CloudCoeff_NC/test_cloud_coeff_io_nc.f90)
@@ -320,7 +344,6 @@ target_link_libraries(CloudCoeff_IO_NC PRIVATE crtm)
 add_test(NAME test_CloudCoeff_IO_NC
          COMMAND $<TARGET_FILE:CloudCoeff_IO_NC>)
 set_tests_properties(test_CloudCoeff_IO_NC PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-add_dependencies(CloudCoeff_IO_NC get_crtm_coeffs)
 
 #(PS) Hypsometric Equation test
 add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
@@ -328,7 +351,6 @@ target_link_libraries(hypsometric_eq PRIVATE crtm)
 add_test(NAME test_hypsometric_eq
          COMMAND $<TARGET_FILE:hypsometric_eq>)
 set_tests_properties(test_hypsometric_eq PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-add_dependencies(hypsometric_eq get_crtm_coeffs)
 
 #=================================================================================
 #forward and k_matrix regression tests
@@ -347,7 +369,6 @@ foreach(regtype IN LISTS regression_types)
         add_test(NAME test_${regtype}_${testtype}_${sensor_id}
                  COMMAND $<TARGET_FILE:test_${regtype}_test_${testtype}> "${sensor_id}")
         set_tests_properties(test_${regtype}_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-        add_dependencies(test_${regtype}_test_${testtype} get_crtm_coeffs)
     endforeach()
   endforeach()
 endforeach()
@@ -363,7 +384,6 @@ foreach(regtype IN LISTS TLAD_types)
         add_test(NAME test_${regtype}_${testtype}_${sensor_id}
                  COMMAND $<TARGET_FILE:test_${regtype}_test_${testtype}> "${sensor_id}")
         set_tests_properties(test_${regtype}_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-        add_dependencies(test_${regtype}_test_${testtype} get_crtm_coeffs)
     endforeach()
   endforeach()
 endforeach()
@@ -383,7 +403,6 @@ foreach(regtype IN LISTS regression_types)
         add_test(NAME test_${regtype}_${testtype}_${sensor_id}
                  COMMAND $<TARGET_FILE:test_${regtype}_test_${testtype}> "${sensor_id}")
         set_tests_properties(test_${regtype}_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-        add_dependencies(test_${regtype}_test_${testtype} get_crtm_coeffs)
     endforeach()
   endforeach()
 endforeach()
