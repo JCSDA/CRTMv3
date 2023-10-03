@@ -42,8 +42,8 @@ PROGRAM test_aerosol_coeff_io_nc
   CHARACTER(*), PARAMETER :: Aerosol_Model = 'CRTM'
   CHARACTER(*), PARAMETER :: AerosolCoeff_File = 'AerosolCoeff.nc4'
   CHARACTER(*), PARAMETER :: File_Path = './testinput/'
-  LOGICAL,      PARAMETER :: Quiet = .TRUE.
   LOGICAL,      PARAMETER :: netCDF = .TRUE.
+  LOGICAL,      PARAMETER :: Quiet = .TRUE.
   INTEGER                 :: err_stat
   TYPE(UnitTest_type)     :: ioTest
   LOGICAL                 :: testPassed
