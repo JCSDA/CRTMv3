@@ -12,6 +12,10 @@
 !  Modified by:    James Rosinski, 08-Feb-2019
 !                  Rosinski@ucar.edu
 !
+!  Modified by:    Cheng Dang, 09-Aug-2023, add CRTM_RTSolution_WriteFile_netCDF
+!                  dangch@ucar.edu
+!
+
 
 MODULE CRTM_RTSolution_Define
 
@@ -22,7 +26,7 @@ MODULE CRTM_RTSolution_Define
   ! Intrinsic modules
   USE ISO_Fortran_Env      , ONLY: OUTPUT_UNIT
   ! Module use statements
-  USE Type_Kinds           , ONLY: fp
+  USE Type_Kinds           , ONLY: Double, Long, fp
   USE Message_Handler      , ONLY: SUCCESS, FAILURE, WARNING, INFORMATION, Display_Message
   USE Compare_Float_Numbers, ONLY: DEFAULT_N_SIGFIG, &
                                    OPERATOR(.EqualTo.), &
@@ -35,6 +39,7 @@ MODULE CRTM_RTSolution_Define
                                    INVALID_WMO_SATELLITE_ID, &
                                    INVALID_WMO_SENSOR_ID
   USE CRTM_Parameters      , ONLY: STRLEN
+  USE netcdf
   ! Disable all implicit typing
   IMPLICIT NONE
 
@@ -62,7 +67,6 @@ MODULE CRTM_RTSolution_Define
   PUBLIC :: CRTM_RTSolution_InquireFile
   PUBLIC :: CRTM_RTSolution_ReadFile
   PUBLIC :: CRTM_RTSolution_WriteFile
-
 
   ! ---------------------
   ! Procedure overloading
@@ -101,7 +105,7 @@ MODULE CRTM_RTSolution_Define
   ! Module parameters
   ! -----------------
   CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
-  '$Id: CRTM_RTSolution_Define.f90 100697 2018-12-21 18:33:44Z tong.zhu@noaa.gov $'  
+  '$Id: CRTM_RTSolution_Define.f90 100697 2018-12-21 18:33:44Z tong.zhu@noaa.gov $'
   ! Literal constants
   REAL(fp), PARAMETER :: ZERO = 0.0_fp
   REAL(fp), PARAMETER :: ONE  = 1.0_fp
@@ -110,6 +114,75 @@ MODULE CRTM_RTSolution_Define
   ! File status on close after write error
   CHARACTER(*), PARAMETER :: WRITE_ERROR_STATUS = 'DELETE'
 
+  ! Output netCDF attributes
+  ! G_LONGNAME
+  CHARACTER(*), PARAMETER :: SENSOR_ID_GATTNAME = 'Sensor_ID'          ! Char
+
+  ! Dimension names
+  CHARACTER(*), PARAMETER :: LAYER_DIMNAME    = 'n_Layers'             ! K
+  CHARACTER(*), PARAMETER :: CHANNEL_DIMNAME  = 'n_Channels'           ! J
+  CHARACTER(*), PARAMETER :: STOKE_DIMNAME    = 'n_Stokes'
+
+  ! Variable names
+  CHARACTER(*), PARAMETER :: CHANNEL_VARNAME    = 'Sensor_Channel'     ! Integer
+  ! CHARACTER(*), PARAMETER :: RTNAME_VARNAME     = 'RT_Algorithm_Name'  ! Char
+  ! CHARACTER(*), PARAMETER :: SCATF_VARNAME      = 'Scattering_Flag'    ! Boolean
+  !... FLOAT, ALL VARIABLES ARE IN DIMENSION J (n_channels)
+  CHARACTER(*), PARAMETER :: STREAM_VARNAME     = 'n_Full_Streams'
+  CHARACTER(*), PARAMETER :: SSAMAX_VARNAME     = 'SSA_Max'
+  CHARACTER(*), PARAMETER :: SOD_VARNAME        = 'SOD'
+  CHARACTER(*), PARAMETER :: SEMIS_VARNAME      = 'Surface_Emissivity'
+  CHARACTER(*), PARAMETER :: SREFL_VARNAME      = 'Surface_Reflectivity'
+  CHARACTER(*), PARAMETER :: UPR_VARNAME        = 'Up_Radiance'
+  CHARACTER(*), PARAMETER :: DWNR_VARNAME       = 'Down_Radiance'
+  CHARACTER(*), PARAMETER :: DWNSOLARR_VARNAME  = 'Down_Solar_Radiance'
+  CHARACTER(*), PARAMETER :: SPR_VARNAME        = 'Surface_Planck_Radiance'
+  CHARACTER(*), PARAMETER :: TCC_VARNAME        = 'Total_Cloud_Cover'
+  CHARACTER(*), PARAMETER :: RCLEAR_VARNAME     = 'R_clear'
+  CHARACTER(*), PARAMETER :: TBCLEAR_VARNAME    = 'Tb_clear'
+  CHARACTER(*), PARAMETER :: RADIANCE_VARNAME   = 'Radiance'
+  CHARACTER(*), PARAMETER :: BT_VARNAME         = 'Brightness_Temperature'
+  CHARACTER(*), PARAMETER :: SI_VARNAME         = 'Solar_Irradiance'
+  CHARACTER(*), PARAMETER :: STOKES_VARNAME     = 'Stokes'
+  !... FLOAT, ALL VARIABLES ARE IN DIMENSION J * K (n_Channels * n_Layers)
+  CHARACTER(*), PARAMETER :: UPOR_PRF_VARNAME   = 'Upwelling_Overcast_Radiance'
+  CHARACTER(*), PARAMETER :: UPR_PRF_VARNAME    = 'Upwelling_Radiance'
+  CHARACTER(*), PARAMETER :: LOP_VARNAME        = 'Layer_Optical_Depth'
+  CHARACTER(*), PARAMETER :: SSA_VARNAME        = 'Single_Scatter_Albedo'
+
+  ! Variable units attribute.
+  CHARACTER(*), PARAMETER :: UNITS_ATTNAME = 'units'
+  CHARACTER(*), PARAMETER :: CHANNEL_UNITS = 'N/A'
+  CHARACTER(*), PARAMETER :: STREAM_UNITS  = 'N/A'
+  CHARACTER(*), PARAMETER :: RTNAME_UNITS  = 'N/A'
+  CHARACTER(*), PARAMETER :: SCATF_UNITS   = 'N/A'
+  ! ...Emissivity/Reflectivity
+  CHARACTER(*), PARAMETER :: SEMIS_UNITS   = 'fraction (0->1)'
+  CHARACTER(*), PARAMETER :: SREFL_UNITS   = 'fraction (0->1)'
+  ! ...Cloud
+  CHARACTER(*), PARAMETER :: TCC_UNITS     = 'fraction (0->1)'
+  CHARACTER(*), PARAMETER :: RCLEAR_UNITS  = 'fraction (0->1)'
+  ! Single scattering albedo, max single scattering Albedo
+  CHARACTER(*), PARAMETER :: SSA_UNITS     =  'fraction (0->1)'
+  ! SOD, Layer_Optical_Depth
+  CHARACTER(*), PARAMETER :: OD_UNITS      =  '1'
+  ! ...Radiance, Up_Radiance, Down_Radiance, Down_Solar_Radiance, Surface_Planck_Radiance
+  CHARACTER(*), PARAMETER :: RAD_UNITS = 'Watts per Square Metre per Micron per Rad (W m^-2 micron^-1 rad^-1)'
+  ! ...Irradiance
+  CHARACTER(*), PARAMETER :: IRAD_UNITS = 'Watts per Square Metre per Micron (W m^-2 micron^-1)'
+  ! ...Brightness_Temperature, Tb_clear
+  CHARACTER(*), PARAMETER :: BT_UNITS = 'Kelvin'
+
+  ! Variable _FillValue attribute.
+  CHARACTER(*),  PARAMETER :: FILLVALUE_ATTNAME = '_FillValue'
+  REAL(Double),  PARAMETER :: FILL_FLOAT = -999.0_fp
+  INTEGER(long), PARAMETER :: FILL_INT   = 0
+  CHARACTER(*) , PARAMETER :: FILL_CHAR  = NF90_FILL_CHAR
+
+  ! Variable types
+  INTEGER, PARAMETER :: INT_TYPE   = NF90_INT
+  INTEGER, PARAMETER :: CHAR_TYPE  = NF90_CHAR
+  INTEGER, PARAMETER :: FLOAT_TYPE = NF90_DOUBLE
 
   ! -------------------------------
   ! RTSolution data type definition
@@ -134,7 +207,7 @@ MODULE CRTM_RTSolution_Define
     ! Forward radiative transfer intermediate results for a single channel
     !    These components are not defined when they are used as TL, AD
     !    and K variables
-    REAL(fp) :: SSA_Max                 = ZERO  ! Max Single Scattering Albedo in the profile                      
+    REAL(fp) :: SSA_Max                 = ZERO  ! Max Single Scattering Albedo in the profile
     REAL(fp) :: SOD                     = ZERO  ! Scattering Optical Depth
     REAL(fp) :: Surface_Emissivity      = ZERO
 !  For UV/Visible, Surface_Reflectivity,Up_Radiance,Down_Radiance are used, but their meanings are changed.
@@ -149,12 +222,12 @@ MODULE CRTM_RTSolution_Define
     REAL(fp), ALLOCATABLE :: Upwelling_Overcast_Radiance(:)   ! K
     REAL(fp), ALLOCATABLE :: Upwelling_Radiance(:)   ! K
     REAL(fp), ALLOCATABLE :: Layer_Optical_Depth(:)  ! K
-    REAL(fp), ALLOCATABLE :: Single_Scatter_Albedo(:)  ! K  
+    REAL(fp), ALLOCATABLE :: Single_Scatter_Albedo(:)  ! K
     ! Radiative transfer results for a single channel
     REAL(fp) :: Radiance               = ZERO
     REAL(fp) :: Brightness_Temperature = ZERO
-    REAL(fp) :: Stokes(4) 
-    REAL(fp) :: SolarIrradiance        = ZERO
+    REAL(fp) :: Stokes(4)
+    REAL(fp) :: Solar_Irradiance       = ZERO
   END TYPE CRTM_RTSolution_type
   !:tdoc-:
 
@@ -283,7 +356,7 @@ CONTAINS
     ALLOCATE( RTSolution%Upwelling_Radiance(n_Layers), &
               RTSolution%Upwelling_Overcast_Radiance(n_Layers), &
               RTSolution%Layer_Optical_Depth(n_Layers), &
-              RTSolution%Single_Scatter_Albedo(n_Layers), & 
+              RTSolution%Single_Scatter_Albedo(n_Layers), &
               STAT = alloc_stat )
     IF ( alloc_stat /= 0 ) RETURN
 
@@ -294,7 +367,7 @@ CONTAINS
     RTSolution%Upwelling_Radiance  = ZERO
     RTSolution%Upwelling_Overcast_Radiance  = ZERO
     RTSolution%Layer_Optical_Depth = ZERO
-    RTSolution%Single_Scatter_Albedo = ZERO 
+    RTSolution%Single_Scatter_Albedo = ZERO
 
     ! Set allocation indicator
     RTSolution%Is_Allocated = .TRUE.
@@ -335,7 +408,7 @@ CONTAINS
     TYPE(CRTM_RTSolution_type), INTENT(IN OUT) :: RTSolution
 
     ! Zero out the scalar data components
-    RTSolution%SSA_Max                 = ZERO 
+    RTSolution%SSA_Max                 = ZERO
     RTSolution%SOD                     = ZERO
     RTSolution%Surface_Emissivity      = ZERO
     RTSolution%Surface_Reflectivity    = ZERO
@@ -348,14 +421,15 @@ CONTAINS
     RTSolution%Tb_clear                = ZERO
     RTSolution%Radiance                = ZERO
     RTSolution%Brightness_Temperature  = ZERO
+    RTSolution%Solar_Irradiance        = ZERO
     RTSolution%Stokes  = ZERO
-    
+
     ! Zero out the array data components
     IF ( CRTM_RTSolution_Associated(RTSolution) ) THEN
       RTSolution%Upwelling_Radiance  = ZERO
       RTSolution%Upwelling_Overcast_Radiance  = ZERO
       RTSolution%Layer_Optical_Depth = ZERO
-      RTSolution%Single_Scatter_Albedo = ZERO  
+      RTSolution%Single_Scatter_Albedo = ZERO
     END IF
 
   END SUBROUTINE CRTM_RTSolution_Zero
@@ -429,6 +503,8 @@ CONTAINS
     WRITE(fid,fmt) "Brightness Temperature (clear): ", RTSolution%Tb_clear
     WRITE(fid,fmt) "Radiance                      : ", RTSolution%Radiance
     WRITE(fid,fmt) "Brightness Temperature        : ", RTSolution%Brightness_Temperature
+    WRITE(fid,fmt) "Solar Irradiance              : ", RTSolution%Solar_Irradiance
+    WRITE(fid,fmt) "Stokes                        : ", RTSolution%Stokes
     IF ( CRTM_RTSolution_Associated(RTSolution) ) THEN
       WRITE(fid,'(3x,"n_Layers : ",i0)') RTSolution%n_Layers
       WRITE(fid,'(3x,"Upwelling Overcast Radiance :")')
@@ -575,7 +651,9 @@ CONTAINS
          .NOT. Compares_Within_Tolerance(x%R_clear                , y%R_clear                , n) .OR. &
          .NOT. Compares_Within_Tolerance(x%Tb_clear               , y%Tb_clear               , n) .OR. &
          .NOT. Compares_Within_Tolerance(x%Radiance               , y%Radiance               , n) .OR. &
-         .NOT. Compares_Within_Tolerance(x%Brightness_Temperature , y%Brightness_Temperature , n) ) RETURN
+         .NOT. Compares_Within_Tolerance(x%Brightness_Temperature , y%Brightness_Temperature , n) .OR. &
+         .NOT. Compares_Within_Tolerance(x%Solar_Irradiance       , y%Solar_Irradiance       , n) .OR. &
+         .NOT. ALL(Compares_Within_Tolerance(x%Stokes             , y%Stokes                 , n))) RETURN
 
     ! Check the array components
     IF ( CRTM_RTSolution_Associated(x) .AND. CRTM_RTSolution_Associated(y) ) THEN
@@ -1007,7 +1085,9 @@ CONTAINS
 ! CALLING SEQUENCE:
 !   Error_Status = CRTM_RTSolution_WriteFile( Filename     , &
 !                                             RTSolution   , &
-!                                             Quiet = Quiet  )
+!                                             NetCDF       , &
+!                                             Quiet        , &
+!                                             Debug)
 !
 ! INPUTS:
 !   Filename:     Character string specifying the name of the
@@ -1025,6 +1105,15 @@ CONTAINS
 !                 ATTRIBUTES: INTENT(IN)
 !
 ! OPTIONAL INPUTS:
+!   NetCDF:        Set this logical argument to set output file format.
+!                 If == .FALSE., Binary [DEFAULT].
+!                    == .TRUE.,  NetCDF
+!                 If not specified, default is .FALSE.
+!                 UNITS:      N/A
+!                 TYPE:       LOGICAL
+!                 DIMENSION:  Scalar
+!                 ATTRIBUTES: INTENT(IN), OPTIONAL
+
 !   Quiet:        Set this logical argument to suppress INFORMATION
 !                 messages being printed to stdout
 !                 If == .FALSE., INFORMATION messages are OUTPUT [DEFAULT].
@@ -1055,12 +1144,14 @@ CONTAINS
   FUNCTION CRTM_RTSolution_WriteFile( &
     Filename   , &  ! Input
     RTSolution , &  ! Input
+    NetCDF     , &  ! Optional input
     Quiet      , &  ! Optional input
     Debug      ) &  ! Optional input (Debug output control)
   RESULT( err_stat )
     ! Arguments
     CHARACTER(*),               INTENT(IN) :: Filename
     TYPE(CRTM_RTSolution_type), INTENT(IN) :: RTSolution(:,:)
+    LOGICAL,          OPTIONAL, INTENT(IN) :: NetCDF
     LOGICAL,          OPTIONAL, INTENT(IN) :: Quiet
     LOGICAL,          OPTIONAL, INTENT(IN) :: Debug
     ! Function result
@@ -1069,12 +1160,9 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_RTSolution_WriteFile'
     ! Function variables
     CHARACTER(ML) :: msg
-    CHARACTER(ML) :: io_msg
-    INTEGER :: io_stat
     LOGICAL :: noisy
-    INTEGER :: fid
-    INTEGER :: l, n_output_channels
-    INTEGER :: m, n_output_profiles
+    LOGICAL :: Binary
+
 
     ! Set up
     err_stat = SUCCESS
@@ -1083,53 +1171,700 @@ CONTAINS
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
     ! ...Override Quiet settings if debug set.
     IF ( PRESENT(Debug) ) noisy = Debug
-    n_output_channels = SIZE(RTSolution,DIM=1)
+    ! ...Check output format
+    Binary = .True.
+    if ( PRESENT(NetCDF) ) Binary = .NOT. NetCDF
+
+
+    IF (Binary) THEN
+      err_stat = CRTM_RTSolution_WriteFile_Binary(Filename, RTSolution, noisy)
+    ELSE
+      err_stat = CRTM_RTSolution_WriteFile_NetCDF(Filename, RTSolution, noisy)
+    END IF
+    IF ( err_stat /= SUCCESS ) THEN
+      WRITE( msg,'("Error writing RTSolution into:  ",a)' ) TRIM(Filename)
+      RETURN
+    END IF
+
+  END FUNCTION CRTM_RTSolution_WriteFile
+
+  !------------------------------------------------------------------------------
+  !:sdoc+:
+  !
+  ! NAME:
+  !   CRTM_RTSolution_WriteFile_Binary
+  !
+  ! PURPOSE:
+  !   Function to write CRTM RTSolution object files (Binary format)
+  !
+  ! CALLING SEQUENCE:
+  !   Error_Status = CRTM_RTSolution_WriteFile_Binary( Filename     , &
+  !                                                    RTSolution   , &
+  !                                                    noisy  )
+  !
+  ! INPUTS:
+  !   Filename:     Character string specifying the name of the
+  !                 RTSolution format data file to write.
+  !                 UNITS:      N/A
+  !                 TYPE:       CHARACTER(*)
+  !                 DIMENSION:  Scalar
+  !                 ATTRIBUTES: INTENT(IN)
+  !
+  !   RTSolution:   CRTM RTSolution object array containing the RTSolution
+  !                 data.
+  !                 UNITS:      N/A
+  !                 TYPE:       CRTM_RTSolution_type
+  !                 DIMENSION:  Rank-2 (n_Channels x n_Profiles)
+  !                 ATTRIBUTES: INTENT(IN)
+  !
+  ! OPTIONAL INPUTS:
+  !   noisy:        Set this logical argument to suppress INFORMATION
+  !                 messages being printed to stdout
+  !                 If == .TRUE.,   INFORMATION messages are OUTPUT [DEFAULT].
+  !                    == .FALSE.,  INFORMATION messages are SUPPRESSED.
+  !                 If not specified, default is .FALSE.
+  !                 UNITS:      N/A
+  !                 TYPE:       LOGICAL
+  !                 DIMENSION:  Scalar
+  !                 ATTRIBUTES: INTENT(IN), OPTIONAL
+  !
+  ! FUNCTION RESULT:
+  !   Error_Status: The return value is an integer defining the error status.
+  !                 The error codes are defined in the Message_Handler module.
+  !                 If == SUCCESS, the file write was successful
+  !                    == FAILURE, an unrecoverable error occurred.
+  !                 UNITS:      N/A
+  !                 TYPE:       INTEGER
+  !                 DIMENSION:  Scalar
+  !
+  ! SIDE EFFECTS:
+  !   - If the output file already exists, it is overwritten.
+  !   - If an error occurs during *writing*, the output file is deleted before
+  !     returning to the calling routine.
+  !
+  !:sdoc-:
+  !------------------------------------------------------------------------------
+
+    FUNCTION CRTM_RTSolution_WriteFile_Binary( &
+      Filename   , &  ! Input
+      RTSolution , &  ! Input
+      noisy      ) &  ! Input
+    RESULT( err_stat )
+      ! Arguments
+      CHARACTER(*),               INTENT(IN) :: Filename
+      TYPE(CRTM_RTSolution_type), INTENT(IN) :: RTSolution(:,:)
+      LOGICAL,                    INTENT(IN) :: noisy
+      ! Function result
+      INTEGER :: err_stat
+      ! Function parameters
+      CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_RTSolution_WriteFile'
+      ! Function variables
+      CHARACTER(ML) :: msg
+      CHARACTER(ML) :: io_msg
+      INTEGER :: io_stat
+      INTEGER :: fid
+      INTEGER :: l, n_output_channels
+      INTEGER :: m, n_output_profiles
+
+      ! Set up
+      err_stat = SUCCESS
+      n_output_channels = SIZE(RTSolution,DIM=1)
+      n_output_profiles = SIZE(RTSolution,DIM=2)
+
+      ! Open the file
+      err_stat = Open_Binary_File( Filename, fid, For_Output = .TRUE. )
+      IF ( err_stat /= SUCCESS ) THEN
+        msg = 'Error opening '//TRIM(Filename)
+        CALL Write_Cleanup(); RETURN
+      END IF
+
+
+      ! Write the dimensions
+      WRITE( fid,IOSTAT=io_stat,IOMSG=io_msg ) n_output_channels, n_output_profiles
+      IF ( io_stat /= 0 ) THEN
+        msg = 'Error writing dimensions to '//TRIM(Filename)//' - '//TRIM(io_msg)
+        CALL Write_Cleanup(); RETURN
+      END IF
+
+
+      ! Write the data
+      Profile_Loop: DO m = 1, n_output_profiles
+        Channel_Loop: DO l = 1, n_output_channels
+          err_stat = Write_Record( fid, RTSolution(l,m) )
+          IF ( err_stat /= SUCCESS ) THEN
+            WRITE( msg,'("Error writing RTSolution element (",i0,",",i0,") to ",a)' ) &
+                   l, m, TRIM(Filename)
+            CALL Write_Cleanup(); RETURN
+          END IF
+        END DO Channel_Loop
+      END DO Profile_Loop
+
+
+      ! Close the file (if error, no delete)
+      CLOSE( fid,STATUS='KEEP',IOSTAT=io_stat,IOMSG=io_msg )
+      IF ( io_stat /= 0 ) THEN
+        msg = 'Error closing '//TRIM(Filename)//' - '//TRIM(io_msg)
+        CALL Write_Cleanup(); RETURN
+      END IF
+
+
+      ! Output an info message
+      IF ( noisy ) THEN
+        WRITE( msg,'("Number of channels and profiles written to ",a,": ",i0,1x,i0 )' ) &
+               TRIM(Filename), n_output_channels, n_output_profiles
+        CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
+      END IF
+
+    CONTAINS
+
+      SUBROUTINE Write_CleanUp()
+        IF ( File_Open( Filename ) ) THEN
+          CLOSE( fid,STATUS=WRITE_ERROR_STATUS,IOSTAT=io_stat,IOMSG=io_msg )
+          IF ( io_stat /= 0 ) &
+            msg = TRIM(msg)//'; Error deleting output file during error cleanup - '//TRIM(io_msg)
+        END IF
+        err_stat = FAILURE
+        CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      END SUBROUTINE Write_CleanUp
+
+    END FUNCTION CRTM_RTSolution_WriteFile_Binary
+
+!------------------------------------------------------------------------------
+!:sdoc+:
+!
+! NAME:
+!   CRTM_RTSolution_WriteFile_NetCDF
+!
+! PURPOSE:
+!   Function to write CRTM RTSolution object files (NetCDf format)
+!
+! CALLING SEQUENCE:
+!   Error_Status = CRTM_RTSolution_WriteFile_netCDF( Filename     , &
+!                                                    RTSolution   , &
+!                                                    noisy  )
+!
+! INPUTS:
+!   Filename:     Character string specifying the name of the
+!                 RTSolution format data file to write.
+!                 UNITS:      N/A
+!                 TYPE:       CHARACTER(*)
+!                 DIMENSION:  Scalar
+!                 ATTRIBUTES: INTENT(IN)
+!
+!   RTSolution:   CRTM RTSolution object array containing the RTSolution
+!                 data.
+!                 UNITS:      N/A
+!                 TYPE:       CRTM_RTSolution_type
+!                 DIMENSION:  Rank-2 (n_Channels x n_Profiles)
+!                 ATTRIBUTES: INTENT(IN)
+!
+! OPTIONAL INPUTS:
+!   noisy:        Set this logical argument to suppress INFORMATION
+!                 messages being printed to stdout
+!                 If == .TRUE.,   INFORMATION messages are OUTPUT [DEFAULT].
+!                    == .FALSE.,  INFORMATION messages are SUPPRESSED.
+!                 If not specified, default is .FALSE.
+!                 UNITS:      N/A
+!                 TYPE:       LOGICAL
+!                 DIMENSION:  Scalar
+!                 ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+! FUNCTION RESULT:
+!   Error_Status: The return value is an integer defining the error status.
+!                 The error codes are defined in the Message_Handler module.
+!                 If == SUCCESS, the file write was successful
+!                    == FAILURE, an unrecoverable error occurred.
+!                 UNITS:      N/A
+!                 TYPE:       INTEGER
+!                 DIMENSION:  Scalar
+!
+! SIDE EFFECTS:
+!   - If the output file already exists, it is overwritten.
+!   - If an error occurs during *writing*, the output file is deleted before
+!     returning to the calling routine.
+!
+!:sdoc-:
+!------------------------------------------------------------------------------
+
+  FUNCTION CRTM_RTSolution_WriteFile_NetCDF( &
+    Sensor_Filename   , &  ! Input
+    RTSolution        , &  ! Input
+    noisy             ) &  ! Input (Debug output control)
+  RESULT( err_stat )
+    ! Arguments
+    CHARACTER(*),               INTENT(IN) :: Sensor_Filename
+    TYPE(CRTM_RTSolution_type), INTENT(IN) :: RTSolution(:,:)
+    LOGICAL,                    INTENT(IN) :: noisy
+    ! Function result
+    INTEGER :: err_stat
+    ! Function parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_RTSolution_WriteFile_netCDF'
+    ! Function variables
+    CHARACTER(ML) :: msg
+    CHARACTER(ML) :: io_msg
+    CHARACTER(ML) :: Filename
+    CHARACTER(2)  :: STR_PROFILE
+    INTEGER :: io_stat
+    INTEGER :: fid
+    INTEGER :: l,m,c
+    INTEGER :: n_output_profiles
+    LOGICAL :: Close_File
+    INTEGER :: NF90_Status
+    INTEGER :: FileId, VarId
+    INTEGER :: alloc_stat
+
+    ! Output variables
+    CHARACTER(:), ALLOCATABLE :: SENSOR_ID
+    INTEGER :: n_Channels, n_Layers, n_Stokes
+    INTEGER, ALLOCATABLE :: Sensor_Channel(:)
+    INTEGER, ALLOCATABLE :: n_Full_Streams(:)
+    REAL(fp), ALLOCATABLE :: SSA_Max(:)
+    REAL(fp), ALLOCATABLE :: SOD(:)
+    REAL(fp), ALLOCATABLE :: Surface_Emissivity(:)
+    REAL(fp), ALLOCATABLE :: Surface_Reflectivity(:)
+    REAL(fp), ALLOCATABLE :: Up_Radiance(:)
+    REAL(fp), ALLOCATABLE :: Down_Radiance(:)
+    REAL(fp), ALLOCATABLE :: Down_Solar_Radiance(:)
+    REAL(fp), ALLOCATABLE :: Surface_Planck_Radiance(:)
+    REAL(fp), ALLOCATABLE :: Total_Cloud_Cover(:)
+    REAL(fp), ALLOCATABLE :: R_clear(:)
+    REAL(fp), ALLOCATABLE :: Tb_clear(:)
+    REAL(fp), ALLOCATABLE :: Radiance(:)
+    REAL(fp), ALLOCATABLE :: Brightness_Temperature(:)
+    REAL(fp), ALLOCATABLE :: Solar_Irradiance(:)
+    REAL(fp), ALLOCATABLE :: Stokes(:,:)
+    REAL(fp), ALLOCATABLE :: Upwelling_Overcast_Radiance(:,:)
+    REAL(fp), ALLOCATABLE :: Upwelling_Radiance(:,:)
+    REAL(fp), ALLOCATABLE :: Layer_Optical_Depth(:,:)
+    REAL(fp), ALLOCATABLE :: Single_Scatter_Albedo(:,:)
+
+
+    ! Set up
+    err_stat = SUCCESS
+
+    ! Check number of sensor and profiles
+    n_Channels        = SIZE(RTSolution,DIM=1)
     n_output_profiles = SIZE(RTSolution,DIM=2)
 
+    ! Sensor ID
+    SENSOR_ID = RTSolution(1,1)%Sensor_ID
 
-    ! Open the file
-    err_stat = Open_Binary_File( Filename, fid, For_Output = .TRUE. )
-    IF ( err_stat /= SUCCESS ) THEN
-      msg = 'Error opening '//TRIM(Filename)
-      CALL Write_Cleanup(); RETURN
-    END IF
-
-
-    ! Write the dimensions
-    WRITE( fid,IOSTAT=io_stat,IOMSG=io_msg ) n_output_channels, n_output_profiles
-    IF ( io_stat /= 0 ) THEN
-      msg = 'Error writing dimensions to '//TRIM(Filename)//' - '//TRIM(io_msg)
-      CALL Write_Cleanup(); RETURN
-    END IF
-
-
-    ! Write the data
+    ! Write to files
     Profile_Loop: DO m = 1, n_output_profiles
-      Channel_Loop: DO l = 1, n_output_channels
-        err_stat = Write_Record( fid, RTSolution(l,m) )
-        IF ( err_stat /= SUCCESS ) THEN
-          WRITE( msg,'("Error writing RTSolution element (",i0,",",i0,") to ",a)' ) &
-                 l, m, TRIM(Filename)
-          CALL Write_Cleanup(); RETURN
-        END IF
+
+      ! Sensor_ID, n_Layers and n_Stokes are the same for all channels
+      n_Layers = RTSolution(1,m)%n_Layers
+      n_Stokes = RTSolution(1,m)%n_Stokes + 1
+
+
+      ! Allocate outputs
+      ALLOCATE( Sensor_Channel( n_Channels ), &
+                n_Full_Streams( n_Channels ), &
+                SSA_Max( n_Channels ), &
+                SOD( n_Channels ), &
+                Surface_Emissivity( n_Channels ), &
+                Surface_Reflectivity( n_Channels ), &
+                Up_Radiance( n_Channels ), &
+                Down_Radiance( n_Channels ), &
+                Down_Solar_Radiance( n_Channels ), &
+                Surface_Planck_Radiance( n_Channels ), &
+                Total_Cloud_Cover( n_Channels ), &
+                R_clear( n_Channels ), &
+                Tb_clear( n_Channels ), &
+                Radiance( n_Channels ), &
+                Brightness_Temperature( n_Channels ), &
+                Solar_Irradiance( n_Channels ), &
+                Stokes( n_Channels, n_Stokes ), &
+                Upwelling_Overcast_Radiance( n_Channels, n_Layers ), &
+                Upwelling_Radiance( n_Channels, n_Layers ), &
+                Layer_Optical_Depth( n_Channels, n_Layers ), &
+                Single_Scatter_Albedo( n_Channels, n_Layers ), &
+                STAT = alloc_stat )
+      IF ( alloc_stat /= 0 ) THEN
+        msg = 'Error allocating RTSolution output arrays'
+        CALL Display_Message( ROUTINE_NAME, msg, FAILURE )
+        STOP
+      END IF
+
+
+      ! arrange RT output
+      Channel_Loop: DO l = 1, n_Channels
+        Sensor_Channel(l)          = RTSolution(l,m)%Sensor_Channel
+        n_Full_Streams(l)          = RTSolution(l,m)%n_Full_Streams
+        SSA_Max(l)                 = RTSolution(l,m)%SSA_Max
+        SOD(l)                     = RTSolution(l,m)%SOD
+        Surface_Emissivity(l)      = RTSolution(l,m)%Surface_Emissivity
+        Surface_Reflectivity(l)    = RTSolution(l,m)%Surface_Reflectivity
+        Up_Radiance(l)             = RTSolution(l,m)%Up_Radiance
+        Down_Radiance(l)           = RTSolution(l,m)%Down_Radiance
+        Down_Solar_Radiance(l)     = RTSolution(l,m)%Down_Solar_Radiance
+        Surface_Planck_Radiance(l) = RTSolution(l,m)%Surface_Planck_Radiance
+        Total_Cloud_Cover(l)       = RTSolution(l,m)%Total_Cloud_Cover
+        R_clear(l)                 = RTSolution(l,m)%R_clear
+        Tb_clear(l)                = RTSolution(l,m)%Tb_clear
+        Radiance(l)                = RTSolution(l,m)%Radiance
+        Brightness_Temperature(l)  = RTSolution(l,m)%Brightness_Temperature
+        Solar_Irradiance(l)        = RTSolution(l,m)%Solar_Irradiance
+        DO c = 1, n_Stokes
+          Stokes(l,c) = RTSolution(l,m)%Stokes(c)
+        END DO
+        DO c = 1, n_Layers
+          Upwelling_Overcast_Radiance(l,c) = RTSolution(l,m)%Upwelling_Overcast_Radiance(c)
+          Upwelling_Radiance(l,c)          = RTSolution(l,m)%Upwelling_Radiance(c)
+          Layer_Optical_Depth(l,c)         = RTSolution(l,m)%Layer_Optical_Depth(c)
+          Single_Scatter_Albedo(l,c)       = RTSolution(l,m)%Single_Scatter_Albedo(c)
+        END DO
       END DO Channel_Loop
-    END DO Profile_Loop
+
+      ! Output file name
+      if (m .LT. 10) then
+         write(STR_PROFILE, 11) m
+      else if (m .LT. 100) then
+         write(STR_PROFILE, 12) m
+      end if
+ 11   format (I1)
+ 12   format (I2)
+      Filename = TRIM(Sensor_Filename)//'_Profile'//TRIM(STR_PROFILE)//'.nc'
+      err_stat = CreateFile_netCDF( &
+                             Filename         , &  ! Input
+                             n_Layers         , &  ! Input
+                             n_Channels       , &  ! Input
+                             n_Stokes         , &  ! Input
+                             SENSOR_ID        , &  ! Input
+                             FileId             )  ! Output
+     IF ( err_stat /= SUCCESS ) THEN
+        msg = 'Error creating output file '//TRIM(Filename)
+        CALL Write_Cleanup(); RETURN
+     END IF
+
+     ! ...Close the file if any error from here on
+     Close_File = .TRUE.
+
+     ! Write the data items
+     ! ...Sensor_Channel variable
+     NF90_Status = NF90_INQ_VARID( FileId,CHANNEL_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//CHANNEL_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID,Sensor_Channel )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//CHANNEL_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ...n_Full_Streams variable
+     NF90_Status = NF90_INQ_VARID( FileId,STREAM_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//STREAM_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID,n_Full_Streams )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//STREAM_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ...SSA_Max variable
+     NF90_Status = NF90_INQ_VARID( FileId,SSAMAX_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//SSAMAX_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, SSA_Max)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//SSAMAX_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ....SOD variable
+     NF90_Status = NF90_INQ_VARID( FileId,SOD_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//SOD_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, SOD)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//SOD_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ...Surface_Emissivity variable
+     NF90_Status = NF90_INQ_VARID( FileId,SEMIS_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//SEMIS_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Surface_Emissivity)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//SOD_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ..Surface_Reflectivity variable
+     NF90_Status = NF90_INQ_VARID( FileId,SREFL_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//SREFL_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Surface_Reflectivity)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//SREFL_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ...Up_Radiance variable
+     NF90_Status = NF90_INQ_VARID( FileId,UPR_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//UPR_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Up_Radiance)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//UPR_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ...Down_Radiance variable
+     NF90_Status = NF90_INQ_VARID( FileId,DWNR_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//DWNR_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Down_Radiance)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//DWNR_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ...Down_Solar_Radiance variable
+     NF90_Status = NF90_INQ_VARID( FileId,DWNSOLARR_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//DWNSOLARR_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Down_Solar_Radiance)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//DWNSOLARR_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ...Surface_Planck_Radiance variable
+     NF90_Status = NF90_INQ_VARID( FileId,SPR_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//SPR_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Surface_Planck_Radiance)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//SPR_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ...Total_Cloud_Cover variable
+     NF90_Status = NF90_INQ_VARID( FileId,TCC_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//TCC_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Total_Cloud_Cover)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//TCC_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ...R_clear variable
+     NF90_Status = NF90_INQ_VARID( FileId,RCLEAR_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//RCLEAR_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, R_clear)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//RCLEAR_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ...Tb_clear variable
+     NF90_Status = NF90_INQ_VARID( FileId,TBCLEAR_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//TBCLEAR_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Tb_clear)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//TBCLEAR_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ...Radiance variable
+     NF90_Status = NF90_INQ_VARID( FileId,RADIANCE_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//RADIANCE_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Radiance)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//RADIANCE_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ....Brightness_Temperature variable
+     NF90_Status = NF90_INQ_VARID( FileId,BT_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//BT_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Brightness_Temperature)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//BT_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ....Solar Irradiance variable
+     NF90_Status = NF90_INQ_VARID( FileId,SI_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//SI_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Solar_Irradiance )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//SI_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ....Stokes variable
+     NF90_Status = NF90_INQ_VARID( FileId,STOKES_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//STOKES_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Stokes )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//STOKES_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! 2D layered outputs
+     ! ... Upwelling_Overcast_Radiance variable
+     NF90_Status = NF90_INQ_VARID( FileId,UPOR_PRF_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//UPOR_PRF_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Upwelling_Overcast_Radiance)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//UPOR_PRF_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ... Upwelling_Radiance variable
+     NF90_Status = NF90_INQ_VARID( FileId,UPR_PRF_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//UPR_PRF_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Upwelling_Radiance)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//UPR_PRF_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ... Layer_Optical_Depth variable
+     NF90_Status = NF90_INQ_VARID( FileId,LOP_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//LOP_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Layer_Optical_Depth)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//LOP_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ... Single_Scatter_Albedo variable
+     NF90_Status = NF90_INQ_VARID( FileId,SSA_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//SSA_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Single_Scatter_Albedo)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//SSA_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
 
 
-    ! Close the file (if error, no delete)
-    CLOSE( fid,STATUS='KEEP',IOSTAT=io_stat,IOMSG=io_msg )
-    IF ( io_stat /= 0 ) THEN
-      msg = 'Error closing '//TRIM(Filename)//' - '//TRIM(io_msg)
-      CALL Write_Cleanup(); RETURN
-    END IF
+     ! Close the file
+     NF90_Status = NF90_CLOSE( FileId )
+     Close_File = .FALSE.
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error closing output file - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+
+     ! Output an info message
+     IF ( noisy ) THEN
+       WRITE( msg,'("Number of channels written to ",a,": ",i0,1x)' ) &
+              TRIM(Filename), n_Channels
+       CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
+     END IF
+
+     ! DEALLOCATE outputs
+     ! The number of layers can be different for different profiles
+     DEALLOCATE( Sensor_Channel, &
+                 n_Full_Streams, &
+                 SSA_Max, &
+                 SOD, &
+                 Surface_Emissivity, &
+                 Surface_Reflectivity, &
+                 Up_Radiance, &
+                 Down_Radiance, &
+                 Down_Solar_Radiance, &
+                 Surface_Planck_Radiance, &
+                 Total_Cloud_Cover, &
+                 R_clear, &
+                 Tb_clear, &
+                 Radiance, &
+                 Brightness_Temperature, &
+                 Solar_Irradiance, &
+                 Stokes, &
+                 Upwelling_Overcast_Radiance, &
+                 Upwelling_Radiance, &
+                 Layer_Optical_Depth, &
+                 Single_Scatter_Albedo, &
+                 STAT = alloc_stat )
+     IF ( alloc_stat /= 0 ) THEN
+       msg = 'Error deallocating RTSolution output arrays'
+       CALL Display_Message( ROUTINE_NAME, msg, FAILURE )
+       STOP
+     END IF
 
 
-    ! Output an info message
-    IF ( noisy ) THEN
-      WRITE( msg,'("Number of channels and profiles written to ",a,": ",i0,1x,i0 )' ) &
-             TRIM(Filename), n_output_channels, n_output_profiles
-      CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
-    END IF
+   END DO Profile_Loop
+
 
   CONTAINS
 
@@ -1143,8 +1878,7 @@ CONTAINS
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
     END SUBROUTINE Write_CleanUp
 
-  END FUNCTION CRTM_RTSolution_WriteFile
-
+  END FUNCTION CRTM_RTSolution_WriteFile_NetCDF
 
 
 !##################################################################################
@@ -1218,6 +1952,7 @@ CONTAINS
          (x%Radiance                .EqualTo. y%Radiance               ) .AND. &
          (x%Brightness_Temperature  .EqualTo. y%Brightness_Temperature ) ) &
       is_equal = .TRUE.
+
 
     ! Check arrays (which may or may not be allocated)
     IF ( CRTM_RTSolution_Associated(x) .AND. CRTM_RTSolution_Associated(y) ) THEN
@@ -1704,7 +2439,9 @@ CONTAINS
     ! Read the radiative transfer results
     READ( fid,IOSTAT=io_stat,IOMSG=io_msg ) &
       rts%Radiance              , &
-      rts%Brightness_Temperature
+      rts%Brightness_Temperature, &
+      rts%Solar_Irradiance      , &
+      rts%Stokes
     IF ( io_stat /= 0 ) THEN
       msg = 'Error reading result data - '//TRIM(io_msg)
       CALL Read_Record_Cleanup(); RETURN
@@ -1812,7 +2549,9 @@ CONTAINS
     ! Write the radiative transfer results
     WRITE( fid,IOSTAT=io_stat,IOMSG=io_msg ) &
       rts%Radiance              , &
-      rts%Brightness_Temperature
+      rts%Brightness_Temperature, &
+      rts%Solar_Irradiance      , &
+      rts%Stokes
     IF ( io_stat /= 0 ) THEN
       msg = 'Error writing result data - '//TRIM(io_msg)
       CALL Write_Record_Cleanup(); RETURN
@@ -1829,5 +2568,486 @@ CONTAINS
     END SUBROUTINE Write_Record_Cleanup
 
   END FUNCTION Write_Record
+
+
+
+  FUNCTION CreateFile_netCDF( &
+    Filename     , &  ! Input
+    n_Layers     , &  ! Input
+    n_Channels   , &  ! Input
+    n_Stokes     , &  ! Input
+    SENSOR_ID    , &  ! Input
+    FileId       ) &  ! Output
+  RESULT( err_stat )
+    ! Arguments
+    CHARACTER(*),           INTENT(IN)  :: Filename
+    CHARACTER(*),           INTENT(IN)  :: SENSOR_ID
+    INTEGER     ,           INTENT(IN)  :: n_Layers
+    INTEGER     ,           INTENT(IN)  :: n_Channels
+    INTEGER     ,           INTENT(IN)  :: n_Stokes
+    ! Function result
+    INTEGER :: err_stat
+    ! Local parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_RTSolution_WriteFile(netCDF)'
+    ! Local variables
+    CHARACTER(ML) :: msg
+    LOGICAL :: Close_File
+    INTEGER :: NF90_Status
+    INTEGER :: n_Layers_DimID
+    INTEGER :: n_Channels_DimID
+    INTEGER :: n_Stokes_DimID
+    INTEGER :: tnsl_DimID
+    INTEGER :: varID
+    INTEGER :: FileId
+    INTEGER :: Put_Status(2)
+
+    ! Setup
+    err_stat = SUCCESS
+    Close_File = .FALSE.
+
+    ! Create the data file
+    NF90_Status = NF90_CREATE( Filename,NF90_CLOBBER,FileId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error creating '//TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    ! ...Close the file if any error from here on
+    Close_File = .TRUE.
+
+    ! Define the dimensions
+    ! ...Number of Layers
+    NF90_Status = NF90_DEF_DIM( FileID,LAYER_DIMNAME,n_Layers,n_Layers_DimID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//LAYER_DIMNAME//' dimension in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    ! ...Number of Channel
+    NF90_Status = NF90_DEF_DIM( FileID,CHANNEL_DIMNAME,n_Channels,n_Channels_DimID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//CHANNEL_DIMNAME//' dimension in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    ! ...Number of Stokes
+    NF90_Status = NF90_DEF_DIM( FileID,STOKE_DIMNAME,n_Stokes,n_Stokes_DimID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//STOKE_DIMNAME//' dimension in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! Write the global attributes
+    NF90_Status = NF90_PUT_ATT( FileId, NF90_GLOBAL,TRIM(SENSOR_ID_GATTNAME),SENSOR_ID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error setting '//SENSOR_ID_GATTNAME//' global attribute in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Channel variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      CHANNEL_VARNAME, &
+      INT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//CHANNEL_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,CHANNEL_UNITS)
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_INT     )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//CHANNEL_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! TBD
+    ! ...RT_Algorithm_Name variable
+    ! ...Scattering_Flag variable
+
+    ! ...n_Full_Streams variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      STREAM_VARNAME, &
+      INT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//STREAM_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,STREAM_UNITS)
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_INT    )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//STREAM_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...SSA_Max variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      SSAMAX_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//STREAM_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,SSA_UNITS  )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//SSAMAX_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...SOD variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      SOD_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//SOD_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,OD_UNITS   )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//SOD_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Surface_Emissivity variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      SEMIS_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//SEMIS_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,SEMIS_UNITS )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT  )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//SEMIS_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Surface_Reflectivity variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      SREFL_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//SREFL_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,SREFL_UNITS )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT  )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//SREFL_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Up_Radiance variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      UPR_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//UPR_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,RAD_UNITS )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT)
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//UPR_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Down_Radiance variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      DWNR_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//DWNR_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,RAD_UNITS )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT)
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//DWNR_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Down_Solar_Radiance variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      DWNSOLARR_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//DWNSOLARR_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,RAD_UNITS )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT  )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//DWNSOLARR_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Surface_Planck_Radiance variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      SPR_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//SPR_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,RAD_UNITS )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT  )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//SPR_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Total_Cloud_Cover variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      TCC_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//TCC_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,TCC_UNITS )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT  )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//TCC_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...R_clear variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      RCLEAR_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//RCLEAR_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,RCLEAR_UNITS )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT   )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//RCLEAR_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Tb_clear variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      TBCLEAR_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//TBCLEAR_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,BT_UNITS   )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//TBCLEAR_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Radiance variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      RADIANCE_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//RADIANCE_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,RAD_UNITS  )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//RADIANCE_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Brightness_Temperature variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      BT_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//BT_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,BT_UNITS  )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//BT_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Solar_Irradiance variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      SI_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//SI_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,IRAD_UNITS )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//SI_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Stokes variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      STOKES_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Stokes_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//STOKES_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,RAD_UNITS  )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//STOKES_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ... Upwelling_Overcast_Radiance variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      UPOR_PRF_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Layers_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//UPOR_PRF_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,RAD_UNITS  )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//UPOR_PRF_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ... Upwelling_Radiance variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      UPR_PRF_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Layers_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//UPR_PRF_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,RAD_UNITS  )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//UPR_PRF_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ... Layer_Optical_Depth variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      LOP_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Layers_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//LOP_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,OD_UNITS   )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//LOP_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ... Single_Scatter_Albedo variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      SSA_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Layers_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//SSA_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,SSA_UNITS  )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//SSA_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! Take netCDF file out of define mode
+    NF90_Status = NF90_ENDDEF( FileId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error taking file '//TRIM(Filename)// &
+            ' out of define mode - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+  CONTAINS
+
+    SUBROUTINE Create_CleanUp()
+      IF ( Close_File ) THEN
+        NF90_Status = NF90_CLOSE( FileID )
+        IF ( NF90_Status /= NF90_NOERR ) &
+          msg = TRIM(msg)//'; Error closing input file during error cleanup - '//&
+                TRIM(NF90_STRERROR( NF90_Status ))
+      END IF
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME,msg,err_stat )
+    END SUBROUTINE Create_CleanUp
+
+  END FUNCTION CreateFile_netCDF
 
 END MODULE CRTM_RTSolution_Define
