@@ -57,7 +57,9 @@ MODULE PtrArr_Define
     MODULE PROCEDURE PtrArr_Equal
   END INTERFACE OPERATOR(==)
 
-
+  INTERFACE OPERATOR(=)
+     MODULE PROCEDURE PtrArr_Assign
+  END INTERFACE OPERATOR(=)
   ! ---------------
   ! Type definition
   ! ---------------
@@ -378,5 +380,37 @@ CONTAINS
          ALL(x%Arr .EqualTo. y%Arr ) ) is_Equal = .TRUE.
     
   END FUNCTION PtrArr_Equal
+
+  ! Elemental function to test the equality of two PtrArr objects.
+  ! Used in OPERATOR(==) interface block.
+  
+  ELEMENTAL FUNCTION PtrArr_Assign( x, y ) RESULT( is_assign )
+    TYPE(PtrArr_type), INTENT(IN)  :: x
+    TYPE(PtrArr_type), INTENT(OUT) :: y
+    LOGICAL :: is_assign
+    
+    ! Set up
+    is_assign = .FALSE.
+    
+    ! Check the structure association status
+    IF ( .NOT. PtrArr_Associated(x) ) RETURN
+
+    
+    ! Deallocate new_type if it is already allocated
+    IF (ALLOCATED(y%Arr)) THEN
+       DEALLOCATE(y%Arr)
+    END IF
+    
+    ! Allocate memory for new_type%Arr
+    ALLOCATE(y%Arr(SIZE(x%Arr)))
+    
+    ! Assign the contents
+    y%Is_Allocated = x%Is_Allocated
+    y%n            = x%n
+    y%Name         = x%Name
+    y%ErrMsg       = x%ErrMsg
+    y%Arr          = x%Arr
+
+  END FUNCTION PtrArr_Assign
   
 END MODULE PtrArr_Define

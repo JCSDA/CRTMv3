@@ -64,13 +64,23 @@ set( CRTM_COEFFS_BRANCH "3.0.0" )
 
 # If local path to testfiles is defined don't download
 #if( DEFINED LOCAL_PATH_JEDI_TESTFILES )
+
+set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION}) 
+
 IF(EXISTS  ${CMAKE_SOURCE_DIR}/fix)
   set( CRTM_COEFFS_PATH ${CMAKE_SOURCE_DIR}/fix )
   message(STATUS "use LOCAL_PATH_JEDI_TESTFILES: ${CRTM_COEFFS_PATH}")
   message("Using existing local fix directory instead of downloading.")
-# Download CRTM coefficients
+
+elseif( EXISTS ${CRTM_COEFFS_PATH}/crtm )
+  message(STATUS "use LOCAL_PATH_JEDI_TESTFILES: ${CRTM_COEFFS_PATH}")
+  message("Using existing local directory instead of downloading.")
+  set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  
+  set( CRTM_COEFFS_BRANCH "3.0.0_skylab_6.0" ) 
+  set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})   
 else()
-	set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
+  #Download CRTM coefficients
+  set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
   set( CRTM_COEFFS_BRANCH "3.0.0_skylab_6.0" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)
 	# it is my intention is to not have any difference between jedi/ufo versions of CRTM and stand-alond versions of CRTM -- they should both work "out of the box"
   set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})   #this is where the symlinks point to binary files for the testinput/* directory after ecbuild.
