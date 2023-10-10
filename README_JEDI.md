@@ -1,7 +1,7 @@
 README_JEDI.md
 
-CRTM REL-3.0.1 
-Released April 1, 2021
+CRTM REL-3.0.1  Released September 23, 2023
+CRTM REL-3.0.0  Released April 1, 2021
 
 
 
@@ -15,7 +15,7 @@ Preamble
 
 CRTM v3.0.1 release (`REL-3.0.1`)  
 
-This is a fully functional release of CRTM v3.0.1-alpha. 
+This is a fully functional release of CRTM v3.0.1.
 
 Basic requirements:  
 (1) A Fortran 2003 compatible compiler.  
@@ -40,9 +40,6 @@ Contents
 2. Building the library  
 3. Testing the library  
 4. Installing the library  
-  a. GNU Install  
-      - Linking to the library  
-  b. Uninstalling the library  
 5. Cleaning up  
 6. Feedback and contact info  
 
@@ -60,7 +57,6 @@ The CRTM **development** repository directory structure looks like:
   ├── COPYING  (CC0 legal document)
   ├── NOTES
   ├── README.md 
-  ├── Set_CRTM_Environment.sh
   ├── Get_CRTM_Binary_Files.sh (downloads the "fix" directory binary data from ftp, this is useful if you're doing out-of-jedi tests or if you want to override the default binary datasets. ) 
   ├── CMakeLists.txt           (top-level configuration file for ecbuild/cmake)
   ├── <b>configuration/</b>
@@ -113,30 +109,24 @@ As of v3.0.1, binary data is obtained during the ecbuild/cmake step, it download
 
 
 **Configuration**
-    git clone https://github.com/JCSDA/crtm      (you've probably done this already)  
-    cd crtm/
-    git fetch
+    git clone https://github.com/JCSDA/CRTMv3      (you've probably done this already)  
+    cd CRTMv3
+    git fetch 
     git pull
-    sh Uncompress_Binary_Files.sh
 
 **Build Instructions**
 <pre>
     mkdir build
     cd build
-    cmake pathtocrtm  
+    cmake pathtocrtm 
 </pre>
 where `pathrocrtm` is where the `crtm/` diretory is located.  In this example if you're in the `crtm/build` directory, typing `cmake ..` will work.
 
 <pre>
     make -j8     (-j8 means 8 parallel make processes, adjust the number to your machine)
-    ctest
+    ctest -j8
 </pre>
 This should compile all of the source codes, create a libcrtm.so file, compile the tests, and finally run the various ctests.  If you're making changes to code, simply running the make command will detect your code changes and rebuild everything for you.  
-
-Linking to the library
-----------------------
-You'll find the library file (`libcrtm.so`) in `build/lib` and the module files (e.g., `*.mod`) in `module/crtm/**`.
-You can link to these files using any codes that call the CRTM.  
 
 Uninstalling the library
 ------------------------
@@ -149,12 +139,12 @@ Cleaning Up
 -----------
 <pre>
 cd build/
-rm -rf *  (make sure you do this in the build/ directory where you ran `cmake`)
+make clean (removes compiled files, but not binary assets)
 </pre>
 
 
 **Additional options**
-You can modify the various compiler flags, etc in the `crtm/cmake/` directory.  There you will find several configuration files based on differen compilers.
+You can modify the various compiler flags, etc in the `CRTMv3/cmake/` directory.  There you will find several configuration files based on differen compilers.
 
 
 **Feedback and Contact Information**
