@@ -52,7 +52,7 @@ else()
     set(CRTM_TEST_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
-set( CRTM_COEFFS_BRANCH "3.0.0" )
+set( CRTM_COEFFS_BRANCH "3.0.1" )
 
 # If local path to testfiles is defined don't download
 IF(EXISTS  ${CMAKE_SOURCE_DIR}/fix)
@@ -66,7 +66,7 @@ else()
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
 
 	set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  
-  set( CRTM_COEFFS_BRANCH "3.0.0_skylab_6.0" ) 
+  set( CRTM_COEFFS_BRANCH "3.0.1_skylab_6.0" ) 
 
 #  set( DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/file")
 #
