@@ -165,7 +165,8 @@ PROGRAM test_Simple
   !  The Sensor_Scan_Angle is optional.
   CALL CRTM_Geometry_SetValue( Geometry, &
                                Sensor_Zenith_Angle = ZENITH_ANGLE, &
-                               Sensor_Scan_Angle   = SCAN_ANGLE )
+                               Sensor_Scan_Angle   = SCAN_ANGLE, &
+                               Source_Zenith_Angle = 30.0_fp)
   ! ============================================================================
 
 
