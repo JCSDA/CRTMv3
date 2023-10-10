@@ -61,15 +61,8 @@ IF(EXISTS  ${CMAKE_SOURCE_DIR}/fix)
   message(STATUS "Using existing local fix/ directory instead of downloading.")
 
 else()
-<<<<<<< HEAD
   # Download CRTM coefficients
   set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})
-=======
-	set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
-  set( CRTM_COEFFS_BRANCH "3.0.1_skylab_6.0" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)
-	# it is my intention is to not have any difference between jedi/ufo versions of CRTM and stand-alond versions of CRTM -- they should both work "out of the box"
-  set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})   #this is where the symlinks point to binary files for the testinput/* directory after ecbuild.
->>>>>>> feature/btj_REL-3.0.1
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
 
 	set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  
