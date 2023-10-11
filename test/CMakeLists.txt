@@ -102,7 +102,7 @@ else()
 
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/file")
   set(test_files_dirname crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz) 
-  set(checksum "5e72e2788acbd7b1a71538ff12ad98b0") # MD5SUM
+  set(checksum "5f6d1c7c272af5a2ab39c72235bcd2a8") # MD5SUM
 
   set(DOWNLOAD_URL "${DOWNLOAD_BASE_URL}/${test_files_dirname}")
   set(DOWNLOAD_DEST "${CRTM_COEFFS_PATH}/${test_files_dirname}")
