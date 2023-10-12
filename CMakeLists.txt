@@ -6,6 +6,9 @@ project( crtm VERSION 3.0.1 LANGUAGES Fortran )
 
 option(OPENMP "Build crtm with OpenMP support" ON)
 
+set( ${PROJECT_NAME}_DIR ${PROJECT_BINARY_DIR} PARENT_SCOPE )
+
+
 list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )
 set( CMAKE_DIRECTORY_LABELS ${PROJECT_NAME} )
 
@@ -48,3 +51,6 @@ message(STATUS "Fortran compiler : ${CMAKE_Fortran_COMPILER}")
 message(STATUS "Fortran compiler flags : ${CMAKE_Fortran_FLAGS}")
 message(STATUS "Fortran compiler flags for release : ${CMAKE_Fortran_FLAGS_RELEASE}")
 message(STATUS "Fortran compiler flags for debug : ${CMAKE_Fortran_FLAGS_DEBUG}")
+
+set(crtm_LIBRARIES crtm)
+
