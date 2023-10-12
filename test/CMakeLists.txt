@@ -15,8 +15,6 @@ list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )
 set( CMAKE_DIRECTORY_LABELS ${PROJECT_NAME} )
 
 # macro to create a symlink from src to dst
-set(CMAKE_VERBOSE_MAKEFILE ON)
-
 function(CREATE_SYMLINK src dst)
     foreach (FILENAME ${ARGN})
         execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
