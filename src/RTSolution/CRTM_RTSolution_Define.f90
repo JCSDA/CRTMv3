@@ -229,7 +229,7 @@ MODULE CRTM_RTSolution_Define
     REAL(fp), ALLOCATABLE :: Reflectivity(:)
     REAL(fp), ALLOCATABLE :: Reflectivity_Attenuated(:)
     REAL(fp) :: Stokes(4) 
-    REAL(fp) :: SolarIrradiance        = ZERO
+    REAL(fp) :: Solar_Irradiance        = ZERO
   END TYPE CRTM_RTSolution_type
   !:tdoc-:
 
