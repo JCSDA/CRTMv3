@@ -469,6 +469,47 @@ foreach(regtype IN LISTS regression_types)
 endforeach()
 
 
+#---------------------------------------------------------------------------------
+# Active sensor module AD/TL test
+ecbuild_add_executable (
+    TARGET "test_Active_Sensor"
+    SOURCES mains/unit/Unit_Test/test_active_sensor.f90
+    LIBS crtm
+    NOINSTALL
+    )
+
+ecbuild_add_test(
+    TARGET "test_Active_Sensor"
+    COMMAND "test_Active_Sensor"
+    OMP $ENV{OMP_NUM_THREADS}
+    )
+
+ecbuild_add_executable (
+    TARGET "test_AD_Active_Sensor"
+    SOURCES mains/unit/Unit_Test/test_AD_Active_Sensor.f90
+    LIBS crtm
+    NOINSTALL
+    )
+
+ecbuild_add_test(
+    TARGET "test_AD_Active_Sensor"
+    COMMAND "test_AD_Active_Sensor"
+    OMP $ENV{OMP_NUM_THREADS}
+    )
+
+ecbuild_add_executable (
+    TARGET "test_TL_convergence_active_sensor"
+    SOURCES mains/unit/Unit_Test/test_TL_convergence_active_sensor.f90
+    LIBS crtm
+    NOINSTALL
+    )
+
+ecbuild_add_test(
+    TARGET "test_TL_convergence_active_sensor"
+    COMMAND "test_TL_convergence_active_sensor"
+    OMP $ENV{OMP_NUM_THREADS}
+    )
+
 
 #####################################################################
 # Files for CRTM tests
@@ -482,6 +523,7 @@ AerosolCoeff/Little_Endian/AerosolCoeff.bin
 AerosolCoeff/netCDF/AerosolCoeff.nc4
 CloudCoeff/Little_Endian/CloudCoeff.bin
 CloudCoeff/netCDF/CloudCoeff.nc4
+CloudCoeff/netCDF/CloudCoeff_DDA_ARTS.nc4
 EmisCoeff/MW_Water/Little_Endian/FASTEM6.MWwater.EmisCoeff.bin
 EmisCoeff/IR_Ice/SEcategory/Little_Endian/NPOESS.IRice.EmisCoeff.bin
 EmisCoeff/IR_Ice/SEcategory/netCDF/NPOESS.IRice.EmisCoeff.nc4

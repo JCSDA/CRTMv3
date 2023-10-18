@@ -16,7 +16,7 @@ MODULE CRTM_Forward_Module
   ! ------------
   USE Type_Kinds,                 ONLY: fp, LLong
   USE Message_Handler,            ONLY: SUCCESS, FAILURE, WARNING, Display_Message
-  USE CRTM_Parameters,            ONLY: SET,NOT_SET,ZERO,ONE, RT_VMOM, &
+  USE CRTM_Parameters,            ONLY: SET,NOT_SET,ZERO,ONE, EPSILON_FP, RT_VMOM, &
                                         MAX_N_LAYERS        , &
                                         MAX_N_PHASE_ELEMENTS, &
                                         MAX_N_LEGENDRE_TERMS, &
@@ -96,7 +96,9 @@ MODULE CRTM_Forward_Module
   USE NLTECoeff_Define,           ONLY: NLTECoeff_Associated
   USE CRTM_Planck_Functions,      ONLY: CRTM_Planck_Temperature
   USE CRTM_CloudCover_Define,     ONLY: CRTM_CloudCover_type
-
+  USE CRTM_Active_Sensor,         ONLY: CRTM_Compute_Reflectivity, &
+                                        Calculate_Cloud_Water_Density
+                                        
   ! Internal variable definition modules
   ! ...AtmOptics
   USE AOvar_Define, ONLY: AOvar_type, &
@@ -615,6 +617,10 @@ CONTAINS
          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
          RETURN
       END IF
+      
+      ! Calculate cloud water density 
+      CALL Calculate_Cloud_Water_Density(Atm)
+      
       !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
       DO nt = 1, n_channel_threads
          ! Prepare the atmospheric optics structures
@@ -934,6 +940,7 @@ CONTAINS
                ! Compute the cloud particle absorption/scattering properties
                IF( Atm%n_Clouds > 0 ) THEN
                   Error_Status = CRTM_Compute_CloudScatter( Atm         , &  ! Input
+                       GeometryInfo, &  ! Input
                        SensorIndex , &  ! Input
                        ChannelIndex, &  ! Input
                        AtmOptics(nt)   , &  ! Output
@@ -1106,6 +1113,17 @@ CONTAINS
                   RTSolution(ln,m)%Tb_clear = RTSolution(ln,m)%Brightness_Temperature
                   RTSolution(ln,m)%R_clear  = RTSolution(ln,m)%Radiance
                END IF
+               
+                         ! Calculate reflectivity for active instruments
+               IF  ( (SC(SensorIndex)%Is_Active_Sensor) .AND. (AtmOptics(nt)%Include_Scattering)) THEN
+                       CALL CRTM_Compute_Reflectivity(Atm             , & ! Input
+                                                  AtmOptics(nt)       , & ! Input
+                                                  GeometryInfo    , & ! Input
+                                                  SensorIndex     , & ! Input
+                                                  ChannelIndex    , & ! Input
+                                                  RTSolution(ln,m))   ! Input/Output
+               ENDIF
+          
             END DO Channel_Loop
          END DO Thread_Loop
          !$OMP END PARALLEL DO
