@@ -78,7 +78,7 @@ else() # Download CRTM coefficients
   set( ECBUILD_DOWNLOAD_BASE_URL https://bin.ssec.wisc.edu/pub/s4/CRTM )
   message(STATUS "download CRTM coeffs files from: ${ECBUILD_DOWNLOAD_BASE_URL}/file to ${CRTM_COEFFS_PATH}")
   ecbuild_get_test_multidata( TARGET   get_crtm_coeffs
-                              NAMES    crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz:2b56a7a55dc9fd440ba97d7719082889
+                              NAMES    crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz:29a9b6a77096006cc76dbbb9c9569b75
                               DIRNAME  file
                               DIRLOCAL ${CRTM_COEFFS_PATH}
                               EXTRACT )
