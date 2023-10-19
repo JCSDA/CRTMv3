@@ -1,4 +1,4 @@
-CRTM REL-3.0.1
+CRTM REL-3.1.0
 ====================
 
 [![Build Status](https://app.travis-ci.com/JCSDA-internal/crtm.svg?token=r6aaq9P13fHcTi8yBgdM&branch=develop)](https://app.travis-ci.com/JCSDA-internal/crtm)
@@ -6,9 +6,9 @@ CRTM REL-3.0.1
 Preamble
 --------
 
-CRTM v3.0.1 release (`REL-3.0.1`)  
+CRTM v3.1.0 release (`REL-3.1.0`)  
 
-v3.0.1 Released September 23, 2023
+v3.1.0 (alpha) Released October 31, 2023
 v3.0.0 Released March, 2023  
 v2.4.1-alpha Released on April 1, 2021 (internal realease only)
 v2.4.0 Released on October 23, 2020
@@ -121,7 +121,7 @@ At present, the `fix/` directory is provided either through ftp or during the ct
 
 The files therein are gzipped (*.gz extension).  Use the Get_CRTM_Binary_Files.sh script to obtain and unpack the dataset.    
 
-As of CRTM v3.0.1, we no longer support legacy build system using autotools. (i.e., configure/make).  Only cmake / ecbuild (a cmake wrapper, but not required) is supported. 
+As of CRTM v3.0.0, we no longer support legacy build system using autotools. (i.e., configure/make).  Only cmake / ecbuild (a cmake wrapper, but not required) is supported. 
 
 **Build Step 1**
 From the top level of the CRTM directory, e.g., `CRTMv3/` 

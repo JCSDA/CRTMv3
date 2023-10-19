@@ -2,7 +2,7 @@
 # Copyright and License: see LICENSE
 
 cmake_minimum_required( VERSION 3.12 )
-project( crtm VERSION 3.0.1 LANGUAGES Fortran )
+project( crtm VERSION 3.1.0 LANGUAGES Fortran )
 
 option(OPENMP "Build crtm with OpenMP support" ON)
 

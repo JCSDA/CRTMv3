@@ -130,6 +130,9 @@ MODULE CRTM_K_Matrix_Module
   USE CRTM_Planck_Functions,      ONLY: CRTM_Planck_Temperature   , &
                                         CRTM_Planck_Temperature_AD
   USE CRTM_CloudCover_Define,     ONLY: CRTM_CloudCover_type
+  USE CRTM_Active_Sensor,         ONLY: CRTM_Compute_Reflectivity, &
+                                        CRTM_Compute_Reflectivity_AD, &
+                                        Calculate_Cloud_Water_Density
 
   ! Internal variable definition modules
   ! ...AtmOptics
@@ -712,6 +715,8 @@ CONTAINS
         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
         RETURN
       END IF
+      ! Calculate cloud water density
+      CALL Calculate_Cloud_Water_Density(Atm)
 
       ! Prepare the atmospheric optics structures
       ! ...Allocate the atmospheric optics structures based on Atm extension
@@ -1033,7 +1038,8 @@ CONTAINS
               END IF
               CALL CRTM_Atmosphere_Zero( Atm_Clear_K(nt) )
             END IF
-
+            !CALL Calculate_Cloud_Water_Density(Atm, Atm_K(nt))
+            Atm_K(nt)%Height = Atm%Height
 
             ! Determine the number of streams (n_Full_Streams) in up+downward directions
             IF ( Opt%Use_N_Streams ) THEN
@@ -1125,6 +1131,7 @@ CONTAINS
             ! Compute the cloud particle absorption/scattering properties
             IF( Atm%n_Clouds > 0 ) THEN
               Error_Status = CRTM_Compute_CloudScatter( Atm         , &  ! Input
+                                                        GeometryInfo, &  ! Input
                                                         SensorIndex , &  ! Input
                                                         ChannelIndex, &  ! Input
                                                         AtmOptics(nt)   , &  ! Output
@@ -1304,6 +1311,19 @@ CONTAINS
                                            ChannelIndex, SensorIndex, &
                                            compute_antenna_correction, GeometryInfo)
 
+              !======= Active sensor =======
+              ! Calculate reflectivity for active instruments
+              IF  ( SC(SensorIndex)%Is_Active_Sensor .AND. AtmOptics(nt)%Include_Scattering) THEN
+                  CALL CRTM_Compute_Reflectivity(Atm             , & ! Input
+                                                 AtmOptics(nt)   , & ! Input
+                                                 GeometryInfo    , & ! Input
+                                                 SensorIndex     , & ! Input
+                                                 ChannelIndex    , & ! Input
+                                                 RTSolution(ln,m))   ! Input/Output
+              ENDIF
+              !=============================
+           
+
            IF ( SpcCoeff_IsInfraredSensor( SC(SensorIndex) ) .OR. &
                SpcCoeff_IsMicrowaveSensor( SC(SensorIndex) ) ) THEN
               ! Perform clear-sky post and pre-processing
@@ -1392,6 +1412,19 @@ CONTAINS
                   CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
                   CYCLE Thread_Loop
                 END IF
+                ! Calculate the adjoint for the active sensor reflectivity
+                IF  ( SC(SensorIndex)%Is_Active_Sensor .AND. AtmOptics(nt)%Include_Scattering) THEN
+                    CALL CRTM_Compute_Reflectivity_AD(Atm             , &  ! Input 
+                                                      AtmOptics(nt)   , &  ! Input 
+                                                      RTSolution(ln,m), & ! Input
+                                                      GeometryInfo    , & ! Input
+                                                      SensorIndex     , &  ! Input
+                                                      ChannelIndex    , &  ! Input
+                                                      AtmOptics_K(nt) , &  ! Input/Output
+                                                      RTSolution_K(ln,m))   ! Input/Output
+                ENDIF
+
+
               END DO Azimuth_Fourier_Loop
 
 ! The following part corresponding TL part is moved from above CRTM_Compute_RTSolution
@@ -1467,6 +1500,7 @@ CONTAINS
               Error_Status = CRTM_Compute_CloudScatter_AD( Atm         , &  ! FWD Input
                                                            AtmOptics(nt)   , &  ! FWD Input
                                                            AtmOptics_K(nt) , &  ! K   Input
+                                                           GeometryInfo    , &  ! Input
                                                            SensorIndex , &  ! Input
                                                            ChannelIndex, &  ! Input
                                                            Atm_K(nt)       , &  ! K   Output
