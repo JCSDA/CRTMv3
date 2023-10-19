@@ -41,13 +41,13 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results/unit)
 
 
 if( DEFINED ENV{LOCAL_PATH_JEDI_TESTFILES})
-    set(LOCAL_PATH_JEDI_TESTFILES "$ENV{LOCAL_PATH_JEDI_TESTFILES}")
+  set(LOCAL_PATH_JEDI_TESTFILES "$ENV{LOCAL_PATH_JEDI_TESTFILES}")
 endif()
 
 if ( DEFINED ENV{CRTM_TEST_ROOT})
-    set(CRTM_TEST_ROOT "$ENV{CRTM_TEST_ROOT}")
+  set(CRTM_TEST_ROOT "$ENV{CRTM_TEST_ROOT}")
 else()
-    set(CRTM_TEST_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
+  set(CRTM_TEST_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
 
@@ -60,68 +60,27 @@ IF(EXISTS  ${CMAKE_SOURCE_DIR}/fix)
   set( CRTM_COEFFS_BRANCH "" )
 
 else() # Download CRTM coefficients
-	set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
+ 	set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
   set( CRTM_COEFFS_BRANCH "3.1.0_skylab_7.0" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)
-	# it is my intention is to not have any difference between jedi/ufo versions of CRTM and stand-alond versions of CRTM -- they should both work "out of the box"
-  set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})   #this is where the symlinks point to binary files for the testinput/* directory after ecbuild.
-  file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
-
-  set( ECBUILD_DOWNLOAD_BASE_URL https://bin.ssec.wisc.edu/pub/s4/CRTM )
-  message(STATUS "download CRTM coeffs files from: ${ECBUILD_DOWNLOAD_BASE_URL}/file to ${CRTM_COEFFS_PATH}")
-  ecbuild_get_test_multidata( TARGET   get_crtm_coeffs
-                              NAMES    crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz:29a9b6a77096006cc76dbbb9c9569b75
-                              DIRNAME  file
-                              DIRLOCAL ${CRTM_COEFFS_PATH}
-                              EXTRACT )
-endif()
-
-#  set( DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/file")
-#
-#  set( test_files_dirname crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz )  #UPDATE TARBALL FILENAME HERE
-#  set( checksum "9cf4b1cc57e20802e608a597d7f53073") #MD5SUM, update this if the file above is updated / changed
-#
-#  message(STATUS "fix/ does not exist, download CRTM coeffs files from: ${DOWNLOAD_BASE_URL} to ${CRTM_COEFFS_PATH}")
-#
-#  list( APPEND CRTM_DATA_DOWNLOADER_ARGS
-#                ${DOWNLOAD_BASE_URL}
-#                ${CRTM_COEFFS_PATH}
-#                ${test_files_dirname}
-#                ${checksum} )
-#
-#  # Create download script for ufo_get_*_test_data test
-#  set ( FILENAME crtm_data_downloader.py)
-#  set ( SOURCE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/${FILENAME} )
-#  set ( DEST_FILE ${CMAKE_BINARY_DIR}/bin/${FILENAME} )
-#
-#  if( EXISTS "${SOURCE_FILE}.in" )
-#    configure_file( ${SOURCE_FILE}.in ${DEST_FILE} @ONLY )
-#  else()
-#    configure_file( ${SOURCE_FILE}    ${DEST_FILE} @ONLY )
-#  endif()
-#
-#  # add command to download coefficient data during build step, rather than as a test
-#  add_custom_target(get_crtm_coeffs
-#    COMMAND ${CMAKE_BINARY_DIR}/bin/crtm_data_downloader.py ${CRTM_DATA_DOWNLOADER_ARGS})
-
-  # Existing definitions
+	
   set(CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
-
+	
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/file")
   set(test_files_dirname crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz) 
-  set(checksum "5f6d1c7c272af5a2ab39c72235bcd2a8") # MD5SUM
-
+  set(checksum "29a9b6a77096006cc76dbbb9c9569b75") # MD5SUM
+	
   set(DOWNLOAD_URL "${DOWNLOAD_BASE_URL}/${test_files_dirname}")
   set(DOWNLOAD_DEST "${CRTM_COEFFS_PATH}/${test_files_dirname}")
-
+	
   # Download during CMake configure step
   message(STATUS "Downloading CRTM coeffs files from: ${DOWNLOAD_URL} to ${DOWNLOAD_DEST}")
   file(DOWNLOAD ${DOWNLOAD_URL} ${DOWNLOAD_DEST}
-       EXPECTED_MD5 ${checksum}
-       SHOW_PROGRESS)
+    EXPECTED_MD5 ${checksum}
+    SHOW_PROGRESS)
 
   # -- UNTAR -- 
-
+	
   # Define the directory to untar into
   set(UNTAR_DEST "${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION}")
 
@@ -136,9 +95,9 @@ endif()
   else()
     message(STATUS "Files have already been untarred. Skipping.")
   endif()
-
-
 endif()
+
+
 
 # Create list of sensor ids for testing
 list( APPEND Simple_Sensor_Ids
@@ -416,45 +375,29 @@ endforeach()
 
 
 #---------------------------------------------------------------------------------
-# Active sensor module AD/TL test
-ecbuild_add_executable (
-    TARGET "test_Active_Sensor"
-    SOURCES mains/unit/Unit_Test/test_active_sensor.f90
-    LIBS crtm
-    NOINSTALL
-    )
+# Add test_Active_Sensor executable
+add_executable(test_Active_Sensor mains/unit/Unit_Test/test_active_sensor.f90)
+target_link_libraries(test_Active_Sensor crtm)
 
-ecbuild_add_test(
-    TARGET "test_Active_Sensor"
-    COMMAND "test_Active_Sensor"
-    OMP $ENV{OMP_NUM_THREADS}
-    )
+# Add test for test_Active_Sensor
+add_test(NAME test_Active_Sensor COMMAND test_Active_Sensor)
+set_tests_properties(test_Active_Sensor PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
 
-ecbuild_add_executable (
-    TARGET "test_AD_Active_Sensor"
-    SOURCES mains/unit/Unit_Test/test_AD_Active_Sensor.f90
-    LIBS crtm
-    NOINSTALL
-    )
+# Add test_AD_Active_Sensor executable
+add_executable(test_AD_Active_Sensor mains/unit/Unit_Test/test_AD_Active_Sensor.f90)
+target_link_libraries(test_AD_Active_Sensor crtm)
 
-ecbuild_add_test(
-    TARGET "test_AD_Active_Sensor"
-    COMMAND "test_AD_Active_Sensor"
-    OMP $ENV{OMP_NUM_THREADS}
-    )
+# Add test for test_AD_Active_Sensor
+add_test(NAME test_AD_Active_Sensor COMMAND test_AD_Active_Sensor)
+set_tests_properties(test_AD_Active_Sensor PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
 
-ecbuild_add_executable (
-    TARGET "test_TL_convergence_active_sensor"
-    SOURCES mains/unit/Unit_Test/test_TL_convergence_active_sensor.f90
-    LIBS crtm
-    NOINSTALL
-    )
+# Add test_TL_convergence_active_sensor executable
+add_executable(test_TL_convergence_active_sensor mains/unit/Unit_Test/test_TL_convergence_active_sensor.f90)
+target_link_libraries(test_TL_convergence_active_sensor crtm)
 
-ecbuild_add_test(
-    TARGET "test_TL_convergence_active_sensor"
-    COMMAND "test_TL_convergence_active_sensor"
-    OMP $ENV{OMP_NUM_THREADS}
-    )
+# Add test for test_TL_convergence_active_sensor
+add_test(NAME test_TL_convergence_active_sensor COMMAND test_TL_convergence_active_sensor)
+set_tests_properties(test_TL_convergence_active_sensor PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
 
 
 #####################################################################
