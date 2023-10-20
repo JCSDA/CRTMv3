@@ -6,9 +6,6 @@ project( crtm VERSION 3.1.0 LANGUAGES Fortran )
 
 option(OPENMP "Build crtm with OpenMP support" ON)
 
-set( ${PROJECT_NAME}_DIR ${PROJECT_BINARY_DIR} PARENT_SCOPE )
-
-
 list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )
 set( CMAKE_DIRECTORY_LABELS ${PROJECT_NAME} )
 
@@ -19,6 +16,14 @@ include(GNUInstallDirs)
 ## Dependencies
 if(OPENMP)
   find_package( OpenMP COMPONENTS Fortran )
+
+	# Set OMP_NUM_THREADS as a cached variable
+	# probably need to have a consistent method for selecting this
+	set(OMP_NUM_THREADS "8" CACHE STRING "Number of threads for OpenMP")
+
+	# Export OMP_NUM_THREADS to the environment
+	set(ENV{OMP_NUM_THREADS} ${OMP_NUM_THREADS})
+	
 endif()
 
 if(DEFINED ENV{NETCDF_PATH})
@@ -44,6 +49,7 @@ install(EXPORT ${PROJECT_NAME}-config
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
 
 # Summary
+# todo select status message based on build type selected
 message(STATUS "Configuration summary")
 message(STATUS "Project name : ${PROJECT_NAME}")
 message(STATUS "Project version : ${PROJECT_VERSION}")
