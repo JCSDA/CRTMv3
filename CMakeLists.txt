@@ -1,29 +1,19 @@
-# CRTM
-# Copyright and License: see LICENSE
-
-cmake_minimum_required( VERSION 3.12 )
-project( crtm VERSION 3.1.0 LANGUAGES Fortran )
+project(crtm VERSION 3.1.0 LANGUAGES Fortran)
 
 option(OPENMP "Build crtm with OpenMP support" ON)
 
-list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )
-set( CMAKE_DIRECTORY_LABELS ${PROJECT_NAME} )
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+set(CMAKE_DIRECTORY_LABELS ${PROJECT_NAME})
 
 ## Configuration options
-include( ${PROJECT_NAME}_compiler_flags )
+include(${PROJECT_NAME}_compiler_flags)
 include(GNUInstallDirs)
 
 ## Dependencies
 if(OPENMP)
-  find_package( OpenMP COMPONENTS Fortran )
-
-	# Set OMP_NUM_THREADS as a cached variable
-	# probably need to have a consistent method for selecting this
-	set(OMP_NUM_THREADS "8" CACHE STRING "Number of threads for OpenMP")
-
-	# Export OMP_NUM_THREADS to the environment
-	set(ENV{OMP_NUM_THREADS} ${OMP_NUM_THREADS})
-	
+  find_package(OpenMP COMPONENTS Fortran)
+  set(OMP_NUM_THREADS "8" CACHE STRING "Number of threads for OpenMP")
+  set(ENV{OMP_NUM_THREADS} ${OMP_NUM_THREADS})
 endif()
 
 if(DEFINED ENV{NETCDF_PATH})
@@ -33,11 +23,17 @@ elseif(DEFINED ENV{NETCDF})
 endif()
 find_package(NetCDF REQUIRED Fortran)
 
-
 ## Sources
-add_subdirectory( src )
-add_subdirectory( test )
+add_subdirectory(src)
+add_subdirectory(test)
 include(CTest)
+
+# Generate and configure the project config file
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/crtm-config.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/crtm-config.cmake"
+  @ONLY
+)
 
 # Installation
 install(TARGETS ${PROJECT_NAME}
@@ -45,8 +41,28 @@ install(TARGETS ${PROJECT_NAME}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-install(EXPORT ${PROJECT_NAME}-config
+# Generate the version file for the config package
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/crtm-config-version.cmake"
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY AnyNewerVersion
+)
+
+# Install the generated or configured files
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/crtm-config.cmake"
+              "${CMAKE_CURRENT_BINARY_DIR}/crtm-config-version.cmake"
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
+
+# Install the export set for use with the install-tree
+install(EXPORT ${PROJECT_NAME}-config
+        FILE ${PROJECT_NAME}-targets.cmake
+        NAMESPACE ${PROJECT_NAME}::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
+
+
+install( EXPORT ${PROJECT_NAME}-targets
+         DESTINATION "${INSTALL_CMAKE_DIR}" )
 
 # Summary
 # todo select status message based on build type selected
@@ -59,4 +75,3 @@ message(STATUS "Fortran compiler flags for release : ${CMAKE_Fortran_FLAGS_RELEA
 message(STATUS "Fortran compiler flags for debug : ${CMAKE_Fortran_FLAGS_DEBUG}")
 
 set(crtm_LIBRARIES crtm)
-
