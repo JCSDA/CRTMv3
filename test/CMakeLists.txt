@@ -60,19 +60,19 @@ IF(EXISTS  ${CMAKE_SOURCE_DIR}/fix)
   set( CRTM_COEFFS_BRANCH "" )
 
 else() # Download CRTM coefficients
- 	set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
+  set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
   set( CRTM_COEFFS_BRANCH "3.1.0_skylab_7.0" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)
-	
+  
   set(CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
-	
+  
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/file")
   set(test_files_dirname crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz) 
   set(checksum "29a9b6a77096006cc76dbbb9c9569b75") # MD5SUM
-	
+  
   set(DOWNLOAD_URL "${DOWNLOAD_BASE_URL}/${test_files_dirname}")
   set(DOWNLOAD_DEST "${CRTM_COEFFS_PATH}/${test_files_dirname}")
-	
+  
   # Download during CMake configure step
   message(STATUS "Downloading CRTM coeffs files from: ${DOWNLOAD_URL} to ${DOWNLOAD_DEST}")
   file(DOWNLOAD ${DOWNLOAD_URL} ${DOWNLOAD_DEST}
@@ -80,7 +80,7 @@ else() # Download CRTM coefficients
     SHOW_PROGRESS)
 
   # -- UNTAR -- 
-	
+  
   # Define the directory to untar into
   set(UNTAR_DEST "${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION}")
 
@@ -104,10 +104,10 @@ list( APPEND Simple_Sensor_Ids
         atms_n21
         cris-fsr_n21
         v.abi_g18
-				atms_npp
+        atms_npp
         cris399_npp
         v.abi_gr
-				abi_g18
+        abi_g18
         modis_aqua
 )
 
@@ -115,32 +115,32 @@ list( APPEND ScatteringSwitch_Sensor_Ids
         atms_n21
         cris-fsr_n21
         v.abi_g18
-				atms_npp
+        atms_npp
         cris399_npp
         v.abi_gr
-				abi_g18
+        abi_g18
         modis_aqua
 )
 
 list( APPEND SOI_Sensor_Ids
         atms_n21
         cris-fsr_n21
-        v.abi_g18	
+        v.abi_g18 
         atms_npp
         cris399_npp
         v.abi_gr
-				abi_g18
+        abi_g18
         modis_aqua
 )
 
 list( APPEND VerticalCoordinates_Sensor_Ids
         atms_n21
         cris-fsr_n21
-        v.abi_g18	
+        v.abi_g18 
         atms_npp
         cris399_npp
         v.abi_gr
-				abi_g18
+        abi_g18
         modis_aqua
 )
 
@@ -156,17 +156,17 @@ list( APPEND ClearSky_Sensor_Ids
         atms_npp
         cris399_npp
         v.abi_gr
-				abi_g18
+        abi_g18
         modis_aqua
 )
 
 # Create list of sensor ids for testing
 list( APPEND AOD_Sensor_Ids
-	cris-fsr_n21
-	v.abi_g18
+  cris-fsr_n21
+  v.abi_g18
         cris399_npp
         v.abi_gr
-	abi_g18
+  abi_g18
         airs_aqua
 )
 
