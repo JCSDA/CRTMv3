@@ -1,9 +1,15 @@
+cmake_minimum_required( VERSION 3.12 )
+
 project(crtm VERSION 3.1.0 LANGUAGES Fortran)
 
 option(OPENMP "Build crtm with OpenMP support" ON)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 set(CMAKE_DIRECTORY_LABELS ${PROJECT_NAME})
+#if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR} CACHE PATH "default install path" FORCE)
+#endif()
+message("CMAKE_INSTALL_PREFIX set to ${CMAKE_INSTALL_PREFIX}")
 
 ## Configuration options
 include(${PROJECT_NAME}_compiler_flags)
@@ -40,6 +46,7 @@ install(TARGETS ${PROJECT_NAME}
         EXPORT ${PROJECT_NAME}-config
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+#add_dependencies(${PROJECT_NAME} install)
 
 # Generate the version file for the config package
 include(CMakePackageConfigHelpers)
@@ -52,17 +59,29 @@ write_basic_package_version_file(
 # Install the generated or configured files
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/crtm-config.cmake"
               "${CMAKE_CURRENT_BINARY_DIR}/crtm-config-version.cmake"
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
+        DESTINATION .)
+#add_dependencies(${PROJECT_NAME} install)
 
 # Install the export set for use with the install-tree
+set(BUILD_DIR ${CMAKE_BINARY_DIR})
 install(EXPORT ${PROJECT_NAME}-config
         FILE ${PROJECT_NAME}-targets.cmake
         NAMESPACE ${PROJECT_NAME}::
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
+        DESTINATION ${BUILD_DIR})
+#add_dependencies(${PROJECT_NAME} install)
 
+#add_custom_target(default COMMAND ${CMAKE_MAKE_PROGRAM} install)
+#add_custom_target(my_all COMMAND ${CMAKE_MAKE_PROGRAM} crtm && ${CMAKE_MAKE_PROGRAM} install)
+#add_custom_target(my_all ALL COMMAND ${CMAKE_MAKE_PROGRAM} install)
 
-install( EXPORT ${PROJECT_NAME}-targets
-         DESTINATION "${INSTALL_CMAKE_DIR}" )
+#add_custom_target(install_all
+#                  COMMAND ${CMAKE_COMMAND} --build . --target all
+#                  COMMAND ${CMAKE_COMMAND} --build . --target install
+#                  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+#add_custom_target(run_install ALL
+#                  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target install
+#                  DEPENDS ${PROJECT_NAME})
 
 # Summary
 # todo select status message based on build type selected
