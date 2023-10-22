@@ -98,7 +98,7 @@ MODULE CRTM_Forward_Module
   USE CRTM_CloudCover_Define,     ONLY: CRTM_CloudCover_type
   USE CRTM_Active_Sensor,         ONLY: CRTM_Compute_Reflectivity, &
                                         Calculate_Cloud_Water_Density
-                                        
+
   ! Internal variable definition modules
   ! ...AtmOptics
   USE AOvar_Define, ONLY: AOvar_type, &
@@ -617,10 +617,10 @@ CONTAINS
          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
          RETURN
       END IF
-      
-      ! Calculate cloud water density 
+
+      ! Calculate cloud water density
       CALL Calculate_Cloud_Water_Density(Atm)
-      
+
       !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
       DO nt = 1, n_channel_threads
          ! Prepare the atmospheric optics structures
@@ -646,18 +646,18 @@ CONTAINS
          ! ...Cloud
          IF ( Atm%n_Clouds > 0 ) THEN
             CALL CSvar_Create( CSvar(nt), &
-                 MAX_N_LEGENDRE_TERMS, &
+                 MAX_N_LEGENDRE_TERMS   , &
                  CloudC%N_PHASE_ELEMENTS, &
-                 Atm%n_Layers        , &
-                 Atm%n_Clouds          )
+                 Atm%n_Layers           , &
+                 Atm%n_Clouds             )
          END IF
          ! ...Aerosol
          IF ( Atm%n_Aerosols > 0 ) THEN
             CALL ASvar_Create( ASvar(nt), &
-                 MAX_N_LEGENDRE_TERMS, &
-                 AeroC%N_PHASE_ELEMENTS, &
-                 Atm%n_Layers        , &
-                 Atm%n_Aerosols        )
+                 MAX_N_LEGENDRE_TERMS   , &
+                 AeroC%N_PHASE_ELEMENTS , &
+                 Atm%n_Layers           , &
+                 Atm%n_Aerosols           )
          END IF
       END DO
       !$OMP END PARALLEL DO
@@ -743,7 +743,7 @@ CONTAINS
 
 
          ! Check if antenna correction to be applied for current sensor
-         compute_antenna_correction = ( Opt%Use_Antenna_Correction               .AND. &
+         compute_antenna_correction = ( Opt%Use_Antenna_Correction .AND. &
               ACCoeff_Associated( SC(SensorIndex)%AC ) .AND. &
               iFOV /= 0 )
 
@@ -773,10 +773,10 @@ CONTAINS
 
             ! Allocate the RTV structure if necessary
             IF( ( Atm%n_Clouds   > 0 .OR. &
-                 Atm%n_Aerosols > 0 .OR. &
-                 SpcCoeff_IsUltravioletSensor(SC(SensorIndex)) .OR. &
-                 SpcCoeff_IsVisibleSensor(SC(SensorIndex)) ) .AND. &
-                 AtmOptics(nt)%Include_Scattering ) THEN
+                  Atm%n_Aerosols > 0 .OR. &
+                  SpcCoeff_IsUltravioletSensor(SC(SensorIndex)) .OR. &
+                  SpcCoeff_IsVisibleSensor(SC(SensorIndex)) ) .AND. &
+                  AtmOptics(nt)%Include_Scattering ) THEN
                CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
 
                IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
@@ -869,7 +869,7 @@ CONTAINS
                   RTSolution(ln,m)%n_Full_Streams = n_Full_Streams + 2
                   RTSolution(ln,m)%Scattering_Flag = .TRUE.
                ELSE
-                  n_Full_Streams = CRTM_Compute_nStreams( Atm             , &  ! Input
+                  n_Full_Streams = CRTM_Compute_nStreams( Atm , &  ! Input
                        SensorIndex     , &  ! Input
                        ChannelIndex    , &  ! Input
                        RTSolution(ln,m)  )  ! Output
@@ -878,10 +878,10 @@ CONTAINS
                AtmOptics(nt)%n_Legendre_Terms = n_Full_Streams
 
                ! Compute the gas absorption
-               CALL CRTM_Compute_AtmAbsorption( SensorIndex   , &  ! Input
+               CALL CRTM_Compute_AtmAbsorption( SensorIndex , &  ! Input
                     ChannelIndex  , &  ! Input
                     AncillaryInput, &  ! Input
-                    Predictor , &  ! Input
+                    Predictor     , &  ! Input
                     AtmOptics(nt) , &  ! Output
                     AAvar(nt)       )  ! Internal variable output
 
@@ -939,12 +939,12 @@ CONTAINS
 
                ! Compute the cloud particle absorption/scattering properties
                IF( Atm%n_Clouds > 0 ) THEN
-                  Error_Status = CRTM_Compute_CloudScatter( Atm         , &  ! Input
-                       GeometryInfo, &  ! Input
-                       SensorIndex , &  ! Input
-                       ChannelIndex, &  ! Input
-                       AtmOptics(nt)   , &  ! Output
-                       CSvar(nt)         )  ! Internal variable output
+                  Error_Status = CRTM_Compute_CloudScatter( Atm , &  ! Input
+                       GeometryInfo  , &  ! Input
+                       SensorIndex   , &  ! Input
+                       ChannelIndex  , &  ! Input
+                       AtmOptics(nt) , &  ! Output
+                       CSvar(nt)       )  ! Internal variable output
                   IF ( Error_Status /= SUCCESS ) THEN
                      WRITE( Message,'("Error computing CloudScatter for ",a,&
                           &", channel ",i0,", profile #",i0)' ) &
@@ -955,11 +955,11 @@ CONTAINS
 
                ! Compute the aerosol absorption/scattering properties
                IF ( Atm%n_Aerosols > 0 ) THEN
-                  Error_Status = CRTM_Compute_AerosolScatter( Atm         , &  ! Input
-                       SensorIndex , &  ! Input
-                       ChannelIndex, &  ! Input
-                       AtmOptics(nt)   , &  ! In/Output
-                       ASvar(nt)         )  ! Internal variable output
+                  Error_Status = CRTM_Compute_AerosolScatter( Atm , &  ! Input
+                       SensorIndex   , &  ! Input
+                       ChannelIndex  , &  ! Input
+                       AtmOptics(nt) , &  ! In/Output
+                       ASvar(nt)       )  ! Internal variable output
 
                   IF ( Error_Status /= SUCCESS ) THEN
                      WRITE( Message,'("Error computing AerosolScatter for ",a,&
@@ -1031,13 +1031,13 @@ CONTAINS
                   Error_Status = CRTM_Compute_RTSolution( &
                        Atm             , &  ! Input
                        Surface(m)      , &  ! Input
-                       AtmOptics(nt)       , &  ! Input
-                       SfcOptics(nt)      , &  ! Input
+                       AtmOptics(nt)   , &  ! Input
+                       SfcOptics(nt)   , &  ! Input
                        GeometryInfo    , &  ! Input
                        SensorIndex     , &  ! Input
                        ChannelIndex    , &  ! Input
                        RTSolution(ln,m), &  ! Output
-                       RTV(nt)               )  ! Internal variable output
+                       RTV(nt)           )  ! Internal variable output
                   IF ( Error_Status /= SUCCESS ) THEN
                      WRITE( Message,'( "Error computing RTSolution for ", a, &
                           &", channel ", i0,", profile #",i0)' ) &
@@ -1062,13 +1062,13 @@ CONTAINS
                      RTV_Clear(nt)%mth_Azi = mth_Azi
                      SfcOptics_Clear(nt)%mth_Azi = mth_Azi
                      Error_Status = CRTM_Compute_RTSolution( &
-                          Atm_Clear       , &  ! Input
-                          Surface(m)      , &  ! Input
+                          Atm_Clear           , &  ! Input
+                          Surface(m)          , &  ! Input
                           AtmOptics_Clear(nt) , &  ! Input
                           SfcOptics_Clear(nt) , &  ! Input
-                          GeometryInfo    , &  ! Input
-                          SensorIndex     , &  ! Input
-                          ChannelIndex    , &  ! Input
+                          GeometryInfo        , &  ! Input
+                          SensorIndex         , &  ! Input
+                          ChannelIndex        , &  ! Input
                           RTSolution_Clear(nt), &  ! Output
                           RTV_Clear(nt)         )  ! Internal variable output
                      IF ( Error_Status /= SUCCESS ) THEN
@@ -1077,7 +1077,6 @@ CONTAINS
                              TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
                         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
                      END IF
-
                   END IF
 
                END DO Azimuth_Fourier_Loop
@@ -1109,21 +1108,21 @@ CONTAINS
                   RTSolution(ln,m)%Tb_Clear = RTSolution_Clear(nt)%Brightness_Temperature
                END IF
                !** output Tb_clear in the case of n_clouds = 0  (note this is NOT aerosol cleared)
-               IF (Atm%n_Clouds == 0 .OR. CloudCover%Total_Cloud_Cover < MIN_COVERAGE_THRESHOLD) THEN
+               IF ( Atm%n_Clouds == 0 .OR. CloudCover%Total_Cloud_Cover < MIN_COVERAGE_THRESHOLD ) THEN
                   RTSolution(ln,m)%Tb_clear = RTSolution(ln,m)%Brightness_Temperature
                   RTSolution(ln,m)%R_clear  = RTSolution(ln,m)%Radiance
                END IF
-               
-                         ! Calculate reflectivity for active instruments
-               IF  ( (SC(SensorIndex)%Is_Active_Sensor) .AND. (AtmOptics(nt)%Include_Scattering)) THEN
-                       CALL CRTM_Compute_Reflectivity(Atm             , & ! Input
-                                                  AtmOptics(nt)       , & ! Input
-                                                  GeometryInfo    , & ! Input
-                                                  SensorIndex     , & ! Input
-                                                  ChannelIndex    , & ! Input
-                                                  RTSolution(ln,m))   ! Input/Output
+
+               ! Calculate reflectivity for active instruments
+               IF ( (SC(SensorIndex)%Is_Active_Sensor) .AND. (AtmOptics(nt)%Include_Scattering) ) THEN
+                  CALL CRTM_Compute_Reflectivity(Atm             , & ! Input
+                                                 AtmOptics(nt)   , & ! Input
+                                                 GeometryInfo    , & ! Input
+                                                 SensorIndex     , & ! Input
+                                                 ChannelIndex    , & ! Input
+                                                 RTSolution(ln,m)  ) ! Input/Output
                ENDIF
-          
+
             END DO Channel_Loop
          END DO Thread_Loop
          !$OMP END PARALLEL DO
@@ -1163,7 +1162,7 @@ CONTAINS
                                        NLTE_Predictor, &
                                        ChannelIndex, SensorIndex, &
                                        compute_antenna_correction, GeometryInfo)
-      TYPE(CRTM_Options_Type),      INTENT(IN) :: Opt
+      TYPE(CRTM_Options_Type),      INTENT(IN)     :: Opt
       TYPE(CRTM_RTSolution_type),   INTENT(IN OUT) :: rts
       TYPE(NLTE_Predictor_type),    INTENT(IN)     :: NLTE_Predictor
       INTEGER,                      INTENT(IN) :: ChannelIndex, SensorIndex
