@@ -18,8 +18,17 @@ include(GNUInstallDirs)
 ## Dependencies
 if(OPENMP)
   find_package(OpenMP COMPONENTS Fortran)
-  set(OMP_NUM_THREADS "8" CACHE STRING "Number of threads for OpenMP")
-  set(ENV{OMP_NUM_THREADS} ${OMP_NUM_THREADS})
+
+	# Check if OMP_NUM_THREADS is set in the environment
+	if(DEFINED ENV{OMP_NUM_THREADS})
+		set(OMP_NUM_THREADS $ENV{OMP_NUM_THREADS})
+	else()
+		# Set a default value if not set
+		set(OMP_NUM_THREADS "4")
+	endif()
+	
+	# Export OMP_NUM_THREADS to the environment
+	set(ENV{OMP_NUM_THREADS} ${OMP_NUM_THREADS})
 endif()
 
 if(DEFINED ENV{NETCDF_PATH})
