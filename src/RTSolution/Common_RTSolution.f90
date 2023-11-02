@@ -1414,9 +1414,9 @@ CONTAINS
     ! -------------------------------------------------------------------------
     ! Compute the corresponding tangent-linear solar reflectance (TOA only)
     ! -------------------------------------------------------------------------
-    IF( RTV%Solar_Flag_true .AND. (.NOT.(RTV%aircraft%rt))) THEN
-     RTSolution_TL%Reflectance = RTSolution_TL%Radiance/(RTV%COS_SUN*RTV%Solar_irradiance/PI)
-    END IF
+    !IF( RTV%Solar_Flag_true .AND. (.NOT.(RTV%aircraft%rt))) THEN
+    ! RTSolution_TL%Reflectance = RTSolution_TL%Radiance/(RTV%COS_SUN*RTV%Solar_irradiance/PI)
+    !END IF
 
   END FUNCTION Assign_Common_Output_TL
 
@@ -1794,9 +1794,9 @@ CONTAINS
     ! ----------------------------------------------------------------
     ! Compute the corresponding adjoint solar reflectance (TOA only)
     ! ----------------------------------------------------------------
-    IF( RTV%Solar_Flag_true .AND. (.NOT.(RTV%aircraft%rt))) THEN
-     RTSolution_AD%Reflectance = RTSolution_AD%Radiance/(RTV%COS_SUN*RTV%Solar_irradiance/PI)
-    END IF
+    !IF( RTV%Solar_Flag_true .AND. (.NOT.(RTV%aircraft%rt))) THEN
+    ! RTSolution_AD%Reflectance = RTSolution_AD%Radiance/(RTV%COS_SUN*RTV%Solar_irradiance/PI)
+    !END IF
 
   END FUNCTION Assign_Common_Output_AD
 
