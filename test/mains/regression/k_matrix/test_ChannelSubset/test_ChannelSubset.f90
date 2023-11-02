@@ -269,19 +269,19 @@ PROGRAM Example6_ChannelSubset
   ! (b) The Forward results are contained in the structure RTSolution
   ! (c) The Jacobians for the atmospheric variables are contained in the structure Atmosphere_K
   ! (d) The Jacobians for the Surface related variables are contained in the structure Surface_K
-  DO m = 1, N_PROFILES
-    WRITE( *,'(//7x,"Profile ",i0," output for ",a )') m, TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)
-    DO l = 1, n_Channels
-      WRITE( *, '(/5x,"Channel ",i0," results")') RTSolution(l,m)%Sensor_Channel
-      ! FWD output
-      WRITE( *, '(/3x,"FORWARD OUTPUT")')
-      CALL CRTM_RTSolution_Inspect(RTSolution(l,m))
-      ! K-MATRIX output
-      WRITE( *, '(/3x,"K-MATRIX OUTPUT")')
-      CALL CRTM_Surface_Inspect(Surface_K(l,m))
-      CALL CRTM_Atmosphere_Inspect(Atmosphere_K(l,m))
-    END DO
-  END DO
+!!$  DO m = 1, N_PROFILES
+!!$    WRITE( *,'(//7x,"Profile ",i0," output for ",a )') m, TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)
+!!$    DO l = 1, n_Channels
+!!$      WRITE( *, '(/5x,"Channel ",i0," results")') RTSolution(l,m)%Sensor_Channel
+!!$      ! FWD output
+!!$      WRITE( *, '(/3x,"FORWARD OUTPUT")')
+!!$      CALL CRTM_RTSolution_Inspect(RTSolution(l,m))
+!!$      ! K-MATRIX output
+!!$      WRITE( *, '(/3x,"K-MATRIX OUTPUT")')
+!!$      CALL CRTM_Surface_Inspect(Surface_K(l,m))
+!!$      CALL CRTM_Atmosphere_Inspect(Atmosphere_K(l,m))
+!!$    END DO
+!!$  END DO
   ! ============================================================================
 
 

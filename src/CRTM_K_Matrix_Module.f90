@@ -422,20 +422,20 @@ CONTAINS
     ! Determine how many threads to use for profiles and channels
     ! After profiles get what they need, we use the left-over threads
     ! to parallelize channels
-    IF ( n_omp_threads <= n_Profiles .OR. n_Profiles == 0) THEN
+!!$    IF ( n_omp_threads <= n_Profiles .OR. n_Profiles == 0) THEN
       n_profile_threads = n_omp_threads
       n_channel_threads = 1
       CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
-    ELSE
-      n_profile_threads = n_Profiles
-      n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
-!      n_channel_threads = MIN(n_Channels, n_omp_threads )
-      if(n_channel_threads > 1) THEN
-        CALL OMP_SET_MAX_ACTIVE_LEVELS(2)
-      ELSE
-        CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
-      END IF
-    END IF
+!!$    ELSE
+!!$      n_profile_threads = n_Profiles
+!!$      n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
+!!$!      n_channel_threads = MIN(n_Channels, n_omp_threads )
+!!$      if(n_channel_threads > 1) THEN
+!!$        CALL OMP_SET_MAX_ACTIVE_LEVELS(2)
+!!$      ELSE
+!!$        CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
+!!$      END IF
+!!$    END IF
 
 !    WRITE(6,*)
 !    WRITE(6,'("   Using",i3," OpenMP threads =",i3," for profiles and",i3," for channels.")') &
@@ -939,14 +939,14 @@ CONTAINS
         ! counters for thread loop
         ! -----------------------------
         n_sensor_channels = ChannelInfo(n)%n_Channels
-!        chunk_ch = n_sensor_channels / n_channel_threads
-        chunk_ch = CEILING( REAL(n_sensor_channels) / REAL(n_channel_threads) )
+        chunk_ch = n_sensor_channels / n_channel_threads
+!        chunk_ch = CEILING( REAL(n_sensor_channels) / REAL(n_channel_threads) )
         !count inactive channels in each chunk
         n_inactive_channels(:) = 0
         DO l = 1, n_sensor_channels
           IF ( .NOT. ChannelInfo(n)%Process_Channel(l) ) THEN
-!            nt = l / chunk_ch + 1
-            nt = FLOOR( REAL(l) / REAL(chunk_ch) ) + 1
+            nt = l / chunk_ch + 1
+!            nt = FLOOR( REAL(l) / REAL(chunk_ch) ) + 1
             n_inactive_channels(nt) = n_inactive_channels(nt) + 1
           END IF
         END DO
