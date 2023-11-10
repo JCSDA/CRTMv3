@@ -77,6 +77,11 @@ install(EXPORT ${PROJECT_NAME}-config
         FILE ${PROJECT_NAME}-targets.cmake
         NAMESPACE ${PROJECT_NAME}::
         DESTINATION ${BUILD_DIR})
+
+export(EXPORT ${PROJECT_NAME}-config
+       FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-targets.cmake"
+       NAMESPACE ${PROJECT_NAME}::)
+
 #add_dependencies(${PROJECT_NAME} install)
 
 #add_custom_target(default COMMAND ${CMAKE_MAKE_PROGRAM} install)
