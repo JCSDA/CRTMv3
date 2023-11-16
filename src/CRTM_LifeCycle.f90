@@ -634,7 +634,7 @@ CONTAINS
     LOGICAL :: netCDF, isSEcategory
     LOGICAL :: Quiet_
     INTEGER :: iQuiet ! TODO: iQuiet should be removed once load routine interfaces have been modified
-    Quiet_ = .FALSE.
+    Quiet_ = .TRUE.
     IF ( PRESENT(Quiet) ) Quiet_ = Quiet
     iQuiet = 0
     IF ( Quiet_ ) THEN
@@ -846,7 +846,9 @@ CONTAINS
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
       END IF
-      WRITE(*, '("Loading IR land emissivity coefficients: ", a) ') TRIM(Default_IRlandCoeff_File)
+      IF ( .NOT. Quiet_ ) THEN
+        WRITE(*, '("Loading IR land emissivity coefficients: ", a) ') TRIM(Default_IRlandCoeff_File)
+      END IF 
       err_stat = CRTM_IRlandCoeff_Load( &
                    Default_IRlandCoeff_File, &
                    File_Path         = Default_File_Path, &
@@ -867,7 +869,9 @@ CONTAINS
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
       END IF
-      WRITE(*, '("Loading IR water emissivity coefficients: ", a) ') TRIM(Default_IRwaterCoeff_File)
+      IF ( .NOT. Quiet_ ) THEN
+        WRITE(*, '("Loading IR water emissivity coefficients: ", a) ') TRIM(Default_IRwaterCoeff_File)
+      END IF
       err_stat = CRTM_IRwaterCoeff_Load( &
                    Default_IRwaterCoeff_File, &
                    netCDF            = netCDF           , &
@@ -893,7 +897,9 @@ CONTAINS
       ELSE
         isSEcategory = .FALSE.
       END IF
-      WRITE(*, '("Loading IR snow emissivity coefficients: ", a) ')  TRIM(Default_IRsnowCoeff_File)
+      IF ( .NOT. Quiet_ ) THEN
+        WRITE(*, '("Loading IR snow emissivity coefficients: ", a) ')  TRIM(Default_IRsnowCoeff_File)
+      END IF
       err_stat = CRTM_IRsnowCoeff_Load( &
                    Default_IRsnowCoeff_File, &
                    netCDF            = netCDF           , &
@@ -915,7 +921,9 @@ CONTAINS
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
       END IF
-      WRITE(*, '("Loading IR ice emissivity coefficients: ", a) ') TRIM(Default_IRiceCoeff_File)
+      IF ( .NOT. Quiet_ ) THEN
+        WRITE(*, '("Loading IR ice emissivity coefficients: ", a) ') TRIM(Default_IRiceCoeff_File)
+      END IF
       err_stat = CRTM_IRiceCoeff_Load( &
                    Default_IRiceCoeff_File, &
                    netCDF            = netCDF           , &
@@ -940,7 +948,9 @@ CONTAINS
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
       END IF
-      WRITE(*, '("Loading VIS land emissivity coefficients: ", a) ') TRIM(Default_VISlandCoeff_File)
+      IF ( .NOT. Quiet_ ) THEN
+        WRITE(*, '("Loading VIS land emissivity coefficients: ", a) ') TRIM(Default_VISlandCoeff_File)
+      END IF
       err_stat = CRTM_VISlandCoeff_Load( &
                    Default_VISlandCoeff_File, &
                    netCDF            = netCDF           , &
@@ -961,7 +971,9 @@ CONTAINS
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
       END IF
-      WRITE(*, '("Loading VIS water emissivity coefficients: ", a) ') TRIM(Default_VISwaterCoeff_File)
+      IF ( .NOT. Quiet_ ) THEN
+        WRITE(*, '("Loading VIS water emissivity coefficients: ", a) ') TRIM(Default_VISwaterCoeff_File)
+      END IF
       err_stat = CRTM_VISwaterCoeff_Load( &
                    Default_VISwaterCoeff_File, &
                    netCDF            = netCDF           , &
@@ -982,8 +994,10 @@ CONTAINS
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
       END IF
-      WRITE(*, '("Loading VIS snow emissivity coefficients: ", a) ') TRIM(Default_VISsnowCoeff_File)
-      err_stat = CRTM_VISsnowCoeff_Load( &
+      IF ( .NOT. Quiet_ ) THEN
+        WRITE(*, '("Loading VIS snow emissivity coefficients: ", a) ') TRIM(Default_VISsnowCoeff_File)
+      END IF
+        err_stat = CRTM_VISsnowCoeff_Load( &
                    Default_VISsnowCoeff_File, &
                    netCDF            = netCDF           , &
                    File_Path         = Default_File_Path, &
@@ -1003,7 +1017,9 @@ CONTAINS
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
       END IF
-      WRITE(*, '("Loading VIS ice emissivity coefficients: ", a) ') TRIM(Default_VISiceCoeff_File)
+      IF ( .NOT. Quiet_ ) THEN
+        WRITE(*, '("Loading VIS ice emissivity coefficients: ", a) ') TRIM(Default_VISiceCoeff_File)
+      END IF
       err_stat = CRTM_VISiceCoeff_Load( &
                    Default_VISiceCoeff_File, &
                    netCDF            = netCDF           , &
@@ -1019,7 +1035,9 @@ CONTAINS
     END IF Visible_Sensor
 
     ! ...Microwave
-    WRITE(*, '("Loading MW water emissivity coefficients: ", a) ') TRIM(Default_MWwaterCoeff_File)
+    IF ( .NOT. Quiet_ ) THEN
+      WRITE(*, '("Loading MW water emissivity coefficients: ", a) ') TRIM(Default_MWwaterCoeff_File)
+    END IF
     Microwave_Sensor: IF ( ANY(SpcCoeff_IsMicrowaveSensor(SC)) ) THEN
       ! ...MW water
       err_stat = CRTM_MWwaterCoeff_Load( &
