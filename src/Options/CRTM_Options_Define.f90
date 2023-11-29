@@ -168,9 +168,6 @@ MODULE CRTM_Options_Define
     REAL(Double), ALLOCATABLE :: Direct_Reflectivity(:) ! L
     LOGICAL :: Derive_Surface_Refl = .FALSE.
     
-    ! Is a specific channel either in visible or ultraviolet
-    LOGICAL, ALLOCATABLE :: Is_Vis_or_UV(:)  ! L
-    
     ! SSU instrument input
     TYPE(SSU_Input_type) :: SSU
 
@@ -566,29 +563,6 @@ CONTAINS
     self%Is_Allocated = ALLOCATED(self%Emissivity) .AND. ALLOCATED(self%Direct_Reflectivity)
                 
   END SUBROUTINE SetEmissivity_rank1
-
-
-  SUBROUTINE SetVis_or_UV_rank1( &
-    self      , &
-    Is_Vis_or_UV)
-    ! Arguments
-    TYPE(CRTM_Options_type), INTENT(IN OUT) :: self
-    LOGICAL,                 INTENT(IN)     :: Is_Vis_or_UV(:)
-    ! Local parameters
-    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Options_SetVis_or_IR(Rank-1)'
-    ! Local variables
-    CHARACTER(ML) :: msg
-    INTEGER :: i
-
-    IF ( SIZE(Is_Vis_or_UV) == self%n_Channels ) THEN
-      self%Is_Vis_or_UV     = Is_Vis_or_UV            ! Auto (re)allocation
-    ELSE
-      write(msg,'(a,i6)') 'Size of Is_Vis_or_UV argument different from n_Channels: ', self%n_Channels
-      CALL Display_Message( ROUTINE_NAME, msg, WARNING )
-      self%Is_Vis_or_UV     = [(.false.,i=1,self%n_Channels)]   ! Auto (re)allocation
-    END IF
-
-  END SUBROUTINE SetVis_or_UV_rank1
 !--------------------------------------------------------------------------------
 !:sdoc+:
 !
@@ -702,7 +676,6 @@ CONTAINS
     ! Perform the allocation
     ALLOCATE( self%Emissivity(n_Channels), &
               self%Direct_Reflectivity(n_Channels), &
-              self%Is_Vis_or_UV(n_Channels), &
               STAT = alloc_stat )
     IF ( alloc_stat /= 0 ) RETURN
 
@@ -712,7 +685,6 @@ CONTAINS
     ! ...Arrays
     self%Emissivity          = ZERO
     self%Direct_Reflectivity = ZERO
-    self%Is_Vis_or_UV        = .FALSE.
 
     ! Set allocation indicator
     self%Is_Allocated = .TRUE.
