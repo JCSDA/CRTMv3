@@ -1783,6 +1783,13 @@ CONTAINS
       RTSolution_AD%Layer_Optical_Depth(1:no) = AtmOptics_AD%Optical_Depth(na+1:nt)
     END IF
              
+    ! ----------------------------------------------------------------
+    ! Compute the corresponding adjoint solar reflectance (TOA only)
+    ! ----------------------------------------------------------------
+    IF( RTV%Solar_Flag_true .AND. (.NOT.(RTV%aircraft%rt))) THEN
+     RTSolution_AD%Reflectance = RTSolution_AD%Radiance/(RTV%COS_SUN*RTV%Solar_irradiance/PI)
+    END IF
+
   END FUNCTION Assign_Common_Output_AD
   
 !################################################################################

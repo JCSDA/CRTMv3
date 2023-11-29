@@ -1082,7 +1082,7 @@ CONTAINS
 
                END DO Azimuth_Fourier_Loop
 
-               ! Combine cloudy and clear radiances for fractional cloud coverage
+               ! Combine cloudy and clear outputs for fractional cloud coverage
                IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
                   DO ks = 1, RTV(nt)%n_Stokes
                      RTSolution(ln,m)%Stokes(ks) = &
@@ -1092,6 +1092,10 @@ CONTAINS
                      RTSolution(ln,m)%Total_Cloud_Cover = CloudCover%Total_Cloud_Cover
                   END DO
                   RTSolution(ln,m)%Radiance = RTSolution(ln,m)%Stokes(1)
+                  !...Reflectance
+                  RTSolution(ln,m)%Reflectance = &
+                        ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Reflectance) + &
+                        (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Reflectance)
                END IF
                ! The radiance post-processing
                CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), &
