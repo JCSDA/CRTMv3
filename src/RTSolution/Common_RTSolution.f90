@@ -1232,6 +1232,13 @@ CONTAINS
              ChannelIndex,                     & ! Input
              RTSolution%Radiance,              & ! Input
              RTSolution%Brightness_Temperature ) ! Output  
+
+    ! -------------------------------------------------------
+    ! Compute the corresponding solar reflectance (TOA only)
+    ! -------------------------------------------------------
+    IF( RTV%Solar_Flag_true .AND. (.NOT.(RTV%aircraft%rt))) THEN
+      RTSolution%Reflectance = RTSolution%Radiance/(RTV%COS_SUN*RTV%Solar_irradiance/PI)
+    END IF
              
   END FUNCTION Assign_Common_Output   
 !-------------------------------------------------------------------------
