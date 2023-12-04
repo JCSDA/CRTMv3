@@ -119,7 +119,7 @@ MODULE RTV_Define
     
 
     REAL(fp):: COS_SUN = ZERO           ! Cosine of sun zenith angle
-    REAL(fp):: Solar_irradiance = ZERO  ! channel solar iiradiance at TOA
+    REAL(fp):: Solar_irradiance = ZERO  ! channel solar irradiance at TOA
     REAL(fp):: Cosmic_Background_Radiance = ZERO ! For background temp=2.7253 
             
     ! Variable to hold the various portions of the

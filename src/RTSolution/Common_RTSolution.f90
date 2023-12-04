@@ -1237,7 +1237,10 @@ CONTAINS
     ! Compute the corresponding solar reflectance (TOA only)
     ! -------------------------------------------------------
     IF( RTV%Solar_Flag_true .AND. (.NOT.(RTV%aircraft%rt))) THEN
-      RTSolution%Reflectance = RTSolution%Radiance/(RTV%COS_SUN*RTV%Solar_irradiance/PI)
+      RTSolution%Reflectance = ZERO
+      IF(RTV%Solar_irradiance .gt. ONE) &
+          !RTSolution%Reflectance = RTSolution%Radiance/(RTV%COS_SUN*RTV%Solar_irradiance/PI)
+          RTSolution%Reflectance = RTSolution%Radiance/(RTV%COS_SUN*RTV%Solar_irradiance)
     END IF
              
   END FUNCTION Assign_Common_Output   

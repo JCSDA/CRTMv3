@@ -1772,7 +1772,7 @@ CONTAINS
              ' - '//TRIM(NF90_STRERROR( NF90_Status ))
        CALL Write_Cleanup(); RETURN
      END IF
-     NF90_Status = NF90_PUT_VAR( FileId,VarID, Refectance )
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Reflectance )
      IF ( NF90_Status /= NF90_NOERR ) THEN
        msg = 'Error writing '//SI_VARNAME//' to '//TRIM(Filename)//&
              ' - '//TRIM(NF90_STRERROR( NF90_Status ))
@@ -3014,7 +3014,7 @@ CONTAINS
     NF90_Status = NF90_DEF_VAR( FileID, &
       RF_VARNAME, &
       FLOAT_TYPE, &
-      dimIDs=(/n_Channels_DimID, n_Profiles_DimID/), &
+      dimIDs=(/n_Channels_DimID/), &
       varID=VarID )
     IF ( NF90_Status /= NF90_NOERR ) THEN
       msg = 'Error defining '//RF_VARNAME//' variable in '//&
