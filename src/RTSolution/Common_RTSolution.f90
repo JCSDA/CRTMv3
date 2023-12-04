@@ -1239,8 +1239,7 @@ CONTAINS
     IF( RTV%Solar_Flag_true .AND. (.NOT.(RTV%aircraft%rt))) THEN
       RTSolution%Reflectance = ZERO
       IF(RTV%Solar_irradiance .gt. ONE) &
-          !RTSolution%Reflectance = RTSolution%Radiance/(RTV%COS_SUN*RTV%Solar_irradiance/PI)
-          RTSolution%Reflectance = RTSolution%Radiance/(RTV%COS_SUN*RTV%Solar_irradiance)
+          RTSolution%Reflectance = RTSolution%Radiance/(RTV%COS_SUN*RTV%Solar_irradiance/PI)
     END IF
              
   END FUNCTION Assign_Common_Output   
