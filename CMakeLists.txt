@@ -38,10 +38,9 @@ elseif(DEFINED ENV{NETCDF})
 endif()
 find_package(NetCDF REQUIRED Fortran)
 
+
 ## Sources
 add_subdirectory(src)
-add_subdirectory(test)
-include(CTest)
 
 # Generate and configure the project config file
 configure_file(
@@ -68,43 +67,50 @@ write_basic_package_version_file(
 # Install the generated or configured files
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/crtm-config.cmake"
               "${CMAKE_CURRENT_BINARY_DIR}/crtm-config-version.cmake"
-        DESTINATION .)
+        DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 #add_dependencies(${PROJECT_NAME} install)
+
+
 
 # Install the export set for use with the install-tree
-set(BUILD_DIR ${CMAKE_BINARY_DIR})
 install(EXPORT ${PROJECT_NAME}-config
-        FILE ${PROJECT_NAME}-targets.cmake
+        FILE "${PROJECT_NAME}-targets.cmake"
         NAMESPACE ${PROJECT_NAME}::
-        DESTINATION ${BUILD_DIR})
+        DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
 
 export(EXPORT ${PROJECT_NAME}-config
-       FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-targets.cmake"
-       NAMESPACE ${PROJECT_NAME}::)
+        FILE "${PROJECT_NAME}-targets.cmake"
+        NAMESPACE ${PROJECT_NAME}::)
 
-#add_dependencies(${PROJECT_NAME} install)
+add_subdirectory(test)
+include(CTest)
 
-#add_custom_target(default COMMAND ${CMAKE_MAKE_PROGRAM} install)
-#add_custom_target(my_all COMMAND ${CMAKE_MAKE_PROGRAM} crtm && ${CMAKE_MAKE_PROGRAM} install)
-#add_custom_target(my_all ALL COMMAND ${CMAKE_MAKE_PROGRAM} install)
-
-#add_custom_target(install_all
-#                  COMMAND ${CMAKE_COMMAND} --build . --target all
-#                  COMMAND ${CMAKE_COMMAND} --build . --target install
-#                  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
-
-#add_custom_target(run_install ALL
-#                  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target install
-#                  DEPENDS ${PROJECT_NAME})
 
 # Summary
-# todo select status message based on build type selected
 message(STATUS "Configuration summary")
 message(STATUS "Project name : ${PROJECT_NAME}")
 message(STATUS "Project version : ${PROJECT_VERSION}")
 message(STATUS "Fortran compiler : ${CMAKE_Fortran_COMPILER}")
 message(STATUS "Fortran compiler flags : ${CMAKE_Fortran_FLAGS}")
-message(STATUS "Fortran compiler flags for release : ${CMAKE_Fortran_FLAGS_RELEASE}")
-message(STATUS "Fortran compiler flags for debug : ${CMAKE_Fortran_FLAGS_DEBUG}")
+if(NOT CMAKE_BUILD_TYPE)
+	set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPER)
+message(STATUS "Build type : ${CMAKE_BUILD_TYPE}")
+if(CMAKE_BUILD_TYPE_UPPER STREQUAL "RELEASE")
+    # Commands for Release build
+		message(STATUS "Fortran compiler flags for release : ${CMAKE_Fortran_FLAGS_RELEASE}")
+elseif(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG")
+    # Commands for Debug build
+		message(STATUS "Fortran compiler flags for debug : ${CMAKE_Fortran_FLAGS_DEBUG}")
+else()
+    # Commands for other build types
+		message(STATUS "No build type specified, defaulting to Release.")
+endif()
+
+
+
 
 set(crtm_LIBRARIES crtm)
