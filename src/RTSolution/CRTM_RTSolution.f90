@@ -370,6 +370,9 @@ CONTAINS
       RETURN
     END IF
 
+    !DO i = 1, Atmosphere%n_Layers
+    !  write(*, '(a,i5,a,f8.5)') 'DEBUG GREG, ', i, ',  Optical_Depth = ', AtmOptics%Optical_Depth(i)
+    !ENDDO
   END FUNCTION CRTM_Compute_RTSolution
 
 !--------------------------------------------------------------------------------

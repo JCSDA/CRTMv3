@@ -1170,6 +1170,7 @@ CONTAINS
     REAL(fp) :: Radiance(RTV%n_Stokes)
     
     Error_Status = SUCCESS
+    no = 0
     n1 = (SfcOptics%Index_Sat_Ang-1)*RTV%n_Stokes + 1    
     ! ADA and SOI specific assignments
     IF( RTV%Scattering_RT ) THEN
@@ -1241,8 +1242,8 @@ CONTAINS
       IF(RTV%Solar_irradiance .gt. ONE) THEN
          !RTSolution%Reflectance = RTSolution%Radiance/(RTV%COS_SUN*RTV%Solar_irradiance/PI)
          RTSolution%Reflectance = RTSolution%Radiance*PI/RTV%Solar_irradiance
-         write(*, '(a,f9.4,a,f9.4,a,f7.4,a,f7.4,a,f7.4)') ' DEBUG-GREG, Solar_irradiance, Down_Solar, reflectance, cos_sun, optical_depth = ', &
-                        RTV%Solar_irradiance, ', ', RTV%Down_Solar_Radiance, ', ', RTSolution%Reflectance, ', ', RTV%COS_SUN, ', ', RTSolution%Layer_Optical_Depth
+         !  write(*, '(a,f9.4,a,f7.4,a,f7.4)') ' DEBUG-GREG, Solar_irradiance, reflectance, cos_sun = ', &
+         !              RTV%Solar_irradiance, ', ', RTSolution%Reflectance, ', ', RTV%COS_SUN
       END IF
     END IF
              
