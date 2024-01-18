@@ -36,14 +36,11 @@ MODULE CloudCoeff_Binary_IO
   PUBLIC :: CloudCoeff_Binary_InquireFile
   PUBLIC :: CloudCoeff_Binary_ReadFile
   PUBLIC :: CloudCoeff_Binary_WriteFile
-  PUBLIC :: CloudCoeff_Binary_IOVersion
-  
+
 
   ! -----------------
   ! Module parameters
   ! -----------------
-  CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
-    '$Id: CloudCoeff_Binary_IO.f90 99117 2017-11-27 18:37:14Z tong.zhu@noaa.gov $'
   CHARACTER(*), PARAMETER :: WRITE_ERROR_STATUS = 'DELETE'
   ! Default message length
   INTEGER, PARAMETER :: ML = 256
@@ -226,9 +223,10 @@ CONTAINS
                                CloudCoeff%n_IR_Frequencies, &
                                CloudCoeff%n_IR_Radii      , &
                                CloudCoeff%n_Temperatures  , &
-                               CloudCoeff%n_Densities     , &
+                               CloudCoeff%n_MW_Densities  , &
                                CloudCoeff%n_Legendre_Terms, &
                                CloudCoeff%n_Phase_Elements
+    CloudCoeff%n_IR_Densities = CloudCoeff%n_MW_Densities
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error reading dimensions from ",a,". IOSTAT = ",i0)' ) &
              TRIM(Filename), io_stat
@@ -248,7 +246,7 @@ CONTAINS
     IF ( PRESENT(n_IR_Frequencies) ) n_IR_Frequencies = CloudCoeff%n_IR_Frequencies
     IF ( PRESENT(n_IR_Radii      ) ) n_IR_Radii       = CloudCoeff%n_IR_Radii      
     IF ( PRESENT(n_Temperatures  ) ) n_Temperatures   = CloudCoeff%n_Temperatures  
-    IF ( PRESENT(n_Densities     ) ) n_Densities      = CloudCoeff%n_Densities     
+    IF ( PRESENT(n_Densities     ) ) n_Densities      = CloudCoeff%n_MW_Densities     
     IF ( PRESENT(n_Legendre_Terms) ) n_Legendre_Terms = CloudCoeff%n_Legendre_Terms
     IF ( PRESENT(n_Phase_Elements) ) n_Phase_Elements = CloudCoeff%n_Phase_Elements
     IF ( PRESENT(Release         ) ) Release          = CloudCoeff%Release     
@@ -384,24 +382,28 @@ CONTAINS
                                dummy%n_IR_Frequencies, &
                                dummy%n_IR_Radii      , &
                                dummy%n_Temperatures  , &
-                               dummy%n_Densities     , &
+                               dummy%n_MW_Densities  , &
                                dummy%n_Legendre_Terms, &
                                dummy%n_Phase_Elements
+    ! IR used to start from (0:3) but that changed                            
+    dummy%n_IR_Densities = dummy%n_MW_Densities + 1 
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error reading data dimensions. IOSTAT = ",i0)' ) io_stat
       CALL Read_Cleanup(); RETURN
     END IF
+    
+    
     ! ...Allocate the object
     CALL CloudCoeff_Create( CloudCoeff, &
                             dummy%n_MW_Frequencies, &
                             dummy%n_MW_Radii      , &
+                            dummy%n_MW_Densities  , &
                             dummy%n_IR_Frequencies, &
                             dummy%n_IR_Radii      , &
+                            dummy%n_IR_Densities  , &
                             dummy%n_Temperatures  , &
-                            dummy%n_Densities     , &
                             dummy%n_Legendre_Terms, &
                             dummy%n_Phase_Elements  )
-
     IF ( .NOT. CloudCoeff_Associated( CloudCoeff ) ) THEN
       msg = 'CloudCoeff object allocation failed.'
       CALL Read_Cleanup(); RETURN
@@ -412,69 +414,43 @@ CONTAINS
                                CloudCoeff%Reff_MW     , &
                                CloudCoeff%Reff_IR     , &
                                CloudCoeff%Temperature , &
-                               CloudCoeff%Density
-                               
+                               CloudCoeff%Density_MW
+    ! This is not used anywhere so just to set the values
+    CloudCoeff%Density_IR = 10                           
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error reading dimension vector data. IOSTAT = ",i0)' ) io_stat
       CALL Read_Cleanup(); RETURN
     END IF
     ! ...Read the microwave liquid phase data
-    
-    IF( CloudCoeff%Version <= 4 .and. dummy%Version <= 4 ) THEN
-    READ( fid,IOSTAT=io_stat ) CloudCoeff%ke_L_MW    , &
-                               CloudCoeff%w_L_MW     , &
-                               CloudCoeff%g_L_MW  , &
-                               CloudCoeff%pcoeff_L_MW
-    ELSE
     READ( fid,IOSTAT=io_stat ) CloudCoeff%ke_L_MW    , &
                                CloudCoeff%w_L_MW     , &
                                CloudCoeff%g_L_MW     , &
-                               CloudCoeff%kb_L_MW     , &
                                CloudCoeff%pcoeff_L_MW
-    END IF
-    
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error reading microwave liquid phase data. IOSTAT = ",i0)' ) io_stat
       CALL Read_Cleanup(); RETURN
     END IF
     ! ...Read the microwave solid phase data
-    IF( CloudCoeff%Version <= 4 .and. dummy%Version <= 4 ) THEN
-      READ( fid,IOSTAT=io_stat ) CloudCoeff%ke_S_MW    , &
+    READ( fid,IOSTAT=io_stat ) CloudCoeff%ke_S_MW    , &
                                CloudCoeff%w_S_MW     , &
                                CloudCoeff%g_S_MW     , &
                                CloudCoeff%pcoeff_S_MW
-    ELSE
-      READ( fid,IOSTAT=io_stat ) CloudCoeff%ke_S_MW    , &
-                               CloudCoeff%w_S_MW     , &
-                               CloudCoeff%g_S_MW     , &
-                               CloudCoeff%kb_S_MW     , &
-                               CloudCoeff%pcoeff_S_MW    
-    END IF
-    
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error reading microwave solid phase data. IOSTAT = ",i0)' ) io_stat
       CALL Read_Cleanup(); RETURN
     END IF
     ! ...Read the infrared data
-    IF( CloudCoeff%Version <= 4 .and. dummy%Version <= 4 ) THEN
-      READ( fid,IOSTAT=io_stat ) CloudCoeff%ke_IR    , &
+    READ( fid,IOSTAT=io_stat ) CloudCoeff%ke_IR    , &
                                CloudCoeff%w_IR     , &
                                CloudCoeff%g_IR     , &
                                CloudCoeff%pcoeff_IR
-    ELSE
-      READ( fid,IOSTAT=io_stat ) CloudCoeff%ke_IR    , &
-                               CloudCoeff%w_IR     , &
-                               CloudCoeff%g_IR     , &
-                               CloudCoeff%kb_IR    , &
-                               CloudCoeff%pcoeff_IR    
-    END IF
-                                   
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error reading infrared data. IOSTAT = ",i0)' ) io_stat
       CALL Read_Cleanup(); RETURN
     END IF
     ! ...Assign the version number read in
     CloudCoeff%Version = dummy%Version
+    
 
     ! Close the file
     CLOSE( fid,IOSTAT=io_stat )
@@ -483,6 +459,7 @@ CONTAINS
       CALL Read_Cleanup(); RETURN
     END IF
 
+ 
     ! Output an info message
     IF ( noisy ) THEN
       CALL CloudCoeff_Info( CloudCoeff, msg )
@@ -631,7 +608,7 @@ CONTAINS
                                 CloudCoeff%n_IR_Frequencies, &
                                 CloudCoeff%n_IR_Radii      , &
                                 CloudCoeff%n_Temperatures  , &
-                                CloudCoeff%n_Densities     , &
+                                CloudCoeff%n_MW_Densities     , &
                                 CloudCoeff%n_Legendre_Terms, &
                                 CloudCoeff%n_Phase_Elements
     IF ( io_stat /= 0 ) THEN
@@ -644,7 +621,7 @@ CONTAINS
                                 CloudCoeff%Reff_MW     , &
                                 CloudCoeff%Reff_IR     , &
                                 CloudCoeff%Temperature , &
-                                CloudCoeff%Density
+                                CloudCoeff%Density_MW
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error writing dimension vector data. IOSTAT = ",i0)' ) io_stat
       CALL Write_Cleanup(); RETURN
@@ -653,7 +630,6 @@ CONTAINS
     WRITE( fid,IOSTAT=io_stat ) CloudCoeff%ke_L_MW    , &
                                 CloudCoeff%w_L_MW     , &
                                 CloudCoeff%g_L_MW     , &
-                                CloudCoeff%kb_L_MW     , &
                                 CloudCoeff%pcoeff_L_MW
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error writing microwave liquid phase data. IOSTAT = ",i0)' ) io_stat
@@ -663,7 +639,6 @@ CONTAINS
     WRITE( fid,IOSTAT=io_stat ) CloudCoeff%ke_S_MW    , &
                                 CloudCoeff%w_S_MW     , &
                                 CloudCoeff%g_S_MW     , &
-                                CloudCoeff%kb_S_MW     , &
                                 CloudCoeff%pcoeff_S_MW
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error writing microwave solid phase data. IOSTAT = ",i0)' ) io_stat
@@ -673,7 +648,6 @@ CONTAINS
     WRITE( fid,IOSTAT=io_stat ) CloudCoeff%ke_IR    , &
                                 CloudCoeff%w_IR     , &
                                 CloudCoeff%g_IR     , &
-                                CloudCoeff%kb_IR     , &
                                 CloudCoeff%pcoeff_IR
     IF ( io_stat /= 0 ) THEN
       WRITE( msg,'("Error writing infrared data. IOSTAT = ",i0)' ) io_stat
@@ -708,33 +682,4 @@ CONTAINS
     END SUBROUTINE Write_CleanUp
 
   END FUNCTION CloudCoeff_Binary_WriteFile
-
-
-!--------------------------------------------------------------------------------
-!:sdoc+:
-!
-! NAME:
-!       CloudCoeff_Binary_IOVersion
-!
-! PURPOSE:
-!       Subroutine to return the module version information.
-!
-! CALLING SEQUENCE:
-!       CALL CloudCoeff_Binary_IOVersion( Id )
-!
-! OUTPUT ARGUMENTS:
-!       Id:   Character string containing the version Id information
-!             for the module.
-!             UNITS:      N/A
-!             TYPE:       CHARACTER(*)
-!             DIMENSION:  Scalar
-!             ATTRIBUTES: INTENT(OUT)
-!
-!:sdoc-:
-!--------------------------------------------------------------------------------
-
-  SUBROUTINE CloudCoeff_Binary_IOVersion( Id )
-    CHARACTER(*), INTENT(OUT) :: Id
-    Id = MODULE_VERSION_ID
-  END SUBROUTINE CloudCoeff_Binary_IOVersion
 END MODULE CloudCoeff_Binary_IO

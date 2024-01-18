@@ -15,8 +15,6 @@ list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )
 set( CMAKE_DIRECTORY_LABELS ${PROJECT_NAME} )
 
 # macro to create a symlink from src to dst
-set(CMAKE_VERBOSE_MAKEFILE ON)
-
 function(CREATE_SYMLINK src dst)
     foreach (FILENAME ${ARGN})
         execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
@@ -60,7 +58,7 @@ else()
     set(CRTM_TEST_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
-set( CRTM_COEFFS_BRANCH "3.0.0" )
+
 
 # If local path to testfiles is defined don't download
 #if( DEFINED LOCAL_PATH_JEDI_TESTFILES )
@@ -68,10 +66,11 @@ IF(EXISTS  ${CMAKE_SOURCE_DIR}/fix)
   set( CRTM_COEFFS_PATH ${CMAKE_SOURCE_DIR}/fix )
   message(STATUS "use LOCAL_PATH_JEDI_TESTFILES: ${CRTM_COEFFS_PATH}")
   message("Using existing local fix directory instead of downloading.")
-# Download CRTM coefficients
-else()
+  set( CRTM_COEFFS_BRANCH "" )
+
+else() # Download CRTM coefficients
 	set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
-  set( CRTM_COEFFS_BRANCH "3.0.0_skylab_6.0" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)
+  set( CRTM_COEFFS_BRANCH "3.1.0_skylab_7.0" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)
 	# it is my intention is to not have any difference between jedi/ufo versions of CRTM and stand-alond versions of CRTM -- they should both work "out of the box"
   set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})   #this is where the symlinks point to binary files for the testinput/* directory after ecbuild.
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
@@ -79,7 +78,7 @@ else()
   set( ECBUILD_DOWNLOAD_BASE_URL https://bin.ssec.wisc.edu/pub/s4/CRTM )
   message(STATUS "download CRTM coeffs files from: ${ECBUILD_DOWNLOAD_BASE_URL}/file to ${CRTM_COEFFS_PATH}")
   ecbuild_get_test_multidata( TARGET   get_crtm_coeffs
-                              NAMES    crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz:5e72e2788acbd7b1a71538ff12ad98b0
+                              NAMES    crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz:29a9b6a77096006cc76dbbb9c9569b75
                               DIRNAME  file
                               DIRLOCAL ${CRTM_COEFFS_PATH}
                               EXTRACT )
@@ -471,6 +470,47 @@ foreach(regtype IN LISTS regression_types)
 endforeach()
 
 
+#---------------------------------------------------------------------------------
+# Active sensor module AD/TL test
+ecbuild_add_executable (
+    TARGET "test_Active_Sensor"
+    SOURCES mains/unit/Unit_Test/test_active_sensor.f90
+    LIBS crtm
+    NOINSTALL
+    )
+
+ecbuild_add_test(
+    TARGET "test_Active_Sensor"
+    COMMAND "test_Active_Sensor"
+    OMP $ENV{OMP_NUM_THREADS}
+    )
+
+ecbuild_add_executable (
+    TARGET "test_AD_Active_Sensor"
+    SOURCES mains/unit/Unit_Test/test_AD_Active_Sensor.f90
+    LIBS crtm
+    NOINSTALL
+    )
+
+ecbuild_add_test(
+    TARGET "test_AD_Active_Sensor"
+    COMMAND "test_AD_Active_Sensor"
+    OMP $ENV{OMP_NUM_THREADS}
+    )
+
+ecbuild_add_executable (
+    TARGET "test_TL_convergence_active_sensor"
+    SOURCES mains/unit/Unit_Test/test_TL_convergence_active_sensor.f90
+    LIBS crtm
+    NOINSTALL
+    )
+
+ecbuild_add_test(
+    TARGET "test_TL_convergence_active_sensor"
+    COMMAND "test_TL_convergence_active_sensor"
+    OMP $ENV{OMP_NUM_THREADS}
+    )
+
 
 #####################################################################
 # Files for CRTM tests
@@ -484,6 +524,8 @@ AerosolCoeff/Little_Endian/AerosolCoeff.bin
 AerosolCoeff/netCDF/AerosolCoeff.nc4
 CloudCoeff/Little_Endian/CloudCoeff.bin
 CloudCoeff/netCDF/CloudCoeff.nc4
+CloudCoeff/netCDF/CloudCoeff_DDA_ARTS.nc4
+CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2022.nc4
 EmisCoeff/MW_Water/Little_Endian/FASTEM6.MWwater.EmisCoeff.bin
 EmisCoeff/IR_Ice/SEcategory/Little_Endian/NPOESS.IRice.EmisCoeff.bin
 EmisCoeff/IR_Ice/SEcategory/netCDF/NPOESS.IRice.EmisCoeff.nc4

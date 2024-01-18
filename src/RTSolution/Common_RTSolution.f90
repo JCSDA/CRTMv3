@@ -3089,6 +3089,6 @@ CONTAINS
       n_Factor_AD = ZERO
     END DO    
     Sum_Fac_AD(0) = ZERO
-  END SUBROUTINE Normalize_Phase_AD  
-  
+  END SUBROUTINE Normalize_Phase_AD
+
 END MODULE Common_RTSolution

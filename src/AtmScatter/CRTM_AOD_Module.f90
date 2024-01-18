@@ -225,7 +225,6 @@ CONTAINS
     ! ------------
     Profile_Loop: DO m = 1, n_Profiles
 
-
       ! Check the aerosol coeff. data for cases with aerosols
       IF( Atmosphere(m)%n_Aerosols > 0 .AND. .NOT. CRTM_AerosolCoeff_IsLoaded() )THEN
          Error_Status = FAILURE
