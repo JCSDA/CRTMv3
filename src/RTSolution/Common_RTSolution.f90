@@ -1789,7 +1789,7 @@ CONTAINS
     ! ----------------------------------------------------------------
     ! Compute the corresponding adjoint solar reflectance (TOA only)
     ! ----------------------------------------------------------------
-    RTSolution%Reflectance = ZERO
+    RTSolution_AD%Reflectance = ZERO
     IF( RTV%Solar_Flag_true .AND. (.NOT.(RTV%aircraft%rt))) THEN
      RTSolution_AD%Reflectance = RTSolution_AD%Radiance*PI/RTV%Solar_irradiance
     END IF
