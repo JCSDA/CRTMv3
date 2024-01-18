@@ -1241,7 +1241,6 @@ CONTAINS
          RTSolution%Reflectance = RTSolution%Radiance*PI/RTV%Solar_irradiance
          !  write(*, '(a,f9.4,a,f7.4,a,f7.4)') ' DEBUG-GREG, Solar_irradiance, reflectance, cos_sun = ', &
          !              RTV%Solar_irradiance, ', ', RTSolution%Reflectance, ', ', RTV%COS_SUN
-      END IF
     END IF
              
   END FUNCTION Assign_Common_Output   
