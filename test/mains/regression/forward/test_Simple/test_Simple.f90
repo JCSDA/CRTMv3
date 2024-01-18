@@ -239,6 +239,7 @@ PROGRAM test_Simple
     STOP 1
   END IF
 
+
   ! 8c. Compare the dimensions
   ! --------------------------
   IF ( n_l /= n_Channels .OR. n_m /= N_PROFILES .OR. n_k /= n_Layers .OR. n_s /= n_Stokes ) THEN
@@ -246,6 +247,7 @@ PROGRAM test_Simple
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
+
 
   ! 8d. Allocate the structure to read in saved data
   ! ------------------------------------------------
@@ -262,6 +264,7 @@ PROGRAM test_Simple
     STOP 1
   END IF
 
+
   ! 8e. Read the saved data
   ! -----------------------
   Error_Status = CRTM_RTSolution_ReadFile( rts_File, rts, NetCDF=.TRUE., Quiet=.TRUE. )
@@ -270,6 +273,7 @@ PROGRAM test_Simple
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
+
 
   ! 8f. Compare the structures
   ! --------------------------
@@ -288,6 +292,8 @@ PROGRAM test_Simple
     END IF
     STOP 1
   END IF
+
+
   ! ============================================================================
 
   ! ============================================================================

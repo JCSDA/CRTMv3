@@ -151,6 +151,8 @@ MODULE CRTM_RTSolution_Define
   CHARACTER(*), PARAMETER :: UPR_PRF_VARNAME    = 'Upwelling_Radiance'
   CHARACTER(*), PARAMETER :: LOP_VARNAME        = 'Layer_Optical_Depth'
   CHARACTER(*), PARAMETER :: SSA_VARNAME        = 'Single_Scatter_Albedo'
+  CHARACTER(*), PARAMETER :: ACREFL_VARNAME     = 'Reflectivity'             ! Active sensor
+  CHARACTER(*), PARAMETER :: ACRATT_VARNAME     = 'Reflectivity_Attenuated'  ! Active sensor
 
   ! Variable units attribute.
   CHARACTER(*), PARAMETER :: UNITS_ATTNAME = 'units'
@@ -161,6 +163,8 @@ MODULE CRTM_RTSolution_Define
   ! ...Emissivity/Reflectivity
   CHARACTER(*), PARAMETER :: SEMIS_UNITS   = 'fraction (0->1)'
   CHARACTER(*), PARAMETER :: SREFL_UNITS   = 'fraction (0->1)'
+  CHARACTER(*), PARAMETER :: ACREFL_UNITS  = 'Reflectivity'             ! Active sensor
+  CHARACTER(*), PARAMETER :: ACRATT_UNITS  = 'Reflectivity_Attenuated'  ! Active sensor
   ! ...Cloud
   CHARACTER(*), PARAMETER :: TCC_UNITS     = 'fraction (0->1)'
   CHARACTER(*), PARAMETER :: RCLEAR_UNITS  = 'fraction (0->1)'
@@ -228,10 +232,10 @@ MODULE CRTM_RTSolution_Define
     ! Radiative transfer results for a single channel
     REAL(fp) :: Radiance               = ZERO
     REAL(fp) :: Brightness_Temperature = ZERO
-    REAL(fp), ALLOCATABLE :: Reflectivity(:)
-    REAL(fp), ALLOCATABLE :: Reflectivity_Attenuated(:)
-    REAL(fp) :: Stokes(4) 
-    REAL(fp) :: Solar_Irradiance        = ZERO
+    REAL(fp), ALLOCATABLE :: Reflectivity(:)             ! K
+    REAL(fp), ALLOCATABLE :: Reflectivity_Attenuated(:)  ! K
+    REAL(fp) :: Stokes(4)
+    REAL(fp) :: Solar_Irradiance       = ZERO
   END TYPE CRTM_RTSolution_type
   !:tdoc-:
 
@@ -360,7 +364,7 @@ CONTAINS
     ALLOCATE( RTSolution%Upwelling_Radiance(n_Layers), &
               RTSolution%Upwelling_Overcast_Radiance(n_Layers), &
               RTSolution%Layer_Optical_Depth(n_Layers), &
-              RTSolution%Single_Scatter_Albedo(n_Layers), & 
+              RTSolution%Single_Scatter_Albedo(n_Layers), &
               RTSolution%Reflectivity(n_Layers), &
               RTSolution%Reflectivity_Attenuated(n_Layers), &
               STAT = alloc_stat )
@@ -373,7 +377,7 @@ CONTAINS
     RTSolution%Upwelling_Radiance  = ZERO
     RTSolution%Upwelling_Overcast_Radiance  = ZERO
     RTSolution%Layer_Optical_Depth = ZERO
-    RTSolution%Single_Scatter_Albedo = ZERO 
+    RTSolution%Single_Scatter_Albedo = ZERO
     RTSolution%Reflectivity = ZERO
     RTSolution%Reflectivity_Attenuated = ZERO
 
@@ -439,7 +443,6 @@ CONTAINS
       RTSolution%Single_Scatter_Albedo = ZERO
       RTSolution%Reflectivity = ZERO
       RTSolution%Reflectivity_Attenuated = ZERO
-
     END IF
 
   END SUBROUTINE CRTM_RTSolution_Zero
@@ -523,7 +526,9 @@ CONTAINS
       WRITE(fid,'(5(1x,es22.15,:))') RTSolution%Upwelling_Radiance
       WRITE(fid,'(3x,"Layer Optical Depth      :")')
       WRITE(fid,'(5(1x,es22.15,:))') RTSolution%Layer_Optical_Depth
+      WRITE(fid,'(3x,"Reflectivity      :")')
       WRITE(fid,'(5(1x,es22.15,:))') RTSolution%Reflectivity
+      WRITE(fid,'(3x,"Reflectivity_Attenuated      :")')
       WRITE(fid,'(5(1x,es22.15,:))') RTSolution%Reflectivity_Attenuated
     END IF
     FLUSH(fid)
@@ -673,7 +678,7 @@ CONTAINS
            (.NOT. ALL(Compares_Within_Tolerance(x%Upwelling_Radiance         , y%Upwelling_Radiance         , n))) .OR. &
            (.NOT. ALL(Compares_Within_Tolerance(x%Layer_Optical_Depth        , y%Layer_Optical_Depth        , n))) .OR. &
            (.NOT. ALL(Compares_Within_Tolerance(x%Reflectivity               , y%Reflectivity               , n))) .OR. &
-           (.NOT. ALL(Compares_Within_Tolerance(x%Reflectivity_Attenuated      , y%Reflectivity_Attenuated      , n)))) RETURN
+           (.NOT. ALL(Compares_Within_Tolerance(x%Reflectivity_Attenuated    , y%Reflectivity_Attenuated    , n)))) RETURN
     END IF
 
     ! If we get here, the structures are comparable
@@ -1605,6 +1610,8 @@ CONTAINS
     REAL(fp), ALLOCATABLE :: Upwelling_Radiance(:,:,:)
     REAL(fp), ALLOCATABLE :: Layer_Optical_Depth(:,:,:)
     REAL(fp), ALLOCATABLE :: Single_Scatter_Albedo(:,:,:)
+    REAL(fp), ALLOCATABLE :: Reflectivity(:,:,:)
+    REAL(fp), ALLOCATABLE :: Reflectivity_Attenuated(:,:,:)
 
 
     ! Set up
@@ -1650,6 +1657,8 @@ CONTAINS
               Upwelling_Radiance( n_Channels, n_Layers, n_Profiles ), &
               Layer_Optical_Depth( n_Channels, n_Layers, n_Profiles ), &
               Single_Scatter_Albedo( n_Channels, n_Layers, n_Profiles ), &
+              Reflectivity( n_Channels, n_Layers, n_Profiles ), &
+              Reflectivity_Attenuated( n_Channels, n_Layers, n_Profiles ), &
               STAT = alloc_stat )
     IF ( alloc_stat /= 0 ) THEN
       msg = 'Error allocating RTSolution output arrays'
@@ -1964,6 +1973,32 @@ CONTAINS
             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Read_Cleanup(); RETURN
     END IF
+    ! ... Reflectivity variable
+    NF90_Status = NF90_INQ_VARID( FileId,ACREFL_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//ACREFL_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_GET_VAR( FileId,VarID, Reflectivity)
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error writing '//ACREFL_VARNAME//' to '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    ! ... Reflectivity_Attenuated variable
+    NF90_Status = NF90_INQ_VARID( FileId,ACRATT_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//ACRATT_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_GET_VAR( FileId,VarID, Reflectivity_Attenuated)
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error writing '//ACRATT_VARNAME//' to '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
 
     ! Close the file
     NF90_Status = NF90_CLOSE( FileId ); Close_File = .FALSE.
@@ -2024,6 +2059,8 @@ CONTAINS
           RTSolution(l,m)%Upwelling_Radiance(c)          = Upwelling_Radiance(l,c,m)
           RTSolution(l,m)%Layer_Optical_Depth(c)         = Layer_Optical_Depth(l,c,m)
           RTSolution(l,m)%Single_Scatter_Albedo(c)       = Single_Scatter_Albedo(l,c,m)
+          RTSolution(l,m)%Reflectivity(c)                = Reflectivity(l,c,m)
+          RTSolution(l,m)%Reflectivity_Attenuated(c)     = Reflectivity_Attenuated(l,c,m)
         END DO
       END DO Channel_Loop
     END DO Profile_Loop
@@ -2412,7 +2449,8 @@ CONTAINS
     REAL(fp), ALLOCATABLE :: Upwelling_Radiance(:,:,:)
     REAL(fp), ALLOCATABLE :: Layer_Optical_Depth(:,:,:)
     REAL(fp), ALLOCATABLE :: Single_Scatter_Albedo(:,:,:)
-
+    REAL(fp), ALLOCATABLE :: Reflectivity(:,:,:)
+    REAL(fp), ALLOCATABLE :: Reflectivity_Attenuated(:,:,:)
 
     ! Set up
     err_stat = SUCCESS
@@ -2453,6 +2491,8 @@ CONTAINS
               Upwelling_Radiance( n_Channels, n_Layers, n_Profiles ), &
               Layer_Optical_Depth( n_Channels, n_Layers, n_Profiles ), &
               Single_Scatter_Albedo( n_Channels, n_Layers, n_Profiles ), &
+              Reflectivity( n_Channels, n_Layers, n_Profiles ), &
+              Reflectivity_Attenuated( n_Channels, n_Layers, n_Profiles ), &
               STAT = alloc_stat )
       IF ( alloc_stat /= 0 ) THEN
         msg = 'Error allocating RTSolution output arrays'
@@ -2488,6 +2528,8 @@ CONTAINS
             Upwelling_Radiance(l,c,m)          = RTSolution(l,m)%Upwelling_Radiance(c)
             Layer_Optical_Depth(l,c,m)         = RTSolution(l,m)%Layer_Optical_Depth(c)
             Single_Scatter_Albedo(l,c,m)       = RTSolution(l,m)%Single_Scatter_Albedo(c)
+            Reflectivity(l,c,m)                = RTSolution(l,m)%Reflectivity(c)
+            Reflectivity_Attenuated(l,c,m)     = RTSolution(l,m)%Reflectivity_Attenuated(c)
           END DO
         END DO Channel_Loop
       END DO Profile_Loop
@@ -2790,6 +2832,33 @@ CONTAINS
              ' - '//TRIM(NF90_STRERROR( NF90_Status ))
        CALL Write_Cleanup(); RETURN
      END IF
+     ! ... Reflectivity variable
+     NF90_Status = NF90_INQ_VARID( FileId,ACREFL_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//ACREFL_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Reflectivity)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//ACREFL_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ... Reflectivity_Attenuated variable
+     NF90_Status = NF90_INQ_VARID( FileId,ACRATT_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//ACRATT_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Reflectivity_Attenuated)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//ACRATT_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+
 
 
      ! Close the file
@@ -2829,6 +2898,8 @@ CONTAINS
                  Upwelling_Radiance, &
                  Layer_Optical_Depth, &
                  Single_Scatter_Albedo, &
+                 Reflectivity, &
+                 Reflectivity_Attenuated, &
                  STAT = alloc_stat )
      IF ( alloc_stat /= 0 ) THEN
        msg = 'Error deallocating RTSolution output arrays'
@@ -2932,7 +3003,7 @@ CONTAINS
                  ALL(x%Upwelling_Radiance          .EqualTo. y%Upwelling_Radiance          ) .AND. &
                  ALL(x%Layer_Optical_Depth         .EqualTo. y%Layer_Optical_Depth         ) .AND. &
                  ALL(x%Reflectivity                .EqualTo. y%Reflectivity                ) .AND. &
-                 ALL(x%Reflectivity_Attenuated       .EqualTo. y%Reflectivity_Attenuated       )
+                 ALL(x%Reflectivity_Attenuated     .EqualTo. y%Reflectivity_Attenuated     )
     END IF
 
   END FUNCTION CRTM_RTSolution_Equal
@@ -3020,6 +3091,7 @@ CONTAINS
 
       rtssum%Reflectivity_Attenuated(1:k) = rtssum%Reflectivity_Attenuated(1:k) + &
                                           rts2%Reflectivity_Attenuated(1:k)
+
     END IF
 
   END FUNCTION CRTM_RTSolution_Add
@@ -3100,13 +3172,13 @@ CONTAINS
                                            rts2%Upwelling_Radiance(1:k)
 
       rtsdiff%Layer_Optical_Depth(1:k) = rtsdiff%Layer_Optical_Depth(1:k) - &
-                                            rts2%Layer_Optical_Depth(1:k)
+                                           rts2%Layer_Optical_Depth(1:k)
 
       rtsdiff%Reflectivity(1:k) = rtsdiff%Reflectivity(1:k) - &
-                                            rts2%Reflectivity(1:k)
+                                           rts2%Reflectivity(1:k)
 
       rtsdiff%Reflectivity_Attenuated(1:k) = rtsdiff%Reflectivity_Attenuated(1:k) - &
-                                            rts2%Reflectivity_Attenuated(1:k)
+                                           rts2%Reflectivity_Attenuated(1:k)
     END IF
 
   END FUNCTION CRTM_RTSolution_Subtract
@@ -3181,7 +3253,7 @@ CONTAINS
       rts_power%Upwelling_Radiance(1:k)          = (rts_power%Upwelling_Radiance(1:k)         )**power
       rts_power%Layer_Optical_Depth(1:k)         = (rts_power%Layer_Optical_Depth(1:k)        )**power
       rts_power%Reflectivity(1:k)                = (rts_power%Reflectivity(1:k)               )**power
-      rts_power%Reflectivity_Attenuated(1:k)       = (rts_power%Reflectivity_Attenuated(1:k)      )**power
+      rts_power%Reflectivity_Attenuated(1:k)     = (rts_power%Reflectivity_Attenuated(1:k)    )**power
     END IF
 
   END FUNCTION CRTM_RTSolution_Exponent
@@ -3257,7 +3329,7 @@ CONTAINS
       rts_normal%Upwelling_Radiance(1:k)          = rts_normal%Upwelling_Radiance(1:k)         /factor
       rts_normal%Layer_Optical_Depth(1:k)         = rts_normal%Layer_Optical_Depth(1:k)        /factor
       rts_normal%Reflectivity(1:k)                = rts_normal%Reflectivity(1:k)               /factor
-      rts_normal%Reflectivity_Attenuated(1:k)       = rts_normal%Reflectivity_Attenuated(1:k)      /factor
+      rts_normal%Reflectivity_Attenuated(1:k)     = rts_normal%Reflectivity_Attenuated(1:k)    /factor
     END IF
 
   END FUNCTION CRTM_RTSolution_Normalise
@@ -3325,7 +3397,7 @@ CONTAINS
       rts_sqrt%Upwelling_Radiance(1:k)          = SQRT(rts_sqrt%Upwelling_Radiance(1:k)         )
       rts_sqrt%Layer_Optical_Depth(1:k)         = SQRT(rts_sqrt%Layer_Optical_Depth(1:k)        )
       rts_sqrt%Reflectivity(1:k)                = SQRT(rts_sqrt%Reflectivity(1:k)               )
-      rts_sqrt%Reflectivity_Attenuated(1:k)       = SQRT(rts_sqrt%Reflectivity_Attenuated(1:k)      )
+      rts_sqrt%Reflectivity_Attenuated(1:k)     = SQRT(rts_sqrt%Reflectivity_Attenuated(1:k)    )
     END IF
 
   END FUNCTION CRTM_RTSolution_Sqrt
@@ -4048,6 +4120,42 @@ CONTAINS
     Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
     IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
       msg = 'Error writing '//SSA_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ... Reflectivity variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      ACREFL_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Layers_DimID, n_Profiles_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//ACREFL_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,ACRATT_UNITS)
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT  )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//ACREFL_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ... Reflectivity_Attenuated variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      ACRATT_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Layers_DimID, n_Profiles_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//ACRATT_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,ACRATT_UNITS)
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT  )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//ACRATT_VARNAME//' variable attributes to '//TRIM(Filename)
       CALL Create_Cleanup(); RETURN
     END IF
 
