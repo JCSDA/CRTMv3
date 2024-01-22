@@ -51,10 +51,10 @@ PROGRAM test_Simple
   CHARACTER(256) :: Sensor_Id
   INTEGER :: Error_Status
   INTEGER :: Allocate_Status
-  INTEGER :: n_Channels
+  INTEGER :: n_Channels, n_Stokes
   INTEGER :: l, m
   ! Declarations for RTSolution comparison
-  INTEGER :: n_l, n_m
+  INTEGER :: n_l, n_m, n_k, n_s
   CHARACTER(256) :: rts_File
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rts(:,:)
 
@@ -76,7 +76,7 @@ PROGRAM test_Simple
   ENDIF
 
   CALL GET_COMMAND_ARGUMENT(1,Sensor_Id)   !read in the value
-  
+
   ! Program header
   ! --------------
   CALL CRTM_Version( Version )
@@ -128,6 +128,14 @@ PROGRAM test_Simple
     STOP 1
   END IF
 
+  ! 3a-2. Allocate N_Layers for layered outputs
+  CALL CRTM_RTSolution_Create( RTSolution, N_LAYERS )
+  IF ( ANY(.NOT. CRTM_RTSolution_Associated(RTSolution)) ) THEN
+    Message = 'Error allocating CRTM RTSolution structures'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    STOP 1
+  END IF
+
   ! 3b. Allocate the STRUCTURES
   ! ---------------------------
   CALL CRTM_Atmosphere_Create( Atm, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
@@ -136,6 +144,7 @@ PROGRAM test_Simple
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
+
   ! ============================================================================
 
 
@@ -175,6 +184,8 @@ PROGRAM test_Simple
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
+
+  n_Stokes = RTSolution(1,1)%n_Stokes+1
   ! ============================================================================
 
 
@@ -183,13 +194,13 @@ PROGRAM test_Simple
   ! ============================================================================
   ! 6. **** OUTPUT THE RESULTS TO SCREEN ****
   !
-  DO m = 1, N_PROFILES
-    WRITE( *,'(//7x,"Profile ",i0," output for ",a )') m, TRIM(Sensor_Id)
-    DO l = 1, n_Channels
-      WRITE( *, '(/5x,"Channel ",i0," results")') RTSolution(l,m)%Sensor_Channel
-      CALL CRTM_RTSolution_Inspect(RTSolution(l,m))
-    END DO
-  END DO
+  ! DO m = 1, N_PROFILES
+  !   WRITE( *,'(//7x,"Profile ",i0," output for ",a )') m, TRIM(Sensor_Id)
+  !   DO l = 1, n_Channels
+  !     WRITE( *, '(/5x,"Channel ",i0," results")') RTSolution(l,m)%Sensor_Channel
+  !     CALL CRTM_RTSolution_Inspect(RTSolution(l,m))
+  !   END DO
+  ! END DO
   ! ============================================================================
 
   ! ============================================================================
@@ -200,38 +211,43 @@ PROGRAM test_Simple
   ! 8a. Create the output file if it does not exist
   ! -----------------------------------------------
   ! ...Generate a filename
-  rts_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.bin'
+  rts_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.nc'
   ! ...Check if the file exists
   IF ( .NOT. File_Exists(rts_File) ) THEN
     Message = 'RTSolution save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write RTSolution structure to file
-    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, Quiet=.TRUE. )
+    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating RTSolution save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
       STOP 1
     END IF
   END IF
- 
+
   ! 8b. Inquire the saved file
   ! --------------------------
   Error_Status = CRTM_RTSolution_InquireFile( rts_File, &
+                                              NetCDF=.TRUE.,    &
+                                              n_Profiles = n_m, &
+                                              n_Layers   = n_k, &
                                               n_Channels = n_l, &
-                                              n_Profiles = n_m )
+                                              n_Stokes   = n_s )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error inquiring RTSolution save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
 
+
   ! 8c. Compare the dimensions
   ! --------------------------
-  IF ( n_l /= n_Channels .OR. n_m /= N_PROFILES ) THEN
+  IF ( n_l /= n_Channels .OR. n_m /= N_PROFILES .OR. n_k /= n_Layers .OR. n_s /= n_Stokes ) THEN
     Message = 'Dimensions of saved data different from that calculated!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
+
 
   ! 8d. Allocate the structure to read in saved data
   ! ------------------------------------------------
@@ -241,15 +257,23 @@ PROGRAM test_Simple
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
+  CALL CRTM_RTSolution_Create( rts, n_k )
+  IF ( ANY(.NOT. CRTM_RTSolution_Associated(rts)) ) THEN
+    Message = 'Error allocating CRTM RTSolution structures'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    STOP 1
+  END IF
+
 
   ! 8e. Read the saved data
   ! -----------------------
-  Error_Status = CRTM_RTSolution_ReadFile( rts_File, rts, Quiet=.TRUE. )
+  Error_Status = CRTM_RTSolution_ReadFile( rts_File, rts, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading RTSolution save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
+
 
   ! 8f. Compare the structures
   ! --------------------------
@@ -260,14 +284,16 @@ PROGRAM test_Simple
     Message = 'RTSolution results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     ! Write the current RTSolution results to file
-    rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.bin'
-    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, Quiet=.TRUE. )
+    rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.nc'
+    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary RTSolution save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
     STOP 1
   END IF
+
+
   ! ============================================================================
 
   ! ============================================================================
@@ -295,7 +321,7 @@ PROGRAM test_Simple
   ! ============================================================================
 
   ! Signal the completion of the program. It is not a necessary step for running CRTM.
-  
+
 CONTAINS
 
   INCLUDE 'Load_Atm_Data.inc'
