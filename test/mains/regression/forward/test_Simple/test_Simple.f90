@@ -21,25 +21,8 @@ PROGRAM test_Simple
   ! Parameters
   ! ----------
   CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'test_Simple'
-
-  ! Directory location of coefficients
-  CHARACTER(*), PARAMETER :: COEFFICIENT_PATH='./testinput/'
-  CHARACTER(*), PARAMETER :: NC_COEFFICIENT_PATH='./testinput/'
-
-  ! Aerosol/Cloud coefficient format
-  CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
-  !CHARACTER(*), PARAMETER :: Coeff_Format = 'netCDF'
-  
-  ! Aerosol/Cloud coefficient scheme
-  CHARACTER(*), PARAMETER :: Aerosol_Model = 'CRTM'
-  !CHARACTER(*), PARAMETER :: Aerosol_Model = 'CMAQ'
-  !CHARACTER(*), PARAMETER :: Aerosol_Model = 'GOCART-GEOS5'
-  !CHARACTER(*), PARAMETER :: Aerosol_Model = 'NAAPS'
-  CHARACTER(*), PARAMETER :: Cloud_Model   = 'CRTM'
-  
-  ! Directory location of results for comparison [NOT USED YET]
+  CHARACTER(*), PARAMETER :: COEFFICIENTS_PATH = './testinput/'
   CHARACTER(*), PARAMETER :: RESULTS_PATH = './results/forward/'
-  
 
   ! ============================================================================
   ! 0. **** SOME SET UP PARAMETERS FOR THIS TEST ****
@@ -50,55 +33,48 @@ PROGRAM test_Simple
   INTEGER, PARAMETER :: N_ABSORBERS = 2
   INTEGER, PARAMETER :: N_CLOUDS    = 1
   INTEGER, PARAMETER :: N_AEROSOLS  = 1
+  ! ...but only ONE Sensor at a time
+  INTEGER, PARAMETER :: N_SENSORS = 1
 
-
-  ! Sensor information
-  INTEGER     , PARAMETER :: N_SENSORS =1 
-
-  ! Some pretend geometry angles. The scan angle is based
+  ! Test GeometryInfo angles. The test scan angle is based
   ! on the default Re (earth radius) and h (satellite height)
   REAL(fp), PARAMETER :: ZENITH_ANGLE = 30.0_fp
   REAL(fp), PARAMETER :: SCAN_ANGLE   = 26.37293341421_fp
   ! ============================================================================
 
+
   ! ---------
   ! Variables
   ! ---------
-  CHARACTER(256) :: Message, Version
-  CHARACTER(256) :: AerosolCoeff_File
-  CHARACTER(256) :: AerosolCoeff_Format
-  CHARACTER(256) :: CloudCoeff_File
-  CHARACTER(256) :: CloudCoeff_Format
-  CHARACTER(256) :: Aerosol_Scheme
-  CHARACTER(256) :: Cloud_Scheme
-  INTEGER        :: Error_Status, Allocate_Status
-  INTEGER        :: n_Channels
-  INTEGER        :: l, m, n, nc, n_l, n_m
-  CHARACTER(256) :: rts_File, Sensor_Id
+  CHARACTER(256) :: Message
+  CHARACTER(256) :: Version
+  CHARACTER(256) :: Sensor_Id
+  INTEGER :: Error_Status
+  INTEGER :: Allocate_Status
+  INTEGER :: n_Channels, n_Stokes
+  INTEGER :: l, m
+  ! Declarations for RTSolution comparison
+  INTEGER :: n_l, n_m, n_k, n_s
+  CHARACTER(256) :: rts_File
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rts(:,:)
+
 
   ! ============================================================================
   ! 1. **** DEFINE THE CRTM INTERFACE STRUCTURES ****
   !
-  ! 1a. Define the "non-demoninational" arguments
-  ! ---------------------------------------------
   TYPE(CRTM_ChannelInfo_type)             :: ChannelInfo(N_SENSORS)
   TYPE(CRTM_Geometry_type)                :: Geometry(N_PROFILES)
-
-
-  ! 1b. Define the FORWARD variables
-  ! --------------------------------
   TYPE(CRTM_Atmosphere_type)              :: Atm(N_PROFILES)
   TYPE(CRTM_Surface_type)                 :: Sfc(N_PROFILES)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution(:,:)
-
-
+  ! ============================================================================
 
   !First, make sure the right number of inputs have been provided
   IF(COMMAND_ARGUMENT_COUNT().NE.1)THEN
      WRITE(*,*)'test_Simple.f90: ERROR, only one command-line argument required, returning'
      STOP 1
   ENDIF
+
   CALL GET_COMMAND_ARGUMENT(1,Sensor_Id)   !read in the value
 
   ! Program header
@@ -108,54 +84,23 @@ PROGRAM test_Simple
     'Test program for the CRTM Forward function including clouds and aerosols.', &
     'CRTM Version: '//TRIM(Version) )
 
+
   ! Get sensor id from user
   ! -----------------------
   Sensor_Id = ADJUSTL(Sensor_Id)
   WRITE( *,'(//5x,"Running CRTM for ",a," sensor...")' ) TRIM(Sensor_Id)
-  
+
+
+
   ! ============================================================================
-  ! STEP 2. **** INITIALIZE THE CRTM ****
+  ! 2. **** INITIALIZE THE CRTM ****
   !
-  ! 2a. Initialise all the sensors at once
-  ! --------------------------------------
-  ! ... Cloud coefficient information
-  IF ( Cloud_Model /= 'CRTM' ) THEN
-     Cloud_Scheme = Cloud_Model//'.'
-  ELSE
-     Cloud_Scheme = ' '
-  END IF
-  ! ... Aerosol coefficient information
-  IF ( Aerosol_Model /= 'CRTM' ) THEN
-     Aerosol_Scheme = Aerosol_Model//'.'
-  ELSE
-     Aerosol_Scheme = ' '
-  END IF
-  ! ... Coefficient table format
-  IF ( Coeff_Format == 'Binary' ) THEN
-     AerosolCoeff_Format = 'Binary'
-     AerosolCoeff_File   = 'AerosolCoeff.'//TRIM(Aerosol_Scheme)//'bin'
-     CloudCoeff_Format   = 'Binary'
-     CloudCoeff_File     = 'CloudCoeff.'//TRIM(Cloud_Scheme)//'bin'
-  ELSE IF ( Coeff_Format == 'netCDF' ) THEN
-     AerosolCoeff_Format = 'netCDF'
-     AerosolCoeff_File   = 'AerosolCoeff.'//TRIM(Aerosol_Scheme)//'nc4'
-     CloudCoeff_Format   = 'netCDF'
-     CloudCoeff_File     = 'CloudCoeff.'//TRIM(Cloud_Scheme)//'nc4'
-  END IF
- 
+  ! 2a. Initialise the requested sensor
+  ! -----------------------------------
   WRITE( *,'(/5x,"Initializing the CRTM...")' )
   Error_Status = CRTM_Init( (/Sensor_Id/), &
-                        ChannelInfo, &
-                        Aerosol_Model, &
-                        AerosolCoeff_Format, &
-                        AerosolCoeff_File, &
-                        Cloud_Model, &
-                        CloudCoeff_Format, &
-                        CloudCoeff_File, &
-                        File_Path=COEFFICIENT_PATH, &
-                        NC_File_Path=NC_COEFFICIENT_PATH, &
-                        Quiet=.TRUE.)
-
+                            ChannelInfo, &
+                            File_Path=COEFFICIENTS_PATH)
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error initializing CRTM'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -166,10 +111,11 @@ PROGRAM test_Simple
   !     for which the CRTM was initialized
   ! ------------------------------------------
   n_Channels = SUM(CRTM_ChannelInfo_n_Channels(ChannelInfo))
-  WRITE( *,'(/5x,"Processing a total of ",i0," channels...")' ) n_Channels
   ! ============================================================================
-  
-  
+
+
+
+
   ! ============================================================================
   ! 3. **** ALLOCATE STRUCTURE ARRAYS ****
   !
@@ -181,7 +127,6 @@ PROGRAM test_Simple
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
-  CALL CRTM_RTSolution_Create(RTSolution,N_LAYERS)
 
   ! 3a-2. Allocate N_Layers for layered outputs
   CALL CRTM_RTSolution_Create( RTSolution, N_LAYERS )
@@ -212,7 +157,8 @@ PROGRAM test_Simple
   ! --------------------------------
   CALL Load_Atm_Data()
   CALL Load_Sfc_Data()
-  
+
+
   ! 4b. GeometryInfo input
   ! ----------------------
   ! All profiles are given the same value
@@ -368,10 +314,10 @@ PROGRAM test_Simple
   ! 9a. Deallocate the structures
   ! -----------------------------
   CALL CRTM_Atmosphere_Destroy(Atm)
-  CALL CRTM_RTSolution_Destroy(RTSolution)
+
   ! 9b. Deallocate the arrays
   ! -------------------------
-  DEALLOCATE(rts, STAT=Allocate_Status)
+  DEALLOCATE(RTSolution, rts, STAT=Allocate_Status)
   ! ============================================================================
 
   ! Signal the completion of the program. It is not a necessary step for running CRTM.
