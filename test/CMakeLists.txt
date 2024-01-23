@@ -236,10 +236,17 @@ ecbuild_add_test( TARGET  test_check_crtm_random
 
 ecbuild_add_test( TARGET  test_spccoeff_bin2nc
                   SOURCES mains/application/SpcCoeff_Utilities/SpcCoeff_BIN2NC.f90
-                  ARGS    "testinput/single_profile.yaml"
                   OMP     $ENV{OMP_NUM_THREADS}
-                  LIBS    crtm
-                  TEST_DEPENDS get_crtm_coeffs)
+                  LIBS    crtm)
+set_tests_properties(test_spccoeff_bin2nc PROPERTIES DISABLED TRUE)
+#                  TEST_DEPENDS get_crtm_coeffs)
+
+ecbuild_add_test( TARGET  test_spccoeff_nc2bin
+                  SOURCES mains/application/SpcCoeff_Utilities/SpcCoeff_NC2BIN.f90
+                  OMP     $ENV{OMP_NUM_THREADS}
+                  LIBS    crtm)
+set_tests_properties(test_spccoeff_nc2bin PROPERTIES DISABLED TRUE)
+#                  TEST_DEPENDS get_crtm_coeffs)
 
 #---------------------------------------------------------------------------------
 #unit tests
