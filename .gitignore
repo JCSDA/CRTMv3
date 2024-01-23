@@ -8,3 +8,4 @@ fix/
 build.bash
 rebuild.bash
 .gitignore
+*~

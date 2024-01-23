@@ -102,6 +102,7 @@ MODULE SpcCoeff_Define
   PUBLIC :: SpcCoeff_Associated
   PUBLIC :: SpcCoeff_Destroy
   PUBLIC :: SpcCoeff_Create
+  PUBLIC :: SpcCoeff_Equal
   PUBLIC :: SpcCoeff_Inspect
   PUBLIC :: SpcCoeff_ValidRelease
   PUBLIC :: SpcCoeff_Info
