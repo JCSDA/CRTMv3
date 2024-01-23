@@ -24,7 +24,7 @@ if(OPENMP)
 		set(OMP_NUM_THREADS $ENV{OMP_NUM_THREADS})
 	else()
 		# Set a default value if not set
-		set(OMP_NUM_THREADS "4")
+		set(OMP_NUM_THREADS "1")
 	endif()
 	
 	# Export OMP_NUM_THREADS to the environment
