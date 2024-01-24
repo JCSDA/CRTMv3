@@ -1,7 +1,7 @@
-B. Johnson JCSDA 10/2023
+B. Johnson JCSDA 10/2020
 
 Synopsis:
-Application, Unit, and Regression tests, largely culled from Paul van Delst's and Dave Groff's CRTM tests, modified to work with CRTM v3.0.1 in a CMake environment.
+Application, Unit, and Regression tests, largely culled from Paul van Delst's and Dave Groff's CRTM tests, modified to work with CRTM v3.0.0 in a CMake environment.
 Not a complete or comprehensive suite of tests, please add a test each time you add a new code element or substantially change code.
 
 
@@ -14,6 +14,10 @@ Layout:
     regression/             (Regression tests go here to check various functionalities of CRTM   [medium scope])
     unit/                   (Unit tests go here to test small units of code, convergence, etc.   [small scope ])
   readme_crtm_tests.txt  (this file)
+  test_build/            (directory where you cmake and make and ctest)
+
+
+
 
 Instructions:
 
@@ -24,14 +28,27 @@ Instructions:
 
 Prerequisites:
 
-  Make and _install_ the CRTM library following the directions provided by the CRTM package.   
+	Make and _install_ the CRTM library following the directions provided by the CRTM packate.
   These tests use both the generated modules and the libcrtm.a, so it needs to see both of these.
-  The cmake step during building the CRTM library will also create the necessary makefile for building tests.  
+
+
+  The cmake will throw an error if the CRTM `lib/` and `include/` directories are not found.
+  If this is the case, please edit the `CMakeLists.txt` file to point to your current installation folder of the CRTM.  
+
+	Currently, it is looking for the CRTM in the following folder:
+
+         ${CRTM_SOURCE_ROOT}/Build/crtm_v3.0.0/   
+	
+			 In CMakeLists.txt it's looking for it in this line: 
+
+         HINTS "$ENV{CRTM_SOURCE_ROOT}/Build/crtm_v3.0.0/lib"
+
 
 Running Tests:
-  cd ./build   (directory where CRTM was built using cmake)
-  cmake ..; make -j12    (if not already )
-  ctest -j4    (run 4 tests in parallel)
+  cd ./test_build   (directory where things are built and run) 
+  cmake ..
+  make -j12
+  ctest
 
 Slightly more verbose Mode (-VV):
 
@@ -40,12 +57,20 @@ Slightly more verbose Mode (-VV):
 
 Cleanup:
 
-  In the build/ directory, you may need to "make clean" to remove compiled executables, modules, etc.  This will not remove the binary data (coefficient files).
+  In the test_build directory, you may need to "rm -rf *" to clean things up, particularly if you're adding new tests to the CMakeLists.txt file and testing, etc.
 
 
-Troubleshooting/Support:
+Troubleshooting:
+    "error #7002: Error in opening the compiled module file.  Check INCLUDE paths.   [CRTM_MODULE]"
+		This means that the CRTM module files are not being seen.
+
+    "CMake Error at CMakeLists.txt:101 (message):     CRTM library not found!"
+    This means that CRTM library file (libcrtm.a or libcrtm.so) are not found.
+
+		When in doubt, clear it out (see Cleanup).
+
+Support:
   Please feel free to contact us at:
     https://forums.jcsda.org/
-    or 
     crtm-support@groups.google.com
   
