@@ -38,7 +38,6 @@ elseif(DEFINED ENV{NETCDF})
 endif()
 find_package(NetCDF REQUIRED Fortran)
 
-
 ## Sources
 add_subdirectory(src)
 
