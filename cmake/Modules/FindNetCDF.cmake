@@ -1,3 +1,8 @@
+# (C) Copyright 2017-2020 UCAR
+#
+# This software is licensed under the terms of the Apache Licence Version 2.0
+# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+#
 # (C) Copyright 2011- ECMWF.
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
@@ -155,13 +160,11 @@ foreach( _comp IN LISTS _search_components )
 endforeach()
 
 set(_C_libs_flag --libs)
-set(_C_static_flag --static)
 set(_Fortran_libs_flag --flibs)
 set(_CXX_libs_flag --libs)
 set(_C_includes_flag --includedir)
 set(_Fortran_includes_flag --includedir)
 set(_CXX_includes_flag --includedir)
-# Call n*-config with one argument only (e.g. --libs)
 function(netcdf_config exec flag output_var)
   set(${output_var} False PARENT_SCOPE)
   if( exec )
@@ -172,32 +175,6 @@ function(netcdf_config exec flag output_var)
     endif()
   endif()
 endfunction()
-# Call n*-config with two arguments (e.g. --libs --static)
-function(netcdf_config2 exec flag1 flag2 output_var)
-  set(${output_var} False PARENT_SCOPE)
-  if( exec )
-    execute_process( COMMAND ${exec} ${flag1} ${flag2} RESULT_VARIABLE _ret OUTPUT_VARIABLE _val)
-    if( _ret EQUAL 0 )
-      string( STRIP ${_val} _val )
-      set( ${output_var} ${_val} PARENT_SCOPE )
-    endif()
-  endif()
-endfunction()
-
-## Detect additional package properties
-netcdf_config(${NetCDF_C_CONFIG_EXECUTABLE} --has-parallel4 _val)
-if( NOT _val MATCHES "^(yes|no)$" )
-  netcdf_config(${NetCDF_C_CONFIG_EXECUTABLE} --has-parallel _val)
-endif()
-if( _val MATCHES "^(yes)$" )
-  set(NetCDF_PARALLEL TRUE CACHE STRING "NetCDF has parallel IO capability via pnetcdf or hdf5." FORCE)
-else()
-  set(NetCDF_PARALLEL FALSE CACHE STRING "NetCDF has no parallel IO capability." FORCE)
-endif()
-
-if(NetCDF_PARALLEL)
-  find_package(MPI)
-endif()
 
 ## Find libraries for each component
 set( NetCDF_LIBRARIES )
@@ -214,12 +191,16 @@ foreach( _comp IN LISTS _search_components )
   set(NetCDF_${_comp}_LIBRARY ${NetCDF_${_comp}_LIBRARY} CACHE STRING "NetCDF ${_comp} library" FORCE)
   message(DEBUG "NetCDF_${_comp}_LIBRARY: ${NetCDF_${_comp}_LIBRARY}")
 
+
   if( NetCDF_${_comp}_LIBRARY )
     if( NetCDF_${_comp}_LIBRARY MATCHES ".a$" )
       set( NetCDF_${_comp}_LIBRARY_SHARED FALSE )
       set( _library_type STATIC)
     else()
-      list( APPEND NetCDF_LIBRARIES ${NetCDF_${_comp}_LIBRARY} )
+      if( NOT ${NetCDF_${_comp}_LIBRARY} IN_LIST NetCDF_LIBRARIES )
+        list( APPEND NetCDF_LIBRARIES ${NetCDF_${_comp}_LIBRARY} )
+        message(DEBUG "Adding new netcdf library [${_comp}]: ${NetCDF_${_comp}_LIBRARY}")
+      endif()
       set( NetCDF_${_comp}_LIBRARY_SHARED TRUE )
       set( _library_type SHARED)
     endif()
@@ -229,15 +210,7 @@ foreach( _comp IN LISTS _search_components )
   netcdf_config( ${NetCDF_${_comp}_CONFIG_EXECUTABLE} ${_${_comp}_libs_flag} _val )
   if( _val )
     set( NetCDF_${_comp}_LIBRARIES ${_val} )
-    #Static targets should use nc_config to get a proper link line with all necessary static targets.
-    if(NOT NetCDF_${_comp}_LIBRARY_SHARED AND NOT NetCDF_${_comp}_FOUND)
-      #Static netcdf-c uses special flags to add the static libraries (libsprivate)
-      if(${_comp} STREQUAL "C" )
-        netcdf_config2( ${NetCDF_${_comp}_CONFIG_EXECUTABLE} ${_${_comp}_libs_flag} ${_${_comp}_static_flag} _val )
-        if( _val )
-          set( NetCDF_${_comp}_LIBRARIES ${_val} )
-        endif()
-      endif()
+    if(NOT NetCDF_${_comp}_LIBRARY_SHARED AND NOT NetCDF_${_comp}_FOUND) #Static targets should use nc_config to get a proper link line with all necessary static targets.
       list( APPEND NetCDF_LIBRARIES ${NetCDF_${_comp}_LIBRARIES} )
     endif()
   else()
@@ -264,19 +237,9 @@ foreach( _comp IN LISTS _search_components )
         IMPORTED_LOCATION ${NetCDF_${_comp}_LIBRARY}
         INTERFACE_INCLUDE_DIRECTORIES "${NetCDF_${_comp}_INCLUDE_DIRS}"
         INTERFACE_LINK_LIBRARIES ${NetCDF_${_comp}_LIBRARIES} )
-      if( NOT _comp MATCHES "^(C)$" )
-        target_link_libraries(NetCDF::NetCDF_${_comp} INTERFACE NetCDF::NetCDF_C)
-      endif()
-      if(MPI_${_comp}_FOUND)
-        target_link_libraries(NetCDF::NetCDF_${_comp} INTERFACE MPI::MPI_${_comp})
-      endif()
     endif()
   endif()
 endforeach()
-#if(NetCDF_LIBRARIES AND NetCDF_${_comp}_LIBRARY_SHARED)
-if(NetCDF_LIBRARIES)
-    list(REMOVE_DUPLICATES NetCDF_LIBRARIES)
-endif()
 set(NetCDF_LIBRARIES "${NetCDF_LIBRARIES}" CACHE STRING "NetCDF library targets" FORCE)
 
 ## Find version via netcdf-config if possible
@@ -306,6 +269,17 @@ if (NetCDF_INCLUDE_DIRS)
   endif()
 endif ()
 
+## Detect additional package properties
+netcdf_config(${NetCDF_C_CONFIG_EXECUTABLE} --has-parallel4 _val)
+if( NOT _val MATCHES "^(yes|no)$" )
+  netcdf_config(${NetCDF_C_CONFIG_EXECUTABLE} --has-parallel _val)
+endif()
+if( _val MATCHES "^(yes)$" )
+  set(NetCDF_PARALLEL TRUE CACHE STRING "NetCDF has parallel IO capability via pnetcdf or hdf5." FORCE)
+else()
+  set(NetCDF_PARALLEL FALSE CACHE STRING "NetCDF has no parallel IO capability." FORCE)
+endif()
+
 ## Finalize find_package
 include(FindPackageHandleStandardArgs)
 
@@ -326,7 +300,7 @@ foreach( _comp IN LISTS _search_components )
 endforeach()
 
 if( ${CMAKE_FIND_PACKAGE_NAME}_FOUND AND NOT ${CMAKE_FIND_PACKAGE_NAME}_FIND_QUIETLY AND _new_search_components)
-  message( STATUS "Find${CMAKE_FIND_PACKAGE_NAME} defines targets:" )
+  message( STATUS "Find${CMAKE_FIND_PACKAGE_NAME} [${CMAKE_CURRENT_LIST_DIR}/FindNetCDF.cmake]:" )
   message( STATUS "  - NetCDF_VERSION [${NetCDF_VERSION}]")
   message( STATUS "  - NetCDF_PARALLEL [${NetCDF_PARALLEL}]")
   foreach( _comp IN LISTS _new_search_components )

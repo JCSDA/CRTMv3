@@ -22,7 +22,7 @@ Basic requirements:
 (2) A netCDF4 / HDF5 library.   
 (3) A linux, macOS, or unix-style environment.  This has not been tested under any Windows Fortran environments.
 (4) Bash shell is preferred.
-(5) A suitable JCSDA JEDI environment: either HPC enabled, a JEDI container, spack-stack, or at a bare minimum ecbuild from ectools OR cmake.
+(5) A suitable JCSDA JEDI environment: either HPC enabled, a JEDI container, JEDI-stacks, or at a bare minimum ecbuild from ectools OR cmake.
 (6) git and git-lfs > version 2.0 (tested on 2.10).
 
 =========================================================
