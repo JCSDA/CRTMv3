@@ -65,9 +65,6 @@ write_basic_package_version_file(
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/crtm-config.cmake"
               "${CMAKE_CURRENT_BINARY_DIR}/crtm-config-version.cmake"
         DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-#add_dependencies(${PROJECT_NAME} install)
-
-
 
 # Install the export set for use with the install-tree
 install(EXPORT ${PROJECT_NAME}-config
@@ -75,14 +72,12 @@ install(EXPORT ${PROJECT_NAME}-config
         NAMESPACE ${PROJECT_NAME}::
         DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
-
 export(EXPORT ${PROJECT_NAME}-config
         FILE "${PROJECT_NAME}-targets.cmake"
         NAMESPACE ${PROJECT_NAME}::)
 
 add_subdirectory(test)
 include(CTest)
-
 
 # Summary
 message(STATUS "Configuration summary")
@@ -106,8 +101,5 @@ else()
     # Commands for other build types
 		message(STATUS "No build type specified, defaulting to Release.")
 endif()
-
-
-
 
 set(crtm_LIBRARIES crtm)
