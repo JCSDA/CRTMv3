@@ -7,10 +7,6 @@ cmake_minimum_required (VERSION 3.12)
 project("CRTM_Tests" VERSION 1.0.1 LANGUAGES Fortran C)
 enable_testing ()
 
-## Ecbuild integration
-find_package( ecbuild QUIET )
-include( ecbuild_system NO_POLICY_SCOPE )
-ecbuild_declare_project()
 list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )
 set( CMAKE_DIRECTORY_LABELS ${PROJECT_NAME} )
 
@@ -34,9 +30,6 @@ function(CREATE_SYMLINK_FILENAME src dst)
 endfunction(CREATE_SYMLINK_FILENAME)
 
 # Create Data directory for test input config and symlink all files
-list( APPEND crtm_test_input
-      testinput/single_profile.yaml
-)
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/testinput)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results)
@@ -45,23 +38,21 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results/tangent_linear)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results/k_matrix)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results/forward)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results/unit)
-CREATE_SYMLINK( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${crtm_test_input} )
 
 
 if( DEFINED ENV{LOCAL_PATH_JEDI_TESTFILES})
-    set(LOCAL_PATH_JEDI_TESTFILES "$ENV{LOCAL_PATH_JEDI_TESTFILES}")
+  set(LOCAL_PATH_JEDI_TESTFILES "$ENV{LOCAL_PATH_JEDI_TESTFILES}")
 endif()
 
 if ( DEFINED ENV{CRTM_TEST_ROOT})
-    set(CRTM_TEST_ROOT "$ENV{CRTM_TEST_ROOT}")
+  set(CRTM_TEST_ROOT "$ENV{CRTM_TEST_ROOT}")
 else()
-    set(CRTM_TEST_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
+  set(CRTM_TEST_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
 
 
-# If local path to testfiles is defined don't download
-#if( DEFINED LOCAL_PATH_JEDI_TESTFILES )
+# If local path to testfiles is defined don't download 
 IF(EXISTS  ${CMAKE_SOURCE_DIR}/fix)
   set( CRTM_COEFFS_PATH ${CMAKE_SOURCE_DIR}/fix )
   message(STATUS "use LOCAL_PATH_JEDI_TESTFILES: ${CRTM_COEFFS_PATH}")
@@ -69,36 +60,54 @@ IF(EXISTS  ${CMAKE_SOURCE_DIR}/fix)
   set( CRTM_COEFFS_BRANCH "" )
 
 else() # Download CRTM coefficients
-	set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
+  set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
   set( CRTM_COEFFS_BRANCH "3.1.0_skylab_7.0" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)
-	# it is my intention is to not have any difference between jedi/ufo versions of CRTM and stand-alond versions of CRTM -- they should both work "out of the box"
-  set( CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})   #this is where the symlinks point to binary files for the testinput/* directory after ecbuild.
+  
+  set(CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
+  
+  set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/file")
+  set(test_files_dirname crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz) 
+  set(checksum "29a9b6a77096006cc76dbbb9c9569b75") # MD5SUM
+  
+  set(DOWNLOAD_URL "${DOWNLOAD_BASE_URL}/${test_files_dirname}")
+  set(DOWNLOAD_DEST "${CRTM_COEFFS_PATH}/${test_files_dirname}")
+  
+  # Download during CMake configure step
+  message(STATUS "Downloading CRTM coeffs files from: ${DOWNLOAD_URL} to ${DOWNLOAD_DEST}")
+  file(DOWNLOAD ${DOWNLOAD_URL} ${DOWNLOAD_DEST}
+    EXPECTED_MD5 ${checksum}
+    SHOW_PROGRESS)
 
-  set( ECBUILD_DOWNLOAD_BASE_URL https://bin.ssec.wisc.edu/pub/s4/CRTM )
-  message(STATUS "download CRTM coeffs files from: ${ECBUILD_DOWNLOAD_BASE_URL}/file to ${CRTM_COEFFS_PATH}")
-  ecbuild_get_test_multidata( TARGET   get_crtm_coeffs
-                              NAMES    crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz:29a9b6a77096006cc76dbbb9c9569b75
-                              DIRNAME  file
-                              DIRLOCAL ${CRTM_COEFFS_PATH}
-                              EXTRACT )
+  # -- UNTAR -- 
+  
+  # Define the directory to untar into
+  set(UNTAR_DEST "${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION}")
+
+  # Only untar if the CHECK_PATH does not exist
+  if(NOT EXISTS ${UNTAR_DEST}/})
+    execute_process(COMMAND tar -xzf ${DOWNLOAD_DEST} -C ${UNTAR_DEST}
+                    RESULT_VARIABLE result
+                    OUTPUT_QUIET ERROR_QUIET)
+    if(NOT result EQUAL 0)
+      message(FATAL_ERROR "Failed to untar the file.")
+    endif()
+  else()
+    message(STATUS "Files have already been untarred. Skipping.")
+  endif()
 endif()
 
-# Add files to cmake resources
-ecbuild_add_resources( TARGET crtm_test_scripts
-                       SOURCES_PACK
-                       ${crtm_test_input}
-                     )
+
 
 # Create list of sensor ids for testing
 list( APPEND Simple_Sensor_Ids
         atms_n21
         cris-fsr_n21
         v.abi_g18
-	atms_npp
+        atms_npp
         cris399_npp
         v.abi_gr
-	abi_g18
+        abi_g18
         modis_aqua
 )
 
@@ -106,32 +115,32 @@ list( APPEND ScatteringSwitch_Sensor_Ids
         atms_n21
         cris-fsr_n21
         v.abi_g18
-	atms_npp
+        atms_npp
         cris399_npp
         v.abi_gr
-	abi_g18
+        abi_g18
         modis_aqua
 )
 
 list( APPEND SOI_Sensor_Ids
         atms_n21
         cris-fsr_n21
-        v.abi_g18	
+        v.abi_g18 
         atms_npp
         cris399_npp
         v.abi_gr
-	abi_g18
+        abi_g18
         modis_aqua
 )
 
 list( APPEND VerticalCoordinates_Sensor_Ids
         atms_n21
         cris-fsr_n21
-        v.abi_g18	
+        v.abi_g18 
         atms_npp
         cris399_npp
         v.abi_gr
-	abi_g18
+        abi_g18
         modis_aqua
 )
 
@@ -147,17 +156,17 @@ list( APPEND ClearSky_Sensor_Ids
         atms_npp
         cris399_npp
         v.abi_gr
-	abi_g18
+        abi_g18
         modis_aqua
 )
 
 # Create list of sensor ids for testing
 list( APPEND AOD_Sensor_Ids
-	cris-fsr_n21
-	v.abi_g18
+  cris-fsr_n21
+  v.abi_g18
         cris399_npp
         v.abi_gr
-	abi_g18
+  abi_g18
         airs_aqua
 )
 
@@ -181,7 +190,7 @@ list( APPEND Aircraft_Sensor_Ids
 )
 
 list( APPEND OMPoverChannels_Sensor_Ids
-        atms_npp
+        atms_n21
 )
 
 list (APPEND common_tests
@@ -220,181 +229,94 @@ list (APPEND TLAD_tests
 
 #####################################################################
 
-ecbuild_add_test( TARGET  test_check_crtm
-                  SOURCES mains/application/check_crtm.F90
-                  ARGS    "testinput/single_profile.yaml"
-                  OMP     $ENV{OMP_NUM_THREADS}
-                  LIBS    crtm
-                  TEST_DEPENDS get_crtm_coeffs)
 
-ecbuild_add_test( TARGET  test_check_crtm_random
-                  SOURCES mains/application/check_crtm_random_profiles.F90
-                  ARGS    "testinput/single_profile.yaml"
-                  OMP     $ENV{OMP_NUM_THREADS}
-                  LIBS    crtm
-                  TEST_DEPENDS get_crtm_coeffs)
+
+add_executable(test_check_crtm mains/application/check_crtm.F90)
+target_link_libraries(test_check_crtm PRIVATE crtm)
+add_test(NAME test_check_crtm 
+         COMMAND test_check_crtm)
+set_tests_properties(test_check_crtm PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(test_check_crtm_random  mains/application/check_crtm_random_profiles.F90)
+target_link_libraries(test_check_crtm_random PRIVATE crtm)
+add_test(NAME test_check_crtm_random
+         COMMAND test_check_crtm_random)
+set_tests_properties(test_check_crtm_random PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+
+add_executable(Unit_TL_TEST mains/unit/Unit_Test/test_TL.f90)
+target_link_libraries(Unit_TL_TEST PRIVATE crtm)
+add_test(NAME test_Unit_TL_TEST
+         COMMAND $<TARGET_FILE:Unit_TL_TEST>)
+set_tests_properties(test_Unit_TL_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+
+add_executable(SpcCoeff_Inspect mains/application/SpcCoeff_Inspect.f90)
+target_link_libraries(SpcCoeff_Inspect PRIVATE crtm)
+add_test(NAME run_SpcCoeff_Inspect
+         COMMAND $<TARGET_FILE:SpcCoeff_Inspect> "testinput/atms_n21.SpcCoeff.bin")
+set_tests_properties(run_SpcCoeff_Inspect PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 #---------------------------------------------------------------------------------
 #unit tests
 
 #first upper level Unit_Test
 
-#implementation of Patrick's modified TL convergence test.
-ecbuild_add_executable (
-    TARGET  "TL_TEST"
-    SOURCES mains/unit/Unit_Test/test_TL.f90
-    LIBS    crtm
-    NOINSTALL
-    )
-ecbuild_add_test (
-    TARGET "Unit_TL_TEST"
-    COMMAND "TL_TEST"
-    OMP     $ENV{OMP_NUM_THREADS}
-    TEST_DEPENDS get_crtm_coeffs
-    )
-
 #(PS) SpcCoeff Version 3 I/O test
-ecbuild_add_executable (
-	TARGET "test_spc_io"
-	SOURCES mains/unit/input_output/test_SpcCoeff/test_spc_io.f90
-	LIBS crtm
-	NOINSTALL
-	)
-ecbuild_add_test(
-	TARGET "Unit_test_spc_io"
-	COMMAND "test_spc_io"
-	OMP     $ENV{OMP_NUM_THREADS}
-	TEST_DEPENDS get_crtm_coeffs
-	)
+add_executable(Spc_IO mains/unit/input_output/test_SpcCoeff/test_spc_io.f90)
+target_link_libraries(Spc_IO PRIVATE crtm)
+add_test(NAME test_Spc_IO
+         COMMAND $<TARGET_FILE:Spc_IO>)
+set_tests_properties(test_Spc_IO PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 #(PS) SpcCoeff netCDF I/O test
-ecbuild_add_executable (
-    TARGET "test_spc_io_nc"
-	SOURCES mains/unit/input_output/test_SpcCoeff_NC/test_spc_io_nc.f90
-	LIBS crtm
-	NOINSTALL
-	)
-ecbuild_add_test(
-    TARGET "Unit_test_spc_io_nc"
-	COMMAND "test_spc_io_nc"
-	OMP $ENV{OMP_NUM_THREADS}
-	TEST_DEPENDS get_crtm_coeffs
-	)
+add_executable(Spc_IO_NC mains/unit/input_output/test_SpcCoeff_NC/test_spc_io_nc.f90)
+target_link_libraries(Spc_IO_NC PRIVATE crtm)
+add_test(NAME test_Spc_IO_NC
+         COMMAND $<TARGET_FILE:Spc_IO_NC>)
+set_tests_properties(test_Spc_IO_NC PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 #(PS) TauCoeff netCDF I/O test
-ecbuild_add_executable (
-	TARGET "test_taucoeff_io_nc"
-	SOURCES mains/unit/input_output/test_TauCoeff_NC/test_taucoeff_io_nc.f90 
-	LIBS crtm
-	NOINSTALL
-	)
-
-ecbuild_add_test(
-	TARGET "Unit_test_tc_io_nc"
-	COMMAND "test_taucoeff_io_nc"
-	OMP $ENV{OMP_NUM_THREADS}
-	TEST_DEPENDS get_crtm_coeffs
-	)
+add_executable(TauCoeff_IO_NC mains/unit/input_output/test_TauCoeff_NC/test_taucoeff_io_nc.f90)
+target_link_libraries(TauCoeff_IO_NC PRIVATE crtm)
+add_test(NAME test_TauCoeff_IO_NC
+         COMMAND $<TARGET_FILE:TauCoeff_IO_NC>)
+set_tests_properties(test_TauCoeff_IO_NC PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 #(CD) AerosolCoeff I/O test
-ecbuild_add_executable (
-    TARGET "test_aerosol_coeff_io"
-        SOURCES mains/unit/input_output/test_AerosolCoeff/test_aerosol_coeff_io.f90
-        LIBS crtm
-        NOINSTALL
-        )
-ecbuild_add_test(
-    TARGET "Unit_test_aerosol_coeff_io"
-        COMMAND "test_aerosol_coeff_io"
-        OMP $ENV{OMP_NUM_THREADS}
-        TEST_DEPENDS get_crtm_coeffs
-        )
+add_executable(AerosolCoeff_IO mains/unit/input_output/test_AerosolCoeff/test_aerosol_coeff_io.f90)
+target_link_libraries(AerosolCoeff_IO PRIVATE crtm)
+add_test(NAME test_AerosolCoeff_IO
+         COMMAND $<TARGET_FILE:AerosolCoeff_IO>)
+set_tests_properties(test_AerosolCoeff_IO PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 #(CD) AerosolCoeff netCDF I/O test
-ecbuild_add_executable (
-    TARGET "test_aerosol_coeff_io_nc"
-        SOURCES mains/unit/input_output/test_AerosolCoeff_NC/test_aerosol_coeff_io_nc.f90
-        LIBS crtm
-        NOINSTALL
-        )
-ecbuild_add_test(
-    TARGET "Unit_test_aerosol_coeff_io_nc"
-        COMMAND "test_aerosol_coeff_io_nc"
-        OMP $ENV{OMP_NUM_THREADS}
-        TEST_DEPENDS get_crtm_coeffs
-        )
+add_executable(AerosolCoeff_IO_NC mains/unit/input_output/test_AerosolCoeff_NC/test_aerosol_coeff_io_nc.f90)
+target_link_libraries(AerosolCoeff_IO_NC PRIVATE crtm)
+add_test(NAME test_AerosolCoeff_IO_NC
+         COMMAND $<TARGET_FILE:AerosolCoeff_IO_NC>)
+set_tests_properties(test_AerosolCoeff_IO_NC PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 #(CD) CloudCoeff Binary I/O test
-ecbuild_add_executable (
-    TARGET "test_cloud_coeff_io"
-        SOURCES mains/unit/input_output/test_CloudCoeff/test_cloud_coeff_io.f90
-        LIBS crtm
-        NOINSTALL
-        )
-ecbuild_add_test(
-    TARGET "Unit_test_cloud_coeff_io"
-        COMMAND "test_cloud_coeff_io"
-        OMP $ENV{OMP_NUM_THREADS}
-        TEST_DEPENDS get_crtm_coeffs
-        )
+add_executable(CloudCoeff_IO mains/unit/input_output/test_CloudCoeff/test_cloud_coeff_io.f90)
+target_link_libraries(CloudCoeff_IO PRIVATE crtm)
+add_test(NAME test_CloudCoeff_IO
+         COMMAND $<TARGET_FILE:CloudCoeff_IO>)
+set_tests_properties(test_CloudCoeff_IO PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 #(CD) CloudCoeff netCDF I/O test
-ecbuild_add_executable (
-    TARGET "test_cloud_coeff_io_nc"
-        SOURCES mains/unit/input_output/test_CloudCoeff_NC/test_cloud_coeff_io_nc.f90
-        LIBS crtm
-        NOINSTALL
-        )
-ecbuild_add_test(
-    TARGET "Unit_test_cloud_coeff_io_nc"
-        COMMAND "test_cloud_coeff_io_nc"
-        OMP $ENV{OMP_NUM_THREADS}
-        TEST_DEPENDS get_crtm_coeffs
-        )
-
-
-#(CD) EmisCoeff I/O test
-ecbuild_add_executable (
-    TARGET "test_emis_coeff_io"
-        SOURCES mains/unit/input_output/test_EmisCoeff/test_emis_coeff_io.f90
-        LIBS crtm
-        NOINSTALL
-        )
-ecbuild_add_test(
-    TARGET "Unit_test_emis_coeff_io"
-        COMMAND "test_emis_coeff_io"
-        OMP $ENV{OMP_NUM_THREADS}
-        TEST_DEPENDS get_crtm_coeffs
-        )
-
-#(CD) EmisCoeff netCDF I/O test
-ecbuild_add_executable (
-    TARGET "test_emis_coeff_io_nc"
-        SOURCES mains/unit/input_output/test_EmisCoeff_NC/test_emis_coeff_io_nc.f90
-        LIBS crtm
-        NOINSTALL
-        )
-ecbuild_add_test(
-    TARGET "Unit_test_emis_coeff_io_nc"
-        COMMAND "test_emis_coeff_io_nc"
-        OMP $ENV{OMP_NUM_THREADS}
-        TEST_DEPENDS get_crtm_coeffs
-        )
+add_executable(CloudCoeff_IO_NC mains/unit/input_output/test_CloudCoeff_NC/test_cloud_coeff_io_nc.f90)
+target_link_libraries(CloudCoeff_IO_NC PRIVATE crtm)
+add_test(NAME test_CloudCoeff_IO_NC
+         COMMAND $<TARGET_FILE:CloudCoeff_IO_NC>)
+set_tests_properties(test_CloudCoeff_IO_NC PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 #(PS) Hypsometric Equation test
-ecbuild_add_executable (
-    TARGET "test_hypsometric_eq"
-    SOURCES mains/unit/Unit_Test/test_Hypsometric.f90
-    LIBS crtm
-    NOINSTALL
-    )
-
-ecbuild_add_test(
-    TARGET "Unit_test_hypsometric_eq"
-    COMMAND "test_hypsometric_eq"
-    OMP $ENV{OMP_NUM_THREADS}
-    )
-
+add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
+target_link_libraries(hypsometric_eq PRIVATE crtm)
+add_test(NAME test_hypsometric_eq
+         COMMAND $<TARGET_FILE:hypsometric_eq>)
+set_tests_properties(test_hypsometric_eq PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 #=================================================================================
 #forward and k_matrix regression tests
@@ -405,45 +327,32 @@ foreach(regtype IN LISTS regression_types)
     if (isregtype AND istesttype)
        continue() #skip Aircraft type for k_Matrix
     endif()
-    ecbuild_add_executable( TARGET  "test_${regtype}_test_${testtype}"
-                            SOURCES "mains/regression/${regtype}/test_${testtype}/test_${testtype}.f90"
-                            LIBS    crtm
-                            NOINSTALL)
+
+    add_executable(test_${regtype}_test_${testtype} mains/regression/${regtype}/test_${testtype}/test_${testtype}.f90)
+    target_link_libraries(test_${regtype}_test_${testtype} PRIVATE crtm)
 
     foreach(sensor_id IN LISTS ${testtype}_Sensor_Ids)
-
-          ecbuild_add_test( TARGET  "test_${regtype}_${testtype}_${sensor_id}"
-                            OMP     $ENV{OMP_NUM_THREADS}
-                            COMMAND "test_${regtype}_test_${testtype}"
-                            ARGS    "${sensor_id}"
-                            TEST_DEPENDS get_crtm_coeffs)
+        add_test(NAME test_${regtype}_${testtype}_${sensor_id}
+                 COMMAND $<TARGET_FILE:test_${regtype}_test_${testtype}> "${sensor_id}")
+        set_tests_properties(test_${regtype}_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
     endforeach()
   endforeach()
 endforeach()
-
 
 #---------------------------------------------------------------------------------
 #TLAD Regression tests
 foreach(regtype IN LISTS TLAD_types)
   foreach(testtype IN LISTS TLAD_tests)
-    if (isregtype AND istesttype)
-       continue() #skip Aircraft type for k_Matrix
-    endif()
-    ecbuild_add_executable( TARGET  "test_${regtype}_test_${testtype}"
-                            SOURCES "mains/regression/${regtype}/test_${testtype}/test_${testtype}.f90"
-                            LIBS    crtm
-                            NOINSTALL)
+    add_executable(test_${regtype}_test_${testtype} mains/regression/${regtype}/test_${testtype}/test_${testtype}.f90)
+    target_link_libraries(test_${regtype}_test_${testtype} PRIVATE crtm)
 
     foreach(sensor_id IN LISTS ${testtype}_Sensor_Ids)
-          ecbuild_add_test( TARGET  "test_${regtype}_${testtype}_${sensor_id}"
-                            OMP     $ENV{OMP_NUM_THREADS}
-                            COMMAND "test_${regtype}_test_${testtype}"
-                            ARGS    "${sensor_id}"
-                            TEST_DEPENDS get_crtm_coeffs)
+        add_test(NAME test_${regtype}_${testtype}_${sensor_id}
+                 COMMAND $<TARGET_FILE:test_${regtype}_test_${testtype}> "${sensor_id}")
+        set_tests_properties(test_${regtype}_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
     endforeach()
   endforeach()
 endforeach()
-
 
 #=================================================================================
 #OpenMP regression tests
@@ -453,63 +362,42 @@ foreach(regtype IN LISTS regression_types)
     continue() #skip all k_matrix tests
   endif()
   foreach(testtype IN LISTS omp_tests)
-    ecbuild_add_executable( TARGET  "test_${regtype}_test_${testtype}"
-                            SOURCES "mains/regression/${regtype}/test_${testtype}/test_${testtype}.F90"
-                            LIBS    crtm
-                            NOINSTALL)
- 
+    add_executable(test_${regtype}_test_${testtype} mains/regression/${regtype}/test_${testtype}/test_${testtype}.F90)
+    target_link_libraries(test_${regtype}_test_${testtype} PRIVATE crtm)
+
     foreach(sensor_id IN LISTS ${testtype}_Sensor_Ids)
-  
-          ecbuild_add_test( TARGET  "test_${regtype}_${testtype}_${sensor_id}"
-                            OMP     $ENV{OMP_NUM_THREADS}
-                            COMMAND "test_${regtype}_test_${testtype}"
-                            ARGS    "${sensor_id}"
-                            TEST_DEPENDS get_crtm_coeffs)
+        add_test(NAME test_${regtype}_${testtype}_${sensor_id}
+                 COMMAND $<TARGET_FILE:test_${regtype}_test_${testtype}> "${sensor_id}")
+        set_tests_properties(test_${regtype}_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
     endforeach()
-  endforeach() 
+  endforeach()
 endforeach()
 
 
 #---------------------------------------------------------------------------------
-# Active sensor module AD/TL test
-ecbuild_add_executable (
-    TARGET "test_Active_Sensor"
-    SOURCES mains/unit/Unit_Test/test_active_sensor.f90
-    LIBS crtm
-    NOINSTALL
-    )
+# Add test_Active_Sensor executable
+add_executable(test_Active_Sensor mains/unit/Unit_Test/test_active_sensor.f90)
+target_link_libraries(test_Active_Sensor crtm)
 
-ecbuild_add_test(
-    TARGET "test_Active_Sensor"
-    COMMAND "test_Active_Sensor"
-    OMP $ENV{OMP_NUM_THREADS}
-    )
+# Add test for test_Active_Sensor
+add_test(NAME test_Active_Sensor COMMAND test_Active_Sensor)
+set_tests_properties(test_Active_Sensor PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
 
-ecbuild_add_executable (
-    TARGET "test_AD_Active_Sensor"
-    SOURCES mains/unit/Unit_Test/test_AD_Active_Sensor.f90
-    LIBS crtm
-    NOINSTALL
-    )
+# Add test_AD_Active_Sensor executable
+add_executable(test_AD_Active_Sensor mains/unit/Unit_Test/test_AD_Active_Sensor.f90)
+target_link_libraries(test_AD_Active_Sensor crtm)
 
-ecbuild_add_test(
-    TARGET "test_AD_Active_Sensor"
-    COMMAND "test_AD_Active_Sensor"
-    OMP $ENV{OMP_NUM_THREADS}
-    )
+# Add test for test_AD_Active_Sensor
+add_test(NAME test_AD_Active_Sensor COMMAND test_AD_Active_Sensor)
+set_tests_properties(test_AD_Active_Sensor PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
 
-ecbuild_add_executable (
-    TARGET "test_TL_convergence_active_sensor"
-    SOURCES mains/unit/Unit_Test/test_TL_convergence_active_sensor.f90
-    LIBS crtm
-    NOINSTALL
-    )
+# Add test_TL_convergence_active_sensor executable
+add_executable(test_TL_convergence_active_sensor mains/unit/Unit_Test/test_TL_convergence_active_sensor.f90)
+target_link_libraries(test_TL_convergence_active_sensor crtm)
 
-ecbuild_add_test(
-    TARGET "test_TL_convergence_active_sensor"
-    COMMAND "test_TL_convergence_active_sensor"
-    OMP $ENV{OMP_NUM_THREADS}
-    )
+# Add test for test_TL_convergence_active_sensor
+add_test(NAME test_TL_convergence_active_sensor COMMAND test_TL_convergence_active_sensor)
+set_tests_properties(test_TL_convergence_active_sensor PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
 
 
 #####################################################################
@@ -517,9 +405,6 @@ ecbuild_add_test(
 #####################################################################
 
 list( APPEND crtm_test_input
-Test_Input/ECMWF_5K/Big_Endian/ecmwf_5k_atmosphereccol.bin
-Test_Input/ECMWF_5K/Big_Endian/ecmwf_5k_surfaceccol.bin
-Test_Input/ECMWF_5K/Big_Endian/ecmwf_5k_geometryccol.bin
 AerosolCoeff/Little_Endian/AerosolCoeff.bin
 AerosolCoeff/netCDF/AerosolCoeff.nc4
 CloudCoeff/Little_Endian/CloudCoeff.bin
