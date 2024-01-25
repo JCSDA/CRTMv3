@@ -5,6 +5,7 @@
 
 cmake_minimum_required (VERSION 3.12)
 project("CRTM_Tests" VERSION 1.0.1 LANGUAGES Fortran C)
+
 enable_testing ()
 
 list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )
@@ -60,15 +61,15 @@ IF(EXISTS  ${CMAKE_SOURCE_DIR}/fix)
   set( CRTM_COEFFS_BRANCH "" )
 
 else() # Download CRTM coefficients
-  set( CRTM_COEFFS_BRANCH_PREFIX "crtm" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
-  set( CRTM_COEFFS_BRANCH "3.1.0_skylab_7.0" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)
+  set( CRTM_COEFFS_BRANCH_PREFIX "" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
+  set( CRTM_COEFFS_BRANCH "fix_REL-3.1.0.1_01252024" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)
   
-  set(CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION})
+  set(CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${CMAKE_PROJECT_VERSION})
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
   
-  set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/file")
-  set(test_files_dirname crtm_coefficients_${CRTM_COEFFS_BRANCH}.tar.gz) 
-  set(checksum "29a9b6a77096006cc76dbbb9c9569b75") # MD5SUM
+  set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
+  set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz) 
+  set(checksum "b37602ea463be55451de1e61ff80b2ba") # MD5SUM of fix_REL-3.1.0.1_01252024.tgz
   
   set(DOWNLOAD_URL "${DOWNLOAD_BASE_URL}/${test_files_dirname}")
   set(DOWNLOAD_DEST "${CRTM_COEFFS_PATH}/${test_files_dirname}")
@@ -82,10 +83,11 @@ else() # Download CRTM coefficients
   # -- UNTAR -- 
   
   # Define the directory to untar into
-  set(UNTAR_DEST "${CMAKE_BINARY_DIR}/test_data/${REPO_VERSION}")
-
+  set(UNTAR_DEST "${CMAKE_BINARY_DIR}/test_data/${CMAKE_PROJECT_VERSION}")
+	message(STATUS "Checking if ${UNTAR_DEST} already exists...")
   # Only untar if the CHECK_PATH does not exist
   if(NOT EXISTS ${UNTAR_DEST}/})
+		message(STATUS "Untarring the downloaded file (~2 minutes) to ${UNTAR_DEST}")
     execute_process(COMMAND tar -xzf ${DOWNLOAD_DEST} -C ${UNTAR_DEST}
                     RESULT_VARIABLE result
                     OUTPUT_QUIET ERROR_QUIET)
@@ -520,6 +522,6 @@ SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
 
 # Symlink all CRTM files
 # Version 3
-CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}
+CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
                          ${CMAKE_CURRENT_BINARY_DIR}/testinput
                          ${crtm_test_input} )
