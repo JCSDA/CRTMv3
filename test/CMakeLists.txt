@@ -4,12 +4,12 @@
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
 
 cmake_minimum_required (VERSION 3.12)
-project("CRTM_Tests" VERSION 1.0.1 LANGUAGES Fortran C)
+project("CRTM_Tests" VERSION 3.1.0 LANGUAGES Fortran C)
 
 enable_testing ()
 
-include (${CMAKE_SOURCE_DIR}/crtm/VERSION.cmake) #grab the version number information
-message (STATUS "Building tests for CRTM v ${CRTM_VERSION_STR}.") 
+
+message (STATUS "Building tests for CRTM v${PROJECT_VERSION}.") 
 
 list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )
 set( CMAKE_DIRECTORY_LABELS ${PROJECT_NAME} )
@@ -67,7 +67,7 @@ else() # Download CRTM coefficients
   set( CRTM_COEFFS_BRANCH_PREFIX "" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
   set( CRTM_COEFFS_BRANCH "fix_REL-3.1.0.1_01252024" ) #this version is the CRTM version, not the jedi / skylab version (again, following prior installations -- I'm not tied to this in any way)
   
-  set(CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${CRTM_VERSION_STR})
+  set(CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${PROJECT_VERSION})
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
   
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
@@ -86,10 +86,10 @@ else() # Download CRTM coefficients
   # -- UNTAR -- 
   
   # Define the directory to untar into
-  set(UNTAR_DEST "${CMAKE_BINARY_DIR}/test_data/${CRTM_VERSION_STR}")
+  set(UNTAR_DEST "${CMAKE_BINARY_DIR}/test_data/${PROJECT_VERSION}")
 	message(STATUS "Checking if ${UNTAR_DEST} already exists...")
   # Only untar if the CHECK_PATH does not exist
-  if(NOT EXISTS ${UNTAR_DEST}/})
+  if(NOT EXISTS ${UNTAR_DEST})
 		message(STATUS "Untarring the downloaded file (~2 minutes) to ${UNTAR_DEST}")
     execute_process(COMMAND tar -xzf ${DOWNLOAD_DEST} -C ${UNTAR_DEST}
                     RESULT_VARIABLE result
