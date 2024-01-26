@@ -87,9 +87,9 @@ else() # Download CRTM coefficients
   
   # Define the directory to untar into
   set(UNTAR_DEST "${CMAKE_BINARY_DIR}/test_data/${PROJECT_VERSION}")
-	message(STATUS "Checking if ${UNTAR_DEST} already exists...")
+	message(STATUS "Checking if ${UNTAR_DEST}/${CRTM_COEFFS_BRANCH} already exists...")
   # Only untar if the CHECK_PATH does not exist
-  if(NOT EXISTS ${UNTAR_DEST})
+  if(NOT EXISTS ${UNTAR_DEST}/${CRTM_COEFFS_BRANCH}/)
 		message(STATUS "Untarring the downloaded file (~2 minutes) to ${UNTAR_DEST}")
     execute_process(COMMAND tar -xzf ${DOWNLOAD_DEST} -C ${UNTAR_DEST}
                     RESULT_VARIABLE result
