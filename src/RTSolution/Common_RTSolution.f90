@@ -1239,8 +1239,14 @@ CONTAINS
     RTSolution%Reflectance = ZERO
     IF( RTV%Solar_Flag_true .AND. (.NOT.(RTV%aircraft%rt))) THEN
          RTSolution%Reflectance = RTSolution%Radiance*PI/RTV%Solar_irradiance
-         !  write(*, '(a,f9.4,a,f7.4,a,f7.4)') ' DEBUG-GREG, Solar_irradiance, reflectance, cos_sun = ', &
-         !              RTV%Solar_irradiance, ', ', RTSolution%Reflectance, ', ', RTV%COS_SUN
+    END IF
+
+    ! -------------------------------------------------------
+    ! Same thing but assuming clear sky
+    ! -------------------------------------------------------
+    RTSolution%Reflectance_clear = ZERO
+    IF( RTV%Solar_Flag_true .AND. (.NOT.(RTV%aircraft%rt))) THEN
+         RTSolution%Reflectance_clear = RTSolution%R_clear*PI/RTV%Solar_irradiance
     END IF
              
   END FUNCTION Assign_Common_Output   
