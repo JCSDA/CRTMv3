@@ -397,7 +397,7 @@ PROGRAM check_crtm
 
     ! Uncomment to write crtm outputs in a netCDF file
     ! 8d. **** OUTPUT THE RESULTS TO NetCDF files ****
-    ! output_nc_file = TRIM(SENSOR_ID(n))
+    ! output_nc_file = TRIM(SENSOR_ID(n))//'.nc'
     ! print *, 'start CRTM_RTSolution_WriteFile'
     ! err_stat = CRTM_RTSolution_WriteFile( &
     !                    output_nc_file     , &  ! Input

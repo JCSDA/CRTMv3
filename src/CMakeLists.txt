@@ -211,17 +211,16 @@ list( APPEND crtm_src_files
 			Zeeman/Zeeman_Utility.f90
 )
 
-ecbuild_add_library(TARGET ${PROJECT_NAME} SOURCES ${${PROJECT_NAME}_src_files})
+add_library(${PROJECT_NAME} STATIC ${${PROJECT_NAME}_src_files})
 
-#Dependecies
+# Dependencies
 target_link_libraries(${PROJECT_NAME} PUBLIC OpenMP::OpenMP_Fortran)
 target_link_libraries(${PROJECT_NAME} PUBLIC NetCDF::NetCDF_Fortran)
 
-#Fortran module output directory for build and install interfaces
+# Fortran module output directory for build and install interfaces
 set(MODULE_DIR module/${PROJECT_NAME}/${CMAKE_Fortran_COMPILER_ID}/${CMAKE_Fortran_COMPILER_VERSION})
 set_target_properties(${PROJECT_NAME} PROPERTIES Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/${MODULE_DIR})
 install(DIRECTORY ${CMAKE_BINARY_DIR}/${MODULE_DIR}/ DESTINATION ${MODULE_DIR})
 target_include_directories(${PROJECT_NAME} INTERFACE
                                 $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/${MODULE_DIR}>
                                 $<INSTALL_INTERFACE:${MODULE_DIR}>)
-
