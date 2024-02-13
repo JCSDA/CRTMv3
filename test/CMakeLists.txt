@@ -256,28 +256,35 @@ add_test(NAME test_Unit_TL_TEST
 set_tests_properties(test_Unit_TL_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 
-list (APPEND Coeff_Types
-	SpcCoeff
-	TauCoeff
-)
-list (APPEND Coeff_Tests
-	TauCoeff_BIN2NC
-	TauCoeff_NC2BIN
+list (APPEND SCoeff_Tests
 	SpcCoeff_Edit
 	SpcCoeff_Inspect
 	SpcCoeff_BIN2NC
 	SpcCoeff_NC2BIN
 )
 
-foreach(coeftype IN LISTS Coeff_Types)
-	foreach(testtype IN LISTS Coeff_Tests)
-		add_executable(${coeftype}${testtype} mains/application/${coeftype}/${coeftype}${testtype}.f90)
-		target_link_libraries(${coeftype}${testtype} PRIVATE crtm)
-		
-		add_test(NAME run_${coeftype}${testtype} 
-			COMMAND $<TARGET_FILE:${coeftype}${regtype}> "testinput/atms_n21.SpcCoeff.bin")
-		set_tests_properties(run_${coeftype}${testtype} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-	endforeach()
+foreach(testtype IN LISTS SCoeff_Tests)
+	add_executable(${testtype} mains/application/SpcCoeff/${testtype}.f90)
+	target_link_libraries(${testtype} PRIVATE crtm)
+	
+	add_test(NAME run_${testtype} 
+		COMMAND $<TARGET_FILE:${testtype}> "testinput/atms_n21.SpcCoeff.bin")
+	set_tests_properties(run_${testtype} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+endforeach()
+
+list (APPEND TCoeff_Tests
+	ODAS_NC2BIN
+	ODPS_BIN2NC
+	ODPS_NC2BIN
+)
+
+foreach(testtype IN LISTS TCoeff_Tests)
+	add_executable(${testtype} mains/application/TauCoeff/${testtype}.f90)
+	target_link_libraries(${testtype} PRIVATE crtm)
+	
+	add_test(NAME run_${testtype} 
+		COMMAND $<TARGET_FILE:${testtype}> "testinput/atms_n21.TauCoeff.bin")
+	set_tests_properties(run_${testtype} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 endforeach()
 
 

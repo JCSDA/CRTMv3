@@ -17,7 +17,6 @@ PROGRAM SpcCoeff_NC2BIN
   ! Module usage
   USE Message_Handler   , ONLY: SUCCESS, FAILURE, Program_Message, Display_Message
   USE String_Utility    , ONLY: StrLowCase
-  USE SignalFile_Utility, ONLY: Create_SignalFile
   USE SpcCoeff_Define   , ONLY: SpcCoeff_type
   USE SpcCoeff_IO       , ONLY: SpcCoeff_netCDF_to_Binary
   ! Disable implicit typing
@@ -28,7 +27,6 @@ PROGRAM SpcCoeff_NC2BIN
   ! Parameters
   ! ----------
   CHARACTER(*), PARAMETER :: PROGRAM_NAME = 'SpcCoeff_NC2BIN'
-  CHARACTER(*), PARAMETER :: PROGRAM_VERSION_ID = &
 
   ! ---------
   ! Variables
@@ -84,11 +82,5 @@ PROGRAM SpcCoeff_NC2BIN
   END IF
   
   
-  ! Create a signal file indicating success
-  err_stat = Create_SignalFile( bin_filename )
-  IF ( err_stat /= SUCCESS ) THEN
-    msg = 'Error creating signal file for '//TRIM(bin_filename)
-    CALL Display_Message( PROGRAM_NAME, msg, FAILURE )
-  END IF
 
 END PROGRAM SpcCoeff_NC2BIN

@@ -17,11 +17,8 @@ PROGRAM SpcCoeff_BIN2NC
   ! Environment set up
   ! ------------------
   ! Module usage
-  USE Message_Handler   , ONLY: SUCCESS, FAILURE, Program_Message, Display_Message
-  USE String_Utility    , ONLY: StrLowCase
-  USE SignalFile_Utility, ONLY: Create_SignalFile
-  USE SpcCoeff_Define   , ONLY: SpcCoeff_type
-  USE SpcCoeff_IO       , ONLY: SpcCoeff_Binary_to_netCDF
+  USE CRTM_Module
+  USE SpcCoeff_IO
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -38,15 +35,19 @@ PROGRAM SpcCoeff_BIN2NC
   CHARACTER(256) :: msg
   CHARACTER(256) :: NC_filename
   CHARACTER(256) :: BIN_filename
-  CHARACTER(256) :: answer
+  CHARACTER(256) :: answer, Version_STR
   INTEGER :: version
 
+
+
+
   ! Program header
+  ! --------------
+  CALL CRTM_Version( Version_STR )
   CALL Program_Message( PROGRAM_NAME, &
-                        'Program to convert a CRTM SpcCoeff data file '//&
-                        'from netCDF to Binary format.')
-
-
+       'Program to convert a CRTM SpcCoeff data file ',&
+       'CRTM Version: '//TRIM(Version_STR) )
+  
   ! Get the filenames
   WRITE(*,FMT='(/5x,"Enter the INPUT Binary SpcCoeff filename : ")', ADVANCE='NO')
   READ(*,'(a)') BIN_filename
@@ -64,7 +65,7 @@ PROGRAM SpcCoeff_BIN2NC
   ! Ask if version increment required
   WRITE(*,FMT='(/5x,"Increment the OUTPUT version number? [y/n]: ")', ADVANCE='NO')
   READ(*,'(a)') answer
-  answer = StrLowCase(ADJUSTL(answer))
+  answer = ADJUSTL(answer)
   SELECT CASE( TRIM(answer) )
     CASE('y','yes')
       version = -1
@@ -84,11 +85,4 @@ PROGRAM SpcCoeff_BIN2NC
   END IF
   
   
-  ! Create a signal file indicating success
-  err_stat = Create_SignalFile( bin_filename )
-  IF ( err_stat /= SUCCESS ) THEN
-    msg = 'Error creating signal file for '//TRIM(bin_filename)
-    CALL Display_Message( PROGRAM_NAME, msg, FAILURE )
-  END IF
-
 END PROGRAM SpcCoeff_NC2BIN
