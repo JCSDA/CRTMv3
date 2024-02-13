@@ -11,10 +11,21 @@
 !       Modified by     Yingtao Ma, 2020/6/11
 !                       yingtao.ma@noaa.gov
 !                       Implemented CMAQ aerosol
+!
+!      Modified by:    Isaac Moradi     isaac.moradi@nasa.gov
+!                      24-Sept-2021
+!                      Several new variables were added to later simpify the interpolation
+!                      of cloud optical properties
+!                      
+!                      Isaac Moradi     isaac.moradi@nasa.gov
+!                      30-Nov-2021
+!                      Added Add_Extra_Layers with default value set to .TRUE.
+!
 !       Modified by:    Cheng Dang, 17-Aug-2022
 !                       dangch@ucar.edu
 !                       Add relative humidity calculation
 !
+
 MODULE CRTM_Atmosphere_Define
 
   ! -----------------
@@ -41,8 +52,40 @@ MODULE CRTM_Atmosphere_Define
                                    SNOW_CLOUD, &
                                    GRAUPEL_CLOUD, &
                                    HAIL_CLOUD, &
+                                   PlateType1 , &
+                                   ColumnType1 , &
+                                   SixBulletRosette, &
+                                   Perpendicular4_BulletRosette, &
+                                   Flat3_BulletRosette, &
+                                   IconCloudIce, &
+                                   SectorSnowflake, &
+                                   EvansSnowAggregate, &
+                                   EightColumnAggregate, &
+                                   LargePlateAggregate, &
+                                   LargeColumnAggregate, &
+                                   LargeBlockAggregate, &
+                                   IconSnow, &
+                                   IconHail, &
+                                   GemGraupel, &
+                                   GemSnow, &
+                                   GemHail, &
+                                   IceSphere, &
+                                   LiquidSphere, &
                                    CLOUD_CATEGORY_NAME, &
                                    CRTM_Cloud_type, &
+                                   ! Parameters used for simplifying interpolation
+                                   ! of cloud optical properties
+                                   CLOUD_TYPE_MIE_TAMU, &
+                                   CLOUD_INDEX_MIE_TAMU, &
+                                   CLOUD_STATE_MIE_TAMU, &
+                                   CLOUD_TYPE_DDA_ARTS, &
+                                   CLOUD_INDEX_DDA_ARTS, &
+                                   CLOUD_STATE_DDA_ARTS, &
+                                   N_VALID_CLOUDS_MIE_TAMU, &
+                                   N_VALID_CLOUDS_DDA_ARTS, &
+                                   LIQUID, &
+                                   FROZEN, &
+                                   ! ------------------------------------
                                    OPERATOR(==), &
                                    OPERATOR(+), &
                                    OPERATOR(-), &
@@ -108,7 +151,42 @@ MODULE CRTM_Atmosphere_Define
   PUBLIC :: SNOW_CLOUD
   PUBLIC :: GRAUPEL_CLOUD
   PUBLIC :: HAIL_CLOUD
+  PUBLIC :: PlateType1
+  PUBLIC :: ColumnType1
+  PUBLIC :: SixBulletRosette
+  PUBLIC :: Perpendicular4_BulletRosette
+  PUBLIC :: Flat3_BulletRosette
+  PUBLIC :: IconCloudIce
+  PUBLIC :: SectorSnowflake
+  PUBLIC :: EvansSnowAggregate
+  PUBLIC :: EightColumnAggregate
+  PUBLIC :: LargePlateAggregate
+  PUBLIC :: LargeColumnAggregate
+  PUBLIC :: LargeBlockAggregate
+  PUBLIC :: IconSnow
+  PUBLIC :: IconHail
+  PUBLIC :: GemGraupel
+  PUBLIC :: GemSnow
+  PUBLIC :: GemHail
+  PUBLIC :: IceSphere
+  PUBLIC :: LiquidSphere
+
   PUBLIC :: CLOUD_CATEGORY_NAME
+
+  ! Cloud Lists used for simplifying the interpoaltion
+  PUBLIC :: CLOUD_TYPE_MIE_TAMU
+  PUBLIC :: CLOUD_INDEX_MIE_TAMU
+  PUBLIC :: CLOUD_STATE_MIE_TAMU
+  PUBLIC :: CLOUD_TYPE_DDA_ARTS
+  PUBLIC :: CLOUD_INDEX_DDA_ARTS
+  PUBLIC :: CLOUD_STATE_DDA_ARTS
+
+  PUBLIC :: N_VALID_CLOUDS_MIE_TAMU
+  PUBLIC :: N_VALID_CLOUDS_DDA_ARTS
+
+  PUBLIC :: LIQUID
+  PUBLIC :: FROZEN
+
   ! ...Structures
   PUBLIC :: CRTM_Cloud_type
   ! ...Procedures
@@ -353,6 +431,7 @@ MODULE CRTM_Atmosphere_Define
   TYPE :: CRTM_Atmosphere_type
     ! Allocation indicator
     LOGICAL :: Is_Allocated = .FALSE.
+    LOGICAL :: Add_Extra_Layers = .TRUE.
     ! Dimension values
     INTEGER :: Max_Layers   = 0  ! K dimension
     INTEGER :: n_Layers     = 0  ! Kuse dimension
@@ -370,6 +449,7 @@ MODULE CRTM_Atmosphere_Define
     INTEGER, ALLOCATABLE :: Absorber_Units(:) ! J
     ! Profile LEVEL and LAYER quantities
     REAL(fp), ALLOCATABLE :: Level_Pressure(:)  ! 0:K
+    REAL(fp), ALLOCATABLE :: Height(:)          ! 0:K in km
     REAL(fp), ALLOCATABLE :: Pressure(:)        ! K
     REAL(fp), ALLOCATABLE :: Temperature(:)     ! K
     REAL(fp), ALLOCATABLE :: Absorber(:,:)      ! K x J
@@ -550,6 +630,7 @@ CONTAINS
     ALLOCATE( Atm%Absorber_ID( n_Absorbers ), &
               Atm%Absorber_Units( n_Absorbers ), &
               Atm%Level_Pressure( 0:n_Layers ), &
+              Atm%Height( 0:n_Layers ), &
               Atm%Pressure( n_Layers ), &
               Atm%Temperature( n_Layers ), &
               Atm%Relative_Humidity ( n_Layers ), &
@@ -596,6 +677,7 @@ CONTAINS
     Atm%Absorber_ID       = INVALID_ABSORBER_ID
     Atm%Absorber_Units    = INVALID_ABSORBER_UNITS
     Atm%Level_Pressure    = ZERO
+    Atm%Height            = ZERO
     Atm%Pressure          = ZERO
     Atm%Temperature       = ZERO
     Atm%Relative_Humidity = ZERO
@@ -681,6 +763,7 @@ CONTAINS
     no = atm%n_Layers
     nt = atm_out%n_Layers
     atm_out%Level_Pressure(na:nt)         = atm%Level_Pressure(0:no)
+    atm_out%Height(na:nt)                 = atm%Height(0:no)
     atm_out%Pressure(na+1:nt)             = atm%Pressure(1:no)
     atm_out%Temperature(na+1:nt)          = atm%Temperature(1:no)
     atm_out%Relative_Humidity(na+1:nt)    = atm%Relative_Humidity(1:no)
@@ -799,6 +882,7 @@ CONTAINS
     ! Zero out the data
     Atmosphere%Level_Pressure    = ZERO
     Atmosphere%Pressure          = ZERO
+    Atmosphere%Height         = ZERO
     Atmosphere%Temperature       = ZERO
     Atmosphere%Relative_Humidity = ZERO
     Atmosphere%Absorber          = ZERO
@@ -1030,6 +1114,8 @@ CONTAINS
     k = Atm%n_Layers
     WRITE(fid, '(3x,"Level pressure:")')
     WRITE(fid, '(5(1x,es22.15,:))') Atm%Level_Pressure(0:k)
+    WRITE(fid, '(3x,"Height [km]:")')
+    WRITE(fid, '(5(1x,es22.15,:))') Atm%Height(0:k)
     WRITE(fid, '(3x,"Layer pressure:")')
     WRITE(fid, '(5(1x,es22.15,:))') Atm%Pressure(1:k)
     WRITE(fid, '(3x,"Layer temperature:")')
@@ -1157,6 +1243,7 @@ CONTAINS
            ANY(x%Absorber_Units(1:j) /= y%Absorber_Units(1:j)) ) RETURN
       ! ...Floating point arrays
       IF ( (.NOT. ALL(Compares_Within_Tolerance(x%Level_Pressure      ,y%Level_Pressure    ,n))) .OR. &
+           (.NOT. ALL(Compares_Within_Tolerance(x%Height              ,y%Height            ,n))) .OR. &
            (.NOT. ALL(Compares_Within_Tolerance(x%Pressure            ,y%Pressure          ,n))) .OR. &
            (.NOT. ALL(Compares_Within_Tolerance(x%Temperature         ,y%Temperature       ,n))) .OR. &
            (.NOT. ALL(Compares_Within_Tolerance(x%Relative_Humidity   ,y%Relative_Humidity ,n))) .OR. &

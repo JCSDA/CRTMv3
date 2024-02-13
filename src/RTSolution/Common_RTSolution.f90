@@ -245,7 +245,7 @@ CONTAINS
     RTV%COS_SUN                = cos(GeometryInfo%Source_Zenith_Radian)
     RTV%Solar_Irradiance       = SC(SensorIndex)%Solar_Irradiance(ChannelIndex) * GeometryInfo%AU_ratio2
     ! 
-    RTSolution%SolarIrradiance = RTV%Solar_Irradiance
+    RTSolution%Solar_Irradiance = RTV%Solar_Irradiance
        
     ! Determine the surface emission behavior
     !   By default, surface is SPECULAR.
@@ -3089,6 +3089,6 @@ CONTAINS
       n_Factor_AD = ZERO
     END DO    
     Sum_Fac_AD(0) = ZERO
-  END SUBROUTINE Normalize_Phase_AD  
-  
+  END SUBROUTINE Normalize_Phase_AD
+
 END MODULE Common_RTSolution

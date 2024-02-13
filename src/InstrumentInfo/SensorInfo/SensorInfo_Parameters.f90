@@ -11,7 +11,7 @@
 ! Date:          Author:                  Description:
 ! =====          =======                  ============
 ! 2021-08-31     Patrick Stegmann         Added PRA_POLARIZATION.
-!
+! 2021-11-11     Isaac Moradi             Added ACTIVE_SENSOR
 !
 MODULE SensorInfo_Parameters
 
@@ -39,6 +39,7 @@ MODULE SensorInfo_Parameters
   PUBLIC :: INFRARED_SENSOR 
   PUBLIC :: VISIBLE_SENSOR  
   PUBLIC :: ULTRAVIOLET_SENSOR  
+  PUBLIC :: ACTIVE_SENSOR
   PUBLIC :: SENSOR_TYPE_NAME
   ! Allowable polarisation type values and names
   PUBLIC :: N_POLARIZATION_TYPES   
@@ -75,6 +76,10 @@ MODULE SensorInfo_Parameters
   INTEGER, PARAMETER :: INFRARED_SENSOR    = 2
   INTEGER, PARAMETER :: VISIBLE_SENSOR     = 3
   INTEGER, PARAMETER :: ULTRAVIOLET_SENSOR = 4
+  ! The number assigned to Active_Sensor should always be the largest
+  ! in the group (all others, MW, IR, VIS, UV should be assigned a smaller
+  ! Number
+  INTEGER, PARAMETER :: ACTIVE_SENSOR      = 100
   CHARACTER(*), PARAMETER, DIMENSION( 0:N_SENSOR_TYPES ) :: &
     SENSOR_TYPE_NAME = (/ 'Invalid    ', &
                           'Microwave  ', &

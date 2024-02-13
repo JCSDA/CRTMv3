@@ -49,6 +49,7 @@ PROGRAM check_crtm
   !
   ! Module usage
   USE CRTM_Module
+  USE CRTM_RTSolution_Define, ONLY: CRTM_RTSolution_WriteFile
   ! Disable all implicit typing
   IMPLICIT NONE
   ! ============================================================================
@@ -73,8 +74,8 @@ PROGRAM check_crtm
   CHARACTER(*), PARAMETER :: NC_COEFFICIENT_PATH='coefficients/netcdf/'
 
   ! Aerosol/Cloud coefficient format
-  CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
-  !CHARACTER(*), PARAMETER :: Coeff_Format = 'netCDF'
+  !CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
+  CHARACTER(*), PARAMETER :: Coeff_Format = 'netCDF'
 
   ! Aerosol/Cloud coefficient scheme
   CHARACTER(*), PARAMETER :: Aerosol_Model = 'CRTM'
@@ -113,6 +114,7 @@ PROGRAM check_crtm
   CHARACTER(256) :: CloudCoeff_Format
   CHARACTER(256) :: Aerosol_Scheme
   CHARACTER(256) :: Cloud_Scheme
+  CHARACTER(256) :: output_nc_file
   INTEGER :: err_stat, alloc_stat
   INTEGER :: n_channels
   INTEGER :: l, m, n, nc
@@ -178,7 +180,7 @@ PROGRAM check_crtm
     CloudCoeff_Format   = 'netCDF'
     CloudCoeff_File     = 'CloudCoeff.'//TRIM(Cloud_Scheme)//'nc4'
   END IF
-  
+
   WRITE( *,'(/5x,"Initializing the CRTM...")' )
   err_stat = CRTM_Init( SENSOR_ID, &
                         chinfo, &
@@ -254,6 +256,14 @@ PROGRAM check_crtm
       CALL Display_Message( PROGRAM_NAME, message, FAILURE )
       STOP
     END IF
+
+    ! The output structure
+    CALL CRTM_RTSolution_Create( rts, N_LAYERS )
+    IF ( ANY(.NOT. CRTM_RTSolution_Associated(rts)) ) THEN
+      Message = 'Error allocating CRTM RTSolution structures'
+      CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+      STOP 1
+    END IF
     ! ==========================================================================
 
     ! ==========================================================================
@@ -308,8 +318,13 @@ PROGRAM check_crtm
     ! 7b. Inintialize the K-matrix INPUT so
     !     that the results are dTb/dx
     ! -------------------------------------
+    CALL CRTM_RTSolution_Create( rts_K, N_LAYERS ) ! This is necessary for Reflectivity
     rts_K%Radiance               = ZERO
     rts_K%Brightness_Temperature = ONE
+    DO m = 1, N_LAYERS
+       rts_K%Reflectivity(m) = ZERO
+       rts_K%Reflectivity_Attenuated(m) = ZERO
+    END DO
     ! ==========================================================================
 
     ! ==========================================================================
@@ -346,29 +361,53 @@ PROGRAM check_crtm
       CALL Display_Message( PROGRAM_NAME, message, FAILURE )
       STOP
     END IF
+
+    ! 8b. The AOD model
+    ! ----------------------
+    err_stat = CRTM_AOD( atm        , &
+                         chinfo(n:n), &
+                         rts )
+    IF ( err_stat /= SUCCESS ) THEN
+      Message = 'Error in CRTM AOD Model'
+      CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+      STOP 1
+    END IF
     ! ==========================================================================
 
-   ! ============================================================================
-   ! 8c. **** OUTPUT THE RESULTS TO SCREEN ****
-   !
-   ! User should read the user guide or the source code of the routine
-   ! CRTM_RTSolution_Inspect in the file CRTM_RTSolution_Define.f90 to
-   ! select the needed variables for outputs.  These variables are contained
-   ! in the structure RTSolution.
-   DO m = 1, N_PROFILES
-     WRITE( *,'(//7x,"Profile ",i0," output for ",a )') m, TRIM(Sensor_Id(n))
-     DO l = 1, n_Channels
-       WRITE( *, '(/5x,"Channel ",i0," results")') chinfo(n)%Sensor_Channel(l)
-       CALL CRTM_RTSolution_Inspect(rts(l,m))
-       CALL CRTM_RTSolution_Inspect(rts_K(l,m))
-       CALL CRTM_Atmosphere_Inspect(atm_K(l,m))
-       CALL CRTM_Surface_Inspect(sfc_K(l,m))
+    ! ============================================================================
+    ! 8c. **** OUTPUT THE RESULTS TO SCREEN ****
+    !
+    ! User should read the user guide or the source code of the routine
+    ! CRTM_RTSolution_Inspect in the file CRTM_RTSolution_Define.f90 to
+    ! select the needed variables for outputs.  These variables are contained
+    ! in the structure RTSolution.
+    DO m = 1, N_PROFILES
+      WRITE( *,'(//7x,"Profile ",i0," output for ",a )') m, TRIM(Sensor_Id(n))
+      DO l = 1, n_Channels
+        WRITE( *, '(/5x,"Channel ",i0," results")') chinfo(n)%Sensor_Channel(l)
+        CALL CRTM_RTSolution_Inspect(rts(l,m))
+        CALL CRTM_RTSolution_Inspect(rts_K(l,m))
+        CALL CRTM_Atmosphere_Inspect(atm_K(l,m))
+        CALL CRTM_Surface_Inspect(sfc_K(l,m))
 
-     END DO
-     CALL CRTM_Atmosphere_Inspect(atm(m))
-     CALL CRTM_Surface_Inspect(sfc(m))
-   END DO
+      END DO
+      CALL CRTM_Atmosphere_Inspect(atm(m))
+      CALL CRTM_Surface_Inspect(sfc(m))
+    END DO
 
+    ! Uncomment to write crtm outputs in a netCDF file
+    ! 8d. **** OUTPUT THE RESULTS TO NetCDF files ****
+    ! output_nc_file = TRIM(SENSOR_ID(n))//'.nc'
+    ! print *, 'start CRTM_RTSolution_WriteFile'
+    ! err_stat = CRTM_RTSolution_WriteFile( &
+    !                    output_nc_file     , &  ! Input
+    !                    rts                , &  ! Input
+    !                    NetCDF=.TRUE.        )    ! Optional Input
+    !  IF ( err_stat /= SUCCESS ) THEN
+    !    message = 'Error calling CRTM_RTSolution_WriteFile for '//TRIM(SENSOR_ID(n))
+    !    CALL Display_Message( PROGRAM_NAME, message, FAILURE )
+    !    STOP
+    !  END IF
 
     ! ==========================================================================
     ! STEP 9. **** CLEAN UP FOR NEXT SENSOR ****
@@ -871,7 +910,7 @@ CONTAINS
     !   Sea Sat SSAM, Sea Salt SSCM1, and Sea Salt SSCM2
     Load_Aerosol_Data_2: IF ( atm(2)%n_Aerosols > 0 ) THEN
 
-      atm(2)%Aerosol(1)%Type = 2 ! SEASALT_SSAM_AEROSOL (CRTM), Soot (CMAQ), 
+      atm(2)%Aerosol(1)%Type = 2 ! SEASALT_SSAM_AEROSOL (CRTM), Soot (CMAQ),
                                  ! DUST 2 (GOCART-GEOS5), Smoke (NAAPS)
       atm(2)%Aerosol(1)%Effective_Radius = & ! microns
       (/0.000000E+00_fp, 0.000000E+00_fp, &
@@ -937,7 +976,7 @@ CONTAINS
       END IF
 
       IF ( atm(2)%n_Aerosols > 1 ) THEN
-        atm(2)%Aerosol(2)%Type = 3 ! SEASALT_SSCM1_AEROSOL (CRTM), Water soluble (CMAQ), 
+        atm(2)%Aerosol(2)%Type = 3 ! SEASALT_SSCM1_AEROSOL (CRTM), Water soluble (CMAQ),
                                    ! DUST 3 (GOCART-GEOS5), Sea salt (NAAPS)
         atm(2)%Aerosol(2)%Effective_Radius = & ! microns
         (/0.000000E+00_fp, 0.000000E+00_fp, &
@@ -1004,7 +1043,7 @@ CONTAINS
       END IF
 
       IF ( atm(2)%n_Aerosols > 2 ) THEN
-        atm(2)%Aerosol(3)%Type = 4 ! SEASALT_SSCM2_AEROSOL (CRTM), Sulfate (CMAQ), 
+        atm(2)%Aerosol(3)%Type = 4 ! SEASALT_SSCM2_AEROSOL (CRTM), Sulfate (CMAQ),
                                    ! Dust 4 (GOCART-GEOS5), Anthropogenic and Biogenic Fine Particles (NAAPS)
         atm(2)%Aerosol(3)%Effective_Radius = & ! microns
         (/0.000000E+00_fp, 0.000000E+00_fp, &
