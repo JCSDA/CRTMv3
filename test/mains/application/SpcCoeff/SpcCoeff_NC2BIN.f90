@@ -7,7 +7,8 @@
 ! CREATION HISTORY:
 !       Written by:     Paul van Delst, 27-Jul-2002
 !                       paul.vandelst@noaa.gov
-!
+!       Updated by:     Ben Johnson 23 January, 2024
+
 
 PROGRAM SpcCoeff_NC2BIN
 
@@ -15,6 +16,7 @@ PROGRAM SpcCoeff_NC2BIN
   ! Environment set up
   ! ------------------
   ! Module usage
+  USE CRTM_Module
   USE Message_Handler   , ONLY: SUCCESS, FAILURE, Program_Message, Display_Message
   USE String_Utility    , ONLY: StrLowCase
   USE SpcCoeff_Define   , ONLY: SpcCoeff_type
@@ -32,18 +34,18 @@ PROGRAM SpcCoeff_NC2BIN
   ! Variables
   ! ---------
   INTEGER :: err_stat
-  CHARACTER(256) :: msg
+  CHARACTER(256) :: msg, version_str
   CHARACTER(256) :: nc_filename
   CHARACTER(256) :: bin_filename
   CHARACTER(256) :: answer
   INTEGER :: version
 
   ! Program header
+  CALL CRTM_Version (version_str)
   CALL Program_Message( PROGRAM_NAME, &
                         'Program to convert a CRTM SpcCoeff data file '//&
                         'from netCDF to Binary format.', &
-                        '$Revision$' )
-
+                        'CRTM Version:'//trim(version_str) )
 
   ! Get the filenames
   WRITE(*,FMT='(/5x,"Enter the INPUT netCDF SpcCoeff filename : ")', ADVANCE='NO')
@@ -58,19 +60,6 @@ PROGRAM SpcCoeff_NC2BIN
     CALL Display_Message( PROGRAM_NAME, msg, FAILURE ); STOP
   END IF
 
-
-  ! Ask if version increment required
-  WRITE(*,FMT='(/5x,"Increment the OUTPUT version number? [y/n]: ")', ADVANCE='NO')
-  READ(*,'(a)') answer
-  answer = StrLowCase(ADJUSTL(answer))
-  SELECT CASE( TRIM(answer) )
-    CASE('y','yes')
-      version = -1
-    CASE DEFAULT
-      version = 0
-  END SELECT
-  
-
   ! Perform the conversion
   err_stat = SpcCoeff_netCDF_to_Binary( nc_filename, bin_filename, Version = version )
   IF ( err_stat /= SUCCESS ) THEN
@@ -82,5 +71,4 @@ PROGRAM SpcCoeff_NC2BIN
   END IF
   
   
-
 END PROGRAM SpcCoeff_NC2BIN

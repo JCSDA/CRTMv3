@@ -1,7 +1,7 @@
 !
 ! SpcCoeff_BIN2NC
 !
-! Program to convert netCDF format SpcCoeff files to the Binary format.
+! Program to convert Binary format SpcCoeff files to the netCDF format.
 !
 !
 ! CREATION HISTORY:
@@ -18,7 +18,8 @@ PROGRAM SpcCoeff_BIN2NC
   ! ------------------
   ! Module usage
   USE CRTM_Module
-  USE SpcCoeff_IO
+  USE SpcCoeff_Define   , ONLY: SpcCoeff_type
+  USE SpcCoeff_IO       , ONLY: SpcCoeff_Binary_to_netCDF
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -33,21 +34,17 @@ PROGRAM SpcCoeff_BIN2NC
   ! ---------
   INTEGER :: err_stat
   CHARACTER(256) :: msg
-  CHARACTER(256) :: NC_filename
   CHARACTER(256) :: BIN_filename
-  CHARACTER(256) :: answer, Version_STR
-  INTEGER :: version
-
-
-
-
-  ! Program header
-  ! --------------
-  CALL CRTM_Version( Version_STR )
-  CALL Program_Message( PROGRAM_NAME, &
-       'Program to convert a CRTM SpcCoeff data file ',&
-       'CRTM Version: '//TRIM(Version_STR) )
+  CHARACTER(256) :: NC_filename
+  CHARACTER(256) :: answer
+  CHARACTER(256) :: version_str
   
+  ! Program header
+  CALL CRTM_Version(version_str)
+  CALL Program_Message( PROGRAM_NAME, &
+                        'Program to convert a CRTM SpcCoeff data file from Binary to netCDF format.', &
+                        'CRTM Version: '//TRIM(version_str) )
+
   ! Get the filenames
   WRITE(*,FMT='(/5x,"Enter the INPUT Binary SpcCoeff filename : ")', ADVANCE='NO')
   READ(*,'(a)') BIN_filename
@@ -60,22 +57,10 @@ PROGRAM SpcCoeff_BIN2NC
   IF ( bin_filename == nc_filename ) THEN
     msg = 'SpcCoeff netCDF and Binary filenames are the same!'
     CALL Display_Message( PROGRAM_NAME, msg, FAILURE ); STOP
-  END IF
-
-  ! Ask if version increment required
-  WRITE(*,FMT='(/5x,"Increment the OUTPUT version number? [y/n]: ")', ADVANCE='NO')
-  READ(*,'(a)') answer
-  answer = ADJUSTL(answer)
-  SELECT CASE( TRIM(answer) )
-    CASE('y','yes')
-      version = -1
-    CASE DEFAULT
-      version = 0
-  END SELECT
-  
+  END IF  
 
   ! Perform the conversion
-  err_stat = SpcCoeff_Binary_to_netCDF( BIN_filename, NC_filename, Version = version )
+  err_stat = SpcCoeff_Binary_to_netCDF( BIN_filename, NC_filename, Quiet=.FALSE.)
   IF ( err_stat /= SUCCESS ) THEN
     msg = 'SpcCoeff Binary -> netCDF conversion failed!'
     CALL Display_Message( PROGRAM_NAME, msg, FAILURE ); STOP
@@ -84,5 +69,4 @@ PROGRAM SpcCoeff_BIN2NC
     CALL Display_Message( PROGRAM_NAME, msg, err_stat )
   END IF
   
-  
-END PROGRAM SpcCoeff_NC2BIN
+END PROGRAM SpcCoeff_BIN2NC
