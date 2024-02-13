@@ -256,11 +256,30 @@ add_test(NAME test_Unit_TL_TEST
 set_tests_properties(test_Unit_TL_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 
-add_executable(SpcCoeff_Inspect mains/application/SpcCoeff/SpcCoeff_Inspect.f90)
-target_link_libraries(SpcCoeff_Inspect PRIVATE crtm)
-add_test(NAME run_SpcCoeff_Inspect
-         COMMAND $<TARGET_FILE:SpcCoeff_Inspect> "testinput/atms_n21.SpcCoeff.bin")
-set_tests_properties(run_SpcCoeff_Inspect PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+list (APPEND Coeff_Types
+	SpcCoeff
+	TauCoeff
+)
+list (APPEND Coeff_Tests
+	TauCoeff_BIN2NC
+	TauCoeff_NC2BIN
+	SpcCoeff_Edit
+	SpcCoeff_Inspect
+	SpcCoeff_BIN2NC
+	SpcCoeff_NC2BIN
+)
+
+foreach(coeftype IN LISTS Coeff_Types)
+	foreach(testtype IN LISTS Coeff_Tests)
+		add_executable(${coeftype}${testtype} mains/application/${coeftype}/${coeftype}${testtype}.f90)
+		target_link_libraries(${coeftype}${testtype} PRIVATE crtm)
+		
+		add_test(NAME run_${coeftype}${testtype} 
+			COMMAND $<TARGET_FILE:${coeftype}${regtype}> "testinput/atms_n21.SpcCoeff.bin")
+		set_tests_properties(run_${coeftype}${testtype} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+	endforeach()
+endforeach()
+
 
 #---------------------------------------------------------------------------------
 #unit tests
