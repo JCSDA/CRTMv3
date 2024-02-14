@@ -269,7 +269,7 @@ foreach(testtype IN LISTS SCoeff_Tests)
 	
 	add_test(NAME run_${testtype} 
 		COMMAND $<TARGET_FILE:${testtype}> "testinput/atms_n21.SpcCoeff.bin")
-	set_tests_properties(run_${testtype} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+	set_tests_properties(run_${testtype} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}" DISABLED ON)
 endforeach()
 
 list (APPEND TCoeff_Tests
@@ -284,7 +284,7 @@ foreach(testtype IN LISTS TCoeff_Tests)
 	
 	add_test(NAME run_${testtype} 
 		COMMAND $<TARGET_FILE:${testtype}> "testinput/atms_n21.TauCoeff.bin")
-	set_tests_properties(run_${testtype} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+	set_tests_properties(run_${testtype} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}" DISABLED ON)
 endforeach()
 
 

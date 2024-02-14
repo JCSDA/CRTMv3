@@ -7,7 +7,8 @@
 ! CREATION HISTORY:
 !       Written by:     Paul van Delst, 02-Feb-2011
 !                       paul.vandelst@noaa.gov
-!
+!       Updated by:     Ben Johnson 22 January, 2024 (bjohns@ucar.edu)
+!                       added SpcCoeff_Binary_to_netCDF
 
 MODULE SpcCoeff_IO
 
@@ -18,7 +19,7 @@ MODULE SpcCoeff_IO
   USE Type_Kinds         , ONLY: fp
   USE Message_Handler    , ONLY: SUCCESS, FAILURE, INFORMATION, Display_Message
   USE File_Utility       , ONLY: File_Exists
-  USE SpcCoeff_Define    , ONLY: SpcCoeff_type, OPERATOR(==)
+  USE SpcCoeff_Define    , ONLY: SpcCoeff_type, SpcCoeff_Inspect, OPERATOR(==)
   USE SpcCoeff_Binary_IO , ONLY: SpcCoeff_Binary_InquireFile, &
                                  SpcCoeff_Binary_ReadFile   , &
                                  SpcCoeff_Binary_WriteFile 
@@ -39,6 +40,7 @@ MODULE SpcCoeff_IO
   PUBLIC :: SpcCoeff_ReadFile
   PUBLIC :: SpcCoeff_WriteFile
   PUBLIC :: SpcCoeff_netCDF_to_Binary
+  PUBLIC :: SpcCoeff_Binary_to_netCDF
   !PUBLIC :: SpcCoeff_IOVersion
 
 
@@ -645,7 +647,9 @@ CONTAINS
     
     ! Read the substructure netCDF filenames
     ! ...ACCoeff
+
     sub_filename = TRIM(spccoeff%Sensor_Id)//'.ACCoeff.nc'
+    PRINT *, 'Looking for the ACCoeff file: '//trim(sub_filename)
     IF ( File_Exists(sub_filename) ) THEN
       err_stat = ACCoeff_netCDF_ReadFile( sub_filename, spccoeff%AC, Quiet = Quiet )
       IF ( err_stat /= SUCCESS ) THEN
@@ -656,6 +660,7 @@ CONTAINS
     END IF
     ! ...NLTECoeff
     sub_filename = TRIM(spccoeff%Sensor_Id)//'.NLTECoeff.nc'
+    PRINT *, 'Looking for the NLTECoeff file: '//trim(sub_filename)
     IF ( File_Exists(sub_filename) ) THEN
       err_stat = NLTECoeff_netCDF_ReadFile( sub_filename, spccoeff%NC, Quiet = Quiet )
       IF ( err_stat /= SUCCESS ) THEN
@@ -694,6 +699,184 @@ CONTAINS
     END IF
 
   END FUNCTION SpcCoeff_netCDF_to_Binary
+
+!------------------------------------------------------------------------------
+!:sdoc+:
+!
+! NAME:
+!       SpcCoeff_Binary_to_netCDF
+!
+! PURPOSE:
+!       Function to convert a netCDF SpcCoeff file to Binary format.
+!
+!       NOTE: If the netCDF files for the SpcCoeff substructure components
+!             are also present, they are read and included in the binary
+!             file output. The substructure components filenames are
+!             constructed from the SpcCoeff sensor id, e.g.
+!               sensor_id.ACCoeff.nc
+!               sensor_id.NLTECoeff.nc
+!             etc..
+!
+! CALLING SEQUENCE:
+!       Error_Status = SpcCoeff_Binary_to_netCDF( &
+!                        BIN_Filename, &
+!                        NC_Filename , &
+!                        Quiet   = Quiet  , &
+!                        Version = Version  )
+!
+! INPUTS:
+!       BIN_Filename:   Character string specifying the name of the
+!                       Binary format SpcCoeff data file to write.
+!                       UNITS:      N/A
+!                       TYPE:       CHARACTER(*)
+!                       DIMENSION:  Scalar
+!                       ATTRIBUTES: INTENT(IN)
+!
+!       NC_Filename:    Character string specifying the name of the
+!                       netCDF format SpcCoeff data file to read.
+!                       UNITS:      N/A
+!                       TYPE:       CHARACTER(*)
+!                       DIMENSION:  Scalar
+!                       ATTRIBUTES: INTENT(IN)
+!
+!
+! OPTIONAL INPUTS:
+!       Quiet:          Set this logical argument to suppress INFORMATION
+!                       messages being printed to stdout
+!                       If == .FALSE., INFORMATION messages are OUTPUT [DEFAULT].
+!                          == .TRUE.,  INFORMATION messages are SUPPRESSED.
+!                       If not specified, default is .FALSE.
+!                       UNITS:      N/A
+!                       TYPE:       LOGICAL
+!                       DIMENSION:  Scalar
+!                       ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+!       Version:        Set this argument to the version number value to be
+!                       used in the output binary file.
+!                       If >  0, the value REPLACES the current Version.
+!                          <= 0, the current version is INCREMENTED by the |value|.
+!                       UNITS:      N/A
+!                       TYPE:       INTEGER
+!                       DIMENSION:  Scalar
+!                       ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+! FUNCTION RESULT:
+!       Error_Status:   The return value is an integer defining the error status.
+!                       The error codes are defined in the Message_Handler module.
+!                       If == SUCCESS the file conversion was successful
+!                          == FAILURE an unrecoverable error occurred.
+!                       UNITS:      N/A
+!                       TYPE:       INTEGER
+!                       DIMENSION:  Scalar
+!
+! SIDE EFFECTS:
+!       - If the output file already exists, it is overwritten.
+!       - If an error occurs, the output file is deleted before
+!         returning to the calling routine.
+!
+!:sdoc-:
+!------------------------------------------------------------------------------
+
+  FUNCTION SpcCoeff_Binary_to_netCDF( &
+    BIN_Filename, &  ! Input
+    NC_Filename , &  ! Input
+    Quiet       , &  ! Optional input
+    Version     ) &  ! Optional input
+  RESULT( err_stat )
+    ! Arguments
+    CHARACTER(*),      INTENT(IN)  :: BIN_Filename
+    CHARACTER(*),      INTENT(IN)  :: NC_Filename
+    LOGICAL, OPTIONAL, INTENT(IN)  :: Quiet
+    INTEGER, OPTIONAL, INTENT(IN)  :: Version
+    ! Function result
+    INTEGER :: err_stat
+    ! Function parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'SpcCoeff_Binary_to_netCDF'
+    ! Function variables
+    CHARACTER(256) :: msg
+    CHARACTER(256) :: sub_filename
+    TYPE(SpcCoeff_type) :: spccoeff, spccoeff_copy
+    
+    ! Set up
+    err_stat = SUCCESS
+    
+
+    ! Read the netCDF file
+    WRITE(*,'(/5x,"Reading the input binary datafile(s)...")')
+    err_stat = SpcCoeff_Binary_ReadFile( BIN_Filename, spccoeff, Quiet = Quiet )
+    IF ( err_stat /= SUCCESS ) THEN
+      msg = 'Error reading binary file '//TRIM(BIN_Filename)
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
+
+
+    ! Update version number if necessary
+    IF ( PRESENT(Version) ) THEN
+      IF ( Version > 0 ) THEN
+        spccoeff%Version = Version                          ! Replace
+      ELSE
+        spccoeff%Version = spccoeff%Version + ABS(Version)  ! Increment
+      END IF
+    END IF
+
+    ! Read the substructure netCDF filenames
+    ! ...ACCoeff
+    sub_filename = TRIM(spccoeff%Sensor_Id)//'.ACCoeff.nc'
+    IF ( File_Exists(sub_filename) ) THEN
+      err_stat = ACCoeff_netCDF_ReadFile( sub_filename, spccoeff%AC, Quiet = Quiet )
+      IF ( err_stat /= SUCCESS ) THEN
+        msg = 'Error reading netCDF file '//TRIM(sub_filename)
+        CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+        RETURN
+      END IF
+    END IF
+    ! ...NLTECoeff
+    sub_filename = TRIM(spccoeff%Sensor_Id)//'.NLTECoeff.nc'
+    IF ( File_Exists(sub_filename) ) THEN
+      err_stat = NLTECoeff_netCDF_ReadFile( sub_filename, spccoeff%NC, Quiet = Quiet )
+      IF ( err_stat /= SUCCESS ) THEN
+        msg = 'Error reading netCDF file '//TRIM(sub_filename)
+        CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+        RETURN
+      END IF
+    END IF
+
+
+    ! Write the netCDF file
+    WRITE(*,'(/5x,"Writing the output netCDF datafile...")')
+    err_stat = SpcCoeff_WriteFile( NC_Filename, spccoeff, netCDF=.TRUE., Quiet = Quiet )
+    IF ( err_stat /= SUCCESS ) THEN
+      msg = 'Error writing netCDF file '//TRIM(NC_Filename)
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
+
+
+    ! Check the write was successful
+    WRITE(*,'(/5x,"Test reading the output netCDF datafile...")')
+    ! ...Read the netCDF file
+    err_stat = SpcCoeff_ReadFile( NC_Filename, spccoeff_copy, netCDF=.TRUE., Quiet = Quiet )
+    IF ( err_stat /= SUCCESS ) THEN
+      msg = 'Error reading newly created netCDF file '//TRIM(NC_Filename)//' for test'
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
+    ! ...Compare the SpcCoeff objects
+    PRINT *, 'spccoeff:'
+    call SpcCoeff_Inspect(spccoeff)
+
+    PRINT *, 'spccoeff_copy:'
+    call SpcCoeff_Inspect(spccoeff_copy)
+
+    IF ( .NOT. (spccoeff == spccoeff_copy) ) THEN
+      err_stat = FAILURE
+      msg = 'SpcCoeff object comparison failed.'
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
+
+  END FUNCTION SpcCoeff_Binary_to_netCDF
 
 
 !--------------------------------------------------------------------------------
