@@ -255,12 +255,18 @@ add_test(NAME test_Unit_TL_TEST
          COMMAND $<TARGET_FILE:Unit_TL_TEST>)
 set_tests_properties(test_Unit_TL_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
+add_executable(Unit_Aerosol_Bypass mains/unit/Unit_Test/test_Aerosol_Bypass.f90)
+target_link_libraries(Unit_Aerosol_Bypass PRIVATE crtm)
+add_test(NAME test_Unit_Aerosol_Bypass
+         COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass>)
+set_tests_properties(test_Unit_Aerosol_Bypass PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(SpcCoeff_Inspect mains/application/SpcCoeff_Inspect.f90)
 target_link_libraries(SpcCoeff_Inspect PRIVATE crtm)
 add_test(NAME run_SpcCoeff_Inspect
          COMMAND $<TARGET_FILE:SpcCoeff_Inspect> "testinput/atms_n21.SpcCoeff.bin")
 set_tests_properties(run_SpcCoeff_Inspect PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
 
 #---------------------------------------------------------------------------------
 #unit tests

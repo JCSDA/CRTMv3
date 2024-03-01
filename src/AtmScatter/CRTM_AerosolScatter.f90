@@ -796,6 +796,8 @@ CONTAINS
 
     ! Get the aerosol type LUT index
     ! ------------------------------
+    IF ( Aerosol_Type == -1 ) RETURN
+
     k = AerosolCoeff_typeID_to_index( AeroC, Aerosol_Type )
 
     ! Get the frequency indices
@@ -955,6 +957,9 @@ CONTAINS
     REAL(fp), POINTER :: zg(:,:), zc(:,:,:)
     NULLIFY (zg)
     NULLIFY (zc)
+
+
+    IF ( Aerosol_Type == -1 ) RETURN  ! Bypass aerosol
 
     ! Setup
     ! -----
@@ -1177,6 +1182,8 @@ CONTAINS
     REAL(fp), POINTER :: zg(:,:), zc(:,:,:)
     NULLIFY(zg)
     NULLIFY(zc)
+
+    IF ( Aerosol_Type == -1 ) RETURN  ! Bypass aerosol
 
     ! Setup
     ! -----

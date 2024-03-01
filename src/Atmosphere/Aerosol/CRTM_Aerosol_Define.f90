@@ -503,8 +503,9 @@ CONTAINS
     ! ...Change default so all entries can be checked
     IsValid = .TRUE.
     ! ...The type of Aerosol
-!yma    IF ( Aerosol%Type < 1 .OR. Aerosol%Type > AeroC%n_Types ) THEN
-    if ( .NOT. any( Aerosol%Type == AeroC%Type(:) ) ) then
+    ! ...Add Aerosol%Type == -1 as a valid aerosol type (required by DA system)
+    IF ( Aerosol%Type < -1 .OR. Aerosol%Type == 0 .OR. Aerosol%Type > AeroC%n_Types ) THEN
+    !IF ( .NOT. any( Aerosol%Type == AeroC%Type(:) ) ) THEN
       msg = 'Invalid Aerosol type'
       CALL Display_Message( ROUTINE_NAME, TRIM(msg), INFORMATION )
       IsValid = .FALSE.
