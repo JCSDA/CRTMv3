@@ -1,11 +1,11 @@
 !
-! test_function CRTM_Atmosphere_Aerosol_Bypass
+! test_Simple
 !
-! Test program for the CRTM Forward function including clouds and aerosols.
+! Test program for the CRTM Tangent-Linear function including clouds and aerosols.
 !
 !
 
-PROGRAM test_Aerosol_Bypass
+PROGRAM test_Aerosol_Bypass_TL
 
   ! ============================================================================
   ! **** ENVIRONMENT SETUP FOR RTM USAGE ****
@@ -20,7 +20,7 @@ PROGRAM test_Aerosol_Bypass
   ! ----------
   ! Parameters
   ! ----------
-  CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'test_Aerosol_Bypass'
+  CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'test_Aerosol_Bypass_TL'
   CHARACTER(*), PARAMETER :: COEFFICIENTS_PATH = './testinput/'
   CHARACTER(*), PARAMETER :: RESULTS_PATH = './results/unit/'
 
@@ -51,14 +51,14 @@ PROGRAM test_Aerosol_Bypass
   CHARACTER(256) :: Sensor_Id
   INTEGER :: Error_Status
   INTEGER :: Allocate_Status
-  INTEGER :: n_Channels, n_Stokes
+  INTEGER :: n_Channels
   INTEGER :: l, m
   INTEGER :: N_AEROSOLS, ICASE
+
   ! Declarations for RTSolution comparison
-  INTEGER :: n_l, n_m, n_k, n_s
+  INTEGER :: n_l, n_m
   CHARACTER(256) :: rts_File
-  ! CHARACTER(*), PARAMETER :: Outcase(2) = (/'case1', 'case2'/)
-  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rts(:,:)
+  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rts_TL(:,:)
 
 
   ! ============================================================================
@@ -66,19 +66,21 @@ PROGRAM test_Aerosol_Bypass
   !
   TYPE(CRTM_ChannelInfo_type)             :: ChannelInfo(N_SENSORS)
   TYPE(CRTM_Geometry_type)                :: Geometry(N_PROFILES)
-  TYPE(CRTM_Atmosphere_type)              :: Atm(N_PROFILES)
-  TYPE(CRTM_Surface_type)                 :: Sfc(N_PROFILES)
-  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution(:,:)
+  TYPE(CRTM_Atmosphere_type)              :: Atm(N_PROFILES), Atm_TL(N_PROFILES)
+  TYPE(CRTM_Surface_type)                 :: Sfc(N_PROFILES), Sfc_TL(N_PROFILES)
+  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution(:,:), RTSolution_TL(:,:)
   ! ============================================================================
 
   !First, make sure the right number of inputs have been provided
   Sensor_Id = 'atms_npp'
 
+
+
   ! Program header
   ! --------------
   CALL CRTM_Version( Version )
   CALL Program_Message( PROGRAM_NAME, &
-    'Test program for the CRTM Forward function including clouds and aerosols.', &
+    'Test program for the CRTM Tangent-Linear function including clouds and aerosols.', &
     'CRTM Version: '//TRIM(Version) )
 
 
@@ -113,49 +115,57 @@ PROGRAM test_Aerosol_Bypass
 
    DO ICASE = 1, 2
 
-     ! --------------------------------
-     IF (ICASE == 1) THEN
-       N_AEROSOLS = 2
-     END IF
-     IF (ICASE == 2) THEN
-       N_AEROSOLS = 3
-     END IF
-
+    ! --------------------------------
+    IF (ICASE == 1) THEN
+      N_AEROSOLS = 2
+    END IF
+    IF (ICASE == 2) THEN
+      N_AEROSOLS = 3
+    END IF
     CALL CRTM_Atmosphere_Destroy(Atm)
-    DEALLOCATE(RTSolution, STAT=Allocate_Status)
+    CALL CRTM_Atmosphere_Destroy(Atm_TL)
 
-   ! ============================================================================
-   ! 3. **** ALLOCATE STRUCTURE ARRAYS ****
-   !
-   ! 3a. Allocate the ARRAYS
-   ! -----------------------
-   ALLOCATE( RTSolution( n_Channels, N_PROFILES ), STAT=Allocate_Status )
-   IF ( Allocate_Status /= 0 ) THEN
-     Message = 'Error allocating structure arrays'
-     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-     STOP 1
-   END IF
+    DEALLOCATE(RTSolution, RTSolution_TL, rts_TL, STAT=Allocate_Status)
 
-   ! 3a-2. Allocate N_Layers for layered outputs
-   CALL CRTM_RTSolution_Create( RTSolution, N_LAYERS )
-   IF ( ANY(.NOT. CRTM_RTSolution_Associated(RTSolution)) ) THEN
-     Message = 'Error allocating CRTM RTSolution structures'
-     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-     STOP 1
-   END IF
+  ! ============================================================================
+  ! 3. **** ALLOCATE STRUCTURE ARRAYS ****
+  !
+  ! 3a. Allocate the ARRAYS
+  ! -----------------------
+  ALLOCATE( RTSolution( n_Channels, N_PROFILES ), &
+            RTSolution_TL( n_Channels, N_PROFILES ), &
+            STAT=Allocate_Status )
+  IF ( Allocate_Status /= 0 ) THEN
+    Message = 'Error allocating structure arrays'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    STOP 1
+  END IF
 
-   ! 3b. Allocate the STRUCTURES
-   ! ---------------------------
-   CALL CRTM_Atmosphere_Create( Atm, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
-   IF ( ANY(.NOT. CRTM_Atmosphere_Associated(Atm)) ) THEN
-     Message = 'Error allocating CRTM Atmosphere structures'
-     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-     STOP 1
-   END IF
+  ! 3b. Allocate the STRUCTURES
+  ! ---------------------------
+  ! The input FORWARD structure
+  CALL CRTM_Atmosphere_Create( Atm, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
+  IF ( ANY(.NOT. CRTM_Atmosphere_Associated(Atm)) ) THEN
+    Message = 'Error allocating CRTM Atmosphere FWD structures'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    STOP 1
+  END IF
+  ! The input TANGENT-LINEAR structure
+  CALL CRTM_Atmosphere_Create( Atm_TL, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
+  IF ( ANY(.NOT. CRTM_Atmosphere_Associated(Atm_TL)) ) THEN
+    Message = 'Error allocating CRTM Atmosphere TL structures'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    STOP 1
+  END IF
+  ! ============================================================================
+
+
+
+
   ! ============================================================================
   ! 4. **** ASSIGN INPUT DATA ****
   !
-  ! 4a. Atmosphere and Surface input
+  ! 4a. Atmosphere and Surface FWD input
   ! --------------------------------
   IF (ICASE == 1) THEN
     CALL Load_Atm_Data()
@@ -180,54 +190,90 @@ PROGRAM test_Aerosol_Bypass
 
 
   ! ============================================================================
-  ! 5. **** CALL THE CRTM FORWARD MODEL ****
+  ! 5. **** INITIALIZE THE TANGENT-LINEAR ARGUMENTS ****
   !
-  Error_Status = CRTM_Forward( Atm        , &
-                               Sfc        , &
-                               Geometry   , &
-                               ChannelInfo, &
-                               RTSolution  )
+  ! 5a. Zero the tangent-liner INPUT structures
+  ! ---------------------------------------
+  ! Copy...
+  Atm_TL = Atm
+  ! ...zero...
+  CALL CRTM_Atmosphere_Zero(Atm_TL)
+  ! ...and perturb temperature by 0.5K
+  DO m = 1, N_PROFILES
+    Atm_TL(m)%Temperature = 0.5_fp
+  END DO
+
+  ! Copy...
+  Sfc_TL = Sfc
+  ! ...and zero.
+  CALL CRTM_Surface_Zero(Sfc_TL)
+  ! ============================================================================
+
+
+
+
+  ! ============================================================================
+  ! 6. **** CALL THE CRTM TANGENT-LINEAR MODEL ****
+  !
+  Error_Status = CRTM_Tangent_Linear( Atm          , &
+                                      Sfc          , &
+                                      Atm_TL       , &
+                                      Sfc_TL       , &
+                                      Geometry     , &
+                                      ChannelInfo  , &
+                                      RTSolution   , &
+                                      RTSolution_TL  )
   IF ( Error_Status /= SUCCESS ) THEN
-    Message = 'Error in CRTM Forward Model'
+    Message = 'Error in CRTM Tangent-Linear Model'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
-
-  n_Stokes = RTSolution(1,1)%n_Stokes+1
   ! ============================================================================
 
 
 
 
   ! ============================================================================
-  ! 6. **** OUTPUT THE RESULTS TO SCREEN ****
+  ! 7. **** OUTPUT THE RESULTS TO SCREEN ****
   !
   ! DO m = 1, N_PROFILES
   !   WRITE( *,'(//7x,"Profile ",i0," output for ",a )') m, TRIM(Sensor_Id)
   !   DO l = 1, n_Channels
   !     WRITE( *, '(/5x,"Channel ",i0," results")') RTSolution(l,m)%Sensor_Channel
+  !     ! FWD output
+  !     WRITE( *, '(/3x,"FORWARD OUTPUT")')
   !     CALL CRTM_RTSolution_Inspect(RTSolution(l,m))
+  !     ! TL output
+  !     WRITE( *, '(/3x,"TANGENT-LINEAR OUTPUT")')
+  !     CALL CRTM_RTSolution_Inspect(RTSolution_TL(l,m))
   !   END DO
   ! END DO
   ! ============================================================================
 
+
+
+
+
+
+
+
   ! ============================================================================
-  ! 8. **** COMPARE RTSolution RESULTS TO SAVED VALUES ****
+  ! 9. **** COMPARE RTSolution_TL RESULTS TO SAVED VALUES ****
   !
   WRITE( *, '( /5x, "Comparing calculated results with saved ones..." )' )
 
-  ! 8a. Create the output file if it does not exist
+  ! 9a. Create the output file if it does not exist
   ! -----------------------------------------------
   ! ...Generate a filename
-  rts_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.nc'
+  rts_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution_TL.bin'
   ! ...Check if the file exists
   IF ( .NOT. File_Exists(rts_File) ) THEN
-    Message = 'RTSolution save file does not exist. Creating...'
+    Message = 'RTSolution_TL save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
-    ! ...File not found, so write RTSolution structure to file
-    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, NetCDF=.TRUE., Quiet=.TRUE. )
+    ! ...File not found, so write RTSolution_TL structure to file
+    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution_TL, Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
-      Message = 'Error creating RTSolution save file'
+      Message = 'Error creating RTSolution_TL save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
       STOP 1
     END IF
@@ -235,79 +281,64 @@ PROGRAM test_Aerosol_Bypass
 
   END DO !ICASE
 
-  ! 8b. Inquire the saved file
+  ! 9b. Inquire the saved file
   ! --------------------------
   Error_Status = CRTM_RTSolution_InquireFile( rts_File, &
-                                              NetCDF=.TRUE.,    &
-                                              n_Profiles = n_m, &
-                                              n_Layers   = n_k, &
                                               n_Channels = n_l, &
-                                              n_Stokes   = n_s )
+                                              n_Profiles = n_m )
   IF ( Error_Status /= SUCCESS ) THEN
-    Message = 'Error inquiring RTSolution save file'
+    Message = 'Error inquiring RTSolution_TL save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
 
-
-  ! 8c. Compare the dimensions
+  ! 9c. Compare the dimensions
   ! --------------------------
-  IF ( n_l /= n_Channels .OR. n_m /= N_PROFILES .OR. n_k /= n_Layers .OR. n_s /= n_Stokes ) THEN
+  IF ( n_l /= n_Channels .OR. n_m /= N_PROFILES ) THEN
     Message = 'Dimensions of saved data different from that calculated!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
 
-
-  ! 8d. Allocate the structure to read in saved data
+  ! 9d. Allocate the structure to read in saved data
   ! ------------------------------------------------
-  ALLOCATE( rts( n_l, n_m ), STAT=Allocate_Status )
+  ALLOCATE( rts_TL( n_l, n_m ), STAT=Allocate_Status )
   IF ( Allocate_Status /= 0 ) THEN
-    Message = 'Error allocating RTSolution saved data array'
-    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-    STOP 1
-  END IF
-  CALL CRTM_RTSolution_Create( rts, n_k )
-  IF ( ANY(.NOT. CRTM_RTSolution_Associated(rts)) ) THEN
-    Message = 'Error allocating CRTM RTSolution structures'
+    Message = 'Error allocating RTSolution_TL saved data array'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
 
-
-  ! 8e. Read the saved data
+  ! 9e. Read the saved data
   ! -----------------------
-  Error_Status = CRTM_RTSolution_ReadFile( rts_File, rts, NetCDF=.TRUE., Quiet=.TRUE. )
+  Error_Status = CRTM_RTSolution_ReadFile( rts_File, rts_TL, Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
-    Message = 'Error reading RTSolution save file'
+    Message = 'Error reading RTSolution_TL save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
 
-
-  ! 8f. Compare the structures
+  ! 9f. Compare the structures
   ! --------------------------
-  IF ( ALL(CRTM_RTSolution_Compare(RTSolution, rts)) ) THEN
-    Message = 'RTSolution results are the same!'
+  IF ( ALL(CRTM_RTSolution_Compare(RTSolution_TL, rts_TL)) ) THEN
+    Message = 'RTSolution_TL results are the same!'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
   ELSE
-    Message = 'RTSolution results are different!'
+    Message = 'RTSolution_TL results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     ! Write the current RTSolution results to file
-    rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.nc'
-    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, NetCDF=.TRUE., Quiet=.TRUE. )
+    rts_File = TRIM(Sensor_Id)//'.RTSolution_TL.bin'
+    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution_TL, Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
-      Message = 'Error creating temporary RTSolution save file for failed comparison'
+      Message = 'Error creating temporary RTSolution_TL save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
     STOP 1
   END IF
-
-
   ! ============================================================================
 
   ! ============================================================================
-  ! 7. **** DESTROY THE CRTM ****
+  ! 8. **** DESTROY THE CRTM ****
   !
   WRITE( *, '( /5x, "Destroying the CRTM..." )' )
   Error_Status = CRTM_Destroy( ChannelInfo )
@@ -319,15 +350,16 @@ PROGRAM test_Aerosol_Bypass
   ! ============================================================================
 
   ! ============================================================================
-  ! 9. **** CLEAN UP ****
+  ! 10. **** CLEAN UP ****
   !
-  ! 9a. Deallocate the structures
-  ! -----------------------------
+  ! 10a. Deallocate the structures
+  ! ------------------------------
   CALL CRTM_Atmosphere_Destroy(Atm)
+  CALL CRTM_Atmosphere_Destroy(Atm_TL)
 
   ! 9b. Deallocate the arrays
   ! -------------------------
-  DEALLOCATE(RTSolution, rts, STAT=Allocate_Status)
+  DEALLOCATE(RTSolution, RTSolution_TL, rts_TL, STAT=Allocate_Status)
   ! ============================================================================
 
   ! Signal the completion of the program. It is not a necessary step for running CRTM.
@@ -338,4 +370,4 @@ CONTAINS
   INCLUDE 'Load_Sfc_Data.inc'
   INCLUDE 'Load_Atm_Data_Bypass_Aerosol.inc'
 
-END PROGRAM test_Aerosol_Bypass
+END PROGRAM test_Aerosol_Bypass_TL

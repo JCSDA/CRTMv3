@@ -45,7 +45,8 @@ MODULE CRTM_AerosolScatter
   USE CRTM_AerosolCoeff,        ONLY: AeroC
   USE AerosolCoeff_Define,      ONLY: AerosolCoeff_typeID_to_index, &
                                       AerosolCoeff_typeName_to_index
-  USE CRTM_Atmosphere_Define,   ONLY: CRTM_Atmosphere_type
+  USE CRTM_Atmosphere_Define,   ONLY: CRTM_Atmosphere_type, &
+                                      AerosolCoeff_BYPASS_AEROSOL
   USE CRTM_GeometryInfo_Define, ONLY: CRTM_GeometryInfo_type
   USE CRTM_Interpolation,       ONLY: NPTS        , &
                                       LPoly_type  , &
@@ -796,7 +797,8 @@ CONTAINS
 
     ! Get the aerosol type LUT index
     ! ------------------------------
-    IF ( Aerosol_Type == -1 ) THEN
+    ! Bypass aerosol
+    IF ( Aerosol_Type == AerosolCoeff_BYPASS_AEROSOL ) THEN
       ke = ZERO
       w  = ZERO
       pcoeff = ZERO
@@ -963,12 +965,12 @@ CONTAINS
     NULLIFY (zg)
     NULLIFY (zc)
 
-
-    IF ( Aerosol_Type == -1 ) THEN
+    ! Bypass aerosol
+    IF ( Aerosol_Type == AerosolCoeff_BYPASS_AEROSOL ) THEN
       ke_TL     = ZERO
       w_TL      = ZERO
       pcoeff_TL = ZERO
-      RETURN  ! Bypass aerosol
+      RETURN
     END IF
 
     ! Setup
@@ -1193,14 +1195,15 @@ CONTAINS
     NULLIFY(zg)
     NULLIFY(zc)
 
-    IF ( Aerosol_Type == -1 ) THEN
+    ! Bypass aerosol
+    IF ( Aerosol_Type == AerosolCoeff_BYPASS_AEROSOL ) THEN
       Reff_AD   = ZERO
       ke_AD     = ZERO
       w_AD      = ZERO
       pcoeff_AD = ZERO
       Rsig_AD   = ZERO
-      RH_AD   = ZERO   
-      RETURN  ! Bypass aerosol
+      RH_AD   = ZERO
+      RETURN
     END IF
 
     ! Setup

@@ -36,7 +36,8 @@ MODULE CRTM_Aerosol_Define
                                    ReadGAtts_Binary_File
   USE AerosolCoeff_Define  , ONLY: AerosolCoeff_type, &
                                    AerosolCoeff_typeID_to_name, &
-                                   AerosolCoeff_INVALID_AEROSOL
+                                   AerosolCoeff_INVALID_AEROSOL, &
+                                   AerosolCoeff_BYPASS_AEROSOL
   USE CRTM_AerosolCoeff    , ONLY: AeroC
   ! Disable implicit typing
   IMPLICIT NONE
@@ -152,9 +153,10 @@ CONTAINS
     INTEGER :: id
 
     id = aerosol%type
-    if ( .NOT. any( id==AeroC%Type(:) ) ) then
+    IF ( id == AerosolCoeff_BYPASS_AEROSOL ) RETURN
+    IF ( .NOT. any( id==AeroC%Type(:) ) ) THEN
       id = AerosolCoeff_INVALID_AEROSOL
-    endif
+    END IF
 
   END FUNCTION CRTM_Aerosol_CategoryId
 
