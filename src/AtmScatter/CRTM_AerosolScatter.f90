@@ -796,7 +796,12 @@ CONTAINS
 
     ! Get the aerosol type LUT index
     ! ------------------------------
-    IF ( Aerosol_Type == -1 ) RETURN
+    IF ( Aerosol_Type == -1 ) THEN
+      ke = ZERO
+      w  = ZERO
+      pcoeff = ZERO
+      asi = ZERO
+      RETURN
 
     k = AerosolCoeff_typeID_to_index( AeroC, Aerosol_Type )
 
@@ -959,7 +964,11 @@ CONTAINS
     NULLIFY (zc)
 
 
-    IF ( Aerosol_Type == -1 ) RETURN  ! Bypass aerosol
+    IF ( Aerosol_Type == -1 ) THEN
+      ke_TL     = ZERO
+      w_TL      = ZERO
+      pcoeff_TL = ZERO
+      RETURN  ! Bypass aerosol
 
     ! Setup
     ! -----
@@ -1183,7 +1192,14 @@ CONTAINS
     NULLIFY(zg)
     NULLIFY(zc)
 
-    IF ( Aerosol_Type == -1 ) RETURN  ! Bypass aerosol
+    IF ( Aerosol_Type == -1 ) THEN
+      Reff_AD   = ZERO
+      ke_AD     = ZERO
+      w_AD      = ZERO
+      pcoeff_AD = ZERO
+      Rsig_AD   = ZERO
+      RH_AD   = ZERO   
+      RETURN  ! Bypass aerosol
 
     ! Setup
     ! -----
