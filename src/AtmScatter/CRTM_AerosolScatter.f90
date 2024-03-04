@@ -802,6 +802,7 @@ CONTAINS
       pcoeff = ZERO
       asi = ZERO
       RETURN
+    END IF
 
     k = AerosolCoeff_typeID_to_index( AeroC, Aerosol_Type )
 
@@ -969,6 +970,7 @@ CONTAINS
       w_TL      = ZERO
       pcoeff_TL = ZERO
       RETURN  ! Bypass aerosol
+    END IF
 
     ! Setup
     ! -----
@@ -1200,6 +1202,7 @@ CONTAINS
       Rsig_AD   = ZERO
       RH_AD   = ZERO   
       RETURN  ! Bypass aerosol
+    END IF
 
     ! Setup
     ! -----
