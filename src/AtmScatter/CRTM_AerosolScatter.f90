@@ -800,7 +800,6 @@ CONTAINS
       ke = ZERO
       w  = ZERO
       pcoeff = ZERO
-      asi = ZERO
       RETURN
     END IF
 
