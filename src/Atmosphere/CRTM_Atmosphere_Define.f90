@@ -16,7 +16,7 @@
 !                      24-Sept-2021
 !                      Several new variables were added to later simpify the interpolation
 !                      of cloud optical properties
-!                      
+!
 !                      Isaac Moradi     isaac.moradi@nasa.gov
 !                      30-Nov-2021
 !                      Added Add_Extra_Layers with default value set to .TRUE.
@@ -105,7 +105,8 @@ MODULE CRTM_Atmosphere_Define
                                    CRTM_Cloud_ReadFile, &
                                    CRTM_Cloud_WriteFile
   USE AerosolCoeff_Define  , ONLY: AerosolCoeff_n_aerosol_categories, &
-                                   AerosolCoeff_INVALID_AEROSOL
+                                   AerosolCoeff_INVALID_AEROSOL, &
+                                   AerosolCoeff_BYPASS_AEROSOL
   USE CRTM_Aerosol_Define  , ONLY: CRTM_Aerosol_type, &
                                    OPERATOR(==), &
                                    OPERATOR(+), &
@@ -204,6 +205,7 @@ MODULE CRTM_Atmosphere_Define
   ! Aerosol entities
   ! ...Parameters
   PUBLIC :: AerosolCoeff_INVALID_AEROSOL
+  PUBLIC :: AerosolCoeff_BYPASS_AEROSOL
   ! ...Structures
   PUBLIC :: CRTM_Aerosol_type
   ! ...Procedures

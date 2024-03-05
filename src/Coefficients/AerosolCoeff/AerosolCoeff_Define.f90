@@ -56,7 +56,7 @@ MODULE AerosolCoeff_Define
   PUBLIC :: AerosolCoeff_typeID_to_name
   PUBLIC :: AerosolCoeff_n_aerosol_categories
   PUBLIC :: AerosolCoeff_INVALID_AEROSOL
-
+  PUBLIC :: AerosolCoeff_BYPASS_AEROSOL
 
 
 
@@ -76,6 +76,7 @@ MODULE AerosolCoeff_Define
 
   ! Invalid aerosol type ID
   INTEGER, PARAMETER :: AerosolCoeff_INVALID_AEROSOL = 0
+  INTEGER, PARAMETER :: AerosolCoeff_BYPASS_AEROSOL  = -1
 
   ! String lengths
   INTEGER, PARAMETER :: SL = 80
@@ -849,9 +850,14 @@ CONTAINS
       CHARACTER(:), ALLOCATABLE           :: Aerosol_Name
       INTEGER :: aerIndex
 
-      aerIndex = AerosolCoeff_typeID_to_index( AerosolCoeff, Aerosol_ID )
-      Aerosol_Name = TRIM(ADJUSTL(AerosolCoeff%Type_Name( aerIndex )))
-
+      IF ( Aerosol_ID == AerosolCoeff_BYPASS_AEROSOL ) THEN
+        Aerosol_Name = TRIM(ADJUSTL('BYPASS'))
+      ELSEIF ( Aerosol_ID == AerosolCoeff_INVALID_AEROSOL ) THEN
+        Aerosol_Name = TRIM(ADJUSTL('INVALID'))
+      ELSE
+        aerIndex = AerosolCoeff_typeID_to_index( AerosolCoeff, Aerosol_ID )
+        Aerosol_Name = TRIM(ADJUSTL(AerosolCoeff%Type_Name( aerIndex )))
+      END IF
    END FUNCTION AerosolCoeff_typeID_to_name
 
 

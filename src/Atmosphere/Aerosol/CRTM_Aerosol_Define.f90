@@ -36,7 +36,8 @@ MODULE CRTM_Aerosol_Define
                                    ReadGAtts_Binary_File
   USE AerosolCoeff_Define  , ONLY: AerosolCoeff_type, &
                                    AerosolCoeff_typeID_to_name, &
-                                   AerosolCoeff_INVALID_AEROSOL
+                                   AerosolCoeff_INVALID_AEROSOL, &
+                                   AerosolCoeff_BYPASS_AEROSOL
   USE CRTM_AerosolCoeff    , ONLY: AeroC
   ! Disable implicit typing
   IMPLICIT NONE
@@ -152,9 +153,10 @@ CONTAINS
     INTEGER :: id
 
     id = aerosol%type
-    if ( .NOT. any( id==AeroC%Type(:) ) ) then
+    IF ( id == AerosolCoeff_BYPASS_AEROSOL ) RETURN
+    IF ( .NOT. any( id==AeroC%Type(:) ) ) THEN
       id = AerosolCoeff_INVALID_AEROSOL
-    endif
+    END IF
 
   END FUNCTION CRTM_Aerosol_CategoryId
 
@@ -503,8 +505,9 @@ CONTAINS
     ! ...Change default so all entries can be checked
     IsValid = .TRUE.
     ! ...The type of Aerosol
-!yma    IF ( Aerosol%Type < 1 .OR. Aerosol%Type > AeroC%n_Types ) THEN
-    if ( .NOT. any( Aerosol%Type == AeroC%Type(:) ) ) then
+    ! ...Add Aerosol%Type == -1 as a valid aerosol type (required by DA system)
+    IF ( Aerosol%Type < -1 .OR. Aerosol%Type == 0 .OR. Aerosol%Type > AeroC%n_Types ) THEN
+    !IF ( .NOT. any( Aerosol%Type == AeroC%Type(:) ) ) THEN
       msg = 'Invalid Aerosol type'
       CALL Display_Message( ROUTINE_NAME, TRIM(msg), INFORMATION )
       IsValid = .FALSE.
