@@ -142,9 +142,11 @@ MODULE CRTM_RTSolution_Define
   CHARACTER(*), PARAMETER :: TCC_VARNAME        = 'Total_Cloud_Cover'
   CHARACTER(*), PARAMETER :: RCLEAR_VARNAME     = 'R_clear'
   CHARACTER(*), PARAMETER :: TBCLEAR_VARNAME    = 'Tb_clear'
+  CHARACTER(*), PARAMETER :: RFCLEAR_VARNAME    = 'Reflectance_clear'
   CHARACTER(*), PARAMETER :: RADIANCE_VARNAME   = 'Radiance'
   CHARACTER(*), PARAMETER :: BT_VARNAME         = 'Brightness_Temperature'
   CHARACTER(*), PARAMETER :: SI_VARNAME         = 'Solar_Irradiance'
+  CHARACTER(*), PARAMETER :: RF_VARNAME         = 'Reflectance'
   CHARACTER(*), PARAMETER :: STOKES_VARNAME     = 'Stokes'
   !... FLOAT, ALL VARIABLES ARE IN DIMENSION (n_Channels * n_Layers * n_Profiles)
   CHARACTER(*), PARAMETER :: UPOR_PRF_VARNAME   = 'Upwelling_Overcast_Radiance'
@@ -178,6 +180,8 @@ MODULE CRTM_RTSolution_Define
   CHARACTER(*), PARAMETER :: IRAD_UNITS = 'Watts per Square Metre per Micron (W m^-2 micron^-1)'
   ! ...Brightness_Temperature, Tb_clear
   CHARACTER(*), PARAMETER :: BT_UNITS = 'Kelvin'
+  ! ...Visible (or UV) reflectance
+  CHARACTER(*), PARAMETER :: RF_UNITS      = 'fraction (0->1)'
 
   ! Variable _FillValue attribute.
   CHARACTER(*),  PARAMETER :: FILLVALUE_ATTNAME = '_FillValue'
@@ -225,17 +229,19 @@ MODULE CRTM_RTSolution_Define
     REAL(fp) :: Total_Cloud_Cover       = ZERO  ! Only used for fractional clear/cloudy calculation
     REAL(fp) :: R_clear                 = ZERO  ! Only used for fractional clear/cloudy calculation
     REAL(fp) :: Tb_clear                = ZERO  ! Only used for fractional clear/cloudy calculation
+    REAL(fp) :: Reflectance_clear       = ZERO  ! Only used for fractional clear/cloudy calculation
     REAL(fp), ALLOCATABLE :: Upwelling_Overcast_Radiance(:)   ! K
-    REAL(fp), ALLOCATABLE :: Upwelling_Radiance(:)   ! K
-    REAL(fp), ALLOCATABLE :: Layer_Optical_Depth(:)  ! K
-    REAL(fp), ALLOCATABLE :: Single_Scatter_Albedo(:)  ! K
+    REAL(fp), ALLOCATABLE :: Upwelling_Radiance(:)            ! K
+    REAL(fp), ALLOCATABLE :: Layer_Optical_Depth(:)           ! K
+    REAL(fp), ALLOCATABLE :: Single_Scatter_Albedo(:)         ! K
     ! Radiative transfer results for a single channel
     REAL(fp) :: Radiance               = ZERO
     REAL(fp) :: Brightness_Temperature = ZERO
-    REAL(fp), ALLOCATABLE :: Reflectivity(:)             ! K
-    REAL(fp), ALLOCATABLE :: Reflectivity_Attenuated(:)  ! K
     REAL(fp) :: Stokes(4)
     REAL(fp) :: Solar_Irradiance       = ZERO
+    REAL(fp) :: Reflectance            = ZERO
+    REAL(fp), ALLOCATABLE :: Reflectivity(:)             ! K
+    REAL(fp), ALLOCATABLE :: Reflectivity_Attenuated(:)  ! K
   END TYPE CRTM_RTSolution_type
   !:tdoc-:
 
@@ -430,9 +436,11 @@ CONTAINS
     RTSolution%Total_Cloud_Cover       = ZERO
     RTSolution%R_clear                 = ZERO
     RTSolution%Tb_clear                = ZERO
+    RTSolution%Reflectance_clear       = ZERO
     RTSolution%Radiance                = ZERO
     RTSolution%Brightness_Temperature  = ZERO
     RTSolution%Solar_Irradiance        = ZERO
+    RTSolution%Reflectance             = ZERO
     RTSolution%Stokes  = ZERO
 
     ! Zero out the array data components
@@ -514,9 +522,11 @@ CONTAINS
     WRITE(fid,fmt) "Total cloud cover             : ", RTSolution%Total_Cloud_Cover
     WRITE(fid,fmt) "Radiance (clear)              : ", RTSolution%R_clear
     WRITE(fid,fmt) "Brightness Temperature (clear): ", RTSolution%Tb_clear
+    WRITE(fid,fmt) "Reflectance_clear             : ", RTSolution%Reflectance_clear
     WRITE(fid,fmt) "Radiance                      : ", RTSolution%Radiance
     WRITE(fid,fmt) "Brightness Temperature        : ", RTSolution%Brightness_Temperature
     WRITE(fid,fmt) "Solar Irradiance              : ", RTSolution%Solar_Irradiance
+    WRITE(fid,fmt) "Reflectance                   : ", RTSolution%Reflectance
     WRITE(fid,fmt) "Stokes                        : ", RTSolution%Stokes
     IF ( CRTM_RTSolution_Associated(RTSolution) ) THEN
       WRITE(fid,'(3x,"n_Layers : ",i0)') RTSolution%n_Layers
@@ -667,9 +677,11 @@ CONTAINS
          .NOT. Compares_Within_Tolerance(x%Total_Cloud_Cover      , y%Total_Cloud_Cover      , n) .OR. &
          .NOT. Compares_Within_Tolerance(x%R_clear                , y%R_clear                , n) .OR. &
          .NOT. Compares_Within_Tolerance(x%Tb_clear               , y%Tb_clear               , n) .OR. &
+         .NOT. Compares_Within_Tolerance(x%Reflectance_clear      , y%Reflectance_clear      , n) .OR. &
          .NOT. Compares_Within_Tolerance(x%Radiance               , y%Radiance               , n) .OR. &
          .NOT. Compares_Within_Tolerance(x%Brightness_Temperature , y%Brightness_Temperature , n) .OR. &
          .NOT. Compares_Within_Tolerance(x%Solar_Irradiance       , y%Solar_Irradiance       , n) .OR. &
+         .NOT. Compares_Within_Tolerance(x%Reflectance            , y%Reflectance            , n) .OR. &
          .NOT. ALL(Compares_Within_Tolerance(x%Stokes             , y%Stokes                 , n))) RETURN
 
     ! Check the array components
@@ -2441,9 +2453,11 @@ CONTAINS
     REAL(fp), ALLOCATABLE :: Total_Cloud_Cover(:,:)
     REAL(fp), ALLOCATABLE :: R_clear(:,:)
     REAL(fp), ALLOCATABLE :: Tb_clear(:,:)
+    REAL(fp), ALLOCATABLE :: Reflectance_clear(:,:)
     REAL(fp), ALLOCATABLE :: Radiance(:,:)
     REAL(fp), ALLOCATABLE :: Brightness_Temperature(:,:)
     REAL(fp), ALLOCATABLE :: Solar_Irradiance(:,:)
+    REAL(fp), ALLOCATABLE :: Reflectance(:,:)
     REAL(fp), ALLOCATABLE :: Stokes(:,:,:)
     REAL(fp), ALLOCATABLE :: Upwelling_Overcast_Radiance(:,:,:)
     REAL(fp), ALLOCATABLE :: Upwelling_Radiance(:,:,:)
@@ -2483,9 +2497,11 @@ CONTAINS
               Total_Cloud_Cover( n_Channels, n_Profiles ), &
               R_clear( n_Channels, n_Profiles ), &
               Tb_clear( n_Channels, n_Profiles ), &
+              Reflectance_clear( n_Channels, n_Profiles ), &
               Radiance( n_Channels, n_Profiles ), &
               Brightness_Temperature( n_Channels, n_Profiles ), &
               Solar_Irradiance( n_Channels, n_Profiles ), &
+              Reflectance( n_Channels, n_Profiles ), &
               Stokes( n_Channels, n_Stokes, n_Profiles ), &
               Upwelling_Overcast_Radiance( n_Channels, n_Layers, n_Profiles ), &
               Upwelling_Radiance( n_Channels, n_Layers, n_Profiles ), &
@@ -2517,9 +2533,11 @@ CONTAINS
           Total_Cloud_Cover(l,m)       = RTSolution(l,m)%Total_Cloud_Cover
           R_clear(l,m)                 = RTSolution(l,m)%R_clear
           Tb_clear(l,m)                = RTSolution(l,m)%Tb_clear
+          Reflectance_clear(l,m)       = RTSolution(l,m)%Reflectance_clear
           Radiance(l,m)                = RTSolution(l,m)%Radiance
           Brightness_Temperature(l,m)  = RTSolution(l,m)%Brightness_Temperature
           Solar_Irradiance(l,m)        = RTSolution(l,m)%Solar_Irradiance
+          Reflectance(l,m)             = RTSolution(l,m)%Reflectance
           DO s = 1, n_Stokes
             Stokes(l,s,m) = RTSolution(l,m)%Stokes(s)
           END DO
@@ -2727,6 +2745,19 @@ CONTAINS
              ' - '//TRIM(NF90_STRERROR( NF90_Status ))
        CALL Write_Cleanup(); RETURN
      END IF
+     ! ....Reflectance_clear variable (Vis or UV)
+     NF90_Status = NF90_INQ_VARID( FileId,RFCLEAR_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//RFCLEAR_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Reflectance_clear )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//RFCLEAR_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
      ! ...Radiance variable
      NF90_Status = NF90_INQ_VARID( FileId,RADIANCE_VARNAME,VarId )
      IF ( NF90_Status /= NF90_NOERR ) THEN
@@ -2763,6 +2794,19 @@ CONTAINS
      NF90_Status = NF90_PUT_VAR( FileId,VarID, Solar_Irradiance )
      IF ( NF90_Status /= NF90_NOERR ) THEN
        msg = 'Error writing '//SI_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ....Reflectance variable (Vis or UV)
+     NF90_Status = NF90_INQ_VARID( FileId,RF_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//RF_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Reflectance )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//RF_VARNAME//' to '//TRIM(Filename)//&
              ' - '//TRIM(NF90_STRERROR( NF90_Status ))
        CALL Write_Cleanup(); RETURN
      END IF
@@ -2890,9 +2934,11 @@ CONTAINS
                  Total_Cloud_Cover, &
                  R_clear, &
                  Tb_clear, &
+                 Reflectance_clear, &
                  Radiance, &
                  Brightness_Temperature, &
                  Solar_Irradiance, &
+                 Reflectance, &
                  Stokes, &
                  Upwelling_Overcast_Radiance, &
                  Upwelling_Radiance, &
@@ -2991,8 +3037,12 @@ CONTAINS
          (x%Total_Cloud_Cover       .EqualTo. y%Total_Cloud_Cover      ) .AND. &
          (x%R_clear                 .EqualTo. y%R_clear                ) .AND. &
          (x%Tb_clear                .EqualTo. y%Tb_clear               ) .AND. &
+         (x%Reflectance_clear       .EqualTo. y%Reflectance_clear      ) .AND. &
          (x%Radiance                .EqualTo. y%Radiance               ) .AND. &
-         (x%Brightness_Temperature  .EqualTo. y%Brightness_Temperature ) ) &
+         (x%Brightness_Temperature  .EqualTo. y%Brightness_Temperature ) .AND. &
+         (x%Solar_Irradiance        .EqualTo. y%Solar_Irradiance       ) .AND. &
+         (x%Reflectance             .EqualTo. y%Reflectance            )) &
+         ! CD: add stokes
       is_equal = .TRUE.
 
 
@@ -3072,8 +3122,12 @@ CONTAINS
     rtssum%Total_Cloud_Cover       = rtssum%Total_Cloud_Cover       + rts2%Total_Cloud_Cover
     rtssum%R_clear                 = rtssum%R_clear                 + rts2%R_clear
     rtssum%Tb_clear                = rtssum%Tb_clear                + rts2%Tb_clear
+    rtssum%Reflectance             = rtssum%Reflectance             + rts2%Reflectance
     rtssum%Radiance                = rtssum%Radiance                + rts2%Radiance
     rtssum%Brightness_Temperature  = rtssum%Brightness_Temperature  + rts2%Brightness_Temperature
+    rtssum%Solar_Irradiance        = rtssum%Solar_Irradiance        + rts2%Solar_Irradiance
+    rtssum%Reflectance_clear       = rtssum%Reflectance_clear       + rts2%Reflectance_clear
+    ! CD: add stokes
     ! ...The arrays (which may or may not be allocated)
     IF ( CRTM_RTSolution_Associated(rts1) .AND. CRTM_RTSolution_Associated(rts2) ) THEN
       k = rts1%n_Layers
@@ -3160,8 +3214,12 @@ CONTAINS
     rtsdiff%Total_Cloud_Cover       = rtsdiff%Total_Cloud_Cover       - rts2%Total_Cloud_Cover
     rtsdiff%R_clear                 = rtsdiff%R_clear                 - rts2%R_clear
     rtsdiff%Tb_clear                = rtsdiff%Tb_clear                - rts2%Tb_clear
+    rtsdiff%Reflectance_clear       = rtsdiff%Reflectance_clear       - rts2%Reflectance_clear
     rtsdiff%Radiance                = rtsdiff%Radiance                - rts2%Radiance
     rtsdiff%Brightness_Temperature  = rtsdiff%Brightness_Temperature  - rts2%Brightness_Temperature
+    rtsdiff%Solar_Irradiance        = rtsdiff%Solar_Irradiance        - rts2%Solar_Irradiance
+    rtsdiff%Reflectance             = rtsdiff%Reflectance             - rts2%Reflectance
+    ! CD: add stokes
     ! ...The arrays (which may or may not be allocated)
     IF ( CRTM_RTSolution_Associated(rts1) .AND. CRTM_RTSolution_Associated(rts2) ) THEN
       k = rts1%n_Layers
@@ -3244,8 +3302,12 @@ CONTAINS
     rts_power%Total_Cloud_Cover       = (rts_power%Total_Cloud_Cover      )**power
     rts_power%R_clear                 = (rts_power%R_clear                )**power
     rts_power%Tb_clear                = (rts_power%Tb_clear               )**power
+    rts_power%Reflectance_clear       = (rts_power%Reflectance_clear      )**power
     rts_power%Radiance                = (rts_power%Radiance               )**power
     rts_power%Brightness_Temperature  = (rts_power%Brightness_Temperature )**power
+    rts_power%Solar_Irradiance        = (rts_power%Solar_Irradiance       )**power
+    rts_power%Reflectance             = (rts_power%Reflectance            )**power
+    ! CD: add stokes
     ! ...The arrays (which may or may not be allocated)
     IF ( CRTM_RTSolution_Associated(rts) ) THEN
       k = rts%n_Layers
@@ -3320,8 +3382,12 @@ CONTAINS
     rts_normal%Total_Cloud_Cover       = rts_normal%Total_Cloud_Cover      /factor
     rts_normal%R_clear                 = rts_normal%R_clear                /factor
     rts_normal%Tb_clear                = rts_normal%Tb_clear               /factor
+    rts_normal%Reflectance_clear       = rts_normal%Reflectance_clear      /factor
     rts_normal%Radiance                = rts_normal%Radiance               /factor
     rts_normal%Brightness_Temperature  = rts_normal%Brightness_Temperature /factor
+    rts_normal%Solar_Irradiance        = rts_normal%Solar_Irradiance       /factor
+    rts_normal%Reflectance             = rts_normal%Reflectance            /factor
+    ! CD: add stokes
     ! ...The arrays (which may or may not be allocated)
     IF ( CRTM_RTSolution_Associated(rts) ) THEN
       k = rts%n_Layers
@@ -3388,8 +3454,11 @@ CONTAINS
     rts_sqrt%Total_Cloud_Cover       = SQRT(rts_sqrt%Total_Cloud_Cover      )
     rts_sqrt%R_clear                 = SQRT(rts_sqrt%R_clear                )
     rts_sqrt%Tb_clear                = SQRT(rts_sqrt%Tb_clear               )
+    rts_sqrt%Reflectance_clear       = SQRT(rts_sqrt%Reflectance_clear      )
     rts_sqrt%Radiance                = SQRT(rts_sqrt%Radiance               )
     rts_sqrt%Brightness_Temperature  = SQRT(rts_sqrt%Brightness_Temperature )
+    rts_sqrt%Solar_Irradiance        = SQRT(rts_sqrt%Solar_Irradiance       )
+    rts_sqrt%Reflectance             = SQRT(rts_sqrt%Reflectance            )
     ! ...The arrays (which may or may not be allocated)
     IF ( CRTM_RTSolution_Associated(rts) ) THEN
       k = rts%n_Layers
@@ -3482,7 +3551,8 @@ CONTAINS
       rts%Surface_Planck_Radiance, &
       rts%Total_Cloud_Cover      , &
       rts%R_clear                , &
-      rts%Tb_clear
+      rts%Tb_clear               , &
+      rts%Reflectance_clear
     IF ( io_stat /= 0 ) THEN
       msg = 'Error reading scalar intermediate results - '//TRIM(io_msg)
       CALL Read_Record_Cleanup(); RETURN
@@ -3506,6 +3576,7 @@ CONTAINS
       rts%Radiance              , &
       rts%Brightness_Temperature, &
       rts%Solar_Irradiance      , &
+      rts%Reflectance           , &
       rts%Stokes
     IF ( io_stat /= 0 ) THEN
       msg = 'Error reading result data - '//TRIM(io_msg)
@@ -3594,7 +3665,8 @@ CONTAINS
       rts%Surface_Planck_Radiance, &
       rts%Total_Cloud_Cover      , &
       rts%R_clear                , &
-      rts%Tb_clear
+      rts%Tb_clear               , &
+      rts%Reflectance_clear
     IF ( io_stat /= 0 ) THEN
       msg = 'Error writing scalar intermediate results - '//TRIM(io_msg)
       CALL Write_Record_Cleanup(); RETURN
@@ -3618,6 +3690,7 @@ CONTAINS
       rts%Radiance              , &
       rts%Brightness_Temperature, &
       rts%Solar_Irradiance      , &
+      rts%Reflectance           , &
       rts%Stokes
     IF ( io_stat /= 0 ) THEN
       msg = 'Error writing result data - '//TRIM(io_msg)
@@ -3979,6 +4052,24 @@ CONTAINS
       CALL Create_Cleanup(); RETURN
     END IF
 
+    ! ...Reflectance_clear variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      RFCLEAR_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Profiles_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//RFCLEAR_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,RF_UNITS )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//RFCLEAR_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
     ! ...Radiance variable
     NF90_Status = NF90_DEF_VAR( FileID, &
       RADIANCE_VARNAME, &
@@ -4030,6 +4121,24 @@ CONTAINS
     Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
     IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
       msg = 'Error writing '//SI_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Reflectance variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      RF_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Profiles_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//RF_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,RF_UNITS )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//RF_VARNAME//' variable attributes to '//TRIM(Filename)
       CALL Create_Cleanup(); RETURN
     END IF
 

@@ -2,7 +2,7 @@
 ! Common_RTSolution
 !
 ! Module containing common ancillary functions for
-! available radiative transfer algorithms. 
+! available radiative transfer algorithms.
 !
 ! CREATION HISTORY:
 !       Written by:     David Neil Groff,    IMSG at EMC;    david.groff@noaa.gov
@@ -38,30 +38,30 @@ MODULE Common_RTSolution
   USE CRTM_SfcOptics_Define
   USE CRTM_Utility
   USE CRTM_RTSolution_Define
-  
+
   ! Disable all implicit typing
   IMPLICIT NONE
-  
+
   ! ------------
   ! Visibilities
   ! ------------
   ! Everything private by default
-  PRIVATE 
-  
+  PRIVATE
+
   PUBLIC :: Assign_Common_Input
   PUBLIC :: Assign_Common_Output
   PUBLIC :: Assign_Common_Input_TL
   PUBLIC :: Assign_Common_Output_TL
   PUBLIC :: Assign_Common_Input_AD
   PUBLIC :: Assign_Common_Output_AD
-   
+
   ! -----------------
   ! Module parameters
   ! -----------------
   ! Version Id for the module
   CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
   '$Id: $'
-    
+
 CONTAINS
 
 !################################################################################
@@ -79,18 +79,18 @@ CONTAINS
 !
 ! PURPOSE:
 !       Function to assign input that is used when calling both the ADA and
-!       SOI RT algorithms. 
+!       SOI RT algorithms.
 !
 ! CALLING SEQUENCE:
 !       Error_Status = Assign_Common_Input( Atmosphere  , &  ! Input
-!                                           Surface     , &  ! Input                         
-!                                           AtmOptics   , &  ! Input                         
-!                                           SfcOptics   , &  ! Input                         
-!                                           GeometryInfo, &  ! Input                         
-!                                           SensorIndex , &  ! Input                         
-!                                           ChannelIndex, &  ! Input                         
-!                                           RTSolution  , &  ! Output                        
-!                                           RTV           )  ! Internal variable output      
+!                                           Surface     , &  ! Input
+!                                           AtmOptics   , &  ! Input
+!                                           SfcOptics   , &  ! Input
+!                                           GeometryInfo, &  ! Input
+!                                           SensorIndex , &  ! Input
+!                                           ChannelIndex, &  ! Input
+!                                           RTSolution  , &  ! Output
+!                                           RTV           )  ! Internal variable output
 !
 ! INPUT ARGUMENTS:
 !       Atmosphere:     Structure containing the atmospheric state data.
@@ -201,7 +201,7 @@ CONTAINS
     ! Arguments
     TYPE(CRTM_Atmosphere_type),   INTENT(IN)     :: Atmosphere
     TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface
-    TYPE(CRTM_AtmOptics_type),    INTENT(IN)     :: AtmOptics 
+    TYPE(CRTM_AtmOptics_type),    INTENT(IN)     :: AtmOptics
     TYPE(CRTM_SfcOptics_type),    INTENT(IN OUT) :: SfcOptics
     TYPE(CRTM_GeometryInfo_type), INTENT(IN OUT) :: GeometryInfo
     INTEGER,                      INTENT(IN)     :: SensorIndex
@@ -214,12 +214,12 @@ CONTAINS
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Assign_Common_Input'
     ! Local variables
-    CHARACTER(256) :: Message 
+    CHARACTER(256) :: Message
     INTEGER :: no, na, nt
     INTEGER :: i, j, k
     REAL(fp) :: Factor  ! SfcOptics quadrature weights normalisation factor
     REAL(fp) :: User_Emissivity, Direct_Reflectivity
-    
+
     ! Set Up
     Error_Status = SUCCESS
     GeometryInfo%Cosine_Sensor_Zenith = ONE / GeometryInfo%Secant_Sensor_Zenith
@@ -244,9 +244,9 @@ CONTAINS
     RTV%Is_Solar_Channel           = SpcCoeff_IsSolar( SC(SensorIndex), ChannelIndex=ChannelIndex )
     RTV%COS_SUN                = cos(GeometryInfo%Source_Zenith_Radian)
     RTV%Solar_Irradiance       = SC(SensorIndex)%Solar_Irradiance(ChannelIndex) * GeometryInfo%AU_ratio2
-    ! 
+    !
     RTSolution%Solar_Irradiance = RTV%Solar_Irradiance
-       
+
     ! Determine the surface emission behavior
     !   By default, surface is SPECULAR.
     RTV%Diffuse_Surface = .FALSE.
@@ -295,7 +295,7 @@ CONTAINS
       SfcOptics%Index_Sat_Ang = RTV%n_Angles      ! Identify the sensor zenith angle
       RTV%COS_Angle( RTV%n_Angles )  = GeometryInfo%Cosine_Sensor_Zenith
       RTV%COS_Weight( RTV%n_Angles ) = ZERO
-      
+
       100 CONTINUE
 
       ! ------------------------
@@ -359,7 +359,7 @@ CONTAINS
         RTV%COS_AngleS(k) = RTV%COS_Angle(i)
       END DO
     END DO
-    ! Normalise the quadrature weights                                               
+    ! Normalise the quadrature weights
     IF( Factor > ZERO) SfcOptics%Weight(1:nZ) = SfcOptics%Weight(1:nZ) / Factor
     ! --------------------------------
     ! Populate the SfcOptics structure
@@ -395,23 +395,23 @@ CONTAINS
         SfcOptics%Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity
         IF( RTV%Diffuse_Surface) THEN
           IF( RTV%mth_Azi == 0 ) THEN
-          DO i = 1, nZ 
-            SfcOptics%Reflectivity(1:nZ, 1, i, 1) = (ONE-SfcOptics%Emissivity(i,1))*SfcOptics%Weight(i) 
+          DO i = 1, nZ
+            SfcOptics%Reflectivity(1:nZ, 1, i, 1) = (ONE-SfcOptics%Emissivity(i,1))*SfcOptics%Weight(i)
           END DO
           ELSE
             SfcOptics%Reflectivity(1:nZ, 1, 1:nZ, 1) = ZERO
             SfcOptics%Direct_Reflectivity(1:nZ,1) = ZERO
             SfcOptics%Emissivity(1:nZ,1) = ZERO
           END IF
-          
-          
+
+
         ELSE ! Specular surface
-          DO i = 1, nZ 
+          DO i = 1, nZ
             SfcOptics%Reflectivity(i, 1, i, 1) = (ONE-SfcOptics%Emissivity(i,1))
           END DO
         END IF
       ELSE
-          IF( RTV%mth_Azi == 0 ) THEN      
+          IF( RTV%mth_Azi == 0 ) THEN
             User_Emissivity = SfcOptics%Emissivity(1,1)
             SfcOptics%Emissivity( SfcOptics%Index_Sat_Ang,1 ) = User_Emissivity
             SfcOptics%Reflectivity(1,1,1,1) = ONE - User_Emissivity
@@ -437,7 +437,7 @@ CONTAINS
     ! Compute Planck radiances
     ! ------------------------
     IF( RTV%mth_Azi == 0 ) THEN
-      DO k = 1, Atmosphere%n_Layers 
+      DO k = 1, Atmosphere%n_Layers
         CALL CRTM_Planck_Radiance( &
                SensorIndex              , & ! Input
                ChannelIndex             , & ! Input
@@ -454,9 +454,9 @@ CONTAINS
       RTV%Planck_Atmosphere = ZERO
       RTV%Planck_Surface = ZERO
     END IF
-    
+
   END FUNCTION Assign_Common_Input
-  
+
 !--------------------------------------------------------------------------------
 !
 ! NAME:
@@ -468,40 +468,40 @@ CONTAINS
 !
 ! CALLING SEQUENCE:
 !      Error_Status = Assign_Common_Input_TL( Atmosphere   , &  ! FWD Input
-!                                             Surface      , &  ! FWD Input                  
-!                                             AtmOptics    , &  ! FWD Input                  
-!                                             SfcOptics    , &  ! FWD Input                  
-!                                             RTSolution   , &  ! FWD Input                  
-!                                             Atmosphere_TL, &  ! TL Input                   
-!                                             Surface_TL   , &  ! TL Input                   
-!                                             AtmOptics_TL , &  ! TL Input                   
-!                                             SfcOptics_TL , &  ! TL Input                   
-!                                             GeometryInfo , &  ! Input                      
-!                                             SensorIndex  , &  ! Input                      
-!                                             ChannelIndex , &  ! Input                      
-!                                             RTSolution_TL, &  ! TL Output                  
-!                                             RTV            )  ! Internal variable input    
+!                                             Surface      , &  ! FWD Input
+!                                             AtmOptics    , &  ! FWD Input
+!                                             SfcOptics    , &  ! FWD Input
+!                                             RTSolution   , &  ! FWD Input
+!                                             Atmosphere_TL, &  ! TL Input
+!                                             Surface_TL   , &  ! TL Input
+!                                             AtmOptics_TL , &  ! TL Input
+!                                             SfcOptics_TL , &  ! TL Input
+!                                             GeometryInfo , &  ! Input
+!                                             SensorIndex  , &  ! Input
+!                                             ChannelIndex , &  ! Input
+!                                             RTSolution_TL, &  ! TL Output
+!                                             RTV            )  ! Internal variable input
 !
 ! INPUT ARGUMENTS:
-!       Atmosphere:             Structure containing the atmospheric state data.                
-!                               UNITS:      N/A                                                 
-!                               TYPE:       CRTM_Atmosphere_type                                
-!                               DIMENSION:  Scalar                                              
-!                               ATTRIBUTES: INTENT(IN)                                          
+!       Atmosphere:             Structure containing the atmospheric state data.
+!                               UNITS:      N/A
+!                               TYPE:       CRTM_Atmosphere_type
+!                               DIMENSION:  Scalar
+!                               ATTRIBUTES: INTENT(IN)
 !
-!       Surface:                Structure containing the surface state data.                    
-!                               UNITS:      N/A                                                 
-!                               TYPE:       CRTM_Surface_type                                   
-!                               DIMENSION:  Scalar                                              
-!                               ATTRIBUTES: INTENT(IN)                                          
+!       Surface:                Structure containing the surface state data.
+!                               UNITS:      N/A
+!                               TYPE:       CRTM_Surface_type
+!                               DIMENSION:  Scalar
+!                               ATTRIBUTES: INTENT(IN)
 !
-!       AtmOptics:              Structure containing the combined atmospheric                   
-!                               optical properties for gaseous absorption, clouds,              
-!                               and aerosols.                                                   
-!                               UNITS:      N/A                                                 
-!                               TYPE:       CRTM_AtmOptics_type                                 
-!                               DIMENSION:  Scalar                                              
-!                               ATTRIBUTES: INTENT(IN)                                          
+!       AtmOptics:              Structure containing the combined atmospheric
+!                               optical properties for gaseous absorption, clouds,
+!                               and aerosols.
+!                               UNITS:      N/A
+!                               TYPE:       CRTM_AtmOptics_type
+!                               DIMENSION:  Scalar
+!                               ATTRIBUTES: INTENT(IN)
 !
 !       SfcOptics:              Structure containing the surface optical properties
 !                               data.
@@ -510,86 +510,86 @@ CONTAINS
 !                               DIMENSION:  Scalar
 !                               ATTRIBUTES: INTENT(IN)
 !
-!       Atmosphere_TL:          Structure containing the tangent-linear atmospheric             
-!                               state data.                                                     
-!                               UNITS:      N/A                                                 
-!                               TYPE:       CRTM_Atmosphere_type                                
-!                               DIMENSION:  Scalar                                              
-!                               ATTRIBUTES: INTENT(IN)                                          
+!       Atmosphere_TL:          Structure containing the tangent-linear atmospheric
+!                               state data.
+!                               UNITS:      N/A
+!                               TYPE:       CRTM_Atmosphere_type
+!                               DIMENSION:  Scalar
+!                               ATTRIBUTES: INTENT(IN)
 !
-!       Surface_TL:             Structure containing the tangent-linear surface state data.     
-!                               UNITS:      N/A                                                 
-!                               TYPE:       CRTM_Surface_type                                   
-!                               DIMENSION:  Scalar                                              
-!                               ATTRIBUTES: INTENT(IN)                                          
+!       Surface_TL:             Structure containing the tangent-linear surface state data.
+!                               UNITS:      N/A
+!                               TYPE:       CRTM_Surface_type
+!                               DIMENSION:  Scalar
+!                               ATTRIBUTES: INTENT(IN)
 !
-!       AtmOptics_TL:           Structure containing the tangent-linear atmospheric             
-!                               optical properties.                                             
-!                               UNITS:      N/A                                                 
-!                               TYPE:       CRTM_AtmOptics_type                                 
-!                               DIMENSION:  Scalar                                              
-!                               ATTRIBUTES: INTENT(IN) 
+!       AtmOptics_TL:           Structure containing the tangent-linear atmospheric
+!                               optical properties.
+!                               UNITS:      N/A
+!                               TYPE:       CRTM_AtmOptics_type
+!                               DIMENSION:  Scalar
+!                               ATTRIBUTES: INTENT(IN)
 !
-!       SfcOptics_TL:           Structure containing the tangent-linear surface optical         
-!                               properties. Argument is defined as INTENT (IN OUT ) as          
-!                               different RT algorithms may compute the surface optics          
-!                               properties before this routine is called.                       
-!                               UNITS:      N/A                                                 
-!                               TYPE:       CRTM_SfcOptics_type                                 
-!                               DIMENSION:  Scalar                                              
+!       SfcOptics_TL:           Structure containing the tangent-linear surface optical
+!                               properties. Argument is defined as INTENT (IN OUT ) as
+!                               different RT algorithms may compute the surface optics
+!                               properties before this routine is called.
+!                               UNITS:      N/A
+!                               TYPE:       CRTM_SfcOptics_type
+!                               DIMENSION:  Scalar
 !                               ATTRIBUTES: INTENT(IN OUT)
 !
-!       GeometryInfo:           Structure containing the view geometry data.                    
-!                               UNITS:      N/A                                                 
-!                               TYPE:       CRTM_GeometryInfo_type                              
-!                               DIMENSION:  Scalar                                              
-!                               ATTRIBUTES: INTENT(IN)                                          
+!       GeometryInfo:           Structure containing the view geometry data.
+!                               UNITS:      N/A
+!                               TYPE:       CRTM_GeometryInfo_type
+!                               DIMENSION:  Scalar
+!                               ATTRIBUTES: INTENT(IN)
 !
-!       SensorIndex:            Sensor index id. This is a unique index associated              
-!                               with a (supported) sensor used to access the                    
-!                               shared coefficient data for a particular sensor.                
-!                               See the ChannelIndex argument.                                  
-!                               UNITS:      N/A                                                 
-!                               TYPE:       INTEGER                                             
-!                               DIMENSION:  Scalar                                              
-!                               ATTRIBUTES: INTENT(IN)                                          
+!       SensorIndex:            Sensor index id. This is a unique index associated
+!                               with a (supported) sensor used to access the
+!                               shared coefficient data for a particular sensor.
+!                               See the ChannelIndex argument.
+!                               UNITS:      N/A
+!                               TYPE:       INTEGER
+!                               DIMENSION:  Scalar
+!                               ATTRIBUTES: INTENT(IN)
 !
-!       ChannelIndex:           Channel index id. This is a unique index associated             
-!                               with a (supported) sensor channel used to access the            
-!                               shared coefficient data for a particular sensor's               
-!                               channel.                                                        
-!                               See the SensorIndex argument.                                   
-!                               UNITS:      N/A                                                 
-!                               TYPE:       INTEGER                                             
-!                               DIMENSION:  Scalar                                              
-!                               ATTRIBUTES: INTENT(IN)                                          
+!       ChannelIndex:           Channel index id. This is a unique index associated
+!                               with a (supported) sensor channel used to access the
+!                               shared coefficient data for a particular sensor's
+!                               channel.
+!                               See the SensorIndex argument.
+!                               UNITS:      N/A
+!                               TYPE:       INTEGER
+!                               DIMENSION:  Scalar
+!                               ATTRIBUTES: INTENT(IN)
 !
-!       RTV:                    Structure containing internal forward model variables           
-!                               required for subsequent tangent-linear or adjoint model         
-!                               calls. The contents of this structure are NOT accessible        
-!                               outside of the CRTM_RTSolution module.                          
-!                               UNITS:      N/A                                                 
-!                               TYPE:       RTV_type                                            
-!                               DIMENSION:  Scalar                                              
-!                               ATTRIBUTES: INTENT(IN)                                         
+!       RTV:                    Structure containing internal forward model variables
+!                               required for subsequent tangent-linear or adjoint model
+!                               calls. The contents of this structure are NOT accessible
+!                               outside of the CRTM_RTSolution module.
+!                               UNITS:      N/A
+!                               TYPE:       RTV_type
+!                               DIMENSION:  Scalar
+!                               ATTRIBUTES: INTENT(IN)
 !
 ! OUTPUT ARGUMENTS:
 !
 !
-!       RTSolution_TL:          Structure containing the solution to the tangent-linear        
-!                               RT equation for the given inputs.                              
-!                               UNITS:      N/A                                                
-!                               TYPE:       CRTM_RTSolution_type                               
-!                               DIMENSION:  Scalar                                             
-!                               ATTRIBUTES: INTENT(IN OUT)                                     
+!       RTSolution_TL:          Structure containing the solution to the tangent-linear
+!                               RT equation for the given inputs.
+!                               UNITS:      N/A
+!                               TYPE:       CRTM_RTSolution_type
+!                               DIMENSION:  Scalar
+!                               ATTRIBUTES: INTENT(IN OUT)
 !
-!       nz:                     Integer assigned from RTV%n_Angles                             
-!                               UNITS:      N/A                                                
-!                               TYPE:       INTEGER                                            
-!                               DIMENSION:  Scalar                                             
-!                               ATTRIBUTES: INTENT(OUT)                                        
+!       nz:                     Integer assigned from RTV%n_Angles
+!                               UNITS:      N/A
+!                               TYPE:       INTEGER
+!                               DIMENSION:  Scalar
+!                               ATTRIBUTES: INTENT(OUT)
 !
-!       User_Emissivity_TL:     Tangent linear of emissivity 
+!       User_Emissivity_TL:     Tangent linear of emissivity
 !                               UNITS:      N/A
 !                               TYPE:       REAL(fp)
 !                               DIMENSION:  Scalar
@@ -613,19 +613,19 @@ CONTAINS
 !                               DIMENSION:  Rank-1
 !                               ATTRIBUTES: INTENT(OUT)
 !
-!       Pff_TL:                 Tangent linear of forward scattering 
+!       Pff_TL:                 Tangent linear of forward scattering
 !                               phase function
 !                               UNITS:      N/A
 !                               TYPE:       REAL(fp)
 !                               DIMENSION:  Rank-3
 !                               ATTRIBUTES: INTENT(OUT)
 !
-!       Pbb_TL:                 Tangent linear of backward scattering 
+!       Pbb_TL:                 Tangent linear of backward scattering
 !                               phase function
 !                               UNITS:      N/A
 !                               TYPE:       REAL(fp)
 !                               DIMENSION:  Rank-3
-!                               ATTRIBUTES: INTENT(OUT)  
+!                               ATTRIBUTES: INTENT(OUT)
 !
 ! FUNCTION RESULT:
 !       Error_Status:   The return value is an integer defining the error status
@@ -650,27 +650,27 @@ CONTAINS
     Atmosphere_TL         , &  ! TL Input
     Surface_TL            , &  ! TL Input
     AtmOptics_TL          , &  ! TL Input
-    SfcOptics_TL          , &  ! TL Input/Output 
+    SfcOptics_TL          , &  ! TL Input/Output
     GeometryInfo          , &  ! Input
     SensorIndex           , &  ! Input
     ChannelIndex          , &  ! Input
     RTSolution_TL         , &  ! TL Output
     nz                    , &  ! Output
-    User_Emissivity_TL    , &  ! Output                                            
-    Direct_Reflectivity_TL, &  ! Output                                            
-    Planck_Surface_TL     , &  ! Output                                            
-    Planck_Atmosphere_TL  , &  ! Output                                            
-    Pff_TL                , &  ! Output                                            
-    Pbb_TL                , &  ! Output                                                                            
+    User_Emissivity_TL    , &  ! Output
+    Direct_Reflectivity_TL, &  ! Output
+    Planck_Surface_TL     , &  ! Output
+    Planck_Atmosphere_TL  , &  ! Output
+    Pff_TL                , &  ! Output
+    Pbb_TL                , &  ! Output
     RTV                   ) &  ! Internal variable input
   RESULT( Error_Status )
     ! Arguments
     TYPE(CRTM_Atmosphere_type),   INTENT(IN)     :: Atmosphere
     TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface
-    TYPE(CRTM_AtmOptics_type),    INTENT(IN)     :: AtmOptics 
+    TYPE(CRTM_AtmOptics_type),    INTENT(IN)     :: AtmOptics
     TYPE(CRTM_SfcOptics_type),    INTENT(IN)     :: SfcOptics
     TYPE(CRTM_Atmosphere_type),   INTENT(IN)     :: Atmosphere_TL
-    TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface_TL 
+    TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface_TL
     TYPE(CRTM_AtmOptics_type),    INTENT(IN)     :: AtmOptics_TL
     TYPE(CRTM_SfcOptics_type),    INTENT(IN OUT) :: SfcOptics_TL
     TYPE(CRTM_GeometryInfo_type), INTENT(IN)     :: GeometryInfo
@@ -683,14 +683,14 @@ CONTAINS
     REAL(fp),                     INTENT(OUT)    :: Planck_Surface_TL
     REAL(fp),                     INTENT(OUT)    :: Planck_Atmosphere_TL(0:)
     REAL(fp),                     INTENT(OUT)    :: Pff_TL(:,:,:)
-    REAL(fp),                     INTENT(OUT)    :: Pbb_TL(:,:,:)    
+    REAL(fp),                     INTENT(OUT)    :: Pbb_TL(:,:,:)
     TYPE(RTV_type),               INTENT(IN)     :: RTV
     ! Function result
     INTEGER :: Error_Status
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Assign_Common_Input_TL'
     ! Local variables
-    CHARACTER(256) :: Message 
+    CHARACTER(256) :: Message
     INTEGER :: i, k
     INTEGER :: no, na, nt
 
@@ -698,7 +698,7 @@ CONTAINS
     ! Set up
     ! ------
     Error_Status = SUCCESS
-    
+
     nz = RTV%n_Angles
     ! Set the sensor zenith angle index
     SfcOptics_TL%Index_Sat_Ang = SfcOptics%Index_Sat_Ang
@@ -738,7 +738,7 @@ CONTAINS
     ! Assign the angles and weights to SfcOptics structure
     ! ----------------------------------------------------
     SfcOptics_TL%n_Angles = SfcOptics%n_Angles
-    SfcOptics_TL%Angle    = SfcOptics%Angle 
+    SfcOptics_TL%Angle    = SfcOptics%Angle
     SfcOptics_TL%Weight   = SfcOptics%Weight
 
 
@@ -776,8 +776,8 @@ CONTAINS
         IF( RTV%Diffuse_Surface) THEN
 
           IF( RTV%mth_Azi == 0 ) THEN
-          DO i = 1, nZ 
-            SfcOptics_TL%Reflectivity(1:nZ, 1, i, 1) = -SfcOptics_TL%Emissivity(i,1)*SfcOptics%Weight(i)   
+          DO i = 1, nZ
+            SfcOptics_TL%Reflectivity(1:nZ, 1, i, 1) = -SfcOptics_TL%Emissivity(i,1)*SfcOptics%Weight(i)
           END DO
           ELSE
             SfcOptics_TL%Reflectivity(1:nZ, 1, 1:nZ, 1) = ZERO
@@ -786,7 +786,7 @@ CONTAINS
           END IF
 
         ELSE ! Specular surface
-          DO i = 1, nZ 
+          DO i = 1, nZ
             SfcOptics_TL%Reflectivity(i, 1, i, 1) = -SfcOptics_TL%Emissivity(i,1)
           END DO
         END IF
@@ -795,7 +795,7 @@ CONTAINS
           User_Emissivity_TL = SfcOptics_TL%Emissivity(1,1)
           SfcOptics_TL%Emissivity( SfcOptics%Index_Sat_Ang,1 ) = User_Emissivity_TL
           SfcOptics_TL%Reflectivity(1,1,1,1) = - User_Emissivity_TL
-        ELSE 
+        ELSE
           User_Emissivity_TL = ZERO
           SfcOptics_TL%Emissivity( SfcOptics%Index_Sat_Ang,1 ) = ZERO
           SfcOptics_TL%Reflectivity(1,1,1,1) = ZERO
@@ -816,7 +816,7 @@ CONTAINS
     ! -------------------------------------------
     IF( RTV%mth_Azi == 0 ) THEN
       ! Atmospheric layer TL radiances
-      DO k = 1, Atmosphere%n_Layers 
+      DO k = 1, Atmosphere%n_Layers
         CALL CRTM_Planck_Radiance_TL( &
                SensorIndex                 , & ! Input
                ChannelIndex                , & ! Input
@@ -839,7 +839,7 @@ CONTAINS
   END FUNCTION Assign_Common_Input_TL
 
 
-  
+
 !--------------------------------------------------------------------------------
 !
 ! NAME:
@@ -849,82 +849,82 @@ CONTAINS
 !       Function to assign common input before calling the adjoint RT algorithms.
 !
 ! CALLING SEQUENCE:
-!      Error_Status = Assign_Common_Input_AD( SfcOptics    , &  ! FWD Input                  
-!                                             RTSolution   , &  ! FWD Input                              
-!                                             GeometryInfo , &  ! Input                      
-!                                             SensorIndex  , &  ! Input                      
+!      Error_Status = Assign_Common_Input_AD( SfcOptics    , &  ! FWD Input
+!                                             RTSolution   , &  ! FWD Input
+!                                             GeometryInfo , &  ! Input
+!                                             SensorIndex  , &  ! Input
 !                                             ChannelIndex , &  ! Input
-!                                             RTSolution_AD, &  ! AD Input/Output                      
-!                                             Atmosphere_AD, &  ! AD Output                  
-!                                             Surface_AD   , &  ! AD Output                  
-!                                             AtmOptics_AD , &  ! AD Output                  
-!                                             SfcOptics_AD , &  ! AD Output                  
-!                                             RTV            )  ! Internal variable input    
+!                                             RTSolution_AD, &  ! AD Input/Output
+!                                             Atmosphere_AD, &  ! AD Output
+!                                             Surface_AD   , &  ! AD Output
+!                                             AtmOptics_AD , &  ! AD Output
+!                                             SfcOptics_AD , &  ! AD Output
+!                                             RTV            )  ! Internal variable input
 !
 ! INPUT ARGUMENTS:
 !
-!       SfcOptics:            Structure containing the surface optical properties           
-!                             data.                                                         
-!                             UNITS:      N/A                                               
-!                             TYPE:       CRTM_SfcOptics_type                               
-!                             DIMENSION:  Scalar                                            
-!                             ATTRIBUTES: INTENT(IN)                                        
+!       SfcOptics:            Structure containing the surface optical properties
+!                             data.
+!                             UNITS:      N/A
+!                             TYPE:       CRTM_SfcOptics_type
+!                             DIMENSION:  Scalar
+!                             ATTRIBUTES: INTENT(IN)
 !
-!       RTSolution:           Structure containing the solution to the RT equation          
-!                             for the given inputs.                                         
-!                             UNITS:      N/A                                               
-!                             TYPE:       CRTM_RTSolution_type                              
-!                             DIMENSION:  Scalar                                            
-!                             ATTRIBUTES: INTENT(IN)                                                                            
+!       RTSolution:           Structure containing the solution to the RT equation
+!                             for the given inputs.
+!                             UNITS:      N/A
+!                             TYPE:       CRTM_RTSolution_type
+!                             DIMENSION:  Scalar
+!                             ATTRIBUTES: INTENT(IN)
 !
-!       GeometryInfo:         Structure containing the view geometry data.                  
-!                             UNITS:      N/A                                               
-!                             TYPE:       CRTM_GeometryInfo_type                            
-!                             DIMENSION:  Scalar                                            
-!                             ATTRIBUTES: INTENT(IN)                                        
+!       GeometryInfo:         Structure containing the view geometry data.
+!                             UNITS:      N/A
+!                             TYPE:       CRTM_GeometryInfo_type
+!                             DIMENSION:  Scalar
+!                             ATTRIBUTES: INTENT(IN)
 !
-!       SensorIndex:          Sensor index id. This is a unique index associated            
-!                             with a (supported) sensor used to access the                  
-!                             shared coefficient data for a particular sensor.              
-!                             See the ChannelIndex argument.                                
-!                             UNITS:      N/A                                               
-!                             TYPE:       INTEGER                                           
-!                             DIMENSION:  Scalar                                            
-!                             ATTRIBUTES: INTENT(IN)                                        
+!       SensorIndex:          Sensor index id. This is a unique index associated
+!                             with a (supported) sensor used to access the
+!                             shared coefficient data for a particular sensor.
+!                             See the ChannelIndex argument.
+!                             UNITS:      N/A
+!                             TYPE:       INTEGER
+!                             DIMENSION:  Scalar
+!                             ATTRIBUTES: INTENT(IN)
 !
-!       ChannelIndex:         Channel index id. This is a unique index associated           
-!                             with a (supported) sensor channel used to access the          
-!                             shared coefficient data for a particular sensor's             
-!                             channel.                                                      
-!                             See the SensorIndex argument.                                 
-!                             UNITS:      N/A                                               
-!                             TYPE:       INTEGER                                           
-!                             DIMENSION:  Scalar                                            
-!                             ATTRIBUTES: INTENT(IN)                                        
+!       ChannelIndex:         Channel index id. This is a unique index associated
+!                             with a (supported) sensor channel used to access the
+!                             shared coefficient data for a particular sensor's
+!                             channel.
+!                             See the SensorIndex argument.
+!                             UNITS:      N/A
+!                             TYPE:       INTEGER
+!                             DIMENSION:  Scalar
+!                             ATTRIBUTES: INTENT(IN)
 !
-!       RTV:                  Structure containing internal forward model variables         
-!                             required for subsequent tangent-linear or adjoint model       
-!                             calls. The contents of this structure are NOT accessible      
-!                             outside of the CRTM_RTSolution module.                        
-!                             UNITS:      N/A                                               
-!                             TYPE:       RTV_type                                          
-!                             DIMENSION:  Scalar                                            
-!                             ATTRIBUTES: INTENT(IN)                                        
+!       RTV:                  Structure containing internal forward model variables
+!                             required for subsequent tangent-linear or adjoint model
+!                             calls. The contents of this structure are NOT accessible
+!                             outside of the CRTM_RTSolution module.
+!                             UNITS:      N/A
+!                             TYPE:       RTV_type
+!                             DIMENSION:  Scalar
+!                             ATTRIBUTES: INTENT(IN)
 !
 ! OUTPUT ARGUMENTS:
 !
-!       RTSolution_AD:        Structure containing the RT solution adjoint inputs.          
-!                             UNITS:      N/A                                               
-!                             TYPE:       CRTM_RTSolution_type                              
-!                             DIMENSION:  Scalar                                            
+!       RTSolution_AD:        Structure containing the RT solution adjoint inputs.
+!                             UNITS:      N/A
+!                             TYPE:       CRTM_RTSolution_type
+!                             DIMENSION:  Scalar
 !                             ATTRIBUTES: INTENT(IN OUT)
 !
-!       SfcOptics_AD:         Structure containing the adjoint surface optical   
-!                             properties data.                                   
-!                             UNITS:      N/A                                    
-!                             TYPE:       CRTM_SfcOptics_type                    
-!                             DIMENSION:  Scalar                                 
-!                             ATTRIBUTES: INTENT(IN OUT)                        
+!       SfcOptics_AD:         Structure containing the adjoint surface optical
+!                             properties data.
+!                             UNITS:      N/A
+!                             TYPE:       CRTM_SfcOptics_type
+!                             DIMENSION:  Scalar
+!                             ATTRIBUTES: INTENT(IN OUT)
 !
 !       Planck_Surface_AD:    Adjoint of Planck surface.
 !                             UNITS:      N/A
@@ -942,13 +942,13 @@ CONTAINS
 !                             UNITS:      N/A
 !                             TYPE:       REAL(fp)
 !                             DIMENSION:  Scalar
-!                             ATTRIBUTES: INTENT(OUT)        
+!                             ATTRIBUTES: INTENT(OUT)
 !
 !       nz:                   Adjoint of Planck atmosphere
 !                             UNITS:      N/A
 !                             TYPE:       INTEGER
 !                             DIMENSION:  Scalar
-!                             ATTRIBUTES: INTENT(OUT)                           
+!                             ATTRIBUTES: INTENT(OUT)
 !
 ! FUNCTION RESULT:
 !       Error_Status:   The return value is an integer defining the error status
@@ -988,7 +988,7 @@ CONTAINS
     TYPE(CRTM_GeometryInfo_type), INTENT(IN)     :: GeometryInfo
     INTEGER,                      INTENT(IN)     :: SensorIndex
     INTEGER,                      INTENT(IN)     :: ChannelIndex
-    TYPE(CRTM_RTSolution_type),   INTENT(IN OUT) :: RTSolution_AD    
+    TYPE(CRTM_RTSolution_type),   INTENT(IN OUT) :: RTSolution_AD
     TYPE(CRTM_SfcOptics_type),    INTENT(IN OUT) :: SfcOptics_AD
     REAL(fp),                     INTENT(OUT)    :: Planck_Surface_AD
     REAL(fp),                     INTENT(OUT)    :: Planck_Atmosphere_AD(0:)
@@ -998,7 +998,7 @@ CONTAINS
     ! Function result
     INTEGER :: Error_Status
     ! Local parameters
-    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Assign_Common_Input_AD' 
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Assign_Common_Input_AD'
 
     ! -----
     ! Setup
@@ -1018,7 +1018,7 @@ CONTAINS
     ! Compute the brightness temperature adjoint
     ! ------------------------------------------
     IF ( SpcCoeff_IsInfraredSensor( SC(SensorIndex) ) .OR. &
-         SpcCoeff_IsMicrowaveSensor( SC(SensorIndex) ) ) THEN 
+         SpcCoeff_IsMicrowaveSensor( SC(SensorIndex) ) ) THEN
       IF( RTV%mth_Azi == 0 ) THEN
         CALL CRTM_Planck_Temperature_AD( &
                SensorIndex                         , & ! Input
@@ -1026,11 +1026,11 @@ CONTAINS
                RTSolution%Radiance                 , & ! Input
                RTSolution_AD%Brightness_Temperature, & ! Input
                Radiance_AD(1)                        ) ! Output
-        RTSolution_AD%Brightness_Temperature = ZERO 
+        RTSolution_AD%Brightness_Temperature = ZERO
       END IF
     END IF
 
-    ! accumulate Fourier component    
+    ! accumulate Fourier component
     IF( RTV%n_Stokes == 1 ) THEN
       Radiance_AD(1) = Radiance_AD(1) + RTSolution_AD%Radiance * &
          COS( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
@@ -1049,7 +1049,7 @@ CONTAINS
     ! Compute the corresponding tangent-linear brightness temperature
     ! ---------------------------------------------------------------
 
-  END FUNCTION Assign_Common_Input_AD 
+  END FUNCTION Assign_Common_Input_AD
 
 !-------------------------------------------------------------------------
 !
@@ -1066,7 +1066,7 @@ CONTAINS
 !                                            SensorIndex  , & ! Input
 !                                            ChannelIndex , & ! Input
 !                                            RTV          , & ! Input
-!                                            RTSolution     ) ! Output     
+!                                            RTSolution     ) ! Output
 !
 ! INPUT ARGUMENTS:
 !
@@ -1090,7 +1090,7 @@ CONTAINS
 !                       TYPE:       CRTM_GeometryInfo_type
 !                       DIMENSION:  Scalar
 !                       ATTRIBUTES: INTENT(IN)
-!   
+!
 !       SensorIndex:    Sensor index id. This is a unique index associated
 !                       with a (supported) sensor used to access the
 !                       shared coefficient data for a particular sensor.
@@ -1143,7 +1143,7 @@ CONTAINS
 !
 !--------------------------------------------------------------------------------
 
-  FUNCTION Assign_Common_Output( & 
+  FUNCTION Assign_Common_Output( &
     Atmosphere   , & ! Input
     SfcOptics    , & ! Input
     GeometryInfo , & ! Input
@@ -1168,28 +1168,28 @@ CONTAINS
     ! Local variables
     INTEGER :: no, na, nt, n1
     REAL(fp) :: Radiance(RTV%n_Stokes)
-    
+
     Error_Status = SUCCESS
-    n1 = (SfcOptics%Index_Sat_Ang-1)*RTV%n_Stokes + 1    
+    n1 = (SfcOptics%Index_Sat_Ang-1)*RTV%n_Stokes + 1
     ! ADA and SOI specific assignments
     IF( RTV%Scattering_RT ) THEN
-      
+
       ! Assign radiance output from ADA or SOI
       IF ( RTV%aircraft%rt ) THEN
         Radiance(:) = RTV%s_Level_Rad_UP(n1:n1-1+RTV%n_Stokes, RTV%aircraft%idx)
       ELSE
         Radiance(:) = RTV%s_Level_Rad_UP(n1:n1-1+RTV%n_Stokes, 0)
       END IF
-    
+
     ! Emission specific assignments
-    ELSE       
-      
+    ELSE
+
       ! The output radiance at TOA or at Aircraft height
       IF ( RTV%aircraft%rt ) THEN
         Radiance(1) = RTV%e_Level_Rad_UP(RTV%aircraft%idx)
       ELSE
         Radiance(1) = RTV%e_Level_Rad_UP(0)
-      END IF 
+      END IF
 
       ! Other emission-only output
       RTSolution%Up_Radiance             = RTV%Up_Radiance
@@ -1207,7 +1207,7 @@ CONTAINS
         RTSolution%Upwelling_Overcast_Radiance(1:no) = RTV%e_Cloud_Radiance_UP(na+1:nt)
       END IF
     END IF
-    
+
     ! accumulate Fourier component
     IF( RTV%n_Stokes == 1 ) THEN
      RTSolution%Radiance = RTSolution%Radiance + Radiance(1)*  &
@@ -1231,9 +1231,25 @@ CONTAINS
              SensorIndex,                      & ! Input
              ChannelIndex,                     & ! Input
              RTSolution%Radiance,              & ! Input
-             RTSolution%Brightness_Temperature ) ! Output  
-             
-  END FUNCTION Assign_Common_Output   
+             RTSolution%Brightness_Temperature ) ! Output
+
+    ! -------------------------------------------------------
+    ! Compute the corresponding solar reflectance (TOA only)
+    ! -------------------------------------------------------
+    RTSolution%Reflectance = ZERO
+    IF( RTV%Solar_Flag_true .AND. (.NOT.(RTV%aircraft%rt))) THEN
+         RTSolution%Reflectance = RTSolution%Radiance*PI/RTV%Solar_irradiance
+    END IF
+
+    ! -------------------------------------------------------
+    ! Same thing but assuming clear sky
+    ! -------------------------------------------------------
+    RTSolution%Reflectance_clear = ZERO
+    IF( RTV%Solar_Flag_true .AND. (.NOT.(RTV%aircraft%rt))) THEN
+         RTSolution%Reflectance_clear = RTSolution%R_clear*PI/RTV%Solar_irradiance
+    END IF
+
+  END FUNCTION Assign_Common_Output
 !-------------------------------------------------------------------------
 !
 ! NAME:
@@ -1243,20 +1259,20 @@ CONTAINS
 !       Function to assign output from CRTM_ADA, CRTM_SOI and CRTM_Emission
 !
 ! CALLING SEQUENCE:
-!       Error_Status = Assign_Common_Output_TL( SfcOptics              , & ! Input 
-!                                               RTSolution             , & ! Input 
-!                                               GeometryInfo           , & ! Input 
-!                                               Radiance_TL            , & ! Input 
-!                                               Scattering_Radiance_TL , & ! Input 
+!       Error_Status = Assign_Common_Output_TL( SfcOptics              , & ! Input
+!                                               RTSolution             , & ! Input
+!                                               GeometryInfo           , & ! Input
+!                                               Radiance_TL            , & ! Input
+!                                               Scattering_Radiance_TL , & ! Input
 !                                               SensorIndex            , & ! Input
 !                                               ChannelIndex           , & ! Input
 !                                               RTV                    , & ! Input
-!                                               RTSolution_TL            ) ! Output     
+!                                               RTSolution_TL            ) ! Output
 !
 ! INPUT ARGUMENTS:
 !
 !       SfcOptics:              Structure containing the surface optical properties
-!                               data. 
+!                               data.
 !                               UNITS:      N/A
 !                               TYPE:       CRTM_SfcOptics_type
 !                               DIMENSION:  Scalar
@@ -1285,7 +1301,7 @@ CONTAINS
 !                               TYPE:       REAL(fp)
 !                               DIMENSION:  Rank-1
 !                               ATTRIBUTES: INTENT(IN)
-!                          
+!
 !       SensorIndex:            Sensor index id. This is a unique index associated
 !                               with a (supported) sensor used to access the
 !                               shared coefficient data for a particular sensor.
@@ -1337,10 +1353,10 @@ CONTAINS
 !
 !--------------------------------------------------------------------------------
 
-  FUNCTION Assign_Common_Output_TL( & 
+  FUNCTION Assign_Common_Output_TL( &
     SfcOptics              , & ! Input
     RTSolution             , & ! Input
-    GeometryInfo           , & ! Input    
+    GeometryInfo           , & ! Input
     Radiance_TL            , & ! Input
     Scattering_Radiance_TL , & ! Input
     SensorIndex            , & ! Input
@@ -1350,7 +1366,7 @@ CONTAINS
   RESULT( Error_Status )
     ! Arguments
     TYPE(CRTM_SfcOptics_type)   , INTENT(IN)     :: SfcOptics
-    TYPE(CRTM_RTSolution_type)  , INTENT(IN)     :: RTSolution    
+    TYPE(CRTM_RTSolution_type)  , INTENT(IN)     :: RTSolution
     TYPE(CRTM_GeometryInfo_type), INTENT(IN)     :: GeometryInfo
     REAL(fp)                    , INTENT(IN)     :: Radiance_TL
     REAL(fp)                    , INTENT(IN)     :: Scattering_Radiance_TL(:)
@@ -1364,19 +1380,19 @@ CONTAINS
     REAL(fp) :: SRadiance_TL(RTV%n_Stokes)
     ! Local Parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Assign_Common_Output_TL'
-  
+
     Error_Status = SUCCESS
-    
+
     n1 = (SfcOptics%Index_Sat_Ang-1)*RTV%n_Stokes + 1
     ! No TL/AD for the simulations at aircraft
     IF( RTV%Scattering_RT ) THEN
         SRadiance_TL(:) = Scattering_Radiance_TL(n1:n1-1+RTV%n_Stokes)
     ! Emission specific assignments
-    ELSE       
+    ELSE
         SRadiance_TL(1) = Radiance_TL
-    END IF 
-    
-    ! accumulate Fourier component    
+    END IF
+
+    ! accumulate Fourier component
     IF( RTV%n_Stokes == 1 ) THEN
       RTSolution_TL%Radiance = RTSolution_TL%Radiance + SRadiance_TL(1)*  &
          COS( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
@@ -1434,7 +1450,7 @@ CONTAINS
 !                                               Atmosphere_AD        , & ! Output
 !                                               Surface_AD           , & ! Output
 !                                               RTSolution_AD        , & ! Output
-!                                               RTV                  ) & ! Input   
+!                                               RTV                  ) & ! Input
 !
 ! INPUT ARGUMENTS:
 !
@@ -1442,7 +1458,7 @@ CONTAINS
 !                               UNITS:      N/A
 !                               TYPE:       CRTM_Atmosphere_type
 !                               DIMENSION:  Scalar
-!                               ATTRIBUTES: INTENT(IN)   
+!                               ATTRIBUTES: INTENT(IN)
 !
 !      Surface:                 Structure containing the Surface state data.
 !                               UNITS:      N/A
@@ -1459,18 +1475,18 @@ CONTAINS
 !                               ATTRIBUTES: INTENT(IN)
 !
 !      SfcOptics:               Structure containing the surface
-!                               optical properties data. 
+!                               optical properties data.
 !                               UNITS:      N/A
 !                               TYPE:       CRTM_SfcOptics_type
 !                               DIMENSION:  Scalar
-!                               ATTRIBUTES: INTENT(IN)                              
+!                               ATTRIBUTES: INTENT(IN)
 !
 !      GeometryInfo:            Structure containing the view geometry data.
 !                               UNITS:      N/A
 !                               TYPE:       CRTM_GeometryInfo_type
 !                               DIMENSION:  Scalar
 !                               ATTRIBUTES: INTENT(IN)
-!                          
+!
 !      SensorIndex:             Sensor index id. This is a unique index associated
 !                               with a (supported) sensor used to access the
 !                               shared coefficient data for a particular sensor.
@@ -1489,12 +1505,12 @@ CONTAINS
 !                               TYPE:       INTEGER
 !                               DIMENSION:  Scalar
 !                               ATTRIBUTES: INTENT(IN)
-! 
-!      nz:                      Integer assigned from RTV%n_Angles                             
-!                               UNITS:      N/A                                                
-!                               TYPE:       INTEGER                                            
-!                               DIMENSION:  Scalar                                             
-!                               ATTRIBUTES: INTENT(IN) 
+!
+!      nz:                      Integer assigned from RTV%n_Angles
+!                               UNITS:      N/A
+!                               TYPE:       INTEGER
+!                               DIMENSION:  Scalar
+!                               ATTRIBUTES: INTENT(IN)
 !
 !      RTV:                     Structure containing internal variables required for
 !                               subsequent tangent-linear or adjoint model calls.
@@ -1504,9 +1520,9 @@ CONTAINS
 !                               TYPE:       RTV_type
 !                               DIMENSION:  Scalar
 !                               ATTRIBUTES: INTENT(IN)
-! 
+!
 !  OUTPUT ARGUMENTS
-! 
+!
 !      Pff_AD:                  Forward scattering AD phase matrix
 !                               UNITS:      N/A
 !                               TYPE:       REAL(fp)
@@ -1517,7 +1533,7 @@ CONTAINS
 !                               UNITS:      N/A
 !                               TYPE:       REAL(fp)
 !                               DIMENSION:  Scalar
-!                               ATTRIBUTES: INTENT(IN OUT) 
+!                               ATTRIBUTES: INTENT(IN OUT)
 !
 !      AtmOptics_AD:            Structure containing the adjoint combined atmospheric
 !                               optical properties for gaseous absorption, clouds,
@@ -1532,7 +1548,7 @@ CONTAINS
 !                               UNITS:      N/A
 !                               TYPE:       CRTM_SfcOptics_type
 !                               DIMENSION:  Scalar
-!                               ATTRIBUTES: INTENT(IN OUT)               
+!                               ATTRIBUTES: INTENT(IN OUT)
 !
 !      Planck_Surface_AD:       Adjoint of Planck surface.
 !                               UNITS:      N/A
@@ -1564,11 +1580,11 @@ CONTAINS
 !                               DIMENSION:  Scalar
 !                               ATTRIBUTES: INTENT(IN OUT)
 !
-!      RTSolution_AD:           Structure containing the RT solution adjoint inputs. 
+!      RTSolution_AD:           Structure containing the RT solution adjoint inputs.
 !                               UNITS:      N/A
-!                               TYPE:       CRTM_RTSolution_type       
-!                               DIMENSION:  Scalar                     
-!                               ATTRIBUTES: INTENT(IN OUT)             
+!                               TYPE:       CRTM_RTSolution_type
+!                               DIMENSION:  Scalar
+!                               ATTRIBUTES: INTENT(IN OUT)
 !
 ! FUNCTION RESULT:
 !       Error_Status:   The return value is an integer defining the error status.
@@ -1586,7 +1602,7 @@ CONTAINS
 !
 !--------------------------------------------------------------------------------
 
-  FUNCTION Assign_Common_Output_AD( & 
+  FUNCTION Assign_Common_Output_AD( &
     Atmosphere             , & ! Input
     Surface                , & ! Input
     AtmOptics              , & ! Input
@@ -1625,8 +1641,8 @@ CONTAINS
     REAL(fp)                    , INTENT(OUT)    :: User_Emissivity_AD
     TYPE(CRTM_Atmosphere_type)  , INTENT(IN OUT) :: Atmosphere_AD
     TYPE(CRTM_Surface_type)     , INTENT(IN OUT) :: Surface_AD
-    TYPE(CRTM_RTSolution_type)  , INTENT(IN OUT) :: RTSolution_AD     
-    TYPE(RTV_type)              , INTENT(IN)     :: RTV    
+    TYPE(CRTM_RTSolution_type)  , INTENT(IN OUT) :: RTSolution_AD
+    TYPE(RTV_type)              , INTENT(IN)     :: RTV
 
     ! Function Result
     INTEGER :: Error_Status
@@ -1636,7 +1652,7 @@ CONTAINS
     CHARACTER(256) :: Message
     INTEGER :: no, na, nt
     INTEGER :: k, i
-  
+
     Error_Status = SUCCESS
 
     ! ------------------------------------
@@ -1675,12 +1691,12 @@ CONTAINS
     ! ---------------------------------------------------------------------
     SfcOptics_AD%n_Stokes = RTV%n_Stokes
 
-    
+
     ! ----------------------------------------------------
     ! Assign the angles and weights to SfcOptics structure
     ! ----------------------------------------------------
     SfcOptics_AD%n_Angles = SfcOptics%n_Angles
-    SfcOptics_AD%Angle    = SfcOptics%Angle 
+    SfcOptics_AD%Angle    = SfcOptics%Angle
     SfcOptics_AD%Weight   = SfcOptics%Weight
 
 
@@ -1689,7 +1705,7 @@ CONTAINS
     ! of emissivity. The requirement is regardless whether having user input or not.
     ! Therefore, this part is common part with/without optional input.
     ! The outputs of CRTM_Compute_RTSolution are the partial derivative
-    ! of emissivity and reflectivity. Since SfcOptics_AD is used as input only in 
+    ! of emissivity and reflectivity. Since SfcOptics_AD is used as input only in
     ! CRTM_Compute_SfcOptics_AD, the total sensitivity of the emissivity is taken into
     ! account for here.
     ! --------------------------------------------------------------------------------
@@ -1731,9 +1747,9 @@ CONTAINS
           ELSE
             SfcOptics_AD%Reflectivity(1:SfcOptics%n_Angles, 1, 1:SfcOptics%n_Angles, 1) = ZERO
             SfcOptics_AD%Direct_Reflectivity(1:SfcOptics%n_Angles,1) = ZERO
-            SfcOptics_AD%Emissivity(1:SfcOptics%n_Angles,1) = ZERO     
+            SfcOptics_AD%Emissivity(1:SfcOptics%n_Angles,1) = ZERO
           END IF
-          
+
         ELSE ! Specular surface
         DO i = nZ, 1, -1
           User_Emissivity_AD = User_Emissivity_AD - SfcOptics_AD%Reflectivity(i,1,i,1)
@@ -1775,17 +1791,25 @@ CONTAINS
       ! defined by the user input layering
       RTSolution_AD%Layer_Optical_Depth(1:no) = AtmOptics_AD%Optical_Depth(na+1:nt)
     END IF
-             
+
+    ! ----------------------------------------------------------------
+    ! Compute the corresponding adjoint solar reflectance (TOA only)
+    ! ----------------------------------------------------------------
+    ! RTSolution_AD%Reflectance = ZERO
+    ! IF( RTV%Solar_Flag_true .AND. (.NOT.(RTV%aircraft%rt))) THEN
+    !  RTSolution_AD%Reflectance = RTSolution_AD%Radiance*PI/RTV%Solar_irradiance
+    ! END IF
+
   END FUNCTION Assign_Common_Output_AD
-  
+
 !################################################################################
 !################################################################################
 !##                                                                            ##
 !##                         ## PRIVATE MODULE ROUTINES ##                      ##
 !##                                                                            ##
 !################################################################################
-!################################################################################  
- 
+!################################################################################
+
 ! -------------------------------------------------------------------------------
 !
 ! NAME:
@@ -1808,7 +1832,7 @@ CONTAINS
 !
 !       RTV:            Structure containing internal forward model variables
 !                       required for tangent-linear or adjoint model calls in
-!                       CRTM_RTSolution module. 
+!                       CRTM_RTSolution module.
 !                       UNITS:      N/A
 !                       TYPE:       RTV_type
 !                       DIMENSION:  Scalar
@@ -1824,12 +1848,12 @@ CONTAINS
 !                       ATTRIBUTES: INTENT(IN OUT)
 !
 ! COMMENTS:
-!       Note that the INTENT on the RTV         argument is IN OUT as it 
+!       Note that the INTENT on the RTV         argument is IN OUT as it
 !       contains data prior to this call and is filled with data within this
 !       routine.
 !
 !S-
-!--------------------------------------------------------------------------------  
+!--------------------------------------------------------------------------------
   SUBROUTINE CRTM_Phase_Matrix( &
     AtmOptics, &  ! Input
     RTV        )  ! Internal variable
@@ -1846,13 +1870,13 @@ CONTAINS
     !#--------------------------------------------------------------------------#
 
     IF( RTV%n_Stokes == 1 ) THEN
-    
+
         !#--------------------------------------------------------------------------#
     !#                   -- COMPUTING LEGENDRE FUNCTION --                      #
     !#                   Pplus  for positive cosine of angles                   #
     !#                   Pminus for negative cosine of angles                   #
     !#--------------------------------------------------------------------------#
-    DO i = 1, RTV%n_Angles 
+    DO i = 1, RTV%n_Angles
        CALL Legendre_M( RTV%mth_Azi               , &
                         AtmOptics%n_Legendre_Terms, &
                         RTV%COS_Angle(i)          , &
@@ -1878,13 +1902,13 @@ CONTAINS
     Layer_Loop1: DO  k = 1, RTV%n_Layers
 
 
-      ! ------------------------------    
-      ! Only proceed if the scattering    
-      ! coefficient is significant        
-      ! ------------------------------    
+      ! ------------------------------
+      ! Only proceed if the scattering
+      ! coefficient is significant
+      ! ------------------------------
 
       Significant_Scattering1: IF( AtmOptics%Single_Scatter_Albedo(k) > SCATTERING_ALBEDO_THRESHOLD) THEN
-      
+
         DO j = 1, jn
           ! add solar angle
           DO i = 1, RTV%n_Angles
@@ -1901,26 +1925,26 @@ CONTAINS
             RTV%Pff(i,j,k) = RTV%Off(i,j,k)
             RTV%Pbb(i,j,k) = RTV%Obb(i,j,k)
 
-            ! For intensity, the phase matrix element must >= ZERO   
-            IF ( RTV%mth_Azi == 0 ) THEN          
+            ! For intensity, the phase matrix element must >= ZERO
+            IF ( RTV%mth_Azi == 0 ) THEN
               IF(RTV%Pff(i,j,k) < ZERO) RTV%Pff(i,j,k) = PHASE_THRESHOLD
               IF(RTV%Pbb(i,j,k) < ZERO) RTV%Pbb(i,j,k) = PHASE_THRESHOLD
             END IF
 
           END DO
         END DO
- 
+
         ! Normalization to ensure energy conservation
-        IF (  RTV%mth_Azi == 0 ) CALL Normalize_Phase( k, RTV )         
+        IF (  RTV%mth_Azi == 0 ) CALL Normalize_Phase( k, RTV )
       END IF Significant_Scattering1
 
     END DO Layer_Loop1
-    
+
       RETURN
     END IF
 
-    L = AtmOptics%n_Legendre_Terms-1     
-    DO i = 1, RTV%n_Angles 
+    L = AtmOptics%n_Legendre_Terms-1
+    DO i = 1, RTV%n_Angles
        CALL Legendre_M( RTV%mth_Azi               , &
                         L, &
                         RTV%COS_Angle(i)          , &
@@ -1938,7 +1962,7 @@ CONTAINS
                        L, &
                        RTV%COS_SUN                , &
                        RTV%Pleg(0:,RTV%n_Angles+1)  )
-                       
+
        IF(RTV%n_Stokes > 1 ) THEN
        !  Rlm
          RTV%Pplus(0:L,RTV%n_Angles+1)=-(Gl2n(RTV%mth_Azi,L,-2,RTV%COS_SUN)+Gl2n(RTV%mth_Azi,L,2,RTV%COS_SUN))/TWO
@@ -1962,13 +1986,13 @@ CONTAINS
 
       RTV%Pff(:,:,k) = ZERO
       RTV%Pbb(:,:,k) = ZERO
-      ! ------------------------------    
-      ! Only proceed if the scattering    
-      ! coefficient is significant        
-      ! ------------------------------    
+      ! ------------------------------
+      ! Only proceed if the scattering
+      ! coefficient is significant
+      ! ------------------------------
 
       Significant_Scattering: IF( AtmOptics%Single_Scatter_Albedo(k) > SCATTERING_ALBEDO_THRESHOLD) THEN
-      
+
         DO j = 1, RTV%n_Angles
           ! add solar angle
           DO i = 1, RTV%n_Angles
@@ -1993,7 +2017,7 @@ CONTAINS
               RTV%Pff(i1+1,j1+1,k) = RTV%Pff(i1+1,j1+1,k) + ( AtmOptics%Phase_Coefficient(l,2,k)*RTV%Pplus(l,i)*RTV%Pplus(l,j) ) &
                                    + ( AtmOptics%Phase_Coefficient(l,3,k)*RTV%Pminus(l,i)*RTV%Pminus(l,j) )
               RTV%Pbb(i1+1,j1+1,k) = RTV%Pbb(i1+1,j1+1,k) +AtmOptics%Phase_Coefficient(l,2,k)*RTV%Pplus(l,i)*RTV%Pplus(l,j)*ifac &
-                                   - ( AtmOptics%Phase_Coefficient(l,3,k)*RTV%Pminus(l,i)*RTV%Pminus(l,j)*ifac )   
+                                   - ( AtmOptics%Phase_Coefficient(l,3,k)*RTV%Pminus(l,i)*RTV%Pminus(l,j)*ifac )
             END IF
             IF( RTV%n_Stokes > 2 ) THEN
               ! alpha3, alpha2  (3,3)
@@ -2007,7 +2031,7 @@ CONTAINS
 
               ! beta1  (3,1)
               RTV%Pff(i1+2,j1,k) = RTV%Pff(i1+2,j1,k) - ( AtmOptics%Phase_Coefficient(l,5,k)*RTV%Pleg(l,j)*RTV%Pminus(l,i) )
-              RTV%Pbb(i1+2,j1,k) = RTV%Pbb(i1+2,j1,k) - ( AtmOptics%Phase_Coefficient(l,5,k)*RTV%Pleg(l,j)*RTV%Pminus(l,i)*ifac )  
+              RTV%Pbb(i1+2,j1,k) = RTV%Pbb(i1+2,j1,k) - ( AtmOptics%Phase_Coefficient(l,5,k)*RTV%Pleg(l,j)*RTV%Pminus(l,i)*ifac )
               ! alpha2, alpha3  (2,3)
               RTV%Pff(i1+1,j1+2,k) = RTV%Pff(i1+1,j1+2,k) -AtmOptics%Phase_Coefficient(l,2,k)*RTV%Pplus(l,i)*RTV%Pminus(l,j) &
                                  - ( AtmOptics%Phase_Coefficient(l,3,k)*RTV%Pminus(l,i)*RTV%Pplus(l,j) )
@@ -2019,7 +2043,7 @@ CONTAINS
                                  - ( AtmOptics%Phase_Coefficient(l,3,k)*RTV%Pminus(l,j)*RTV%Pplus(l,i) )
               RTV%Pbb(i1+2,j1+1,k) = RTV%Pbb(i1+2,j1+1,k) -AtmOptics%Phase_Coefficient(l,2,k)*RTV%Pplus(l,j)*RTV%Pminus(l,i)*ifac &
                                    + ( AtmOptics%Phase_Coefficient(l,3,k)*RTV%Pminus(l,j)*RTV%Pplus(l,i)*ifac )
-            END IF              
+            END IF
             IF( RTV%n_Stokes == 4 ) THEN
               ! beta2  (3,4)
               RTV%Pff(i1+2,j1+3,k) = RTV%Pff(i1+2,j1+3,k) - ( AtmOptics%Phase_Coefficient(l,6,k)*RTV%Pplus(l,i)*RTV%Pleg(l,j) )
@@ -2038,32 +2062,32 @@ CONTAINS
              ! beta2  (4,2)
              RTV%Pff(i1+3,j1+1,k) = RTV%Pff(i1+3,j1+1,k) - ( AtmOptics%Phase_Coefficient(l,6,k)*RTV%Pminus(l,j)*RTV%Pleg(l,i) )
              RTV%Pbb(i1+3,j1+1,k) = RTV%Pbb(i1+3,j1+1,k) +AtmOptics%Phase_Coefficient(l,6,k)*RTV%Pminus(l,j)*RTV%Pleg(l,i)*ifac
-           END IF 
+           END IF
 
             END DO
 
             RTV%Pff(i1,j1,k) = RTV%Off(i,j,k)
             RTV%Pbb(i1,j1,k) = RTV%Obb(i,j,k)
 
-            ! For intensity, the phase matrix element must >= ZERO   
-            IF ( RTV%mth_Azi == 0 ) THEN          
+            ! For intensity, the phase matrix element must >= ZERO
+            IF ( RTV%mth_Azi == 0 ) THEN
               IF(RTV%Pff(i1,j1,k) < ZERO) RTV%Pff(i1,j1,k) = PHASE_THRESHOLD
               IF(RTV%Pbb(i1,j1,k) < ZERO) RTV%Pbb(i1,j1,k) = PHASE_THRESHOLD
             END IF
 
             ! qliu   set P' = P D
             IF( RTV%n_Stokes > 2 ) THEN
-              RTV%Pbb(i1,j1+2,k) = -RTV%Pbb(i1,j1+2,k)        
-              RTV%Pbb(i1+1,j1+2,k) = -RTV%Pbb(i1+1,j1+2,k)       
-              RTV%Pbb(i1+2,j1+2,k) = -RTV%Pbb(i1+2,j1+2,k)       
+              RTV%Pbb(i1,j1+2,k) = -RTV%Pbb(i1,j1+2,k)
+              RTV%Pbb(i1+1,j1+2,k) = -RTV%Pbb(i1+1,j1+2,k)
+              RTV%Pbb(i1+2,j1+2,k) = -RTV%Pbb(i1+2,j1+2,k)
             END IF
             IF( RTV%n_Stokes == 4 ) THEN
-              RTV%Pbb(i1,j1+3,k) = -RTV%Pbb(i1,j1+3,k)        
-              RTV%Pbb(i1+1,j1+3,k) = -RTV%Pbb(i1+1,j1+3,k)       
-              RTV%Pbb(i1+2,j1+3,k) = -RTV%Pbb(i1+2,j1+3,k)       
+              RTV%Pbb(i1,j1+3,k) = -RTV%Pbb(i1,j1+3,k)
+              RTV%Pbb(i1+1,j1+3,k) = -RTV%Pbb(i1+1,j1+3,k)
+              RTV%Pbb(i1+2,j1+3,k) = -RTV%Pbb(i1+2,j1+3,k)
 
-              RTV%Pbb(i1+3,j1+2,k) = -RTV%Pbb(i1+3,j1+2,k) 
-              RTV%Pbb(i1+3,j1+3,k) = -RTV%Pbb(i1+3,j1+3,k) 
+              RTV%Pbb(i1+3,j1+2,k) = -RTV%Pbb(i1+3,j1+2,k)
+              RTV%Pbb(i1+3,j1+3,k) = -RTV%Pbb(i1+3,j1+3,k)
             END IF
 
           END DO
@@ -2091,30 +2115,30 @@ CONTAINS
               ! beta1  (3,1)
               RTV%Pff(i1+2,j1,k) = RTV%Pff(i1+2,j1,k) - ( AtmOptics%Phase_Coefficient(l,5,k)*RTV%Pleg(l,jn)*RTV%Pminus(l,i) )
               RTV%Pbb(i1+2,j1,k) = RTV%Pbb(i1+2,j1,k) - ( AtmOptics%Phase_Coefficient(l,5,k)*RTV%Pleg(l,jn)*RTV%Pminus(l,i)*ifac)
-            END IF 
+            END IF
             END DO
             RTV%Pff(i1,j1,k) = RTV%Off(i,jn,k)
             RTV%Pbb(i1,j1,k) = RTV%Obb(i,jn,k)
 
-            ! For intensity, the phase matrix element must >= ZERO   
-            IF ( RTV%mth_Azi == 0 ) THEN          
+            ! For intensity, the phase matrix element must >= ZERO
+            IF ( RTV%mth_Azi == 0 ) THEN
               IF(RTV%Pff(i1,j1,k) < ZERO) RTV%Pff(i1,j1,k) = PHASE_THRESHOLD
               IF(RTV%Pbb(i1,j1,k) < ZERO) RTV%Pbb(i1,j1,k) = PHASE_THRESHOLD
             END IF
-  
+
           END DO
-                    
+
        END IF
 
        ! Normalization to ensure energy conservation
-       IF (  RTV%mth_Azi == 0 ) CALL Normalize_Phase( k, RTV )  ! normalize RTV%Pff and RTV%Pbb 
+       IF (  RTV%mth_Azi == 0 ) CALL Normalize_Phase( k, RTV )  ! normalize RTV%Pff and RTV%Pbb
                                   ! (n_Stokes*n_Angles, n_Stokes*n_Angles)
       END IF Significant_Scattering
 
     END DO Layer_Loop
 
   END SUBROUTINE CRTM_Phase_Matrix
-  
+
 !--------------------------------------------------------------------------------
 !
 ! NAME:
@@ -2124,46 +2148,46 @@ CONTAINS
 !       Subroutine to calculate the tangent-linear phase function for the
 !       scattering model.
 !
-! CALLING SEQUENCE:                                                        
+! CALLING SEQUENCE:
 !       CALL CRTM_Phase_Matrix_TL( AtmOptics,    &  ! FWD Input
 !                                  AtmOptics_TL, &  ! TL  Input
 !                                  Pff_TL,       &  ! TL Output
 !                                  Pff_TL,       &  ! TL Output
 !                                  RTV           )  ! Internal variable
 !
-! INPUT ARGUMENTS:                                                         
-!       AtmOptics:      Structure containing the atmospheric optical         
-!                       parameters                                         
-!                       UNITS:      N/A                                    
-!                       TYPE:       CRTM_AtmOptics_type                     
-!                       DIMENSION:  Scalar                                 
-!                       ATTRIBUTES: INTENT(IN)                             
+! INPUT ARGUMENTS:
+!       AtmOptics:      Structure containing the atmospheric optical
+!                       parameters
+!                       UNITS:      N/A
+!                       TYPE:       CRTM_AtmOptics_type
+!                       DIMENSION:  Scalar
+!                       ATTRIBUTES: INTENT(IN)
 !
-!       AtmOptics_TL:   Structure containing the tangent-linear atmospheric  
-!                       optical parameters                                 
-!                       UNITS:      N/A                                    
-!                       TYPE:       CRTM_AtmOptics_type                     
-!                       DIMENSION:  Scalar                                 
-!                       ATTRIBUTES: INTENT(IN)                             
+!       AtmOptics_TL:   Structure containing the tangent-linear atmospheric
+!                       optical parameters
+!                       UNITS:      N/A
+!                       TYPE:       CRTM_AtmOptics_type
+!                       DIMENSION:  Scalar
+!                       ATTRIBUTES: INTENT(IN)
 !
 !       RTV:            Structure containing internal forward model variables
 !                       required for subsequent tangent-linear or adjoint model
 !                       calls. The contents of this structure are NOT accessible
-!                       outside of the CRTM_RTSolution module.               
-!                       UNITS:      N/A                                    
-!                       TYPE:       RTV_type                    
-!                       DIMENSION:  Scalar                                 
-!                       ATTRIBUTES: INTENT(IN)                             
+!                       outside of the CRTM_RTSolution module.
+!                       UNITS:      N/A
+!                       TYPE:       RTV_type
+!                       DIMENSION:  Scalar
+!                       ATTRIBUTES: INTENT(IN)
 !
 ! OUTPUT ARGUMENTS:
-!       Pff_TL:         Array containing the tangent-linear of the 
+!       Pff_TL:         Array containing the tangent-linear of the
 !                       forward phase matrix.
 !                       UNITS:      N/A
 !                       TYPE:       REAL
 !                       DIMENSION:  Rank-3, n_Angles x n_Angles x n_Layers
 !                       ATTRIBUTES: INTENT(OUT)
 !
-!       Pbb_TL:         Array containing the tangent-linear of the 
+!       Pbb_TL:         Array containing the tangent-linear of the
 !                       backward phase matrix.
 !                       UNITS:      N/A
 !                       TYPE:       REAL
@@ -2205,16 +2229,16 @@ CONTAINS
     END IF
 
     IF(RTV%n_Stokes == 1 ) THEN
-    
+
     Layer_Loop1: DO  k = 1, RTV%n_Layers
-        
-      ! ------------------------------    
-      ! Only proceed if the scattering    
-      ! coefficient is significant        
-      ! ------------------------------    
+
+      ! ------------------------------
+      ! Only proceed if the scattering
+      ! coefficient is significant
+      ! ------------------------------
 
       Significant_Scattering1: IF( AtmOptics%Single_Scatter_Albedo(k) > SCATTERING_ALBEDO_THRESHOLD) THEN
-                 
+
         Lff(1:nZ,1:jn) = RTV%Off(1:nZ,1:jn,k)
         Lbb(1:nZ,1:jn) = RTV%Obb(1:nZ,1:jn,k)
 
@@ -2223,28 +2247,28 @@ CONTAINS
           DO i = 1, RTV%n_Angles
 
             Pff_TL(i,j,k) = ZERO
-            Pbb_TL(i,j,k) = ZERO    
-                
+            Pbb_TL(i,j,k) = ZERO
+
             DO l = RTV%mth_Azi, AtmOptics%n_Legendre_Terms - 1
               ifac = (-1) ** (l - RTV%mth_Azi)
               Pff_TL(i,j,k) = Pff_TL(i,j,k) + ( AtmOptics_TL%Phase_Coefficient(l,1,k)*RTV%Pleg(l,i)*RTV%Pleg(l,j) )
               Pbb_TL(i,j,k) = Pbb_TL(i,j,k) + ( AtmOptics_TL%Phase_Coefficient(l,1,k)*RTV%Pleg(l,i)*RTV%Pleg(l,j)*ifac )
             END DO
-              
+
             ! For intensity, the FWD phase matrix element must >= ZERO
             ! so the TL form is always == zero.
             IF ( RTV%mth_Azi == 0 ) THEN
               IF ( RTV%Off(i,j,k) < ZERO ) THEN
                 Pff_TL(i,j,k) = ZERO
-                Lff(i,j)      = PHASE_THRESHOLD 
+                Lff(i,j)      = PHASE_THRESHOLD
               END IF
 
               IF ( RTV%Obb(i,j,k) < ZERO ) THEN
                 Pbb_TL(i,j,k) = ZERO
-                Lbb(i,j) = PHASE_THRESHOLD 
+                Lbb(i,j) = PHASE_THRESHOLD
               END IF
             END IF
-             
+
           END DO
         END DO
 
@@ -2258,10 +2282,10 @@ CONTAINS
                  Pbb_TL(:,:,k)  ) ! TL  Output
         END IF
       END IF Significant_Scattering1
-    
-    END DO Layer_Loop1    
+
+    END DO Layer_Loop1
     RETURN
-    
+
     END IF
 
 
@@ -2269,11 +2293,11 @@ CONTAINS
 
 
     Layer_Loop: DO  k = 1, RTV%n_Layers
-        
-      ! ------------------------------    
-      ! Only proceed if the scattering    
-      ! coefficient is significant        
-      ! ------------------------------    
+
+      ! ------------------------------
+      ! Only proceed if the scattering
+      ! coefficient is significant
+      ! ------------------------------
 
       Significant_Scattering: IF( AtmOptics%Single_Scatter_Albedo(k) > SCATTERING_ALBEDO_THRESHOLD) THEN
 
@@ -2302,9 +2326,9 @@ CONTAINS
               Pff_TL(i1+1,j1+1,k) = Pff_TL(i1+1,j1+1,k) +AtmOptics_TL%Phase_Coefficient(l,2,k)*RTV%Pplus(l,i)*RTV%Pplus(l,j) &
                                    + ( AtmOptics_TL%Phase_Coefficient(l,3,k)*RTV%Pminus(l,i)*RTV%Pminus(l,j) )
               Pbb_TL(i1+1,j1+1,k) = Pbb_TL(i1+1,j1+1,k)+AtmOptics_TL%Phase_Coefficient(l,2,k)*RTV%Pplus(l,i)*RTV%Pplus(l,j)*ifac &
-                                   - ( AtmOptics_TL%Phase_Coefficient(l,3,k)*RTV%Pminus(l,i)*RTV%Pminus(l,j)*ifac )   
+                                   - ( AtmOptics_TL%Phase_Coefficient(l,3,k)*RTV%Pminus(l,i)*RTV%Pminus(l,j)*ifac )
              END IF
-             
+
              IF( RTV%n_Stokes > 2 ) THEN
               ! alpha3, alpha2  (3,3)
               Pff_TL(i1+2,j1+2,k) = Pff_TL(i1+2,j1+2,k) +AtmOptics_TL%Phase_Coefficient(l,3,k)*RTV%Pplus(l,i)*RTV%Pplus(l,j) &
@@ -2317,7 +2341,7 @@ CONTAINS
 
               ! beta1  (3,1)
               Pff_TL(i1+2,j1,k) = Pff_TL(i1+2,j1,k) - AtmOptics_TL%Phase_Coefficient(l,5,k)*RTV%Pleg(l,j)*RTV%Pminus(l,i)
-              Pbb_TL(i1+2,j1,k) = Pbb_TL(i1+2,j1,k) - AtmOptics_TL%Phase_Coefficient(l,5,k)*RTV%Pleg(l,j)*RTV%Pminus(l,i)*ifac  
+              Pbb_TL(i1+2,j1,k) = Pbb_TL(i1+2,j1,k) - AtmOptics_TL%Phase_Coefficient(l,5,k)*RTV%Pleg(l,j)*RTV%Pminus(l,i)*ifac
 
               ! alpha2, alpha3  (2,3)
               Pff_TL(i1+1,j1+2,k) = Pff_TL(i1+1,j1+2,k) -AtmOptics_TL%Phase_Coefficient(l,2,k)*RTV%Pplus(l,i)*RTV%Pminus(l,j) &
@@ -2330,7 +2354,7 @@ CONTAINS
                                  - ( AtmOptics_TL%Phase_Coefficient(l,3,k)*RTV%Pminus(l,j)*RTV%Pplus(l,i) )
               Pbb_TL(i1+2,j1+1,k) = Pbb_TL(i1+2,j1+1,k)-AtmOptics_TL%Phase_Coefficient(l,2,k)*RTV%Pplus(l,j)*RTV%Pminus(l,i)*ifac &
                                    + ( AtmOptics_TL%Phase_Coefficient(l,3,k)*RTV%Pminus(l,j)*RTV%Pplus(l,i)*ifac )
-             END IF              
+             END IF
              IF( RTV%n_Stokes == 4 ) THEN
               ! beta2  (3,4)
               Pff_TL(i1+2,j1+3,k) = Pff_TL(i1+2,j1+3,k) -AtmOptics_TL%Phase_Coefficient(l,6,k)*RTV%Pplus(l,i)*RTV%Pleg(l,j)
@@ -2350,22 +2374,22 @@ CONTAINS
               ! beta2  (4,2)
               Pff_TL(i1+3,j1+1,k) = Pff_TL(i1+3,j1+1,k) -AtmOptics_TL%Phase_Coefficient(l,6,k)*RTV%Pminus(l,j)*RTV%Pleg(l,i)
               Pbb_TL(i1+3,j1+1,k) = Pbb_TL(i1+3,j1+1,k) +AtmOptics_TL%Phase_Coefficient(l,6,k)*RTV%Pminus(l,j)*RTV%Pleg(l,i)*ifac
-             END IF 
+             END IF
 
             END DO n_Legendre_Terms_loop
-            
+
         ! qliu   set P' = P D
            IF( RTV%n_Stokes > 2 ) THEN
-             Pbb_TL(i1,j1+2,k)   = -Pbb_TL(i1,j1+2,k)        
-             Pbb_TL(i1+1,j1+2,k) = -Pbb_TL(i1+1,j1+2,k)       
+             Pbb_TL(i1,j1+2,k)   = -Pbb_TL(i1,j1+2,k)
+             Pbb_TL(i1+1,j1+2,k) = -Pbb_TL(i1+1,j1+2,k)
              Pbb_TL(i1+2,j1+2,k) = -Pbb_TL(i1+2,j1+2,k)
            END IF
            IF( RTV%n_Stokes == 4 ) THEN
-             Pbb_TL(i1,j1+3,k)   = -Pbb_TL(i1,j1+3,k)        
-             Pbb_TL(i1+1,j1+3,k) = -Pbb_TL(i1+1,j1+3,k)       
-             Pbb_TL(i1+2,j1+3,k) = -Pbb_TL(i1+2,j1+3,k)       
-             Pbb_TL(i1+3,j1+2,k) = -Pbb_TL(i1+3,j1+2,k) 
-             Pbb_TL(i1+3,j1+3,k) = -Pbb_TL(i1+3,j1+3,k)           
+             Pbb_TL(i1,j1+3,k)   = -Pbb_TL(i1,j1+3,k)
+             Pbb_TL(i1+1,j1+3,k) = -Pbb_TL(i1+1,j1+3,k)
+             Pbb_TL(i1+2,j1+3,k) = -Pbb_TL(i1+2,j1+3,k)
+             Pbb_TL(i1+3,j1+2,k) = -Pbb_TL(i1+3,j1+2,k)
+             Pbb_TL(i1+3,j1+3,k) = -Pbb_TL(i1+3,j1+3,k)
            END IF
 
            IF( RTV%mth_Azi == 0 ) THEN
@@ -2385,7 +2409,7 @@ CONTAINS
             DO l = RTV%mth_Azi, AtmOptics%n_Legendre_Terms - 1
               ifac = (-1) ** (l - RTV%mth_Azi)
               Pff_TL(i1,j1,k) = Pff_TL(i1,j1,k) + ( AtmOptics_TL%Phase_Coefficient(l,1,k)*RTV%Pleg(l,i)*RTV%Pleg(l,jn) )
-              Pbb_TL(i1,j1,k) = Pbb_TL(i1,j1,k) + ( AtmOptics_TL%Phase_Coefficient(l,1,k)*RTV%Pleg(l,i)*RTV%Pleg(l,jn)*ifac )   
+              Pbb_TL(i1,j1,k) = Pbb_TL(i1,j1,k) + ( AtmOptics_TL%Phase_Coefficient(l,1,k)*RTV%Pleg(l,i)*RTV%Pleg(l,jn)*ifac )
 
             IF( RTV%n_Stokes > 1 ) THEN
               ! beta1  (2,1)
@@ -2396,7 +2420,7 @@ CONTAINS
               ! beta1  (3,1)
               Pff_TL(i1+2,j1,k) = Pff_TL(i1+2,j1,k) - ( AtmOptics_TL%Phase_Coefficient(l,5,k)*RTV%Pleg(l,jn)*RTV%Pminus(l,i) )
               Pbb_TL(i1+2,j1,k) = Pbb_TL(i1+2,j1,k) - ( AtmOptics_TL%Phase_Coefficient(l,5,k)*RTV%Pleg(l,jn)*RTV%Pminus(l,i)*ifac)
-            END IF 
+            END IF
             END DO
           END DO
        END IF
@@ -2417,12 +2441,12 @@ CONTAINS
             ! so the TL form is always == zero.
             IF ( RTV%Off(i,j,k) < ZERO ) THEN
               Lff_TL(i,j) = ZERO
-              Lff(i,j)      = PHASE_THRESHOLD 
+              Lff(i,j)      = PHASE_THRESHOLD
             END IF
 
             IF ( RTV%Obb(i,j,k) < ZERO ) THEN
               Lbb_TL(i,j) = ZERO
-              Lbb(i,j) = PHASE_THRESHOLD 
+              Lbb(i,j) = PHASE_THRESHOLD
             END IF
           END DO
         END DO
@@ -2441,18 +2465,18 @@ CONTAINS
             j1 = (j-1)*RTV%n_Stokes + 1
             i1 = (i-1)*RTV%n_Stokes + 1
             Pff_TL(i1,j1,k) = Lff_TL(i,j)
-            Pbb_TL(i1,j1,k) = Lbb_TL(i,j)       
+            Pbb_TL(i1,j1,k) = Lbb_TL(i,j)
           END DO
         END DO
       END IF
- 
-        
+
+
       END IF Significant_Scattering
-    
+
     END DO Layer_Loop
 
   END SUBROUTINE CRTM_Phase_Matrix_TL
-  
+
 !--------------------------------------------------------------------------------
 !
 ! NAME:
@@ -2477,7 +2501,7 @@ CONTAINS
 !                       DIMENSION:  Scalar
 !                       ATTRIBUTES: INTENT(IN)
 !
-!       Pff_AD:         Array containing the adjoint of the 
+!       Pff_AD:         Array containing the adjoint of the
 !                       forward phase matrix.
 !                       ** NOTE: This argument will be zeroed upon exit
 !                       **       from this routine.
@@ -2486,7 +2510,7 @@ CONTAINS
 !                       DIMENSION:  Rank-3, n_Angles x n_Angles x n_Layers
 !                       ATTRIBUTES: INTENT(IN OUT)
 !
-!       Pbb_AD:         Array containing the adjoint of the 
+!       Pbb_AD:         Array containing the adjoint of the
 !                       backward phase matrix.
 !                       ** NOTE: This argument will be zeroed upon exit
 !                       **       from this routine.
@@ -2550,37 +2574,37 @@ CONTAINS
     ELSE
       jn = RTV%n_Angles
     END IF
-     
-     
+
+
     IF( RTV%n_Stokes == 1 ) THEN
-    
+
     Layer_Loop1: DO  k = 1, RTV%n_Layers
-    
-    
-      ! ------------------------------    
-      ! Only proceed if the scattering    
-      ! coefficient is significant        
-      ! ------------------------------    
+
+
+      ! ------------------------------
+      ! Only proceed if the scattering
+      ! coefficient is significant
+      ! ------------------------------
 
       Significant_Scattering1: IF( AtmOptics%Single_Scatter_Albedo(k) > SCATTERING_ALBEDO_THRESHOLD) THEN
 
 
         ! AD normalization to ensure energy conservation
      !!   AtmOptics_AD%Phase_Coefficient(0:,1,k) = ZERO
-        
+
         Lff(1:nZ,1:jn) = RTV%Off(1:nZ,1:jn,k)
         Lbb(1:nZ,1:jn) = RTV%Obb(1:nZ,1:jn,k)
 
-        IF ( RTV%mth_Azi == 0 ) THEN              
+        IF ( RTV%mth_Azi == 0 ) THEN
           DO j = 1, jn
             DO i = 1, RTV%n_Angles
-           
+
               ! For intensity, the FWD phase matrix element must >= ZERO
               ! so the TL, and thus the AD, for is always == zero.
 
                 IF ( RTV%Off(i,j,k) < ZERO) Lff(i,j) = PHASE_THRESHOLD
                 IF ( RTV%Obb(i,j,k) < ZERO) Lbb(i,j) = PHASE_THRESHOLD
-             
+
             END DO
           END DO
 
@@ -2593,7 +2617,7 @@ CONTAINS
 
         DO j = 1, jn
           DO i = 1, RTV%n_Angles
-         
+
             ! For intensity, the FWD phase matrix element must >= ZERO
             ! so the TL, and thus the AD, for is always == zero.
             IF ( RTV%mth_Azi == 0 ) THEN
@@ -2606,11 +2630,11 @@ CONTAINS
               AtmOptics_AD%Phase_Coefficient(l,1,k) = AtmOptics_AD%Phase_Coefficient(l,1,k) + &
                                                       ( Pff_AD(i,j,k)*RTV%Pleg(l,i)*RTV%Pleg(l,j) )
               AtmOptics_AD%Phase_Coefficient(l,1,k) = AtmOptics_AD%Phase_Coefficient(l,1,k) + &
-                                                      ( Pbb_AD(i,j,k)*RTV%Pleg(l,i)*RTV%Pleg(l,j)*ifac ) 
+                                                      ( Pbb_AD(i,j,k)*RTV%Pleg(l,i)*RTV%Pleg(l,j)*ifac )
             END DO
 
             Pff_AD(i,j,k) = ZERO
-            Pbb_AD(i,j,k) = ZERO           
+            Pbb_AD(i,j,k) = ZERO
 
           END DO
         END DO
@@ -2618,17 +2642,17 @@ CONTAINS
       END IF Significant_Scattering1
 
     END DO Layer_Loop1
-    
+
     RETURN
     END IF
 !    AtmOptics_AD%Phase_Coefficient(0:,:,:) = ZERO
-        
+
     Layer_Loop: DO  k = 1, RTV%n_Layers
-    
-      ! ------------------------------    
-      ! Only proceed if the scattering    
-      ! coefficient is significant        
-      ! ------------------------------    
+
+      ! ------------------------------
+      ! Only proceed if the scattering
+      ! coefficient is significant
+      ! ------------------------------
 
       Significant_Scattering: IF( AtmOptics%Single_Scatter_Albedo(k) > SCATTERING_ALBEDO_THRESHOLD) THEN
 
@@ -2636,16 +2660,16 @@ CONTAINS
         DO j = 1, jn
           DO i = 1, RTV%n_Angles
             Lff(i,j) = RTV%Off(i,j,k)
-            Lbb(i,j) = RTV%Obb(i,j,k)                 
+            Lbb(i,j) = RTV%Obb(i,j,k)
             IF ( RTV%Off(i,j,k) < ZERO) Lff(i,j) = PHASE_THRESHOLD
-            IF ( RTV%Obb(i,j,k) < ZERO) Lbb(i,j) = PHASE_THRESHOLD          
+            IF ( RTV%Obb(i,j,k) < ZERO) Lbb(i,j) = PHASE_THRESHOLD
             j1 = (j-1)*RTV%n_Stokes + 1
             i1 = (i-1)*RTV%n_Stokes + 1
             Lff_AD(i,j) = Pff_AD(i1,j1,k)
-            Lbb_AD(i,j) = Pbb_AD(i1,j1,k) 
+            Lbb_AD(i,j) = Pbb_AD(i1,j1,k)
           END DO
         END DO
- 
+
         CALL Normalize_Phase_AD( &
               k, RTV, &
               Lff, Lbb,      & ! FWD Input
@@ -2681,16 +2705,16 @@ CONTAINS
                  ( Pbb_AD(i1+2,j1,k)*RTV%Pleg(l,jn)*RTV%Pminus(l,i)*ifac)
               AtmOptics_AD%Phase_Coefficient(l,5,k) = AtmOptics_AD%Phase_Coefficient(l,5,k) - &
                  ( Pff_AD(i1+2,j1,k)*RTV%Pleg(l,jn)*RTV%Pminus(l,i))
-            END IF 
+            END IF
 
             IF( RTV%n_Stokes > 1 ) THEN
               ! beta1  (2,1)
               AtmOptics_AD%Phase_Coefficient(l,5,k) = AtmOptics_AD%Phase_Coefficient(l,5,k) + &
-                 ( Pbb_AD(i1+1,j1,k)*RTV%Pleg(l,jn)*RTV%Pplus(l,i)*ifac)              
+                 ( Pbb_AD(i1+1,j1,k)*RTV%Pleg(l,jn)*RTV%Pplus(l,i)*ifac)
               AtmOptics_AD%Phase_Coefficient(l,5,k) = AtmOptics_AD%Phase_Coefficient(l,5,k) + &
                  ( Pff_AD(i1+1,j1,k)*RTV%Pleg(l,jn)*RTV%Pplus(l,i) )
             END IF
- 
+
               AtmOptics_AD%Phase_Coefficient(l,1,k) = AtmOptics_AD%Phase_Coefficient(l,1,k) + &
                 ( Pbb_AD(i1,j1,k)*RTV%Pleg(l,i)*RTV%Pleg(l,jn)*ifac )
               AtmOptics_AD%Phase_Coefficient(l,1,k) = AtmOptics_AD%Phase_Coefficient(l,1,k) + &
@@ -2713,82 +2737,82 @@ CONTAINS
 
         ! qliu   set P' = P D
            IF( RTV%n_Stokes == 4 ) THEN
-             Pbb_AD(i1,j1+3,k)   = -Pbb_AD(i1,j1+3,k)        
-             Pbb_AD(i1+1,j1+3,k) = -Pbb_AD(i1+1,j1+3,k)       
-             Pbb_AD(i1+2,j1+3,k) = -Pbb_AD(i1+2,j1+3,k)       
-             Pbb_AD(i1+3,j1+2,k) = -Pbb_AD(i1+3,j1+2,k) 
-             Pbb_AD(i1+3,j1+3,k) = -Pbb_AD(i1+3,j1+3,k)           
+             Pbb_AD(i1,j1+3,k)   = -Pbb_AD(i1,j1+3,k)
+             Pbb_AD(i1+1,j1+3,k) = -Pbb_AD(i1+1,j1+3,k)
+             Pbb_AD(i1+2,j1+3,k) = -Pbb_AD(i1+2,j1+3,k)
+             Pbb_AD(i1+3,j1+2,k) = -Pbb_AD(i1+3,j1+2,k)
+             Pbb_AD(i1+3,j1+3,k) = -Pbb_AD(i1+3,j1+3,k)
            END IF
 
            IF( RTV%n_Stokes > 2 ) THEN
              Pbb_AD(i1+2,j1+2,k) = -Pbb_AD(i1+2,j1+2,k)
-             Pbb_AD(i1+1,j1+2,k) = -Pbb_AD(i1+1,j1+2,k)       
+             Pbb_AD(i1+1,j1+2,k) = -Pbb_AD(i1+1,j1+2,k)
              Pbb_AD(i1,j1+2,k)   = -Pbb_AD(i1,j1+2,k)
            END IF
 
          n_Legendre_Terms_loop: DO l = AtmOptics%n_Legendre_Terms - 1, RTV%mth_Azi, -1
               ifac = (-1) ** (l - RTV%mth_Azi)
- 
+
             IF( RTV%n_Stokes == 4 ) THEN
              ! beta2  (4,2)
               AtmOptics_AD%Phase_Coefficient(l,6,k) = AtmOptics_AD%Phase_Coefficient(l,6,k) + &
                Pbb_AD(i1+3,j1+1,k)*RTV%Pminus(l,j)*RTV%Pleg(l,i)*ifac
-                             
+
               AtmOptics_AD%Phase_Coefficient(l,6,k) = AtmOptics_AD%Phase_Coefficient(l,6,k) - &
                Pff_AD(i1+3,j1+1,k)*RTV%Pminus(l,j)*RTV%Pleg(l,i)
-               
-              ! beta2  (2,4)       
+
+              ! beta2  (2,4)
               AtmOptics_AD%Phase_Coefficient(l,6,k) = AtmOptics_AD%Phase_Coefficient(l,6,k) + &
               Pbb_AD(i1+1,j1+3,k)*RTV%Pminus(l,i)*RTV%Pleg(l,j)*ifac
               AtmOptics_AD%Phase_Coefficient(l,6,k) = AtmOptics_AD%Phase_Coefficient(l,6,k) + &
               Pff_AD(i1+1,j1+3,k)*RTV%Pminus(l,i)*RTV%Pleg(l,j)
-                             
+
               ! alpha4 (4,4)
               AtmOptics_AD%Phase_Coefficient(l,4,k) = AtmOptics_AD%Phase_Coefficient(l,4,k) + &
                Pbb_AD(i1+3,j1+3,k)*RTV%Pleg(l,i)*RTV%Pleg(l,j)*ifac
               AtmOptics_AD%Phase_Coefficient(l,4,k) = AtmOptics_AD%Phase_Coefficient(l,4,k) + &
                Pff_AD(i1+3,j1+3,k)*RTV%Pleg(l,i)*RTV%Pleg(l,j)
 
-              ! beta2  (4,3)  
+              ! beta2  (4,3)
               AtmOptics_AD%Phase_Coefficient(l,6,k) = AtmOptics_AD%Phase_Coefficient(l,6,k) + &
                Pbb_AD(i1+3,j1+2,k)*RTV%Pplus(l,j)*RTV%Pleg(l,i)*ifac
               AtmOptics_AD%Phase_Coefficient(l,6,k) = AtmOptics_AD%Phase_Coefficient(l,6,k) + &
-               Pff_AD(i1+3,j1+2,k)*RTV%Pplus(l,j)*RTV%Pleg(l,i)             
-               
+               Pff_AD(i1+3,j1+2,k)*RTV%Pplus(l,j)*RTV%Pleg(l,i)
+
               ! beta2  (3,4)
               AtmOptics_AD%Phase_Coefficient(l,6,k) = AtmOptics_AD%Phase_Coefficient(l,6,k) - &
                 Pbb_AD(i1+2,j1+3,k)*RTV%Pplus(l,i)*RTV%Pleg(l,j)*ifac
               AtmOptics_AD%Phase_Coefficient(l,6,k) = AtmOptics_AD%Phase_Coefficient(l,6,k) - &
                 Pff_AD(i1+2,j1+3,k)*RTV%Pplus(l,i)*RTV%Pleg(l,j)
-            END IF 
+            END IF
 
 
             IF( RTV%n_Stokes > 2 ) THEN
-              ! alpha2, alpha3  (3,2)                                                  
+              ! alpha2, alpha3  (3,2)
               AtmOptics_AD%Phase_Coefficient(l,3,k) = AtmOptics_AD%Phase_Coefficient(l,3,k) + &
                 Pbb_AD(i1+2,j1+1,k)*RTV%Pminus(l,j)*RTV%Pplus(l,i)*ifac
-                
+
               AtmOptics_AD%Phase_Coefficient(l,2,k) = AtmOptics_AD%Phase_Coefficient(l,2,k) - &
                 Pbb_AD(i1+2,j1+1,k)*RTV%Pplus(l,j)*RTV%Pminus(l,i)*ifac
-                
+
               AtmOptics_AD%Phase_Coefficient(l,3,k) = AtmOptics_AD%Phase_Coefficient(l,3,k) - &
-                Pff_AD(i1+2,j1+1,k)*RTV%Pminus(l,j)*RTV%Pplus(l,i)                     
+                Pff_AD(i1+2,j1+1,k)*RTV%Pminus(l,j)*RTV%Pplus(l,i)
               AtmOptics_AD%Phase_Coefficient(l,2,k) = AtmOptics_AD%Phase_Coefficient(l,2,k) - &
                 Pff_AD(i1+2,j1+1,k)*RTV%Pplus(l,j)*RTV%Pminus(l,i)
 
               ! alpha2, alpha3  (2,3)
               AtmOptics_AD%Phase_Coefficient(l,3,k) = AtmOptics_AD%Phase_Coefficient(l,3,k) - &
                 Pbb_AD(i1+1,j1+2,k)*RTV%Pminus(l,i)*RTV%Pplus(l,j)*ifac
-                
+
               AtmOptics_AD%Phase_Coefficient(l,2,k) = AtmOptics_AD%Phase_Coefficient(l,2,k) + &
                 Pbb_AD(i1+1,j1+2,k)*RTV%Pplus(l,i)*RTV%Pminus(l,j)*ifac
-                
+
               AtmOptics_AD%Phase_Coefficient(l,3,k) = AtmOptics_AD%Phase_Coefficient(l,3,k) - &
                 Pff_AD(i1+1,j1+2,k)*RTV%Pminus(l,i)*RTV%Pplus(l,j)
               AtmOptics_AD%Phase_Coefficient(l,2,k) = AtmOptics_AD%Phase_Coefficient(l,2,k) - &
                 Pff_AD(i1+1,j1+2,k)*RTV%Pplus(l,i)*RTV%Pminus(l,j)
 
-              ! beta1  (3,1)          
+              ! beta1  (3,1)
               AtmOptics_AD%Phase_Coefficient(l,5,k) = AtmOptics_AD%Phase_Coefficient(l,5,k) - &
                 Pbb_AD(i1+2,j1,k)*RTV%Pleg(l,j)*RTV%Pminus(l,i)*ifac
               AtmOptics_AD%Phase_Coefficient(l,5,k) = AtmOptics_AD%Phase_Coefficient(l,5,k) - &
@@ -2799,19 +2823,19 @@ CONTAINS
                  Pbb_AD(i1,j1+2,k)*RTV%Pleg(l,i)*RTV%Pminus(l,j)*ifac
               AtmOptics_AD%Phase_Coefficient(l,5,k) = AtmOptics_AD%Phase_Coefficient(l,5,k) - &
                  Pff_AD(i1,j1+2,k)*RTV%Pleg(l,i)*RTV%Pminus(l,j)
-                 
+
               ! alpha3, alpha2  (3,3)
               AtmOptics_AD%Phase_Coefficient(l,2,k) = AtmOptics_AD%Phase_Coefficient(l,2,k) - &
                 Pbb_AD(i1+2,j1+2,k)*RTV%Pminus(l,i)*RTV%Pminus(l,j)*ifac
 
              AtmOptics_AD%Phase_Coefficient(l,3,k) = AtmOptics_AD%Phase_Coefficient(l,3,k) + &
                 Pbb_AD(i1+2,j1+2,k)*RTV%Pplus(l,i)*RTV%Pplus(l,j)*ifac
-                
+
               AtmOptics_AD%Phase_Coefficient(l,2,k) = AtmOptics_AD%Phase_Coefficient(l,2,k) + &
                 Pff_AD(i1+2,j1+2,k)*RTV%Pminus(l,i)*RTV%Pminus(l,j)
               AtmOptics_AD%Phase_Coefficient(l,3,k) = AtmOptics_AD%Phase_Coefficient(l,3,k) + &
                 Pff_AD(i1+2,j1+2,k)*RTV%Pplus(l,i)*RTV%Pplus(l,j)
-            END IF              
+            END IF
 
             ! alpha2, alpha3  (2,2)
             IF( RTV%n_Stokes > 1 ) THEN
@@ -2837,14 +2861,14 @@ CONTAINS
               AtmOptics_AD%Phase_Coefficient(l,5,k) = AtmOptics_AD%Phase_Coefficient(l,5,k) + &
                 Pff_AD(i1,j1+1,k)*RTV%Pleg(l,i)*RTV%Pplus(l,j)
             END IF
-             
+
               AtmOptics_AD%Phase_Coefficient(l,1,k) = AtmOptics_AD%Phase_Coefficient(l,1,k) + &
                 Pbb_AD(i1,j1,k)*RTV%Pleg(l,i)*RTV%Pleg(l,j)*ifac
               AtmOptics_AD%Phase_Coefficient(l,1,k) = AtmOptics_AD%Phase_Coefficient(l,1,k) + &
-                Pff_AD(i1,j1,k)*RTV%Pleg(l,i)*RTV%Pleg(l,j)  
+                Pff_AD(i1,j1,k)*RTV%Pleg(l,i)*RTV%Pleg(l,j)
 
             END DO n_Legendre_Terms_loop
-            
+
           END DO
         END DO
 
@@ -2857,13 +2881,13 @@ CONTAINS
 !**************************************************************
 !                 Normalize Phase Subroutines
 !**************************************************************
-  
+
   SUBROUTINE Normalize_Phase( k, RTV )
     ! Arguments
     INTEGER,        INTENT(IN)     :: k
     TYPE(RTV_type), INTENT(IN OUT) :: RTV
     ! Local variables
-    INTEGER :: i, j, nZ, i1, j1                                      
+    INTEGER :: i, j, nZ, i1, j1
 
     nZ = RTV%n_Angles
 
@@ -2891,7 +2915,7 @@ CONTAINS
         END IF
       END DO
 
-      IF( RTV%n_Streams < nZ ) THEN 
+      IF( RTV%n_Streams < nZ ) THEN
         ! Sensor viewing angle differs from the Gaussian angles
         RTV%n_Factor(nZ,k) =  RTV%Sum_Fac(nZ-1,k)
         DO j = 1, nZ
@@ -2902,9 +2926,9 @@ CONTAINS
             RTV%Pff(nZ,j,k) = RTV%Pff(j,nZ,k)
             RTV%Pbb(nZ,j,k) = RTV%Pbb(j,nZ,k)
           END IF
-        END DO      
+        END DO
       END IF
-    
+
       RETURN
     END IF
 
@@ -2937,7 +2961,7 @@ CONTAINS
       END IF
     END DO
 
-    IF( RTV%n_Streams < nZ ) THEN 
+    IF( RTV%n_Streams < nZ ) THEN
       ! Sensor viewing angle differs from the Gaussian angles
       RTV%n_Factor(nZ,k) =  RTV%Sum_Fac(nZ-1,k)
       DO j = 1, nZ
@@ -2949,11 +2973,11 @@ CONTAINS
           RTV%Pff(nZ*RTV%n_Stokes,j1,k) = RTV%Pff(j1,nZ*RTV%n_Stokes,k)
           RTV%Pbb(nZ*RTV%n_Stokes,j1,k) = RTV%Pbb(j1,nZ*RTV%n_Stokes,k)
         END IF
-      END DO      
+      END DO
     END IF
 
   END SUBROUTINE Normalize_Phase
-  
+
   SUBROUTINE Normalize_Phase_TL( k, RTV, Pff, Pbb, Pff_TL, Pbb_TL )
     ! Arguments
     INTEGER       , INTENT(IN)     :: k
@@ -2965,7 +2989,7 @@ CONTAINS
     ! Local variables
     REAL(fp) :: n_Factor_TL
     REAL(fp) :: Sum_Fac_TL(0:RTV%n_Angles)
-    INTEGER :: i, j, nZ                                           
+    INTEGER :: i, j, nZ
 
     nZ = RTV%n_Angles
 
@@ -2980,7 +3004,7 @@ CONTAINS
         Pff_TL(i,j) = Pff_TL(i,j)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k)) - &
                       Pff(i,j)/RTV%n_Factor(i,k)/RTV%n_Factor(i,k)*n_Factor_TL*(ONE-RTV%Sum_Fac(i-1,k)) - &
                       Pff(i,j)/RTV%n_Factor(i,k)*Sum_Fac_TL(i-1)
-        
+
         Pbb_TL(i,j) = Pbb_TL(i,j)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k)) - &
                       Pbb(i,j)/RTV%n_Factor(i,k)/RTV%n_Factor(i,k)*n_Factor_TL*(ONE-RTV%Sum_Fac(i-1,k)) - &
                       Pbb(i,j)/RTV%n_Factor(i,k)*Sum_Fac_TL(i-1)
@@ -2998,15 +3022,15 @@ CONTAINS
      END IF
     END DO
 
-    IF( RTV%n_Streams < nZ ) THEN 
+    IF( RTV%n_Streams < nZ ) THEN
       ! Sensor viewing angle differs from the Gaussian angles
       n_Factor_TL = Sum_Fac_TL(nZ-1)
       DO j = 1, nZ
         Pff_TL(j,nZ) = Pff_TL(j,nZ)/RTV%n_Factor(nZ,k) - &
                        Pff(j,nZ)/RTV%n_Factor(nZ,k)/RTV%n_Factor(nZ,k)*n_Factor_TL
-                     
+
         Pbb_TL(j,nZ) = Pbb_TL(j,nZ)/RTV%n_Factor(nZ,k) - &
-                       Pbb(j,nZ)/RTV%n_Factor(nZ,k)/RTV%n_Factor(nZ,k)*n_Factor_TL             
+                       Pbb(j,nZ)/RTV%n_Factor(nZ,k)/RTV%n_Factor(nZ,k)*n_Factor_TL
         ! Symmetric condition
         IF( j < nZ ) THEN
           Pff_TL(nZ,j) = Pff_TL(j,nZ)
@@ -3015,8 +3039,8 @@ CONTAINS
       END DO
     END IF
 
-  END SUBROUTINE Normalize_Phase_TL 
-  
+  END SUBROUTINE Normalize_Phase_TL
+
   SUBROUTINE Normalize_Phase_AD( k, RTV, Pff, Pbb, Pff_AD, Pbb_AD )
     ! Arguments
     INTEGER       , INTENT(IN)     :: k
@@ -3026,7 +3050,7 @@ CONTAINS
     REAL(fp)      , INTENT(IN OUT) :: Pff_AD(:,:)
     REAL(fp)      , INTENT(IN OUT) :: Pbb_AD(:,:)
     ! Local variables
-    INTEGER :: i, j, nZ                                           
+    INTEGER :: i, j, nZ
     REAL(fp) :: n_Factor_AD
     REAL(fp) :: Sum_Fac_AD(0:RTV%n_Angles)
 
@@ -3035,7 +3059,7 @@ CONTAINS
     Sum_Fac_AD = ZERO
 
     n_Factor_AD = ZERO
-    IF( RTV%n_Streams < nZ ) THEN 
+    IF( RTV%n_Streams < nZ ) THEN
       ! Sensor viewing angle diffs from the Gaussian angles
       DO j = nZ, 1, -1
         ! Symmetric condition
@@ -3050,18 +3074,18 @@ CONTAINS
         Pff_AD(j,nZ) = Pff_AD(j,nZ)/RTV%n_Factor(nZ,k)
 
         n_Factor_AD = n_Factor_AD - Pbb(j,nZ)/RTV%n_Factor(nZ,k)/RTV%n_Factor(nZ,k)*Pbb_AD(j,nZ)
-        Pbb_AD(j,nZ) = Pbb_AD(j,nZ)/RTV%n_Factor(nZ,k)             
-      END DO   
-      Sum_Fac_AD(nZ-1) = n_Factor_AD      
+        Pbb_AD(j,nZ) = Pbb_AD(j,nZ)/RTV%n_Factor(nZ,k)
+      END DO
+      Sum_Fac_AD(nZ-1) = n_Factor_AD
       n_Factor_AD = ZERO
     END IF
-    
-    DO i = RTV%n_Streams, 1, -1 
+
+    DO i = RTV%n_Streams, 1, -1
       ! Symmetric condition
       IF( i < nZ ) THEN
-        DO j = i, 1, -1       
+        DO j = i, 1, -1
           Pbb_AD(j,i+1) = Pbb_AD(j,i+1) + Sum_Fac_AD(i)*RTV%COS_Weight(j)
-          Pff_AD(j,i+1) = Pff_AD(j,i+1) + Sum_Fac_AD(i)*RTV%COS_Weight(j)        
+          Pff_AD(j,i+1) = Pff_AD(j,i+1) + Sum_Fac_AD(i)*RTV%COS_Weight(j)
         END DO
         DO j = nZ,i+1,-1
           Pff_AD(i,j) = Pff_AD(i,j) + Pff_AD(j,i)
@@ -3076,7 +3100,7 @@ CONTAINS
         n_Factor_AD = n_Factor_AD -Pbb(i,j)/RTV%n_Factor(i,k)/RTV%n_Factor(i,k) * &
                       Pbb_AD(i,j)*(ONE-RTV%Sum_Fac(i-1,k))
         Pbb_AD(i,j) = Pbb_AD(i,j)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k))
-        
+
         Sum_Fac_AD(i-1) = Sum_Fac_AD(i-1) - Pff(i,j)/RTV%n_Factor(i,k)*Pff_AD(i,j)
         n_Factor_AD = n_Factor_AD -Pff(i,j)/RTV%n_Factor(i,k)/RTV%n_Factor(i,k) * &
                       Pff_AD(i,j)*(ONE-RTV%Sum_Fac(i-1,k))
@@ -3087,7 +3111,7 @@ CONTAINS
         Pff_AD(i,j) = Pff_AD(i,j) + n_Factor_AD*RTV%COS_Weight(j)
       END DO
       n_Factor_AD = ZERO
-    END DO    
+    END DO
     Sum_Fac_AD(0) = ZERO
   END SUBROUTINE Normalize_Phase_AD
 

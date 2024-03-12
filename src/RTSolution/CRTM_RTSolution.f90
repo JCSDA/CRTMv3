@@ -369,7 +369,6 @@ CONTAINS
       CALL Display_Message( ROUTINE_NAME, TRIM(Message), Error_Status )
       RETURN
     END IF
-
   END FUNCTION CRTM_Compute_RTSolution
 
 !--------------------------------------------------------------------------------
