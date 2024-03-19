@@ -353,14 +353,14 @@ CONTAINS
       CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
       IsValid = .FALSE.
     ENDIF
-    IF ( SensorData%WMO_Satellite_Id == INVALID_WMO_SATELLITE_ID ) THEN
-      msg = 'Invalid WMO Satellite Id found. Continuing...'
-      CALL Display_Message( ROUTINE_NAME, msg, WARNING )
-    ENDIF
-    IF ( SensorData%WMO_Sensor_Id == INVALID_WMO_SENSOR_ID ) THEN
-      msg = 'Invalid WMO Sensor Id Continuing...'
-      CALL Display_Message( ROUTINE_NAME, msg, WARNING )
-    ENDIF
+    ! IF ( SensorData%WMO_Satellite_Id == INVALID_WMO_SATELLITE_ID ) THEN
+    !   msg = 'Invalid WMO Satellite Id found. Continuing...'
+    !   CALL Display_Message( ROUTINE_NAME, msg, WARNING )
+    ! ENDIF
+    ! IF ( SensorData%WMO_Sensor_Id == INVALID_WMO_SENSOR_ID ) THEN
+    !   msg = 'Invalid WMO Sensor Id Continuing...'
+    !   CALL Display_Message( ROUTINE_NAME, msg, WARNING )
+    ! ENDIF
     ! ...Listed sensor channels
     IF ( ANY(SensorData%Sensor_Channel < 1) ) THEN
       msg = 'Invalid Sensor Channel found'
@@ -397,14 +397,14 @@ CONTAINS
 !                    ATTRIBUTES: INTENT(IN)
 !
 ! OPTIONAL INPUTS:
-!       Unit:        Unit number for an already open file to which the output  
-!                    will be written.                                          
-!                    If the argument is specified and the file unit is not     
-!                    connected, the output goes to stdout.                     
-!                    UNITS:      N/A                                           
-!                    TYPE:       INTEGER                                       
-!                    DIMENSION:  Scalar                                        
-!                    ATTRIBUTES: INTENT(IN), OPTIONAL                          
+!       Unit:        Unit number for an already open file to which the output
+!                    will be written.
+!                    If the argument is specified and the file unit is not
+!                    connected, the output goes to stdout.
+!                    UNITS:      N/A
+!                    TYPE:       INTEGER
+!                    DIMENSION:  Scalar
+!                    ATTRIBUTES: INTENT(IN), OPTIONAL
 !
 !:sdoc-:
 !--------------------------------------------------------------------------------
@@ -415,14 +415,14 @@ CONTAINS
     INTEGER,          OPTIONAL, INTENT(IN) :: Unit
     ! Local variables
     INTEGER :: fid
-    
+
     ! Setup
     fid = OUTPUT_UNIT
     IF ( PRESENT(Unit) ) THEN
       IF ( File_Open(Unit) ) fid = Unit
     END IF
 
-    
+
     WRITE(fid,'(1x,"SENSORDATA OBJECT")')
     ! Dimensions
     WRITE(fid,'(3x,"n_Channels:",1x,i0)') SensorData%n_Channels
