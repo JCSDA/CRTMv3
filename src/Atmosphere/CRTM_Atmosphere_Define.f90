@@ -684,7 +684,7 @@ CONTAINS
     Atm%Temperature       = ZERO
     Atm%Relative_Humidity = ZERO
     Atm%Absorber          = ZERO
-    Atm%Cloud_Fraction    = ZERO
+    Atm%Cloud_Fraction    = 1.0_fp
 
     ! Set allocation indicator
     Atm%Is_Allocated = .TRUE.
@@ -888,7 +888,7 @@ CONTAINS
     Atmosphere%Temperature       = ZERO
     Atmosphere%Relative_Humidity = ZERO
     Atmosphere%Absorber          = ZERO
-    Atmosphere%Cloud_Fraction    = ZERO
+    Atmosphere%Cloud_Fraction    = 1.0_fp
 
     ! Reset the structure components
     IF ( Atmosphere%n_Clouds   > 0 ) CALL CRTM_Cloud_Zero( Atmosphere%Cloud )

@@ -52,7 +52,7 @@ PROGRAM test_Simple
   INTEGER :: Error_Status
   INTEGER :: Allocate_Status
   INTEGER :: n_Channels, n_Stokes
-  INTEGER :: l, m
+  INTEGER :: l, m, nc
   ! Declarations for RTSolution comparison
   INTEGER :: n_l, n_m, n_k, n_s
   CHARACTER(256) :: rts_File
@@ -157,8 +157,12 @@ PROGRAM test_Simple
   ! --------------------------------
   CALL Load_Atm_Data()
   CALL Load_Sfc_Data()
-
-
+  DO m = 1, 2
+     DO nc = 1, atm(m)%n_Clouds
+        WHERE(atm(m)%Cloud(nc)%Water_Content > ZERO) atm(m)%Cloud_Fraction = 1.0_fp
+     END DO
+  END DO
+  
   ! 4b. GeometryInfo input
   ! ----------------------
   ! All profiles are given the same value
@@ -283,6 +287,11 @@ PROGRAM test_Simple
   ELSE
     Message = 'RTSolution results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL DIsplay_MESSAGE( PROGRAM_NAME, "Newly Computed RTSolution re (clear):", INFORMATION)
+    call CRTM_RTSolution_Inspect(RTSolution)
+    CALL DIsplay_MESSAGE( PROGRAM_NAME, "Reference RTSolution re (clear):", INFORMATION)
+    call CRTM_RTSolution_Inspect(rts)
+
     ! Write the current RTSolution results to file
     rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.nc'
     Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, NetCDF=.TRUE., Quiet=.TRUE. )
