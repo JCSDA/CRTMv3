@@ -254,7 +254,7 @@ CONTAINS
     ! Select the RT model
         IF( RTV%Scattering_RT ) THEN
 !!          RTSolution%RT_Algorithm_Name = 'VMOM'
-          ! NESDIS advanced adding-doubling method   
+          ! NESDIS advanced adding-doubling method
 
           CALL CRTM_ADA( &
                Atmosphere%n_Layers                       , & ! Input, number of atmospheric layers
@@ -266,11 +266,11 @@ CONTAINS
                SfcOptics%S_Direct_Ref(:),   & ! Input, surface reflectivity
                RTV, Error_Status                 ) ! Output, Internal variables
           IF( Error_Status /= SUCCESS  ) THEN
-            WRITE( Message,'("Error in  CALL CRTM_ADA 2")' ) 
-            CALL Display_Message( ROUTINE_NAME,  &                                                    
-                            TRIM(Message), &                                                   
-                            Error_Status   )                                          
-            RETURN                                                                                    
+            WRITE( Message,'("Error in  CALL CRTM_ADA 2")' )
+            CALL Display_Message( ROUTINE_NAME,  &
+                            TRIM(Message), &
+                            Error_Status   )
+            RETURN
           END IF
         ELSE
         RTSolution%RT_Algorithm_Name = 'Emission'
@@ -289,9 +289,9 @@ CONTAINS
              RTV%Solar_Irradiance,                  & ! Input, Source irradiance at TOA
              RTV%Is_Solar_Channel,                  & ! Input, Source sensitive channel info.
              GeometryInfo%Source_Zenith_Radian,     & ! Input, Source zenith angle
-             RTV                                    ) ! Output, Internal variables     
+             RTV                                    ) ! Output, Internal variables
         END IF
-    
+
     ! ------------------------------
     ! Perform the radiative transfer
     ! ------------------------------
@@ -329,7 +329,7 @@ CONTAINS
       WRITE(Message,'("Incorrect RT_Algorithm_ID, ",i0,", do not fit model")') &
                     RTV%RT_Algorithm_Id
       CALL Display_Message( ROUTINE_NAME,Message,Error_Status )
-      RETURN      
+      RETURN
       END SELECT
 
     ELSE
@@ -653,14 +653,14 @@ CONTAINS
              SfcOptics_TL%S_Emissivity(1:nZ),          & ! Input, TL surface emissivity
              SfcOptics_TL%S_Reflectivity(1:nZ,1:nZ), & ! Input, TL surface reflectivity
              SfcOptics_TL%S_Direct_Ref(1:nZ), & ! Input, TL surface reflectivity for a point source
-             Radiance_TL                               ) ! Output, TL radiances    
+             Radiance_TL                               ) ! Output, TL radiances
       END IF
 
    ELSE IF( RTV%Scattering_RT ) THEN
       ! Select the scattering RT model
       SELECT CASE(RTV%RT_Algorithm_Id)
         CASE (RT_ADA, RT_VMOM)
-          ! NESDIS advanced adding-doubling method    
+          ! NESDIS advanced adding-doubling method
           CALL CRTM_ADA_TL( &
                  Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
                  AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
@@ -704,7 +704,7 @@ CONTAINS
           WRITE(Message,'("Incorrect TL RT_Algorithm_ID, ",i0,", do not fit model")') &
                         RTV%RT_Algorithm_Id
           CALL Display_Message( ROUTINE_NAME,Message,Error_Status )
-        RETURN      
+        RETURN
       END SELECT
     ELSE
       ! -----------------
@@ -981,7 +981,7 @@ CONTAINS
     ! Select the RT model
     nZ = RTV%n_Angles * RTV%n_Stokes
     n1 = (SfcOptics%Index_Sat_Ang-1)*RTV%n_Stokes + 1
-        
+
     IF( RTV%Scattering_RT ) THEN
 
       ! Initialise the input adjoint radiance
@@ -1009,7 +1009,7 @@ CONTAINS
              SfcOptics_AD%S_Reflectivity(1:nZ,1:nZ), & ! Output, AD surface reflectivity
              SfcOptics_AD%S_Direct_Ref(1:nZ), & ! Output, AD surface reflectivity for a point source
              Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
-             Pbb_AD(1:nZ,1:(nZ+1),:)                   ) ! Output, AD layer backward phase matrix      
+             Pbb_AD(1:nZ,1:(nZ+1),:)                   ) ! Output, AD layer backward phase matrix
       ELSE
         CALL CRTM_Emission_AD( &
              Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
@@ -1030,7 +1030,7 @@ CONTAINS
              Planck_Surface_AD,                        & ! Output, AD surface radiance
              SfcOptics_AD%S_Emissivity(1:nZ),          & ! Output, AD surface emissivity
              SfcOptics_AD%S_Reflectivity(1:nZ,1:nZ), & ! Output, AD surface reflectivity
-             SfcOptics_AD%S_Direct_Ref(1:nZ)  ) ! Output, AD surface reflectivity for a point source      
+             SfcOptics_AD%S_Direct_Ref(1:nZ)  ) ! Output, AD surface reflectivity for a point source
       END IF
       CALL Reshape_Surf_Opt_AD(RTV%n_Angles, RTV%n_Stokes, SfcOptics_AD%Emissivity, SfcOptics_AD%Direct_Reflectivity, &
         SfcOptics_AD%Reflectivity, SfcOptics_AD%S_Emissivity, SfcOptics_AD%S_Direct_Ref, SfcOptics_AD%S_Reflectivity)
@@ -1085,7 +1085,7 @@ CONTAINS
       WRITE(Message,'("Incorrect AD RT_Algorithm_ID, ",i0,", do not fit model")') &
                     RTV%RT_Algorithm_Id
       CALL Display_Message( ROUTINE_NAME,Message,Error_Status )
-      RETURN      
+      RETURN
       END SELECT
 
     ELSE
@@ -1243,22 +1243,24 @@ CONTAINS
 
     ! Determine the number of streams based on Mie parameter
     IF ( MieParameter < 0.01_fp ) THEN
-      nStreams = 2
+      ! 1. nStreams = the number of pcoeff terms used to reconstruct the phase function;
+      ! 2. AerosolCoeff and CloudCoeff LUTs Require at least 4 terms to properly
+      !    reconstruct the phase function and set up truncation factor.
+      nStreams = 4
+      RTSolution%n_full_Streams = 4
     ELSE IF( MieParameter < ONE ) THEN
       nStreams = 4
+      RTSolution%n_full_Streams = 6
     ELSE
       nStreams = 6
+      RTSolution%n_full_Streams = 8
     END IF
-
-! Hardcode number of streams for testing purposes
-!    nStreams = 6
 
     ! Set RTSolution scattering info
     RTSolution%Scattering_Flag = .TRUE.
-    RTSolution%n_full_Streams  = nStreams + 2
 
   END FUNCTION CRTM_Compute_nStreams
-  
+
 !--------------------------------------------------------------------------------
 !:sdoc+:
 !
@@ -1286,5 +1288,5 @@ CONTAINS
     CHARACTER(*), INTENT(OUT) :: Id
     Id = MODULE_VERSION_ID
   END SUBROUTINE CRTM_RTSolution_Version
-  
+
 END MODULE CRTM_RTSolution

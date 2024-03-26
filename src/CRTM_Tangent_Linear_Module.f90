@@ -657,9 +657,9 @@ CONTAINS
         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
         RETURN
       END IF
-  
-      Atm_TL%Height = Atm%Height 
-   
+
+      Atm_TL%Height = Atm%Height
+
       ! ...Check the total number of Atm layers
       IF ( Atm%n_Layers > MAX_N_LAYERS .OR. Atm_TL%n_Layers > MAX_N_LAYERS) THEN
         Error_Status = FAILURE
@@ -977,8 +977,12 @@ CONTAINS
 !            CALL CRTM_SfcOptics_Zero( SfcOptics_TL(nt) )
             ! Determine the number of streams (n_Full_Streams) in up+downward directions
             IF ( Opt%Use_N_Streams ) THEN
-              n_Full_Streams = Opt%n_Streams
-              RTSolution(ln,m)%n_Full_Streams = n_Full_Streams + 2
+              ! 1. AtmOptics(nt)%n_Legendre_Terms = n_Full_Streams = the number of pcoeff
+              !    terms used to reconstruct the phase function;
+              ! 2. AerosolCoeff and CloudCoeff LUTs Require at least 4 terms to properly
+              !    reconstruct the phase function and set up truncation factor.
+              n_Full_Streams = max(4, Opt%n_Streams)
+              RTSolution(ln,m)%n_Full_Streams = max(4, Opt%n_Streams + 2)
               RTSolution(ln,m)%Scattering_Flag = .TRUE.
             ELSE
               n_Full_Streams = CRTM_Compute_nStreams( Atm             , &  ! Input
@@ -1017,11 +1021,9 @@ CONTAINS
                  .AND. RTV(nt)%Solar_Flag_true ) THEN
             RTV(nt)%Visible_Flag_true = .true.
               ! Rayleigh phase function has 0, 1, 2 components.
-              IF( AtmOptics(nt)%n_Legendre_Terms < 4 ) THEN
-                AtmOptics(nt)%n_Legendre_Terms = 4
-                AtmOptics_TL(nt)%n_Legendre_Terms = AtmOptics(nt)%n_Legendre_Terms
-                RTSolution(ln,m)%Scattering_FLAG = .TRUE.
-                RTSolution(ln,m)%n_Full_Streams = AtmOptics(nt)%n_Legendre_Terms + 2
+              ! Make sure CRTM always use a minmum of 6 streams for visible calculation.
+              IF( AtmOptics%n_Legendre_Terms == 4 ) THEN
+                RTSolution(ln,m)%n_Full_Streams = AtmOptics%n_Legendre_Terms + 2
               END IF
               RTV(nt)%n_Azi = MIN( AtmOptics(nt)%n_Legendre_Terms - 1, MAX_N_AZIMUTH_FOURIER )
               ! Get molecular scattering and extinction
@@ -1335,7 +1337,7 @@ CONTAINS
                                              SensorIndex     , & ! Input
                                              ChannelIndex    , & ! Input
                                              RTSolution(ln,m))   ! Input/Output
-                                             
+
               CALL CRTM_Compute_Reflectivity_TL(Atm                 , & ! Input
                                                 AtmOptics(nt)       , & ! Input
                                                 AtmOptics_TL(nt)    , & ! Input

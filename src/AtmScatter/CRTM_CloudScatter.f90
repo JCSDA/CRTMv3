@@ -5,8 +5,8 @@
 ! required for radiative transfer in a cloudy atmosphere.
 !
 !
-! CREATION HISTORY  
-!        Written by:     Quanhua Liu,    quanhua.liu@noaa.gov 
+! CREATION HISTORY
+!        Written by:     Quanhua Liu,    quanhua.liu@noaa.gov
 !                        Yong Han,       yong.han@noaa.gov
 !                        Paul van Delst, paul.vandelst@noaa.gov
 !                        02-July-2005
@@ -38,7 +38,7 @@ MODULE CRTM_CloudScatter
                                       MAX_N_PHASE_ELEMENTS, &
                                       HGPHASE  ! <<< NEED TO REMOVE THIS IN FUTURE
   USE CRTM_SpcCoeff,            ONLY: SC, &
-                                      SpcCoeff_IsMicrowaveSensor , & 
+                                      SpcCoeff_IsMicrowaveSensor , &
                                       SpcCoeff_IsInfraredSensor  , &
                                       SpcCoeff_IsVisibleSensor   , &
                                       SpcCoeff_IsUltravioletSensor
@@ -134,16 +134,14 @@ MODULE CRTM_CloudScatter
   ! Message string length
   INTEGER, PARAMETER :: ML = 256
   ! Number of stream angle definitions
-  INTEGER, PARAMETER :: TWO_STREAMS       =  2
   INTEGER, PARAMETER :: FOUR_STREAMS      =  4
   INTEGER, PARAMETER :: SIX_STREAMS       =  6
   INTEGER, PARAMETER :: EIGHT_STREAMS     =  8
   INTEGER, PARAMETER :: SIXTEEN_STREAMS   = 16
-  INTEGER, PARAMETER :: THIRTYTWO_STREAMS = 32
-  
+
 
 CONTAINS
-  
+
 
 !------------------------------------------------------------------------------
 !:sdoc+:
@@ -260,7 +258,6 @@ CONTAINS
     ! the CloudC lookup table corresponding to the
     ! number of streams
     SELECT CASE(CScat%n_Legendre_Terms)
-      CASE (TWO_STREAMS)    ; CScat%lOffset = 0
       CASE (FOUR_STREAMS)   ; CScat%lOffset = 0
       CASE (SIX_STREAMS)    ; CScat%lOffset = 5
       CASE (EIGHT_STREAMS)  ; CScat%lOffset = 12
@@ -313,7 +310,7 @@ CONTAINS
         ELSE IF ( SpcCoeff_IsInfraredSensor(SC(SensorIndex)) .OR. &
                   SpcCoeff_IsUltravioletSensor(SC(SensorIndex)) .OR. &
                   SpcCoeff_IsVisibleSensor( SC(SensorIndex))      ) THEN
-          ! IR and visible use the same cloud optical data file, but distingished with Frequency   
+          ! IR and visible use the same cloud optical data file, but distingished with Frequency
           CALL Get_Cloud_Opt_IR(CScat                            , & ! Input
                                 Frequency_IR                     , & ! Input
                                 Atm%Cloud(n)%Type                , & ! Input
@@ -340,7 +337,7 @@ CONTAINS
           CSV%w(kc,n) = ZERO
           CSV%kb(kc,n) = ZERO
           CSV%pcoeff(:,:,kc,n) = ZERO
-        END IF        
+        END IF
 
         IF( CSV%w(kc,n) >= ONE ) THEN
           CSV%w(kc,n) = ONE
@@ -367,7 +364,7 @@ CONTAINS
            CScat%Backscat_Coefficient(kc) = CScat%Backscat_Coefficient(kc) + &
                                      (CSV%kb(kc,n)*Atm%Cloud(n)%Water_Content(kc))
         END IF
-        
+
         ! Compute the phase matrix coefficients
         !   p = p + p(LUT)*bs
         ! where
@@ -382,7 +379,7 @@ CONTAINS
         !   rho = integrated cloud water density for a layer (kg/m^2) [M.L^-2]
         !   w   = single scatter albedo [dimensionless]
         !   ke  = mass extintion coefficient (m^2/kg) [L^2.M^-1]
-        bs = Atm%Cloud(n)%Water_Content(kc) * CSV%ke(kc,n) * CSV%w(kc,n) 
+        bs = Atm%Cloud(n)%Water_Content(kc) * CSV%ke(kc,n) * CSV%w(kc,n)
         CSV%Total_bs(kc) = CSV%Total_bs(kc) + bs
         CScat%Single_Scatter_Albedo(kc) = CScat%Single_Scatter_Albedo(kc) + bs
 
@@ -390,12 +387,12 @@ CONTAINS
             DO l = 1, CScat%n_Legendre_Terms
               CScat%Phase_Coefficient(l,m,kc) = CScat%Phase_Coefficient(l,m,kc) + &
                                                 (CSV%pcoeff(l,m,kc,n) * bs)
-            END DO              
+            END DO
           END DO
         END IF
       END DO Cloud_Layer_loop
     END DO Cloud_loop
- 
+
   END FUNCTION CRTM_Compute_CloudScatter
 
 
@@ -601,10 +598,10 @@ CONTAINS
           w_TL = ZERO
           kb_TL = ZERO
           pcoeff_TL = ZERO
-        END IF        
+        END IF
         IF( CSV%w(kc,n) >= ONE ) THEN
           w_TL = ZERO
-        END IF        
+        END IF
 
         ! Compute the optical depth (absorption + scattering)
         CScat_TL%Optical_Depth(kc) = CScat_TL%Optical_Depth(kc) + &
@@ -619,13 +616,13 @@ CONTAINS
         ! Compute the phase matrix coefficients
         IF( n_Phase_Elements > 0 .and. CScat%Include_Scattering ) THEN
         ! Compute the volume scattering coefficient
-        bs = Atm%Cloud(n)%Water_Content(kc) * CSV%ke(kc,n) * CSV%w(kc,n) 
+        bs = Atm%Cloud(n)%Water_Content(kc) * CSV%ke(kc,n) * CSV%w(kc,n)
         bs_TL = (Atm_TL%Cloud(n)%Water_Content(kc) * CSV%ke(kc,n) * CSV%w(kc,n) ) + &
                 (Atm%Cloud(n)%Water_Content(kc) * ke_TL * CSV%w(kc,n) ) + &
-                (Atm%Cloud(n)%Water_Content(kc) * CSV%ke(kc,n) * w_TL ) 
+                (Atm%Cloud(n)%Water_Content(kc) * CSV%ke(kc,n) * w_TL )
 
         CScat_TL%Single_Scatter_Albedo(kc) = CScat_TL%Single_Scatter_Albedo(kc) + bs_TL
-        
+
           DO m = 1, n_Phase_Elements
             DO l = 0, n_Legendre_Terms
               CScat_TL%Phase_Coefficient(l,m,kc) = CScat_TL%Phase_Coefficient(l,m,kc) + &
@@ -811,7 +808,7 @@ CONTAINS
         IF( n_Phase_Elements > 0 .and. CScat%Include_Scattering ) THEN
         ! Recompute the forward model volume scattering
         ! coefficient for the current cloud ONLY
-        bs = Atm%Cloud(n)%Water_Content(kc) * CSV%ke(kc,n) * CSV%w(kc,n) 
+        bs = Atm%Cloud(n)%Water_Content(kc) * CSV%ke(kc,n) * CSV%w(kc,n)
 
           DO m = 1, n_Phase_Elements
             DO l = 0, n_Legendre_Terms
@@ -823,10 +820,10 @@ CONTAINS
         !       point since it is reinitialised at the
         !       start of the Cloud_Layer_loop.
         bs_AD = bs_AD + CScat_AD%Single_Scatter_Albedo(kc)
-        w_AD  = w_AD  + (Atm%Cloud(n)%Water_Content(kc) * CSV%ke(kc,n)* bs_AD )          
+        w_AD  = w_AD  + (Atm%Cloud(n)%Water_Content(kc) * CSV%ke(kc,n)* bs_AD )
         END IF
 
-        ! Compute the adjoint of the optical 
+        ! Compute the adjoint of the optical
         ! depth (absorption + scattering)
         Atm_AD%Cloud(n)%Water_Content(kc) = Atm_AD%Cloud(n)%Water_Content(kc) + &
                                             (CSV%ke(kc,n) * CScat_AD%Optical_Depth(kc))
@@ -847,7 +844,7 @@ CONTAINS
         ! interpolation quality control
         IF( CSV%w(kc,n) >= ONE ) THEN
           w_AD = ZERO
-        END IF        
+        END IF
         IF( CSV%ke(kc,n) <= ZERO ) THEN
           ke_AD = ZERO
           kb_AD = ZERO
@@ -862,7 +859,7 @@ CONTAINS
           w_AD = ZERO
           kb_AD = ZERO
           pcoeff_AD = ZERO
-        END IF        
+        END IF
 
         ! Call sensor specific routines
         IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
@@ -894,7 +891,7 @@ CONTAINS
                                    w_AD                                , & ! AD  Input
                                    pcoeff_AD                           , & ! AD  Input
                                    Atm_AD%Cloud(n)%Effective_Radius(kc), & ! AD  Output
-                                   CSV%csi(kc,n)                         ) ! Interpolation     
+                                   CSV%csi(kc,n)                         ) ! Interpolation
         ELSE
           ke_AD     = ZERO
           kb_AD     = ZERO
@@ -903,7 +900,7 @@ CONTAINS
         END IF
       END DO Cloud_Layer_loop
     END DO Cloud_loop
-                                 
+
   END FUNCTION CRTM_Compute_CloudScatter_AD
 
 
@@ -925,7 +922,7 @@ CONTAINS
   !   spherical Legendre coefficients (pcoeff)
   ! ------------------------------------------
   SUBROUTINE Get_Cloud_Opt_IR( CloudScatter, &  ! Input  CloudScatter structure
-                               Frequency   , &  ! Input  Frequency (cm^-1) 
+                               Frequency   , &  ! Input  Frequency (cm^-1)
                                cloud_type  , &  ! Input  see CRTM_Cloud_Define.f90
                                Reff        , &  ! Input  effective radius (mm)
                                ke          , &  ! Output optical depth for 1 mm water content
@@ -945,7 +942,7 @@ CONTAINS
     ! Local variables
     INTEGER  :: k, l, m
 
-    
+
     ! Find the frequency and effective
     ! radius indices for interpolation
     ! --------------------------------
@@ -955,7 +952,7 @@ CONTAINS
     csi%r_int = MAX(MIN(CloudC%Reff_IR(CloudC%n_IR_Radii),Reff),CloudC%Reff_IR(1))
     CALL find_index(CloudC%Reff_IR, csi%r_int, csi%j1,csi%j2, csi%r_outbound)
     csi%r = CloudC%Reff_IR(csi%j1:csi%j2)
-    
+
     ! Calculate the interpolating polynomials
     ! ---------------------------------------
     ! Frequency term
@@ -964,7 +961,7 @@ CONTAINS
     ! Effective radius term
     CALL LPoly( csi%r, csi%r_int, &  ! Input
                 csi%xlp           )  ! Output
- 
+
     ! Determine the density index, k, for the clouds
     ! based on CloudC LUT organisation
     ! ----------------------------------------------
@@ -977,7 +974,7 @@ CONTAINS
       CASE(HAIL_CLOUD)   ; k=4  ! Solid
       CASE DEFAULT       ; k=HUGE(k)   ! Case not found: Hopefully induce code to fail
     END SELECT
-    
+
     ! Perform interpolation
     ! ---------------------
     CALL interp_2D( CloudC%ke_IR(csi%i1:csi%i2,csi%j1:csi%j2,k), csi%wlp, csi%xlp, ke )
@@ -989,13 +986,13 @@ CONTAINS
       DO l = 1, CloudScatter%n_Legendre_Terms
         CALL interp_2D( CloudC%pcoeff_IR(csi%i1:csi%i2,csi%j1:csi%j2,k,l+CloudScatter%lOffset,m), &
                         csi%wlp, csi%xlp, pcoeff(l,m) )
-      END DO    
-      END DO  
+      END DO
+      END DO
     ELSE
       ! Absorption coefficient
-      ke = ke *(ONE - w) 
+      ke = ke *(ONE - w)
     END IF
-    
+
   END SUBROUTINE Get_Cloud_Opt_IR
 
 
@@ -1056,7 +1053,7 @@ CONTAINS
     z_TL = ZERO
 
 
-    ! Calculate the TL interpolating polynomials 
+    ! Calculate the TL interpolating polynomials
     ! ------------------------------------------
     ! Frequency term (always zero. This is a placeholder for testing)
     CALL LPoly_TL( csi%f, csi%f_int, & ! FWD Input
@@ -1082,8 +1079,8 @@ CONTAINS
       CASE(HAIL_CLOUD)   ; k=4  ! Solid
       CASE DEFAULT       ; k=HUGE(k)   ! Case not found: Hopefully induce code to fail
     END SELECT
-    
-    
+
+
     ! Perform interpolation based on cloud type
     ! -----------------------------------------
     ! Extinction coefficient
@@ -1104,7 +1101,7 @@ CONTAINS
     ! Phase matrix coefficients
     IF ( CloudScatter_TL%n_Phase_Elements > 0 .and. CloudScatter_TL%Include_Scattering ) THEN
       pcoeff_TL(0,1) = ZERO
-         
+
       DO m = 1, CloudScatter_TL%n_Phase_Elements
       DO l = 1, CloudScatter_TL%n_Legendre_Terms
         z => CloudC%pcoeff_IR(csi%i1:csi%i2,csi%j1:csi%j2,k,l+CloudScatter_TL%lOffset,m)
@@ -1113,7 +1110,7 @@ CONTAINS
                            pcoeff_TL(l,m)          )  ! TL  Output
       END DO
       END DO
-    ELSE    
+    ELSE
       ! Absorption coefficient
       IF( w < ONE ) THEN
         ke_TL = ke_TL * (ONE - w) - ke/(ONE -w) * w_TL
@@ -1122,7 +1119,7 @@ CONTAINS
       END IF
     END IF
     NULLIFY(z)
-    
+
   END SUBROUTINE Get_Cloud_Opt_IR_TL
 
 
@@ -1184,7 +1181,7 @@ CONTAINS
     CALL Clear_LPoly(wlp_AD)
     CALL Clear_LPoly(xlp_AD)
 
-    
+
     ! Determine the density index, k, for the clouds
     ! based on CloudC LUT organisation
     ! ----------------------------------------------
@@ -1197,7 +1194,7 @@ CONTAINS
       CASE(HAIL_CLOUD)   ; k=4  ! Solid
       CASE DEFAULT       ; k=HUGE(k)   ! Case not found: Hopefully induce code to fail
     END SELECT
-    
+
     ! Perform interpolation
     ! ---------------------
     ! Phase matrix coefficients
@@ -1210,12 +1207,12 @@ CONTAINS
                            z_AD, wlp_AD, xlp_AD  )  ! AD  Output
       END DO
       END DO
-      pcoeff_AD(0,1) = ZERO    
+      pcoeff_AD(0,1) = ZERO
     ELSE
       ! Absorption coefficient
       IF( w < ONE ) THEN
         w_AD  = w_AD - ke/(ONE -w) * ke_AD
-        ke_AD = ke_AD * (ONE - w) 
+        ke_AD = ke_AD * (ONE - w)
       ELSE
         ke_AD = ZERO
       END IF
@@ -1250,11 +1247,11 @@ CONTAINS
                    csi%wlp,          & ! FWD Input
                    wlp_AD,           & ! AD  Input
                    f_AD, f_int_AD    ) ! AD  Output
-    
+
     ! The AD outputs
     ! --------------
     Reff_AD = Reff_AD + r_int_AD
-    
+
   END SUBROUTINE Get_Cloud_Opt_IR_AD
 
 
@@ -1291,7 +1288,7 @@ CONTAINS
 
     ! Local variables
     INTEGER :: cloud_state, cloud_loc
-    INTEGER :: Error_Status 
+    INTEGER :: Error_Status
     INTEGER  :: j, k, l, m
     CHARACTER(ML) :: Message
 
@@ -1304,7 +1301,7 @@ CONTAINS
     w      = ZERO
     pcoeff = ZERO
 
-    
+
     ! Find the frequency, effective radius (or water content)
     ! and temperature indices for interpolation
     ! -----------------------------------------
@@ -1339,7 +1336,7 @@ CONTAINS
     csi%t_int = MAX(MIN(CloudC%Temperature(CloudC%n_Temperatures),Temperature),CloudC%Temperature(1))
     CALL find_index(CloudC%Temperature, csi%t_int, csi%k1,csi%k2, csi%t_outbound)
     csi%t = CloudC%Temperature(csi%k1:csi%k2)
-    
+
     ! Calculate the interpolating polynomials
     ! ---------------------------------------
     ! Frequency term
@@ -1351,10 +1348,10 @@ CONTAINS
     ! Temperature term
     CALL LPoly( csi%t, csi%t_int, &  ! Input
                 csi%ylp           )  ! Output
-        
+
     ! Perform interpolation based on cloud type
     ! -----------------------------------------
-    
+
     SELECT CASE (cloud_state)
       CASE (LIQUID)
         ! Only 2-D interpolation of extinction coefficient as a
@@ -1455,10 +1452,10 @@ CONTAINS
     REAL(fp) :: z2_TL(NPTS,NPTS)
     REAL(fp) :: z3_TL(NPTS,NPTS,NPTS)
     TYPE(LPoly_type) :: wlp_TL, xlp_TL, ylp_TL
-    
+
     ! Variables to find the cloud index and state
     INTEGER :: cloud_state, cloud_loc
-    
+
 !JR Static initialization means only 1 copy of the variable. OpenMP over profiles
 !JR means $OPENMP_NUM_THREADS copies are needed. So change to run-time initialization
 !JR    REAL(fp), POINTER :: z2(:,:) => NULL()
@@ -1482,7 +1479,7 @@ CONTAINS
     t_TL     = ZERO
     z2_TL = ZERO
     z3_TL = ZERO
-    
+
      ! If all Reff_MW existed in the CloudCoeff then  CloudC%Reff_MW should be greater than zero and
     ! will use Reff for interpolation otherwise will use the water content
     IF (ALL(CloudC%Reff_MW .GT. ZERO)) THEN
@@ -1502,7 +1499,7 @@ CONTAINS
     END IF
 
 
-    ! Calculate the TL interpolating polynomials 
+    ! Calculate the TL interpolating polynomials
     ! ------------------------------------------
     ! Frequency term (always zero. This is a placeholder for testing)
     CALL LPoly_TL( csi%f, csi%f_int, & ! FWD Input
@@ -1519,7 +1516,7 @@ CONTAINS
                    csi%ylp,          & ! FWD Input
                    t_TL, t_int_TL,   & ! TL  Input
                    ylp_TL            ) ! TL  Output
-    
+
     ! Perform interpolation based on cloud type
     ! -----------------------------------------
     SELECT CASE (cloud_state)
@@ -1647,7 +1644,7 @@ CONTAINS
     END SELECT
 
     NULLIFY(z2, z3)
-    
+
   END SUBROUTINE Get_Cloud_Opt_MW_TL
 
 
@@ -1933,7 +1930,7 @@ CONTAINS
         END IF ! Cloud_Type
     END SELECT
     NULLIFY(z2, z3)
-    
+
   END SUBROUTINE Get_Cloud_Opt_MW_AD
 
 END MODULE CRTM_CloudScatter
