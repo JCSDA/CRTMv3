@@ -1,6 +1,4 @@
 !
-!
-!
 ! CRTM_Tangent_Linear_Module
 !
 ! Module containing the CRTM tangent-linear model function.
@@ -1017,13 +1015,12 @@ CONTAINS
               IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) RTV_Clear(nt)%Solar_Flag_true = .TRUE.
             END IF
             ! ...Visible /UV channel with solar radiation
-        IF((SpcCoeff_IsVisibleSensor(SC(SensorIndex)).or.SpcCoeff_IsUltravioletSensor(SC(SensorIndex))) &
+            IF((SpcCoeff_IsVisibleSensor(SC(SensorIndex)).or.SpcCoeff_IsUltravioletSensor(SC(SensorIndex))) &
                  .AND. RTV(nt)%Solar_Flag_true ) THEN
-            RTV(nt)%Visible_Flag_true = .true.
               ! Rayleigh phase function has 0, 1, 2 components.
               ! Make sure CRTM always use a minmum of 6 streams for visible calculation.
-              IF( AtmOptics%n_Legendre_Terms == 4 ) THEN
-                RTSolution(ln,m)%n_Full_Streams = AtmOptics%n_Legendre_Terms + 2
+              IF( AtmOptics(nt)%n_Legendre_Terms == 4 ) THEN
+                RTSolution(ln,m)%n_Full_Streams = AtmOptics(nt)%n_Legendre_Terms + 2
               END IF
               RTV(nt)%n_Azi = MIN( AtmOptics(nt)%n_Legendre_Terms - 1, MAX_N_AZIMUTH_FOURIER )
               ! Get molecular scattering and extinction
