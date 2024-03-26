@@ -98,7 +98,7 @@ MODULE CRTM_Forward_Module
   USE CRTM_CloudCover_Define,     ONLY: CRTM_CloudCover_type
   USE CRTM_Active_Sensor,         ONLY: CRTM_Compute_Reflectivity, &
                                         Calculate_Cloud_Water_Density
-                                        
+
   ! Internal variable definition modules
   ! ...AtmOptics
   USE AOvar_Define, ONLY: AOvar_type, &
@@ -617,10 +617,10 @@ CONTAINS
          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
          RETURN
       END IF
-      
-      ! Calculate cloud water density 
+
+      ! Calculate cloud water density
       CALL Calculate_Cloud_Water_Density(Atm)
-      
+
       !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
       DO nt = 1, n_channel_threads
          ! Prepare the atmospheric optics structures
@@ -865,14 +865,18 @@ CONTAINS
 
                ! Determine the number of streams (n_Full_Streams) in up+downward directions
                IF ( Opt%Use_N_Streams ) THEN
-                  n_Full_Streams = Opt%n_Streams
-                  RTSolution(ln,m)%n_Full_Streams = n_Full_Streams + 2
-                  RTSolution(ln,m)%Scattering_Flag = .TRUE.
+                 ! 1. AtmOptics(nt)%n_Legendre_Terms = n_Full_Streams = the number of pcoeff
+                 !    terms used to reconstruct the phase function;
+                 ! 2. AerosolCoeff and CloudCoeff LUTs Require at least 4 terms to properly
+                 !    reconstruct the phase function and set up truncation factor.
+                 n_Full_Streams = max(4, Opt%n_Streams)
+                 RTSolution(ln,m)%n_Full_Streams = max(4, Opt%n_Streams + 2)
+                 RTSolution(ln,m)%Scattering_Flag = .TRUE.
                ELSE
-                  n_Full_Streams = CRTM_Compute_nStreams( Atm             , &  ! Input
-                       SensorIndex     , &  ! Input
-                       ChannelIndex    , &  ! Input
-                       RTSolution(ln,m)  )  ! Output
+                 n_Full_Streams = CRTM_Compute_nStreams( Atm             , &  ! Input
+                      SensorIndex     , &  ! Input
+                      ChannelIndex    , &  ! Input
+                      RTSolution(ln,m)  )  ! Output
                END IF
                ! ...Transfer stream count to scattering structure
                AtmOptics(nt)%n_Legendre_Terms = n_Full_Streams
@@ -897,10 +901,9 @@ CONTAINS
                     .AND. RTV(nt)%Solar_Flag_true ) THEN
                   RTV%Visible_Flag_true = .TRUE.
                   ! Rayleigh phase function has 0, 1, 2 components.
-                  IF( AtmOptics(nt)%n_Legendre_Terms < 4 ) THEN
-                     AtmOptics(nt)%n_Legendre_Terms = 4
-                     RTSolution(ln,m)%Scattering_FLAG = .TRUE.
-                     RTSolution(ln,m)%n_Full_Streams = AtmOptics(nt)%n_Legendre_Terms + 2
+                  ! Make sure CRTM always use a minmum of 6 streams for visible calculation.
+                  IF( AtmOptics(nt)%n_Legendre_Terms == 4 ) THEN
+                    RTSolution(ln,m)%n_Full_Streams = AtmOptics(nt)%n_Legendre_Terms + 2
                   END IF
                   RTV(nt)%n_Azi = MIN( AtmOptics(nt)%n_Legendre_Terms - 1, MAX_N_AZIMUTH_FOURIER )
                   ! Get molecular scattering and extinction
@@ -1117,7 +1120,7 @@ CONTAINS
                   RTSolution(ln,m)%Tb_clear = RTSolution(ln,m)%Brightness_Temperature
                   RTSolution(ln,m)%R_clear  = RTSolution(ln,m)%Radiance
                END IF
-               
+
                          ! Calculate reflectivity for active instruments
                IF  ( (SC(SensorIndex)%Is_Active_Sensor) .AND. (AtmOptics(nt)%Include_Scattering)) THEN
                        CALL CRTM_Compute_Reflectivity(Atm             , & ! Input
@@ -1127,7 +1130,7 @@ CONTAINS
                                                   ChannelIndex    , & ! Input
                                                   RTSolution(ln,m))   ! Input/Output
                ENDIF
-          
+
             END DO Channel_Loop
          END DO Thread_Loop
          !$OMP END PARALLEL DO
