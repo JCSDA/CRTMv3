@@ -707,14 +707,31 @@ CONTAINS
         RETURN
       END IF
 
-      IF( (CloudC%N_PHASE_ELEMENTS /= AeroC%N_PHASE_ELEMENTS) .or. &
-         (RTV(1)%n_Stokes > 1.and.CloudC%N_PHASE_ELEMENTS < 6) ) THEN
-        Error_Status = FAILURE
-
-        WRITE( Message,'("N_PHASE_ELEMENTS NOT RIGHT FW ",i0)' ) CloudC%N_PHASE_ELEMENTS
-        CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-        RETURN
+      ! Check n_Stokes and number of phase elements
+      IF ( CRTM_CloudCoeff_IsLoaded() .AND. &
+           (RTV(1)%n_Stokes > 1 .AND. CloudC%N_PHASE_ELEMENTS < 6 )) THEN
+         Error_Status = FAILURE
+         WRITE( Message,'("N_PHASE_ELEMENTS OF CLOUD LUT NOT RIGHT ",i0)' ) CloudC%N_PHASE_ELEMENTS
+         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+         RETURN
       END IF
+
+      IF ( CRTM_AerosolCoeff_IsLoaded() .AND. &
+           (RTV(1)%n_Stokes > 1 .AND. AeroC%N_PHASE_ELEMENTS < 6 )) THEN
+         Error_Status = FAILURE
+         WRITE( Message,'("N_PHASE_ELEMENTS OF AEROSOL LUT NOT RIGHT ",i0)' ) AeroC%N_PHASE_ELEMENTS
+         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+         RETURN
+      END IF
+
+      IF ( CRTM_CloudCoeff_IsLoaded() .AND. CRTM_AerosolCoeff_IsLoaded() .AND. &
+           (CloudC%N_PHASE_ELEMENTS /= AeroC%N_PHASE_ELEMENTS) ) THEN
+         Error_Status = FAILURE
+         WRITE( Message,'("N_PHASE_ELEMENTS OF CLOUD AND AEROSOL LUTS DO NOT MATCH")' )
+         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+         RETURN
+      END IF
+      
       ! Calculate cloud water density
       CALL Calculate_Cloud_Water_Density(Atm)
 
@@ -1083,7 +1100,7 @@ CONTAINS
               ! (2) If aerosol/cloud and MieParameter < 0.01_fp, AtmOptics(nt)%n_Legendre_Terms == 4
               !     Follow the legacy code, make sure RTSolution(ln,m)%n_Full_Streams == 6 for visible channels
               ! Rayleigh phase function has 0, 1, 2 components.
-              IF( AtmOptics(nt)%n_Legendre_Terms <= 4 ) THEN                
+              IF( AtmOptics(nt)%n_Legendre_Terms <= 4 ) THEN
                 AtmOptics(nt)%n_Legendre_Terms = 4
                 AtmOptics_K(nt)%n_Legendre_Terms = AtmOptics(nt)%n_Legendre_Terms
                 RTSolution(ln,m)%Scattering_FLAG = .TRUE.
@@ -1326,7 +1343,7 @@ CONTAINS
                                                  RTSolution(ln,m))   ! Input/Output
               ENDIF
               !=============================
-           
+
 
            IF ( SpcCoeff_IsInfraredSensor( SC(SensorIndex) ) .OR. &
                SpcCoeff_IsMicrowaveSensor( SC(SensorIndex) ) ) THEN
@@ -1418,8 +1435,8 @@ CONTAINS
                 END IF
                 ! Calculate the adjoint for the active sensor reflectivity
                 IF  ( SC(SensorIndex)%Is_Active_Sensor .AND. AtmOptics(nt)%Include_Scattering) THEN
-                    CALL CRTM_Compute_Reflectivity_AD(Atm             , &  ! Input 
-                                                      AtmOptics(nt)   , &  ! Input 
+                    CALL CRTM_Compute_Reflectivity_AD(Atm             , &  ! Input
+                                                      AtmOptics(nt)   , &  ! Input
                                                       RTSolution(ln,m), & ! Input
                                                       GeometryInfo    , & ! Input
                                                       SensorIndex     , &  ! Input
