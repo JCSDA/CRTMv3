@@ -99,7 +99,10 @@ else() # Download CRTM coefficients
   # Only untar if the CHECK_PATH does not exist
   if(NOT EXISTS ${UNTAR_DEST}/${CRTM_COEFFS_BRANCH}/)
     message(STATUS "Untarring the downloaded file (~2 minutes) to ${UNTAR_DEST}")
-    execute_process(COMMAND tar -xzf ${DOWNLOAD_DEST} -C ${UNTAR_DEST}
+    # Use the built-in tar feature to work around an issue on Orion with the
+    # system tar command. See: https://github.com/JCSDA/spack-stack/issues/1355
+    execute_process(COMMAND ${CMAKE_COMMAND} -E chdir ${UNTAR_DEST}
+                    ${CMAKE_COMMAND} -E tar xzf ${DOWNLOAD_DEST}
                     RESULT_VARIABLE result
                     OUTPUT_QUIET ERROR_QUIET)
     if(NOT result EQUAL 0)
