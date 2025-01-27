@@ -139,13 +139,13 @@ Now we have compiled the linked source codes that reside in the `src/` directory
 
 The CMake variables of interest are:
 `-DCMAKE_BUILD_TYPE = RELEASE / DEBUG / RELWITHDEBINFO`  (default is `RELEASE` if not specified)
-`-DCMAKE_SHARED_LIBS = ON / OFF`   (build shared lib (`<build>/lib/libcrtm.so`) or static lib (`<build>/lib/libcrtm.a`) --  default is `ON` if not specified)
+`-DBUILD_SHARED_LIBS = ON / OFF`   (build shared lib (`<build>/lib/libcrtm.so`) or static lib (`<build>/lib/libcrtm.a`) --  default is `ON` if not specified)
 `-DCMAKE_INSTALL_PREFIX=<path-to-install>` (You have to run `make install` to install the libcrtm* into your desired directory `<build>/path-to-install`).
 
 
 example:
 ```
-cmake -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=./install ..
+cmake -DCMAKE_BUILD_TYPE=DEBUG -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=./install ..
 ```
 this would make a debug build of CRTM, static library (`libcrtm.a`) and set the optional install location to `<build>/install/.` (or something similar, search for `libcrtm.*` and `*.mod`).  Custom Install only happens if you issue the `make install` command. 
 
