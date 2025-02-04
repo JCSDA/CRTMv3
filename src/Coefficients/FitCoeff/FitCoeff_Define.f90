@@ -144,7 +144,7 @@ MODULE FitCoeff_Define
     INTEGER(Long) :: Release = FITCOEFF_RELEASE
     INTEGER(Long) :: Version = FITCOEFF_VERSION
     ! Dimensions
-    INTEGER(Long) :: Dimensions(:) = 0
+    INTEGER(Long) :: Dimensions(1) = 0
     ! Data
     REAL(Double), ALLOCATABLE :: C(:)
   END TYPE FitCoeff_1D_type
@@ -158,7 +158,7 @@ MODULE FitCoeff_Define
     INTEGER(Long) :: Release = FITCOEFF_RELEASE
     INTEGER(Long) :: Version = FITCOEFF_VERSION
     ! Dimensions
-    INTEGER(Long) :: Dimensions(:) = 0
+    INTEGER(Long) :: Dimensions(2) = 0
     ! Data
     REAL(Double), ALLOCATABLE :: C(:,:)
   END TYPE FitCoeff_2D_type
@@ -172,7 +172,7 @@ MODULE FitCoeff_Define
     INTEGER(Long) :: Release = FITCOEFF_RELEASE
     INTEGER(Long) :: Version = FITCOEFF_VERSION
     ! Dimensions
-    INTEGER(Long) :: Dimensions(:) = 0
+    INTEGER(Long) :: Dimensions(3) = 0
     ! Data
     REAL(Double), ALLOCATABLE :: C(:,:,:)
   END TYPE FitCoeff_3D_type
