@@ -429,6 +429,13 @@ add_test(NAME test_MWwater_io
          COMMAND $<TARGET_FILE:MWwater_IO>)
 set_tests_properties(test_MWwater_io PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
+# test_MWSurfEM
+add_executable(test_MWSurfEM mains/unit/Unit_Test/test_MWSurfEM.f90)
+target_link_libraries(test_MWSurfEM PRIVATE crtm)
+add_test(NAME test_MWSurfEM
+         COMMAND $<TARGET_FILE:test_MWSurfEM>)
+set_tests_properties(test_MWSurfEM PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
 #=================================================================================
 #forward and k_matrix regression tests
 foreach(regtype IN LISTS regression_types)
