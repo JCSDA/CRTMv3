@@ -1,5 +1,5 @@
 !
-! test_TL.f90
+! test_Hypsometric.f90
 !
 ! Program to test the CRTM hypsometric equation module.
 !
