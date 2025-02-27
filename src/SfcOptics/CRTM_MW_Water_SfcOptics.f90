@@ -212,7 +212,7 @@ CONTAINS
            Source_Azimuth_Angle = Source_Azimuth_Angle, &
            Sensor_Azimuth_Angle = Sensor_Azimuth_Angle  )
 
-
+    
     ! Compute the surface optical parameters
     IF( SfcOptics%Use_New_MWSSEM ) THEN
 
