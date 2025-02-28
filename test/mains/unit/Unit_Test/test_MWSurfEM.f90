@@ -78,9 +78,9 @@ PROGRAM test_MWSurfEM
   INTEGER :: n_Channels
   INTEGER :: SensorIndex
   INTEGER :: ChannelIndex
-  INTEGER :: l, m
+  INTEGER :: ii
   INTEGER :: testresult
-  TYPE(UnitTest_type) :: ioTest
+  TYPE(UnitTest_type) :: emTest
   LOGICAL :: testPassed
 
 
@@ -95,8 +95,8 @@ PROGRAM test_MWSurfEM
 
   ! ============================================================================
   ! Initialize Unit test:
-  CALL UnitTest_Init(ioTest, .TRUE.)
-  CALL UnitTest_Setup(ioTest, 'test_MWSurfEM', Program_Name, .TRUE.)
+  CALL UnitTest_Init(emTest, .TRUE.)
+  CALL UnitTest_Setup(emTest, 'test_MWSurfEM', Program_Name, .TRUE.)
 
   ! Get sensor id from user
   ! -----------------------
@@ -115,18 +115,12 @@ PROGRAM test_MWSurfEM
                                     File_Path         = COEFFICIENTS_PATH, &
                                     netCDF            = .FALSE.           , &
                                     Quiet             = Quiet          )
-  CALL UnitTest_Assert(ioTest, (Error_Status==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
-
-  IF ( Error_Status /= SUCCESS ) THEN
-    CALL Display_Message( 'CRTM_Load_SpcCoeff' ,'Error loading SpcCoeff data', Error_Status )
-    STOP 1
-  END IF  
+  CALL UnitTest_Assert(emTest, (Error_Status==SUCCESS) )
 
   Error_Status = CRTM_MWwaterCoeff_Load_FASTEM( &
                         'FASTEM6',             &
                         Quiet             = Quiet            )
-
+  CALL UnitTest_Assert(emTest, (Error_Status==SUCCESS) )
   ! 2b. Determine the total number of channels
   !     for which the CRTM was initialized
   ! ------------------------------------------
@@ -156,7 +150,9 @@ PROGRAM test_MWSurfEM
                                    Sensor_Zenith_Angle = ZENITH_ANGLE )
   ! ============================================================================
 
-  CALL CRTM_SfcOptics_Create(SfcOptics, 1, 1)
+  CALL CRTM_SfcOptics_Create(SfcOptics, &
+                              1, & ! n_Angles
+                              1)   ! n_Stokes
 
   !Error_Status = Compute_MW_Water_SfcOptics( &
   !  Sfc(1)     , &  ! Input
@@ -166,19 +162,29 @@ PROGRAM test_MWSurfEM
   !  SfcOptics   , &  ! Output
   !  iVar        )
 
-  Error_Status = CRTM_Compute_SfcOptics( &
-                                        Sfc(1)     , &  ! Input
-                                        GeometryInfo(1), &  ! Input
-                                        SensorIndex , &  ! Input
-                                        ChannelIndex, &  ! Input
-                                        SfcOptics   , &  ! Output
-                                        iVar        )
+  ChannelLoop: DO ChannelIndex = 1, n_Channels
+    Error_Status = CRTM_Compute_SfcOptics( &
+                                          Sfc(1)     , &  ! Input
+                                          GeometryInfo(1), &  ! Input
+                                          SensorIndex , &  ! Input
+                                          ChannelIndex, &  ! Input
+                                          SfcOptics   , &  ! Output
+                                          iVar        )
+    WRITE(*,*) "Channel: ", ChannelIndex, " Emissivity: ", SfcOptics%Emissivity
+  END DO ChannelLoop
 
-  WRITE(*,*) "SfcOptics: ", SfcOptics%Emissivity(1,1)
+  CALL UnitTest_Assert(emTest, (Error_Status==SUCCESS) )
 
   ! 5. Cleanup
   CALL CRTM_SfcOptics_Destroy(SfcOptics)
   CALL CRTM_GeometryInfo_Destroy(GeometryInfo)
+
+  testPassed = UnitTest_Passed(emTest)
+  IF(testPassed) THEN
+    STOP 0
+  ELSE
+    STOP 1
+  END IF
 
 CONTAINS
 
@@ -202,24 +208,24 @@ CONTAINS
     ! 4a.1 Profile #1
     ! ---------------
     ! ...Land surface characteristics
-    !sfc(1)%Land_Coverage     = 0.1_fp
-    !sfc(1)%Land_Type         = TUNDRA_SURFACE_TYPE
-    !sfc(1)%Land_Temperature  = 272.0_fp
-    !sfc(1)%Lai               = 0.17_fp
-    !sfc(1)%Soil_Type         = COARSE_SOIL_TYPE
-    !sfc(1)%Vegetation_Type   = GROUNDCOVER_VEGETATION_TYPE
+    sfc(1)%Land_Coverage     = 0.1_fp
+    sfc(1)%Land_Type         = TUNDRA_SURFACE_TYPE
+    sfc(1)%Land_Temperature  = 272.0_fp
+    sfc(1)%Lai               = 0.17_fp
+    sfc(1)%Soil_Type         = COARSE_SOIL_TYPE
+    sfc(1)%Vegetation_Type   = GROUNDCOVER_VEGETATION_TYPE
     ! ...Water surface characteristics
-    sfc(1)%Water_Coverage    = 1.0_fp !0.5_fp
+    sfc(1)%Water_Coverage    = 0.5_fp
     sfc(1)%Water_Type        = SEA_WATER_TYPE
     sfc(1)%Water_Temperature = 275.0_fp
     ! ...Snow coverage characteristics
-    !sfc(1)%Snow_Coverage    = 0.25_fp
-    !sfc(1)%Snow_Type        = FRESH_SNOW_TYPE
-    !sfc(1)%Snow_Temperature = 265.0_fp
+    sfc(1)%Snow_Coverage    = 0.25_fp
+    sfc(1)%Snow_Type        = FRESH_SNOW_TYPE
+    sfc(1)%Snow_Temperature = 265.0_fp
     ! ...Ice surface characteristics
-    !sfc(1)%Ice_Coverage    = 0.15_fp
-    !sfc(1)%Ice_Type        = FRESH_ICE_TYPE
-    !sfc(1)%Ice_Temperature = 269.0_fp
+    sfc(1)%Ice_Coverage    = 0.15_fp
+    sfc(1)%Ice_Type        = FRESH_ICE_TYPE
+    sfc(1)%Ice_Temperature = 269.0_fp
 
 
 
