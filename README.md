@@ -115,8 +115,9 @@ But after a clean clone of the development repository, none of the links to sour
 
 Configuration
 -------------
-At present, the `fix/` directory is provided through ftp using the Get_CRTM_Binary_Files.sh script to obtain and unpack the dataset. 
-If this directory doesn't exist during the `cmake` step, then cmake will download and install into `build/test_data/fix_REL-3.1.1.x/fix/`...
+By default, the `fix/` directory is provided through ftp using the Get_CRTM_Binary_Files.sh script to obtain and unpack the dataset. 
+If this directory doesn't exist during the `cmake` step, then cmake will download and install into `build/test_data/fix_REL-3.1.1.x/fix/`.
+The path to an existing fix file installation can be specified using the `FIX_FILE_PATH` option (see CMake variables summary below).
 
 The fix/ directory (as of v3.1.1) contains most of the netCDF SpcCoeff and TauCoeff files, as part of our ongoing effort to transition toward netCDF-only CRTM.  We expect to deprecate the binary formats in v3.2.x 
 
@@ -141,6 +142,8 @@ The CMake variables of interest are:
 `-DCMAKE_BUILD_TYPE = RELEASE / DEBUG / RELWITHDEBINFO`  (default is `RELEASE` if not specified)
 `-DBUILD_SHARED_LIBS = ON / OFF`   (build shared lib (`<build>/lib/libcrtm.so`) or static lib (`<build>/lib/libcrtm.a`) --  default is `ON` if not specified)
 `-DCMAKE_INSTALL_PREFIX=<path-to-install>` (You have to run `make install` to install the libcrtm* into your desired directory `<build>/path-to-install`).
+`-DFIX_FILE_PATH=<path-to-fix-files>` (default is `fix/`, populated by Get_CRTM_Binary_Files.sh if needed)
+`-DBUILD_TESTING = ON / OFF` (enables/disabled testing under `test/`; default is ON)
 
 
 example:
@@ -149,7 +152,7 @@ cmake -DCMAKE_BUILD_TYPE=DEBUG -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=./
 ```
 this would make a debug build of CRTM, static library (`libcrtm.a`) and set the optional install location to `<build>/install/.` (or something similar, search for `libcrtm.*` and `*.mod`).  Custom Install only happens if you issue the `make install` command. 
 
-The first time you run `cmake`, it will check for a `fix/` directory one level above, and if it does't find it, it will download the binary files (according to `test/CMakeLists.txt` file information), and store them in `<build>/test_data/**`.  
+The first time you run `cmake`, it will check for a `fix/` directory one level above (or `FIX_FILE_PATH` CMake variable), and if it does't find it, it will download the binary files (according to `test/CMakeLists.txt` file information), and store them in `<build>/test_data/**`.  
 
 Linking to the library
 ----------------------
