@@ -121,8 +121,10 @@ export(EXPORT ${PROJECT_NAME}-config
 # Additional settings for test and build type (unchanged from original)
 set(CRTM_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_subdirectory(test)
 include(CTest)
+if(BUILD_TESTING)
+  add_subdirectory(test)
+endif()
 
 # Summary (unchanged from original)
 message(STATUS "Configuration summary")
