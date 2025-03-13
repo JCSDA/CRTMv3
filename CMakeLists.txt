@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.12)
 project(crtm VERSION 3.1.1 LANGUAGES Fortran)
 
 option(OPENMP "Build crtm with OpenMP support" ON)
+option(FIX_FILE_PATH "Path to fix files (default: fix/)" OFF)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 set(CMAKE_DIRECTORY_LABELS ${PROJECT_NAME})
