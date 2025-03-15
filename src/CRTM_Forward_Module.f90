@@ -601,10 +601,27 @@ CONTAINS
          RETURN
       END IF
 
-      IF( (CloudC%N_PHASE_ELEMENTS /= AeroC%N_PHASE_ELEMENTS) .OR. &
-           (RTV(1)%n_Stokes > 1.AND.CloudC%N_PHASE_ELEMENTS < 6) ) THEN
+      ! Check n_Stokes and number of phase elements
+      IF ( CRTM_CloudCoeff_IsLoaded() .AND. &
+           (RTV(1)%n_Stokes > 1 .AND. CloudC%N_PHASE_ELEMENTS < 6 )) THEN
          Error_Status = FAILURE
-         WRITE( Message,'("N_PHASE_ELEMENTS NOT RIGHT FW ",i0)' ) CloudC%N_PHASE_ELEMENTS
+         WRITE( Message,'("N_PHASE_ELEMENTS OF CLOUD LUT NOT RIGHT ",i0)' ) CloudC%N_PHASE_ELEMENTS
+         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+         RETURN
+      END IF
+
+      IF ( CRTM_AerosolCoeff_IsLoaded() .AND. &
+           (RTV(1)%n_Stokes > 1 .AND. AeroC%N_PHASE_ELEMENTS < 6 )) THEN
+         Error_Status = FAILURE
+         WRITE( Message,'("N_PHASE_ELEMENTS OF AEROSOL LUT NOT RIGHT ",i0)' ) AeroC%N_PHASE_ELEMENTS
+         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+         RETURN
+      END IF
+
+      IF ( CRTM_CloudCoeff_IsLoaded() .AND. CRTM_AerosolCoeff_IsLoaded() .AND. &
+           (CloudC%N_PHASE_ELEMENTS /= AeroC%N_PHASE_ELEMENTS) ) THEN
+         Error_Status = FAILURE
+         WRITE( Message,'("N_PHASE_ELEMENTS OF CLOUD AND AEROSOL LUTS DO NOT MATCH")' )
          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
          RETURN
       END IF

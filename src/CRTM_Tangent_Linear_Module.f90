@@ -657,10 +657,10 @@ CONTAINS
         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
         RETURN
       END IF
-  
-      Atm_TL%Height = Atm%Height 
-   
-      ! ...Check the total number of Atm layers
+
+      Atm_TL%Height = Atm%Height
+
+      ! Check the total number of Atm layers
       IF ( Atm%n_Layers > MAX_N_LAYERS .OR. Atm_TL%n_Layers > MAX_N_LAYERS) THEN
         Error_Status = FAILURE
         WRITE( Message,'("Added layers [",i0,"] cause total [",i0,"] to exceed the ",&
@@ -670,13 +670,29 @@ CONTAINS
         RETURN
       END IF
 
-      IF( (CloudC%N_PHASE_ELEMENTS /= AeroC%N_PHASE_ELEMENTS) .or. &
-         (RTV(1)%n_Stokes > 1.and.CloudC%N_PHASE_ELEMENTS < 6) ) THEN
-        Error_Status = FAILURE
+      ! Check n_Stokes and number of phase elements
+      IF ( CRTM_CloudCoeff_IsLoaded() .AND. &
+           (RTV(1)%n_Stokes > 1 .AND. CloudC%N_PHASE_ELEMENTS < 6 )) THEN
+         Error_Status = FAILURE
+         WRITE( Message,'("N_PHASE_ELEMENTS OF CLOUD LUT NOT RIGHT ",i0)' ) CloudC%N_PHASE_ELEMENTS
+         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+         RETURN
+      END IF
 
-        WRITE( Message,'("N_PHASE_ELEMENTS NOT RIGHT FW ",i0)' ) CloudC%N_PHASE_ELEMENTS
-        CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-        RETURN
+      IF ( CRTM_AerosolCoeff_IsLoaded() .AND. &
+           (RTV(1)%n_Stokes > 1 .AND. AeroC%N_PHASE_ELEMENTS < 6 )) THEN
+         Error_Status = FAILURE
+         WRITE( Message,'("N_PHASE_ELEMENTS OF AEROSOL LUT NOT RIGHT ",i0)' ) AeroC%N_PHASE_ELEMENTS
+         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+         RETURN
+      END IF
+
+      IF ( CRTM_CloudCoeff_IsLoaded() .AND. CRTM_AerosolCoeff_IsLoaded() .AND. &
+           (CloudC%N_PHASE_ELEMENTS /= AeroC%N_PHASE_ELEMENTS) ) THEN
+         Error_Status = FAILURE
+         WRITE( Message,'("N_PHASE_ELEMENTS OF CLOUD AND AEROSOL LUTS DO NOT MATCH")' )
+         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+         RETURN
       END IF
 
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
@@ -1339,7 +1355,7 @@ CONTAINS
                                              SensorIndex     , & ! Input
                                              ChannelIndex    , & ! Input
                                              RTSolution(ln,m))   ! Input/Output
-                                             
+
               CALL CRTM_Compute_Reflectivity_TL(Atm                 , & ! Input
                                                 AtmOptics(nt)       , & ! Input
                                                 AtmOptics_TL(nt)    , & ! Input

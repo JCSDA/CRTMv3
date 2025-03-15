@@ -99,7 +99,10 @@ else() # Download CRTM coefficients
   # Only untar if the CHECK_PATH does not exist
   if(NOT EXISTS ${UNTAR_DEST}/${CRTM_COEFFS_BRANCH}/)
     message(STATUS "Untarring the downloaded file (~2 minutes) to ${UNTAR_DEST}")
-    execute_process(COMMAND tar -xzf ${DOWNLOAD_DEST} -C ${UNTAR_DEST}
+    # Use the built-in tar feature to work around an issue on Orion with the
+    # system tar command. See: https://github.com/JCSDA/spack-stack/issues/1355
+    execute_process(COMMAND ${CMAKE_COMMAND} -E chdir ${UNTAR_DEST}
+                    ${CMAKE_COMMAND} -E tar xzf ${DOWNLOAD_DEST}
                     RESULT_VARIABLE result
                     OUTPUT_QUIET ERROR_QUIET)
     if(NOT result EQUAL 0)
@@ -425,6 +428,13 @@ target_link_libraries(MWwater_IO PRIVATE crtm)
 add_test(NAME test_MWwater_io
          COMMAND $<TARGET_FILE:MWwater_IO>)
 set_tests_properties(test_MWwater_io PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+# test_MWSurfEM
+add_executable(test_MWSurfEM mains/unit/Unit_Test/test_MWSurfEM.f90)
+target_link_libraries(test_MWSurfEM PRIVATE crtm)
+add_test(NAME test_MWSurfEM
+         COMMAND $<TARGET_FILE:test_MWSurfEM>)
+set_tests_properties(test_MWSurfEM PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 #=================================================================================
 #forward and k_matrix regression tests

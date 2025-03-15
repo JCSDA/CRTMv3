@@ -534,6 +534,7 @@ CONTAINS
     WRITE(fid,fmt) "Solar Irradiance              : ", RTSolution%Solar_Irradiance
     WRITE(fid,fmt) "Reflectance                   : ", RTSolution%Reflectance
     WRITE(fid,fmt_4) "Stokes(1:4)                 : ", RTSolution%Stokes(1:4)
+
     IF ( CRTM_RTSolution_Associated(RTSolution) ) THEN
       WRITE(fid,'(3x,"n_Layers : ",i0)') RTSolution%n_Layers
       WRITE(fid,'(3x,"Upwelling Overcast Radiance :")')
