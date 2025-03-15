@@ -106,7 +106,7 @@ PROGRAM test_TL
   ! -----------------------
   !WRITE( *,'(/5x,"Enter sensor id [hirs4_n18, amsua_metop-a, or mhs_n18]: ")',ADVANCE='NO' )
   !READ( *,'(a)' ) Sensor_Id
-  Sensor_Id = 'amsua_metop-a'
+  Sensor_Id = 'atms_n21'
   Sensor_Id = ADJUSTL(Sensor_Id)
   WRITE( *,'(//5x,"Running CRTM for ",a," sensor...")' ) TRIM(Sensor_Id)
 
