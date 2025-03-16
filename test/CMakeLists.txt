@@ -44,23 +44,24 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results/forward)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results/unit)
 
 
-if( DEFINED ENV{LOCAL_PATH_JEDI_TESTFILES})
-  set(LOCAL_PATH_JEDI_TESTFILES "$ENV{LOCAL_PATH_JEDI_TESTFILES}")
-endif()
-
 if ( DEFINED ENV{CRTM_TEST_ROOT})
   set(CRTM_TEST_ROOT "$ENV{CRTM_TEST_ROOT}")
 else()
   set(CRTM_TEST_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
-
+if(NOT FIX_FILE_PATH)
+  if( DEFINED ENV{LOCAL_PATH_JEDI_TESTFILES})
+    set(FIX_FILE_PATH "$ENV{LOCAL_PATH_JEDI_TESTFILES}/fix")
+  else()
+    set(FIX_FILE_PATH ${CMAKE_SOURCE_DIR}/fix)
+  endif()
+endif()
 
 # If local path to testfiles is defined don't download 
-IF(EXISTS  ${CMAKE_SOURCE_DIR}/fix)
-  set( CRTM_COEFFS_PATH ${CMAKE_SOURCE_DIR} )
-  message(STATUS "use LOCAL_PATH_JEDI_TESTFILES: ${CRTM_COEFFS_PATH}/fix")
-  message("Using existing local fix directory instead of downloading.")
+IF(EXISTS  ${FIX_FILE_PATH})
+  get_filename_component(CRTM_COEFFS_PATH "${FIX_FILE_PATH}/.." ABSOLUTE)
+  message(STATUS "Using existing fix files: ${CRTM_COEFFS_PATH}/fix")
   set( CRTM_COEFFS_BRANCH "" )
 
 else() # Download CRTM coefficients
