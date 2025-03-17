@@ -1723,13 +1723,9 @@ CONTAINS
     ! -----------------------------------------
     ! Populate the SfcOptics_AD structure based
     ! on FORWARD model SfcOptics Compute_Switch
-    ! -----------------------------------------  
-
+    ! -----------------------------------------
     IF ( SfcOptics%Compute ) THEN
-      
-        RTSolution_AD%Surface_Emissivity = SfcOptics_AD%Emissivity(SfcOptics_AD%Index_Sat_Ang,1)
-        
-        Error_Status = CRTM_Compute_SfcOptics_AD( &
+      Error_Status = CRTM_Compute_SfcOptics_AD( &
                        Surface     , & ! Input
                        SfcOptics   , & ! Input
                        SfcOptics_AD, & ! Input
