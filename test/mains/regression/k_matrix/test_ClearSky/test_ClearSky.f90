@@ -144,7 +144,6 @@ PROGRAM test_ClearSky
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
-  
 
   ! 3b. Allocate the STRUCTURES
   ! ---------------------------
@@ -252,7 +251,6 @@ PROGRAM test_ClearSky
       CALL CRTM_RTSolution_Inspect(RTSolution(l,m))
       ! K-MATRIX output
       WRITE( *, '(/3x,"K-MATRIX OUTPUT")')
-      CALL CRTM_RTSolution_Inspect(RTSolution_K(l,m))
       CALL CRTM_Surface_Inspect(Surface_K(l,m))
       CALL CRTM_Atmosphere_Inspect(Atmosphere_K(l,m))
     END DO
