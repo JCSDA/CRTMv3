@@ -39,8 +39,6 @@ PROGRAM test_aerosol_coeff_io_nc
   ! Data dictionary:
   !TYPE(AerosolCoeff_type) :: aero_coeff
   CHARACTER(2000)         :: info
-  CHARACTER(*), PARAMETER :: Aerosol_Model = 'CRTM'
-  CHARACTER(*), PARAMETER :: AerosolCoeff_File = 'AerosolCoeff.nc4'
   CHARACTER(*), PARAMETER :: File_Path = './testinput/'
   LOGICAL,      PARAMETER :: netCDF = .TRUE.
   LOGICAL,      PARAMETER :: Quiet = .TRUE.
@@ -48,6 +46,9 @@ PROGRAM test_aerosol_coeff_io_nc
   TYPE(UnitTest_type)     :: ioTest
   LOGICAL                 :: testPassed
   CHARACTER(*), PARAMETER :: Program_Name = 'Test_Aerosol_Coeff_IO_NetCDF'
+  CHARACTER(256)          :: Aerosol_Model
+  CHARACTER(256)          :: AerosolCoeff_File = 'AerosolCoeff.nc4'
+
 
   ! Initialize Unit test:
   CALL UnitTest_Init(ioTest, .TRUE.)
@@ -55,6 +56,10 @@ PROGRAM test_aerosol_coeff_io_nc
 
   ! Greeting:
   WRITE(*,*) 'HELLO, THIS IS A TEST CODE TO INSPECT AerosolCoeff files.'
+
+  ! Default CRTM
+  Aerosol_Model = 'CRTM'
+  AerosolCoeff_File = 'AerosolCoeff.nc4'
   WRITE(*,*) 'test_aerosol_coeff_io_nc', 'The following aerosol scheme is investigated: ', Aerosol_Model
   ! Load the aerosol coefficient look-up table:
   err_stat = 3
@@ -66,11 +71,32 @@ PROGRAM test_aerosol_coeff_io_nc
                 Quiet             = Quiet    )
   CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
   testPassed = UnitTest_Passed(ioTest)
-
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_Load_Aerosol_Coeff' ,'Error loading AerosolCoeff data', err_stat )
     STOP 1
   END IF
+
+  ! GOCART-GEOS5
+  Aerosol_Model = 'GOCART-GEOS5'
+  AerosolCoeff_File = 'AerosolCoeff.GOCART-GEOS5.nc4'
+  WRITE(*,*) 'test_aerosol_coeff_io_nc', 'The following aerosol scheme is investigated: ', Aerosol_Model
+  ! Load the aerosol coefficient look-up table:
+  err_stat = 3
+  err_stat = CRTM_AerosolCoeff_Load( &
+                Aerosol_Model              , &
+                AerosolCoeff_File          , &
+                File_Path                  , &
+                netCDF            = netCDF , &
+                Quiet             = Quiet    )
+  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
+  testPassed = UnitTest_Passed(ioTest)
+  IF ( err_stat /= SUCCESS ) THEN
+    CALL Display_Message( 'CRTM_Load_Aerosol_Coeff' ,'Error loading AerosolCoeff data', err_stat )
+    STOP 1
+  END IF
+
+
+
   STOP 0
 
 END PROGRAM test_aerosol_coeff_io_nc
