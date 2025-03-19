@@ -274,6 +274,9 @@ list (APPEND TLAD_tests
 add_executable(check_tropics mains/application/check_tropics.f90)
 target_link_libraries(check_tropics PRIVATE crtm)
 
+add_executable(TB_to_Radiance mains/application/TB_to_Radiance.f90)
+target_link_libraries(TB_to_Radiance PRIVATE crtm)
+
 add_executable(test_check_crtm mains/application/check_crtm.F90)
 target_link_libraries(test_check_crtm PRIVATE crtm)
 add_test(NAME test_check_crtm 
