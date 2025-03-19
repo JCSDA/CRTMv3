@@ -8,7 +8,7 @@ PROGRAM TB_to_Radiance
 
   ! Module usage
   USE CRTM_Module
-  USE CRTM_Planck_Functions,      ONLY: CRTM_Planck_Radiance
+  USE CRTM_Planck_Functions,      ONLY: CRTM_Planck_Radiance, CRTM_Planck_Temperature
   USE CRTM_SpcCoeff  , ONLY: SC
   ! Disable all implicit typing
   IMPLICIT NONE
@@ -55,7 +55,7 @@ PROGRAM TB_to_Radiance
   INTEGER :: err_stat
   INTEGER :: n_channels
   INTEGER :: n, i, SensorIndex, ChannelIndex
-  REAL(fp) :: Radiance
+  REAL(fp) :: Radiance, tmp
   TYPE(CRTM_ChannelInfo_type)             :: chinfo(N_SENSORS)
 
   ! ... Cloud coefficient information
@@ -138,7 +138,17 @@ PROGRAM TB_to_Radiance
              BT(i)        , &  !* input
              Radiance     )    !* output
              
-        PRINT *, i, BT(i), Radiance
+        PRINT *, 'A',  i, BT(i), Radiance
+
+        !** check to ensure it works both ways
+        CALL CRTM_Planck_Temperature( &
+             SensorIndex  , &
+             ChannelIndex , &
+             Radiance     , &    !* input
+             tmp           )  !* output TB
+
+        PRINT *, 'B', i, Radiance, tmp
+        
      END DO
   END DO Sensor_Loop
 
