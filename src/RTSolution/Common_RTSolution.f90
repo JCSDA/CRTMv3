@@ -1750,16 +1750,20 @@ CONTAINS
     ELSE
 
       IF( RTV%Scattering_RT ) THEN
+        
         !User_Emissivity_AD = SUM(SfcOptics_AD%Emissivity(1:nZ,1))
+        !bugfix test: CD option 1, follow CRTM v2.4
+        User_Emissivity_AD = ZERO
+
         IF( RTV%Diffuse_Surface) THEN
-          ! bugfix test: CD
-          User_Emissivity_AD = SUM(SfcOptics_AD%Emissivity(1:nZ,1))
+          ! bugfix test: CD, option 2, seems to have some effects on ocean though unclear why
+          ! User_Emissivity_AD = SUM(SfcOptics_AD%Emissivity(1:nZ,1))
           IF( RTV%mth_Azi == 0 ) THEN
-        ! Assuming Lambertian surface isn't polarized!
-          DO i = SfcOptics%n_Angles, 1, -1
-            User_Emissivity_AD = User_Emissivity_AD - &
-            (SUM(SfcOptics_AD%Reflectivity(1:SfcOptics%n_Angles,1,i,1))*SfcOptics%Weight(i))
-          END DO
+            ! Assuming Lambertian surface isn't polarized!
+            DO i = SfcOptics%n_Angles, 1, -1
+              User_Emissivity_AD = User_Emissivity_AD - &
+              (SUM(SfcOptics_AD%Reflectivity(1:SfcOptics%n_Angles,1,i,1))*SfcOptics%Weight(i))
+            END DO
           ELSE
             SfcOptics_AD%Reflectivity(1:SfcOptics%n_Angles, 1, 1:SfcOptics%n_Angles, 1) = ZERO
             SfcOptics_AD%Direct_Reflectivity(1:SfcOptics%n_Angles,1) = ZERO
@@ -1767,9 +1771,9 @@ CONTAINS
           END IF
 
         ELSE ! Specular surface
-        DO i = nZ, 1, -1
-          User_Emissivity_AD = User_Emissivity_AD - SfcOptics_AD%Reflectivity(i,1,i,1)
-        END DO
+          DO i = nZ, 1, -1
+            User_Emissivity_AD = User_Emissivity_AD - SfcOptics_AD%Reflectivity(i,1,i,1)
+          END DO
         END IF
 !      Direct_Reflectivity_AD = SUM(SfcOptics_AD%Direct_Reflectivity(1:nZ,1))
 !      SfcOptics_AD%Direct_Reflectivity(1,1) = SfcOptics_AD%Direct_Reflectivity(1,1) +
