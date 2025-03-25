@@ -125,6 +125,7 @@ list( APPEND Simple_Sensor_Ids
         v.abi_gr
         abi_g18
         modis_aqua
+        amsua_n19
 )
 
 list( APPEND ScatteringSwitch_Sensor_Ids

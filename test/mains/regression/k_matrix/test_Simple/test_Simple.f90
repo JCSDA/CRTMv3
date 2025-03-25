@@ -160,7 +160,7 @@ PROGRAM test_Simple
     Message = 'Error allocating CRTM Atmosphere_K structure'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
-  END IF 
+  END IF
   ! Deleted in V2.4.1
   ! The comparative K-MATRIX structure inside the results file
   !CALL CRTM_Atmosphere_Create( atm_K, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
@@ -257,6 +257,7 @@ PROGRAM test_Simple
       CALL CRTM_RTSolution_Inspect(RTSolution(l,m))
       ! K-MATRIX output
       WRITE( *, '(/3x,"K-MATRIX OUTPUT")')
+      CALL CRTM_RTSolution_Inspect(RTSolution_K(l,m))
       CALL CRTM_Surface_Inspect(Surface_K(l,m))
       CALL CRTM_Atmosphere_Inspect(Atmosphere_K(l,m))
     END DO

@@ -59,8 +59,8 @@ MODULE Common_RTSolution
   ! Module parameters
   ! -----------------
   ! Version Id for the module
-  CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
-  '$Id: $'
+  ! CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
+  ! '$Id: $'
 
 CONTAINS
 
@@ -1723,12 +1723,9 @@ CONTAINS
     ! -----------------------------------------
     ! Populate the SfcOptics_AD structure based
     ! on FORWARD model SfcOptics Compute_Switch
-    ! -----------------------------------------  
-
+    ! -----------------------------------------
     IF ( SfcOptics%Compute ) THEN
-      
         RTSolution_AD%Surface_Emissivity = SfcOptics_AD%Emissivity(SfcOptics_AD%Index_Sat_Ang,1)
-        
         Error_Status = CRTM_Compute_SfcOptics_AD( &
                        Surface     , & ! Input
                        SfcOptics   , & ! Input
@@ -1750,14 +1747,9 @@ CONTAINS
     ELSE
 
       IF( RTV%Scattering_RT ) THEN
-        
-        !User_Emissivity_AD = SUM(SfcOptics_AD%Emissivity(1:nZ,1))
-        !bugfix test: CD option 1, follow CRTM v2.4
-        User_Emissivity_AD = ZERO
-
+        ! User_Emissivity_AD = SUM(SfcOptics_AD%Emissivity(1:nZ,1)) ! V3.0 implementation
+        User_Emissivity_AD = ZERO ! V2.4 implementation
         IF( RTV%Diffuse_Surface) THEN
-          ! bugfix test: CD, option 2, seems to have some effects on ocean though unclear why
-          ! User_Emissivity_AD = SUM(SfcOptics_AD%Emissivity(1:nZ,1))
           IF( RTV%mth_Azi == 0 ) THEN
             ! Assuming Lambertian surface isn't polarized!
             DO i = SfcOptics%n_Angles, 1, -1
@@ -1769,7 +1761,6 @@ CONTAINS
             SfcOptics_AD%Direct_Reflectivity(1:SfcOptics%n_Angles,1) = ZERO
             SfcOptics_AD%Emissivity(1:SfcOptics%n_Angles,1) = ZERO
           END IF
-
         ELSE ! Specular surface
           DO i = nZ, 1, -1
             User_Emissivity_AD = User_Emissivity_AD - SfcOptics_AD%Reflectivity(i,1,i,1)
