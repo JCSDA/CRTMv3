@@ -57,9 +57,11 @@ PROGRAM test_ClearSky
   ! Declarations for Adjoint comparisons
   INTEGER :: n_la, n_ma
   INTEGER :: n_ls, n_ms
-  CHARACTER(256) :: atmad_file, sfcad_file
+  INTEGER :: n_l, n_m
+  CHARACTER(256) :: atmad_file, sfcad_file, rtsad_File
   TYPE(CRTM_Atmosphere_type), ALLOCATABLE :: atm_AD(:)
   TYPE(CRTM_Surface_type)   , ALLOCATABLE :: sfc_AD(:)
+  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rts_AD(:,:)
 
 
 
@@ -246,6 +248,8 @@ PROGRAM test_ClearSky
       ! FWD output
       WRITE( *, '(/3x,"FORWARD OUTPUT")')
       CALL CRTM_RTSolution_Inspect(RTSolution(l,m))
+      WRITE( *, '(/3x,"ADJOINT OUTPUT")')
+      CALL CRTM_RTSolution_Inspect(RTSolution_AD(l,m))
     END DO
     ! ADJOINT output
     WRITE( *, '(/3x,"ADJOINT OUTPUT")')
@@ -291,6 +295,21 @@ PROGRAM test_ClearSky
       STOP 1
     END IF
   END IF
+  ! 9a.3 RTSolution_AD file
+  ! ...Generate filename
+  rtsad_file = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution_AD.bin'
+  ! ...Check if the file exists
+  IF ( .NOT. File_Exists(rtsad_file) ) THEN
+    Message = 'RTSolution_AD save file does not exist. Creating...'
+    CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
+    ! ...File not found, so write RTSolution_AD structure to file
+    Error_Status = CRTM_RTSolution_WriteFile( rtsad_file, RTSolution_AD, Quiet=.TRUE. )
+    IF ( Error_Status /= SUCCESS ) THEN
+      Message = 'Error creating RTSolution_AD save file'
+      CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+      STOP 1
+    END IF
+  END IF
 
   ! 9b. Inquire the saved files
   ! ---------------------------
@@ -312,11 +331,21 @@ PROGRAM test_ClearSky
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
+  ! 9b.3 RTSolution_AD file
+  Error_Status = CRTM_RTSolution_InquireFile(rtsad_file, &
+                                             n_Channels = n_l, &
+                                             n_Profiles = n_m )
+  IF ( Error_Status /= SUCCESS ) THEN
+    Message = 'Error inquiring RTSolution_AD save file'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    STOP 1
+  END IF
 
   ! 9c. Compare the dimensions
   ! --------------------------
   IF ( n_la /= 0 .OR. n_ma /= N_PROFILES .OR. &
-       n_ls /= 0 .OR. n_ms /= N_PROFILES      ) THEN
+       n_ls /= 0 .OR. n_ms /= N_PROFILES .OR. &
+       n_l /= n_Channels .OR. n_m /= N_PROFILES ) THEN
     Message = 'Dimensions of saved data different from that calculated!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
@@ -338,6 +367,20 @@ PROGRAM test_ClearSky
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
+  ! 9d.3 RTSolution_AD file
+  ALLOCATE( rts_AD( n_l, n_m ), STAT=Allocate_Status )
+  IF ( Allocate_Status /= 0 ) THEN
+    Message = 'Error allocating RTSolution_AD saved data array'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    STOP 1
+  END IF
+  Error_Status = CRTM_RTSolution_ReadFile( rtsad_file, rts_AD, Quiet=.TRUE. )
+  IF ( Error_Status /= SUCCESS ) THEN
+    Message = 'Error reading RTSolution_AD save file'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    STOP 1
+  END IF
+
 
   ! 9e. Compare some Adjoints
   ! --------------------------
@@ -373,6 +416,21 @@ PROGRAM test_ClearSky
     END IF
     STOP 1
   END IF
+  ! 9e.3 RTSolution_AD
+  IF ( ALL(CRTM_RTSolution_Compare(RTSolution_AD, rts_AD, n_SigFig=5)) ) THEN
+    Message = 'RTSolution_AD results are the same!'
+    CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
+  ELSE
+    Message = 'RTSolution_AD results are different!'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    rtsad_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution_AD.bin'
+    Error_Status = CRTM_RTSolution_WriteFile( rtsad_File, RTSolution_AD, Quiet=.TRUE. )
+    IF ( Error_Status /= SUCCESS ) THEN
+      Message = 'Error creating temporary RTSolution_AD save file for failed comparison'
+      CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    END IF
+    STOP 1
+  END IF
   ! ============================================================================
 
   ! ============================================================================
@@ -398,7 +456,7 @@ PROGRAM test_ClearSky
 
   ! 10b. Deallocate the arrays
   ! --------------------------
-  DEALLOCATE(RTSolution, RTSolution_AD, &
+  DEALLOCATE(RTSolution, RTSolution_AD, rts_AD, &
              STAT = Allocate_Status)
   ! ============================================================================
 
