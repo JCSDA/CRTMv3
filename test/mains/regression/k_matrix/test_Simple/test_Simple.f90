@@ -160,7 +160,7 @@ PROGRAM test_Simple
     Message = 'Error allocating CRTM Atmosphere_K structure'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
-  END IF 
+  END IF
   ! Deleted in V2.4.1
   ! The comparative K-MATRIX structure inside the results file
   !CALL CRTM_Atmosphere_Create( atm_K, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
@@ -370,6 +370,7 @@ PROGRAM test_Simple
       Message = 'Error creating temporary Atmosphere_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! 9e.2 Surface
   IF ( ALL(CRTM_Surface_Compare(Surface_K, sfc_k, n_SigFig=5)) ) THEN
@@ -385,6 +386,7 @@ PROGRAM test_Simple
       Message = 'Error creating temporary Surface_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! ============================================================================
 

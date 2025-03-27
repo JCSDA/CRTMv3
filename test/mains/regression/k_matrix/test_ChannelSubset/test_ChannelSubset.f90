@@ -80,7 +80,7 @@ PROGRAM Example6_ChannelSubset
   TYPE(CRTM_Surface_type)   , ALLOCATABLE :: Surface_K(:,:)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution_K(:,:)
   ! ============================================================================
-  
+
   !First, make sure the right number of inputs have been provided
   IF(COMMAND_ARGUMENT_COUNT().NE.1)THEN
      WRITE(*,*) TRIM(PROGRAM_NAME)//': ERROR, ONLY one command-line argument required, returning'
@@ -395,6 +395,7 @@ PROGRAM Example6_ChannelSubset
       Message = 'Error creating temporary Atmosphere_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! 9e.2 Surface
   IF ( ALL(CRTM_Surface_Compare(Surface_K, sfc_k, n_SigFig=5)) ) THEN
@@ -410,6 +411,7 @@ PROGRAM Example6_ChannelSubset
       Message = 'Error creating temporary Surface_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! ============================================================================
 

@@ -425,16 +425,14 @@ PROGRAM test_Simple
   ELSE
     Message = 'Atmosphere_AD Adjoints are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-    STOP 1
     ! Write the current Atmosphere_AD results to file
     atmad_file = TRIM(Sensor_Id)//'.Atmosphere.bin'
-
-    Error_Status = CRTM_Atmosphere_WriteFile( atmad_file, atm_AD, Quiet=.TRUE. ) 
+    Error_Status = CRTM_Atmosphere_WriteFile( atmad_file, atm_AD, Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary Atmosphere_AD save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-      STOP 1
     END IF
+    STOP 1
   END IF
   ! 9e.2 Surface
   IF ( ALL(CRTM_Surface_Compare(Surface_AD, sfc_AD, n_SigFig=5)) ) THEN
@@ -443,15 +441,14 @@ PROGRAM test_Simple
   ELSE
     Message = 'Surface_AD Adjoints are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-    STOP 1
     ! Write the current Surface_AD results to file
     sfcad_file = TRIM(Sensor_Id)//'.Surface.bin'
     Error_Status = CRTM_Surface_WriteFile( sfcad_file, Surface_AD, Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary Surface_AD save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-      STOP 1
     END IF
+    STOP 1
   END IF
   ! ============================================================================
 

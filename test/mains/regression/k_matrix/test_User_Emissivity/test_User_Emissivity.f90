@@ -2,7 +2,7 @@
 ! test_User_Emissivity
 !
 ! Test program to test user-defined emissivity
-! in the CRTM K-Matrix function. 
+! in the CRTM K-Matrix function.
 !
 !
 
@@ -204,7 +204,7 @@ PROGRAM test_User_Emissivity
   END IF
 
   CALL CRTM_Options_SetEmissivity(Opt(1), Emissivity)
-  
+
   ! ============================================================================
 
 
@@ -378,6 +378,7 @@ PROGRAM test_User_Emissivity
       Message = 'Error creating temporary Atmosphere_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! 9e.2 Surface
   IF ( ALL(CRTM_Surface_Compare(Surface_K, sfc_k, n_SigFig=5)) ) THEN
@@ -393,6 +394,7 @@ PROGRAM test_User_Emissivity
       Message = 'Error creating temporary Surface_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! ============================================================================
 
@@ -432,6 +434,6 @@ CONTAINS
 
   INCLUDE 'Load_Atm_Data.inc'
   INCLUDE 'Load_Sfc_Data.inc'
-  
+
 
 END PROGRAM test_User_Emissivity
