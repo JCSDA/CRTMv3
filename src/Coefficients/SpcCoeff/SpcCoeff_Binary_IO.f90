@@ -419,9 +419,9 @@ CONTAINS
     
     ! ...Read the channel data
     IF( dummy%Version > 3 ) THEN
-      ! Binary coefficient version 3 introduced for TROPICS instrument.
+      ! Binary coefficient version 4 introduced for TROPICS instrument. 
       ! The SpcCoeff coefficients contain 'PolAngle' as an additional
-      ! array.
+      ! array.  All SpcCoeff files needing PolAngle will be version 4 or higher internally. 
       READ ( fid, IOSTAT=io_stat, IOMSG=io_msg ) &
         SpcCoeff%Sensor_Channel            , &
         SpcCoeff%Polarization              , &
