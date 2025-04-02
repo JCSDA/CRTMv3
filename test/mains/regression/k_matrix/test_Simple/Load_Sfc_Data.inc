@@ -21,24 +21,24 @@
     ! 4a.1 Profile #1
     ! ---------------
     ! ...Land surface characteristics
-    !sfc(1)%Land_Coverage     = 0.1_fp
-    !sfc(1)%Land_Type         = TUNDRA_SURFACE_TYPE
-    !sfc(1)%Land_Temperature  = 272.0_fp
-    !sfc(1)%Lai               = 0.17_fp
-    !sfc(1)%Soil_Type         = COARSE_SOIL_TYPE
-    !sfc(1)%Vegetation_Type   = GROUNDCOVER_VEGETATION_TYPE
+    sfc(1)%Land_Coverage     = 0.1_fp
+    sfc(1)%Land_Type         = TUNDRA_SURFACE_TYPE
+    sfc(1)%Land_Temperature  = 272.0_fp
+    sfc(1)%Lai               = 0.17_fp
+    sfc(1)%Soil_Type         = COARSE_SOIL_TYPE
+    sfc(1)%Vegetation_Type   = GROUNDCOVER_VEGETATION_TYPE
     ! ...Water surface characteristics
-    sfc(1)%Water_Coverage    = 1.0_fp
+    sfc(1)%Water_Coverage    = 0.5_fp
     sfc(1)%Water_Type        = SEA_WATER_TYPE
     sfc(1)%Water_Temperature = 275.0_fp
     ! ...Snow coverage characteristics
-    !sfc(1)%Snow_Coverage    = 0.25_fp
-    !sfc(1)%Snow_Type        = FRESH_SNOW_TYPE
-    !sfc(1)%Snow_Temperature = 265.0_fp
+    sfc(1)%Snow_Coverage    = 0.25_fp
+    sfc(1)%Snow_Type        = FRESH_SNOW_TYPE
+    sfc(1)%Snow_Temperature = 265.0_fp
     ! ...Ice surface characteristics
-    !sfc(1)%Ice_Coverage    = 0.15_fp
-    !sfc(1)%Ice_Type        = FRESH_ICE_TYPE
-    !sfc(1)%Ice_Temperature = 269.0_fp
+    sfc(1)%Ice_Coverage    = 0.15_fp
+    sfc(1)%Ice_Type        = FRESH_ICE_TYPE
+    sfc(1)%Ice_Temperature = 269.0_fp
 
 
 
