@@ -91,7 +91,7 @@ PROGRAM test_VerticalCoordinates
   ENDIF
   CALL GET_COMMAND_ARGUMENT(1,Sensor_Id)   !read in the value
 
-  
+
   ! Program header
   ! --------------
   CALL CRTM_Version( Version )
@@ -397,6 +397,7 @@ PROGRAM test_VerticalCoordinates
       Message = 'Error creating temporary RTSolution save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! regional atmosphere
   IF ( ALL(CRTM_RTSolution_Compare(RTSolution_NAM, rts_NAM)) ) THEN
@@ -412,6 +413,7 @@ PROGRAM test_VerticalCoordinates
       Message = 'Error creating temporary regional RTSolution save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! global atmosphere
   IF ( ALL(CRTM_RTSolution_Compare(RTSolution_GFS, rts_GFS)) ) THEN
@@ -427,6 +429,7 @@ PROGRAM test_VerticalCoordinates
       Message = 'Error creating temporary global RTSolution save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! ============================================================================
 

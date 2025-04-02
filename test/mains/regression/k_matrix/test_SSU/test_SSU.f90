@@ -20,8 +20,6 @@ PROGRAM test_SSU
   ! Parameters
   ! ----------
   CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'test_SSU'
-  CHARACTER(*), PARAMETER :: PROGRAM_RCS_ID = &
-    '$Id: test_SSU.f90 50587 2015-01-27 20:49:52Z paul.vandelst@noaa.gov $'
   CHARACTER(*), PARAMETER :: COEFFICIENTS_PATH = './testinput/'
   CHARACTER(*), PARAMETER :: RESULTS_PATH = './results/k_matrix/'
 
@@ -59,9 +57,11 @@ PROGRAM test_SSU
   ! Declarations for Jacobian comparisons
   INTEGER :: n_la, n_ma
   INTEGER :: n_ls, n_ms
-  CHARACTER(256) :: atmk_File, sfck_File
+  INTEGER :: n_l, n_m
+  CHARACTER(256) :: atmk_File, sfck_File, rtsk_File
   TYPE(CRTM_Atmosphere_type), ALLOCATABLE :: atm_k(:,:)
   TYPE(CRTM_Surface_type)   , ALLOCATABLE :: sfc_k(:,:)
+  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rts_k(:,:)
 
 
 
@@ -265,6 +265,7 @@ PROGRAM test_SSU
       CALL CRTM_RTSolution_Inspect(RTSolution(l,m))
       ! K-MATRIX output
       WRITE( *, '(/3x,"K-MATRIX OUTPUT")')
+      CALL CRTM_RTSolution_Inspect(RTSolution_K(l,m))
       CALL CRTM_Surface_Inspect(Surface_K(l,m))
       CALL CRTM_Atmosphere_Inspect(Atmosphere_K(l,m))
     END DO
@@ -309,6 +310,21 @@ PROGRAM test_SSU
       STOP 1
     END IF
   END IF
+  ! 9a.3 RTSolution_K file
+  ! ...Generate filename
+  rtsk_file = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution_K.bin'
+  ! ...Check if the file exists
+  IF ( .NOT. File_Exists(rtsk_file) ) THEN
+    Message = 'RTSolution_K save file does not exist. Creating...'
+    CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
+    ! ...File not found, so write RTSolution_K structure to file
+    Error_Status = CRTM_RTSolution_WriteFile( rtsk_file, RTSolution_K, Quiet=.TRUE. )
+    IF ( Error_Status /= SUCCESS ) THEN
+      Message = 'Error creating RTSolution_K save file'
+      CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+      STOP 1
+    END IF
+  END IF
 
   ! 9b. Inquire the saved files
   ! ---------------------------
@@ -330,16 +346,26 @@ PROGRAM test_SSU
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
-
-  ! 9c. Compare the dimensions
-  ! --------------------------
-  IF ( n_la /= n_Channels .OR. n_ma /= N_PROFILES .OR. &
-       n_ls /= n_Channels .OR. n_ms /= N_PROFILES      ) THEN
-    Message = 'Dimensions of saved data different from that calculated!'
+  ! 9b.3 RTSolution_K file
+  Error_Status = CRTM_RTSolution_InquireFile(rtsk_file, &
+                                             n_Channels = n_l, &
+                                             n_Profiles = n_m )
+  IF ( Error_Status /= SUCCESS ) THEN
+    Message = 'Error inquiring RTSolution_K save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
 
+
+  ! 9c. Compare the dimensions
+  ! --------------------------
+  IF ( n_la /= n_Channels .OR. n_ma /= N_PROFILES .OR. &
+       n_ls /= n_Channels .OR. n_ms /= N_PROFILES .OR. &
+       n_l  /= n_Channels .OR. n_m  /= N_PROFILES ) THEN
+    Message = 'Dimensions of saved data different from that calculated!'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    STOP 1
+  END IF
   ! 9d. Read the saved data
   ! -----------------------
   ! 9d.1 Atmosphere file
@@ -356,6 +382,20 @@ PROGRAM test_SSU
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
+  ! 9d.3 RTSolution_K file
+  ALLOCATE( rts_k( n_l, n_m ), STAT=Allocate_Status )
+  IF ( Allocate_Status /= 0 ) THEN
+    Message = 'Error allocating RTSolution_K saved data array'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    STOP 1
+  END IF
+  Error_Status = CRTM_RTSolution_ReadFile( rtsk_file, rts_k, Quiet=.TRUE. )
+  IF ( Error_Status /= SUCCESS ) THEN
+    Message = 'Error reading RTSolution_K save file'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    STOP 1
+  END IF
+
 
   ! 9e. Compare some Jacobians
   ! --------------------------
@@ -373,6 +413,7 @@ PROGRAM test_SSU
       Message = 'Error creating temporary Atmosphere_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! 9e.2 Surface
   IF ( ALL(CRTM_Surface_Compare(Surface_K, sfc_k, n_SigFig=5)) ) THEN
@@ -388,6 +429,22 @@ PROGRAM test_SSU
       Message = 'Error creating temporary Surface_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
+  END IF
+  ! 9e.3 RTSolution_K
+  IF ( ALL(CRTM_RTSolution_Compare(RTSolution_K, rts_k, n_SigFig=5)) ) THEN
+    Message = 'RTSolution_K results are the same!'
+    CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
+  ELSE
+    Message = 'RTSolution_K results are different!'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    rtsk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution_K.bin'
+    Error_Status = CRTM_RTSolution_WriteFile( rtsk_File, RTSolution_K, Quiet=.TRUE. )
+    IF ( Error_Status /= SUCCESS ) THEN
+      Message = 'Error creating temporary RTSolution_K save file for failed comparison'
+      CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    END IF
+    STOP 1
   END IF
   ! ============================================================================
 
@@ -417,7 +474,7 @@ PROGRAM test_SSU
   ! --------------------------
   DEALLOCATE(RTSolution, RTSolution_K, &
              Surface_K, Atmosphere_K, &
-             sfc_K, atm_K, &
+             sfc_k, atm_k, rts_k, &
              STAT = Allocate_Status)
   ! ============================================================================
 

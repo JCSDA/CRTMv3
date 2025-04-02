@@ -120,7 +120,7 @@ PROGRAM test_VerticalCoordinates
   ENDIF
   CALL GET_COMMAND_ARGUMENT(1,Sensor_Id)   !read in the value
 
-  
+
   ! Program header
   ! --------------
   CALL CRTM_Version( Version )
@@ -618,6 +618,7 @@ PROGRAM test_VerticalCoordinates
       Message = 'Error creating temporary Atmosphere_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! NAM resolution
   IF ( ALL(CRTM_Atmosphere_Compare(Atmosphere_NAM_K, atm_NAM_k)) ) THEN
@@ -633,6 +634,7 @@ PROGRAM test_VerticalCoordinates
       Message = 'Error creating temporary Atmosphere_NAM_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! GFS resolution
   IF ( ALL(CRTM_Atmosphere_Compare(Atmosphere_GFS_K, atm_GFS_k)) ) THEN
@@ -648,6 +650,7 @@ PROGRAM test_VerticalCoordinates
       Message = 'Error creating temporary Atmosphere_GFS_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
 
   ! 9e.2 Surface
@@ -665,6 +668,7 @@ PROGRAM test_VerticalCoordinates
       Message = 'Error creating temporary Surface_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! NAM
   IF ( ALL(CRTM_Surface_Compare(Surface_NAM_K, sfc_NAM_k, n_SigFig=5)) ) THEN
@@ -680,6 +684,7 @@ PROGRAM test_VerticalCoordinates
       Message = 'Error creating temporary Surface_NAM_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! GFS
   IF ( ALL(CRTM_Surface_Compare(Surface_GFS_K, sfc_GFS_k, n_SigFig=5)) ) THEN
@@ -695,6 +700,7 @@ PROGRAM test_VerticalCoordinates
       Message = 'Error creating temporary Surface_GFS_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
+    STOP 1
   END IF
   ! ============================================================================
 
