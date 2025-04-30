@@ -23,7 +23,7 @@ PROGRAM EmisCoeff_NC2BIN
                                  Destroy_EmisCoeff, Equal_EmisCoeff
   USE EmisCoeff_Binary_IO, ONLY: Read_EmisCoeff_Binary, Write_EmisCoeff_Binary
   USE EmisCoeff_netCDF_IO, ONLY: Read_EmisCoeff_netCDF, Write_EmisCoeff_netCDF
-  USE SignalFile_Utility
+
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -32,7 +32,7 @@ PROGRAM EmisCoeff_NC2BIN
   ! Parameters
   ! ----------
   CHARACTER(*), PARAMETER :: PROGRAM_NAME = 'EmisCoeff_NC2BIN'
-  CHARACTER(*), PARAMETER :: PROGRAM_RCS_ID = &
+  CHARACTER(*), PARAMETER :: PROGRAM_RCS_ID = ''
 
 
   ! ---------
@@ -59,7 +59,7 @@ PROGRAM EmisCoeff_NC2BIN
     CALL Display_Message( PROGRAM_NAME, &
                           'File '//TRIM( NC_Filename )//' not found.', &
                           FAILURE )
-    STOP
+    STOP 0
   END IF
 
   WRITE( *, FMT     = '( /5x, "Enter the OUTPUT Binary EmisCoeff file: " )', &
@@ -72,7 +72,7 @@ PROGRAM EmisCoeff_NC2BIN
     CALL Display_Message( PROGRAM_NAME, &
                           'Output filename is the same as the input filename!', &
                           FAILURE )
-    STOP
+    STOP 0
   END IF
 
   ! Read the input netCDF file
@@ -83,7 +83,7 @@ PROGRAM EmisCoeff_NC2BIN
                           'Error reading netCDF EmisCoeff file '//&
                           TRIM( NC_Filename ), &
                           Error_Status )
-    STOP
+    STOP 0
   END IF
 
   ! Write the binary file
@@ -94,7 +94,7 @@ PROGRAM EmisCoeff_NC2BIN
                           'Error writing Binary EmisCoeff file '//&
                           TRIM( BIN_Filename ), &
                           Error_Status )
-    STOP
+    STOP 0
   END IF
 
   ! Test read the binary data file
@@ -105,7 +105,7 @@ PROGRAM EmisCoeff_NC2BIN
                           'Error reading Binary EmisCoeff file '//&
                           TRIM( BIN_Filename ), &
                           Error_Status )
-    STOP
+    STOP 0
   END IF
 
   ! Compare the two structures
@@ -122,15 +122,6 @@ PROGRAM EmisCoeff_NC2BIN
                           INFORMATION )
   END IF
   
-  ! Create a signal file indicating success
-  Error_Status = Create_SignalFile( BIN_Filename )
-  IF ( Error_Status /= SUCCESS ) THEN
-    CALL Display_Message( PROGRAM_NAME, &
-                          'Error creating signal file for '//TRIM(BIN_Filename), &
-                          FAILURE )
-    STOP
-  END IF 
-
   ! Destroy the structures
   Error_Status = Destroy_EmisCoeff( EmisCoeff )
   IF ( Error_Status /= SUCCESS ) THEN

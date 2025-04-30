@@ -387,14 +387,6 @@ foreach(testtype IN LISTS IRwaterCoef_Utils)
         target_link_libraries(${testtype} PRIVATE crtm)
 endforeach()
 
-list (APPEND EmisCoef_Utils
-  EmisCoeff_NC2BIN
-#  EmisCoeff_BIN2NC   !** doesn't exist yet (BTJ)
-)
-foreach(testtype IN LISTS EmisCoef_Utils)
-        add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/EmisCoeff/EmisCoeff_legacy/${testtype}/${testtype}.f90)
-        target_link_libraries(${testtype} PRIVATE crtm)
-endforeach()
 
 
 #---------------------------------------------------------------------------------
