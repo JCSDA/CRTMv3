@@ -319,10 +319,10 @@ set_tests_properties(test_Unit_Aerosol_Bypass_k_matrix  PROPERTIES ENVIRONMENT "
 
 #SpcCoeff utilities
 list (APPEND SCoeff_Utils
-	SpcCoeff_Edit
-	SpcCoeff_Inspect
-	SpcCoeff_BIN2NC
-	SpcCoeff_NC2BIN
+  SpcCoeff_Edit
+  SpcCoeff_Inspect
+  SpcCoeff_BIN2NC
+  SpcCoeff_NC2BIN
 )
 foreach(testtype IN LISTS SCoeff_Utils)
 	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/SpcCoeff/${testtype}/${testtype}.f90)
@@ -331,8 +331,8 @@ endforeach()
 
 #TauCoeff ODAS utilities
 list (APPEND ODAS_Utils
-	ODAS_BIN2NC
-	ODAS_NC2BIN
+  ODAS_BIN2NC
+  ODAS_NC2BIN
 )
 foreach(testtype IN LISTS ODAS_Utils)
 	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/TauCoeff/ODAS/${testtype}/${testtype}.f90)
@@ -341,8 +341,8 @@ endforeach()
 
 #TauCoeff ODPS utilities
 list (APPEND ODPS_Utils
-	ODPS_BIN2NC
-	ODPS_NC2BIN
+  ODPS_BIN2NC
+  ODPS_NC2BIN
 )
 foreach(testtype IN LISTS ODPS_Utils)
 	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/TauCoeff/ODPS/${testtype}/${testtype}.f90)
@@ -350,16 +350,51 @@ foreach(testtype IN LISTS ODPS_Utils)
 endforeach()
 
 #CloudCoeff utilities 
-list (APPEND CCoeff_Utils
+list (APPEND CCoef_Utils
   CloudCoeff_NC2BIN
-	CloudCoeff_BIN2NC
-	CloudCoeff_Inspect
+  CloudCoeff_BIN2NC
+  CloudCoeff_Inspect
 )
-foreach(testtype IN LISTS CCoeff_Utils)
+foreach(testtype IN LISTS CCoef_Utils)
 	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/CloudCoeff/${testtype}/${testtype}.f90)
 	target_link_libraries(${testtype} PRIVATE crtm)
 endforeach()
 
+list (APPEND SEcategoryCoef_Utils
+  SEcategory_NC2BIN
+  SEcategory_BIN2NC
+)
+foreach(testtype IN LISTS SEcategoryCoef_Utils)
+        add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/EmisCoeff/SEcategory/${testtype}/${testtype}.f90)
+        target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+list (APPEND IRsnowCoef_Utils
+#  IRsnowCoeff_BIN2NC  !** doesn't exist yet (BTJ)
+  IRsnowCoeff_NC2BIN
+)
+foreach(testtype IN LISTS IRsnowCoef_Utils)
+        add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/EmisCoeff/IR_Snow/${testtype}/${testtype}.f90)
+        target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+list (APPEND IRwaterCoef_Utils
+  IRwaterCoeff_BIN2NC
+  IRwaterCoeff_NC2BIN
+)
+foreach(testtype IN LISTS IRwaterCoef_Utils)
+        add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/EmisCoeff/IR_Water/${testtype}/${testtype}.f90)
+        target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+list (APPEND EmisCoef_Utils
+  EmisCoeff_NC2BIN
+#  EmisCoeff_BIN2NC   !** doesn't exist yet (BTJ)
+)
+foreach(testtype IN LISTS EmisCoef_Utils)
+        add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/EmisCoeff/EmisCoeff_legacy/${testtype}/${testtype}.f90)
+        target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
 
 
 #---------------------------------------------------------------------------------
