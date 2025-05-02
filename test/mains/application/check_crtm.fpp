@@ -96,14 +96,15 @@ PROGRAM check_crtm
   INTEGER, PARAMETER :: N_AEROSOLS  = 1
 
   ! Sensor information
-  INTEGER     , PARAMETER :: N_SENSORS = 2
-  CHARACTER(*), PARAMETER :: SENSOR_ID(N_SENSORS) = (/'cris399_npp', &
-                                                      'atms_npp   '/)
+  INTEGER     , PARAMETER :: N_SENSORS = 1
+  CHARACTER(*), PARAMETER :: SENSOR_ID(N_SENSORS) = 'v.virrs-m_j2'
 
   ! Some pretend geometry angles. The scan angle is based
   ! on the default Re (earth radius) and h (satellite height)
   REAL(fp), PARAMETER :: ZENITH_ANGLE = 30.0_fp
   REAL(fp), PARAMETER :: SCAN_ANGLE   = 26.37293341421_fp
+  REAL(fp), PARAMETER :: SOURCE_ZENITH_ANGLE = 0.0_fp
+  REAL(fp), PARAMETER :: AZIMUTH_ANGLE = 135.0_fp
   ! ============================================================================
 
   ! ---------
@@ -293,7 +294,9 @@ PROGRAM check_crtm
     !  The Sensor_Scan_Angle is optional.
     CALL CRTM_Geometry_SetValue( geo, &
                                  Sensor_Zenith_Angle = ZENITH_ANGLE, &
-                                 Sensor_Scan_Angle   = SCAN_ANGLE )
+                                 Sensor_Scan_Angle   = SCAN_ANGLE, &
+                                 Sensor_Azimuth_Angle = AZIMUTH_ANGLE,&
+                                 Source_Zenith_Angle  = SOURCE_ZENITH_ANGLE )
     ! ==========================================================================
 
 

@@ -1136,6 +1136,7 @@ CONTAINS
                      END IF
 
                   END IF
+               print *,' Azimuth ',m, mth_Azi, RTV(nt)%n_Azi, ChannelIndex, RTSolution(ln,m)%Radiance
 
                END DO Azimuth_Fourier_Loop
 
