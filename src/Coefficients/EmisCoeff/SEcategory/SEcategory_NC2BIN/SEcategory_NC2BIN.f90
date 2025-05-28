@@ -16,7 +16,7 @@ PROGRAM SEcategory_NC2BIN
   ! -----------------
   ! Module usage
   USE Message_Handler    , ONLY: SUCCESS, FAILURE, Program_Message, Display_Message
-  USE SignalFile_Utility , ONLY: Create_SignalFile
+
   USE SEcategory_Define  , ONLY: SEcategory_type
   USE SEcategory_IO      , ONLY: SEcategory_netCDF_to_Binary
   ! Disable implicit typing
@@ -50,7 +50,7 @@ PROGRAM SEcategory_NC2BIN
     CALL Display_Message( PROGRAM_NAME, &
                           'SEcategory netCDF and Binary filenames are the same!', &
                           FAILURE )
-    STOP
+    STOP 1
   END IF
 
   ! Perform the conversion
@@ -59,15 +59,8 @@ PROGRAM SEcategory_NC2BIN
     CALL Display_Message( PROGRAM_NAME, &
                           'SEcategory netCDF -> Binary conversion failed!', &
                           FAILURE )
-    STOP
+    STOP 1
   END IF
 
-  ! Create a signal file indicating success
-  err_stat = Create_SignalFile( BIN_Filename )
-  IF ( err_stat /= SUCCESS ) THEN
-    CALL Display_Message( PROGRAM_NAME, &
-                          'Error creating signal file for '//TRIM(BIN_Filename), &
-                          FAILURE )
-  END IF
 
 END PROGRAM SEcategory_NC2BIN

@@ -34,28 +34,38 @@ PROGRAM CloudCoeff_NC2BIN
   ! Variables
   ! ---------
   INTEGER :: err_stat
-  CHARACTER(256) :: NC_Filename, BIN_Filename
-  
+  CHARACTER(256) :: nc_filename, bin_filename, tmp_filename, msg
+  INTEGER :: n_args
+ 
   ! Program header
   CALL Program_Message( PROGRAM_NAME, &
                         'Program to convert a CRTM CloudCoeff data file '//&
                         'from netCDF to Binary format.', &
                         '$Revision: 7080 $')
-  
-  ! Get the filenames
-  WRITE(*,FMT='(/5x,"Enter the INPUT netCDF CloudCoeff filename : ")', ADVANCE='NO')
-  READ(*,'(a)') NC_Filename
-  NC_Filename = ADJUSTL(NC_Filename)
-  WRITE(*,FMT='(/5x,"Enter the OUTPUT Binary CloudCoeff filename: ")', ADVANCE='NO')
-  READ(*,'(a)') BIN_Filename
-  BIN_Filename = ADJUSTL(BIN_Filename)
-  ! ...Sanity check that they're not the same
-  IF ( BIN_Filename == NC_Filename ) THEN
-    CALL Display_Message( PROGRAM_NAME, &
-                          'CloudCoeff netCDF and Binary filenames are the same!', &
-                          FAILURE )
-    STOP
+
+  ! Get the filename
+  n_args = COMMAND_ARGUMENT_COUNT()
+  IF ( n_args > 0 ) THEN
+     CALL GET_COMMAND_ARGUMENT(1, nc_filename)
+     !** automatically generate the binary filename based on the command line netcdf filename
+     tmp_filename = nc_filename(1:LEN_TRIM(nc_filename) - 3)//".bin"
+     bin_filename = TRIM(ADJUSTL(tmp_filename))
+     PRINT *, "Output filename:", bin_filename
+  ELSE
+     ! Get the filenames
+     WRITE(*,FMT='(/5x,"Enter the INPUT netCDF CloudCoeff filename : ")', ADVANCE='NO')
+     READ(*,'(a)') nc_filename
+     nc_filename = ADJUSTL(nc_filename)
+     WRITE(*,FMT='(/5x,"Enter the OUTPUT Binary CloudCoeff filename: ")', ADVANCE='NO')
+     READ(*,'(a)') bin_filename
+     bin_filename = ADJUSTL(bin_filename)
+     ! ...Sanity check that they're not the same
+     IF ( bin_filename == nc_filename ) THEN
+        msg = 'CloudCoeff netCDF and Binary filenames are the same!'
+        CALL Display_Message( PROGRAM_NAME, msg, FAILURE ); STOP
+     END IF
   END IF
+
   
   
   ! Perform the conversion

@@ -1128,10 +1128,111 @@ list (APPEND check_crtm_Sensor_Ids
 add_executable(test_check_crtm mains/application/check_crtm.F90)
 target_link_libraries(test_check_crtm PRIVATE crtm)
 
-foreach(sensor_id IN LISTS check_crtm_Sensor_Ids)
-  add_test(NAME test_check_crtm_${sensor_id}
-    COMMAND test_check_crtm "${sensor_id}")
-  set_tests_properties(test_check_crtm_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+add_executable(test_check_crtm_random  mains/application/check_crtm_random_profiles.F90)
+target_link_libraries(test_check_crtm_random PRIVATE crtm)
+add_test(NAME test_check_crtm_random
+         COMMAND test_check_crtm_random)
+set_tests_properties(test_check_crtm_random PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+
+add_executable(Unit_TL_TEST mains/unit/Unit_Test/test_TL.f90)
+target_link_libraries(Unit_TL_TEST PRIVATE crtm)
+add_test(NAME test_Unit_TL_TEST
+         COMMAND $<TARGET_FILE:Unit_TL_TEST>)
+set_tests_properties(test_Unit_TL_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(Unit_Aerosol_Bypass mains/unit/Unit_Test/test_Aerosol_Bypass.f90)
+target_link_libraries(Unit_Aerosol_Bypass PRIVATE crtm)
+add_test(NAME test_Unit_Aerosol_Bypass
+         COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass>)
+set_tests_properties(test_Unit_Aerosol_Bypass PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(Unit_Aerosol_Bypass_TL mains/unit/Unit_Test/test_Aerosol_Bypass_TL.f90)
+target_link_libraries(Unit_Aerosol_Bypass_TL PRIVATE crtm)
+add_test(NAME test_Unit_Aerosol_Bypass_TL
+	 COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass_TL>)
+set_tests_properties(test_Unit_Aerosol_Bypass_TL PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(Unit_Aerosol_Bypass_adjoint mains/unit/Unit_Test/test_Aerosol_Bypass_adjoint.f90)
+target_link_libraries(Unit_Aerosol_Bypass_adjoint PRIVATE crtm)
+add_test(NAME test_Unit_Aerosol_Bypass_adjoint
+	 COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass_adjoint>)
+set_tests_properties(test_Unit_Aerosol_Bypass_adjoint  PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(Unit_Aerosol_Bypass_k_matrix mains/unit/Unit_Test/test_Aerosol_Bypass_k_matrix.f90)
+target_link_libraries(Unit_Aerosol_Bypass_k_matrix PRIVATE crtm)
+add_test(NAME test_Unit_Aerosol_Bypass_k_matrix
+         COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass_k_matrix>)
+set_tests_properties(test_Unit_Aerosol_Bypass_k_matrix  PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+#SpcCoeff utilities
+list (APPEND SCoeff_Utils
+  SpcCoeff_Edit
+  SpcCoeff_Inspect
+  SpcCoeff_BIN2NC
+  SpcCoeff_NC2BIN
+)
+foreach(testtype IN LISTS SCoeff_Utils)
+	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/SpcCoeff/${testtype}/${testtype}.f90)
+	target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+#TauCoeff ODAS utilities
+list (APPEND ODAS_Utils
+  ODAS_BIN2NC
+  ODAS_NC2BIN
+)
+foreach(testtype IN LISTS ODAS_Utils)
+	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/TauCoeff/ODAS/${testtype}/${testtype}.f90)
+	target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+#TauCoeff ODPS utilities
+list (APPEND ODPS_Utils
+  ODPS_BIN2NC
+  ODPS_NC2BIN
+)
+foreach(testtype IN LISTS ODPS_Utils)
+	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/TauCoeff/ODPS/${testtype}/${testtype}.f90)
+	target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+#CloudCoeff utilities 
+list (APPEND CCoef_Utils
+  CloudCoeff_NC2BIN
+  CloudCoeff_BIN2NC
+  CloudCoeff_Inspect
+)
+foreach(testtype IN LISTS CCoef_Utils)
+	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/CloudCoeff/${testtype}/${testtype}.f90)
+	target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+list (APPEND SEcategoryCoef_Utils
+  SEcategory_NC2BIN
+  SEcategory_BIN2NC
+)
+foreach(testtype IN LISTS SEcategoryCoef_Utils)
+        add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/EmisCoeff/SEcategory/${testtype}/${testtype}.f90)
+        target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+list (APPEND IRsnowCoef_Utils
+#  IRsnowCoeff_BIN2NC  !** doesn't exist yet (BTJ)
+  IRsnowCoeff_NC2BIN
+)
+foreach(testtype IN LISTS IRsnowCoef_Utils)
+        add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/EmisCoeff/IR_Snow/${testtype}/${testtype}.f90)
+        target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+list (APPEND IRwaterCoef_Utils
+  IRwaterCoeff_BIN2NC
+  IRwaterCoeff_NC2BIN
+)
+foreach(testtype IN LISTS IRwaterCoef_Utils)
+        add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/EmisCoeff/IR_Water/${testtype}/${testtype}.f90)
+        target_link_libraries(${testtype} PRIVATE crtm)
 endforeach()
 
 
