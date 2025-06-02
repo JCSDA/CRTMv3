@@ -237,6 +237,11 @@ target_link_libraries(${PROJECT_NAME} PUBLIC NetCDF::NetCDF_Fortran)
 set_target_properties(${PROJECT_NAME} PROPERTIES
     Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/${MODULE_DIR})
 
+set_source_files_properties(
+  ${CMAKE_CURRENT_SOURCE_DIR}/CRTM_K_Matrix_Module.f90
+  PROPERTIES COMPILE_FLAGS "-cpp"
+)
+  
 # Install Fortran modules into the correct destination
 install(DIRECTORY ${CMAKE_BINARY_DIR}/${MODULE_DIR}/ DESTINATION ${CRTM_INSTALL_PREFIX}/${MODULE_DIR})
 

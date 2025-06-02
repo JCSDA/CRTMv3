@@ -979,12 +979,25 @@ CONTAINS
         ! ------------
         ! THREAD LOOP
         ! ------------
+#ifdef __INTEL_LLVM_COMPILER
+        ! Intel ifx (LLVM) then skip OpenMP
+#elif defined(__INTEL_COMPILER)
+  #if __INTEL_COMPILER < 202400
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
 !$OMP    FIRSTPRIVATE(ln, r_cloudy)                                     &
-!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,    &
-!$OMP          start_ch, end_ch, Wavenumber, Status_FWD, Status_K,      &
-!$OMP          transmittance, transmittance_K, transmittance_clear,     &
-!$OMP          transmittance_clear_K, l, mth_Azi, ks)
+!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,          &
+!$OMP            start_ch, end_ch, Wavenumber, Status_FWD, Status_K,    &
+!$OMP            transmittance, transmittance_K, transmittance_clear,   &
+!$OMP            transmittance_clear_K, l, mth_Azi, ks)
+  #endif
+#else
+!$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
+!$OMP    FIRSTPRIVATE(ln, r_cloudy)                                     &
+!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,          &
+!$OMP            start_ch, end_ch, Wavenumber, Status_FWD, Status_K,    &
+!$OMP            transmittance, transmittance_K, transmittance_clear,   &
+!$OMP            transmittance_clear_K, l, mth_Azi, ks)
+#endif
         Thread_Loop: DO nt = 1, n_channel_threads
 
           start_ch = (nt - 1) * chunk_ch + 1
@@ -1651,7 +1664,15 @@ CONTAINS
 
           END DO Channel_Loop
         END DO Thread_Loop
+#ifdef __INTEL_LLVM_COMPILER
+        ! skip
+#elif defined(__INTEL_COMPILER)
+#if __INTEL_COMPILER < 202400
 !$OMP END PARALLEL DO
+#endif
+#else
+!$OMP END PARALLEL DO
+#endif
         IF ( Error_Status == FAILURE ) RETURN
 
         ln = ln + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
