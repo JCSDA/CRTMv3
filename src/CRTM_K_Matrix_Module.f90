@@ -979,17 +979,20 @@ CONTAINS
         ! ------------
         ! THREAD LOOP
         ! ------------
+
 #ifdef __INTEL_LLVM_COMPILER
         ! Intel ifx (LLVM) then skip OpenMP
 #elif defined(__INTEL_COMPILER)
-  #if __INTEL_COMPILER < 202400
+#if __INTEL_COMPILER < 2024
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
 !$OMP    FIRSTPRIVATE(ln, r_cloudy)                                     &
 !$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,          &
 !$OMP            start_ch, end_ch, Wavenumber, Status_FWD, Status_K,    &
 !$OMP            transmittance, transmittance_K, transmittance_clear,   &
 !$OMP            transmittance_clear_K, l, mth_Azi, ks)
-  #endif
+#else
+        ! skip ifort 2024
+#endif
 #else
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
 !$OMP    FIRSTPRIVATE(ln, r_cloudy)                                     &
@@ -1667,9 +1670,9 @@ CONTAINS
 #ifdef __INTEL_LLVM_COMPILER
         ! skip
 #elif defined(__INTEL_COMPILER)
-#if __INTEL_COMPILER < 202400
+   #if __INTEL_COMPILER < 2024
 !$OMP END PARALLEL DO
-#endif
+   #endif
 #else
 !$OMP END PARALLEL DO
 #endif
