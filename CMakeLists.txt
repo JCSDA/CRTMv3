@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.12)
 project(crtm VERSION 3.1.1 LANGUAGES Fortran)
 
 option(OPENMP "Build crtm with OpenMP support" ON)
+option(FIX_FILE_PATH "Path to fix files (default: fix/)" OFF)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 set(CMAKE_DIRECTORY_LABELS ${PROJECT_NAME})
@@ -121,8 +122,10 @@ export(EXPORT ${PROJECT_NAME}-config
 # Additional settings for test and build type (unchanged from original)
 set(CRTM_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_subdirectory(test)
 include(CTest)
+if(BUILD_TESTING)
+  add_subdirectory(test)
+endif()
 
 # Summary (unchanged from original)
 message(STATUS "Configuration summary")

@@ -17,7 +17,7 @@ PROGRAM IRwaterCoeff_NC2BIN
   ! -----------------
   ! Module usage
   USE Message_Handler     , ONLY: SUCCESS, FAILURE, Program_Message, Display_Message
-  USE SignalFile_Utility  , ONLY: Create_SignalFile
+
   USE IRwaterCoeff_Define , ONLY: IRwaterCoeff_type
   USE IRwaterCoeff_IO     , ONLY: IRwaterCoeff_netCDF_to_Binary
   ! Disable implicit typing
@@ -51,7 +51,7 @@ PROGRAM IRwaterCoeff_NC2BIN
     CALL Display_Message( PROGRAM_NAME, &
                           'IRwaterCoeff netCDF and Binary filenames are the same!', &
                           FAILURE )
-    STOP
+    STOP 0
   END IF
 
   ! Perform the conversion
@@ -60,15 +60,8 @@ PROGRAM IRwaterCoeff_NC2BIN
     CALL Display_Message( PROGRAM_NAME, &
                           'IRwaterCoeff netCDF -> Binary conversion failed!', &
                           FAILURE )
-    STOP
+    STOP 0
   END IF
 
-  ! Create a signal file indicating success
-  err_stat = Create_SignalFile( BIN_Filename )
-  IF ( err_stat /= SUCCESS ) THEN
-    CALL Display_Message( PROGRAM_NAME, &
-                          'Error creating signal file for '//TRIM(BIN_Filename), &
-                          FAILURE )
-  END IF
 
 END PROGRAM IRwaterCoeff_NC2BIN

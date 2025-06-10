@@ -414,11 +414,13 @@ CONTAINS
         WRITE(*,'(5x,"Channel ",i0,": ",a)') SpcCoeff%Sensor_Channel(n), &
                                              POLARIZATION_TYPE_NAME(SpcCoeff%Polarization(n))
       END DO
-      WRITE(*,*) "Fixed Polarization Angle: "
-      DO n = 1, SpcCoeff%n_Channels
-        WRITE(*,'(3x,"Channel ",i0,": ")') SpcCoeff%Sensor_Channel(n)
-        WRITE(*,'(es22.15)') SpcCoeff%PolAngle(n)
-      END DO
+      IF (SpcCoeff%Version > 3) THEN ! See SpcCoeff_Binary_IO.f90
+         WRITE(*,*) "Fixed Polarization Angle: "
+         DO n = 1, SpcCoeff%n_Channels
+            WRITE(*,'(3x,"Channel ",i0,": ")') SpcCoeff%Sensor_Channel(n)
+            WRITE(*,'(es22.15)') SpcCoeff%PolAngle(n)
+         END DO
+      END IF
     END IF
     WRITE(*,'(3x,"Channel_Flag               :")')
     WRITE(*,'(3(1x,b32.32,:))') SpcCoeff%Channel_Flag

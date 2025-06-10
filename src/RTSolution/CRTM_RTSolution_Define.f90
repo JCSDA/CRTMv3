@@ -237,7 +237,7 @@ MODULE CRTM_RTSolution_Define
     ! Radiative transfer results for a single channel
     REAL(fp) :: Radiance               = ZERO
     REAL(fp) :: Brightness_Temperature = ZERO
-    REAL(fp) :: Stokes(4)
+    REAL(fp) :: Stokes(4)              = ZERO
     REAL(fp) :: Solar_Irradiance       = ZERO
     REAL(fp) :: Reflectance            = ZERO
     REAL(fp), ALLOCATABLE :: Reflectivity(:)             ! K

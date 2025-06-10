@@ -21,7 +21,7 @@ PROGRAM test_Simple
   ! Parameters
   ! ----------
   CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'test_Simple'
-  CHARACTER(*), PARAMETER :: COEFFICIENTS_PATH = './testinput/'  
+  CHARACTER(*), PARAMETER :: COEFFICIENTS_PATH = './testinput/'
   CHARACTER(*), PARAMETER :: RESULTS_PATH = './results/tangent_linear/'
 
   ! ============================================================================
@@ -186,7 +186,7 @@ PROGRAM test_Simple
   DO m = 1, N_PROFILES
     Atm_TL(m)%Temperature = 0.5_fp
   END DO
-  
+
   ! Copy...
   Sfc_TL = Sfc
   ! ...and zero.
