@@ -13,7 +13,7 @@ endif()
 ####################################################################
 
 set( CMAKE_Fortran_FLAGS_RELEASE
-     "-O3 -unroll -inline-forceinline -no-heap-arrays -assume byterecl -qopenmp" )
+     "-O3 -unroll -no-heap-arrays -assume byterecl -qopenmp" )
 
 ####################################################################
 # DEBUG FLAGS
