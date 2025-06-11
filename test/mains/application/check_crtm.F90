@@ -75,10 +75,8 @@ PROGRAM check_crtm
   CHARACTER(*), PARAMETER :: NC_COEFFICIENT_PATH='./testinput/'
 
   ! Aerosol/Cloud coefficient format
-  !CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
-  CHARACTER(*), PARAMETER :: Coeff_Format = 'netCDF'
-  CHARACTER(*), PARAMETER :: SpcCoeff_Format = 'netCDF'
-  CHARACTER(*), PARAMETER :: TauCoeff_Format = 'netCDF'
+  CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
+  !CHARACTER(*), PARAMETER :: Coeff_Format = 'netCDF'
 
   ! Aerosol/Cloud coefficient scheme
   CHARACTER(*), PARAMETER :: Aerosol_Model = 'CRTM'
@@ -98,8 +96,9 @@ PROGRAM check_crtm
   INTEGER, PARAMETER :: N_AEROSOLS  = 1
 
   ! Sensor information
-  INTEGER, PARAMETER :: N_SENSORS = 1
-  CHARACTER(256)     :: SENSOR_ID(1)
+  INTEGER     , PARAMETER :: N_SENSORS = 2
+  CHARACTER(*), PARAMETER :: SENSOR_ID(N_SENSORS) = (/'cris399_npp', &
+                                                      'atms_npp   '/)
 
   ! Some pretend geometry angles. The scan angle is based
   ! on the default Re (earth radius) and h (satellite height)
@@ -142,9 +141,6 @@ PROGRAM check_crtm
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rts_K(:,:)
   ! ============================================================================
 
-  ! Aerosol/Cloud coefficient format
-
-  
 
   ! Program header
   ! --------------
@@ -154,13 +150,7 @@ PROGRAM check_crtm
     ENDIAN_TYPE//' coefficient datafiles', &
     'CRTM Version: '//TRIM(Version) )
 
-  !First, make sure the right number of inputs have been provided
-  IF(COMMAND_ARGUMENT_COUNT().NE.1)THEN
-     WRITE(*,*)'test_Simple.f90: ERROR, only one command-line argument required, returning'
-     STOP 1
-  ENDIF
 
-  CALL GET_COMMAND_ARGUMENT(1,SENSOR_ID(1))   !read in the value
 
   ! ============================================================================
   ! STEP 4. **** INITIALIZE THE CRTM ****
@@ -201,8 +191,6 @@ PROGRAM check_crtm
                         Cloud_Model, &
                         CloudCoeff_Format, &
                         CloudCoeff_File, &
-                        SpcCoeff_Format    , &
-                        TauCoeff_Format    , &
                         File_Path=COEFFICIENT_PATH, &
                         NC_File_Path=NC_COEFFICIENT_PATH, &
                         Quiet=.TRUE.)
