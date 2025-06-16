@@ -4,7 +4,7 @@
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
 
 cmake_minimum_required (VERSION 3.12)
-project("CRTM_Tests" VERSION 3.1.1 LANGUAGES Fortran C)
+project("CRTM_Tests" VERSION 3.1.2 LANGUAGES Fortran C)
 
 enable_testing ()
 
@@ -66,14 +66,14 @@ IF(EXISTS  ${FIX_FILE_PATH})
 
 else() # Download CRTM coefficients
   set( CRTM_COEFFS_BRANCH_PREFIX "" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
-  set( CRTM_COEFFS_BRANCH "fix_REL-3.1.1.2" ) 
-  
+  set( CRTM_COEFFS_BRANCH "fix_REL-3.1.2.0" )
+
   set(CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${PROJECT_VERSION})
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
-  
+
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
-  set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz) 
-  set(checksum "58e0a5c698a438a31dc4914fcda39846") # MD5SUM of fix_REL-3.1.1.2.tgz
+  set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz)
+  set(checksum "0e5888cae80aa674b2e67ecd4490317d") # MD5SUM of fix_REL-3.1.2.0.tgz
   
   # Check if the CRTM binary tarball is already present otherwise download it.
   if (DEFINED ENV{CRTM_BINARY_FILES_TARBALL})

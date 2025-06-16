@@ -6,8 +6,9 @@ CRTM REL-3.1.1
 Preamble
 --------
 
-CRTM v3.1.1 release (`REL-3.1.1`)
+CRTM v3.1.2 release (`REL-3.1.2`)
 
+v3.1.2 released June 11, 2025
 v3.1.1 released August 12, 2024
 v3.1.0 (alpha) Released October 31, 2023
 v3.0.0 Released March, 2023  
@@ -56,7 +57,7 @@ Contents
 
 Configuration, building, and testing the library
 ================================================  
-JCSDA CRTM v3.1.1 Build Instructions
+JCSDA CRTM v3.1.2 Build Instructions
 
 The CRTM repository directory structure looks (something) like:
 
@@ -116,10 +117,10 @@ But after a clean clone of the development repository, none of the links to sour
 Configuration
 -------------
 By default, the `fix/` directory is provided through ftp using the Get_CRTM_Binary_Files.sh script to obtain and unpack the dataset. 
-If this directory doesn't exist during the `cmake` step, then cmake will download and install into `build/test_data/fix_REL-3.1.1.x/fix/`.
+If this directory doesn't exist during the `cmake` step, then cmake will download and install into `build/test_data/fix_REL-3.1.2.x/fix/`.
 The path to an existing fix file installation can be specified using the `FIX_FILE_PATH` option (see CMake variables summary below).
 
-The fix/ directory (as of v3.1.1) contains most of the netCDF SpcCoeff and TauCoeff files, as part of our ongoing effort to transition toward netCDF-only CRTM.  We expect to deprecate the binary formats in v3.2.x 
+The fix/ directory (as of v3.1.2) contains most of the netCDF SpcCoeff and TauCoeff files, as part of our ongoing effort to transition toward netCDF-only CRTM.  We expect to deprecate the binary formats in v3.2.x, but code to read / convert binary format will continue.  
 
 As of CRTM v3.0.0, we no longer support legacy build system using autotools. (i.e., configure/make).  Only cmake / ecbuild (a cmake wrapper, but not required) is supported.   Many standalone Makefiles, make.dependencies, etc. have been removed, but not entirely.  Cleanup occurs as we work our way through the repository updating other things.  
 
