@@ -4,7 +4,7 @@
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
 
 cmake_minimum_required (VERSION 3.12)
-project("CRTM_Tests" VERSION 3.1.1 LANGUAGES Fortran C)
+project("CRTM_Tests" VERSION 3.1.2 LANGUAGES Fortran C)
 
 enable_testing ()
 
@@ -66,14 +66,14 @@ IF(EXISTS  ${FIX_FILE_PATH})
 
 else() # Download CRTM coefficients
   set( CRTM_COEFFS_BRANCH_PREFIX "" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
-  set( CRTM_COEFFS_BRANCH "fix_REL-3.1.1.2" ) 
-  
+  set( CRTM_COEFFS_BRANCH "fix_REL-3.1.2.0" )
+
   set(CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${PROJECT_VERSION})
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
-  
+
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
-  set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz) 
-  set(checksum "58e0a5c698a438a31dc4914fcda39846") # MD5SUM of fix_REL-3.1.1.2.tgz
+  set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz)
+  set(checksum "0e5888cae80aa674b2e67ecd4490317d") # MD5SUM of fix_REL-3.1.2.0.tgz
   
   # Check if the CRTM binary tarball is already present otherwise download it.
   if (DEFINED ENV{CRTM_BINARY_FILES_TARBALL})
@@ -320,10 +320,10 @@ set_tests_properties(test_Unit_Aerosol_Bypass_k_matrix  PROPERTIES ENVIRONMENT "
 
 #SpcCoeff utilities
 list (APPEND SCoeff_Utils
-	SpcCoeff_Edit
-	SpcCoeff_Inspect
-	SpcCoeff_BIN2NC
-	SpcCoeff_NC2BIN
+  SpcCoeff_Edit
+  SpcCoeff_Inspect
+  SpcCoeff_BIN2NC
+  SpcCoeff_NC2BIN
 )
 foreach(testtype IN LISTS SCoeff_Utils)
 	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/SpcCoeff/${testtype}/${testtype}.f90)
@@ -332,8 +332,8 @@ endforeach()
 
 #TauCoeff ODAS utilities
 list (APPEND ODAS_Utils
-	ODAS_BIN2NC
-	ODAS_NC2BIN
+  ODAS_BIN2NC
+  ODAS_NC2BIN
 )
 foreach(testtype IN LISTS ODAS_Utils)
 	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/TauCoeff/ODAS/${testtype}/${testtype}.f90)
@@ -342,8 +342,8 @@ endforeach()
 
 #TauCoeff ODPS utilities
 list (APPEND ODPS_Utils
-	ODPS_BIN2NC
-	ODPS_NC2BIN
+  ODPS_BIN2NC
+  ODPS_NC2BIN
 )
 foreach(testtype IN LISTS ODPS_Utils)
 	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/TauCoeff/ODPS/${testtype}/${testtype}.f90)
@@ -351,14 +351,41 @@ foreach(testtype IN LISTS ODPS_Utils)
 endforeach()
 
 #CloudCoeff utilities 
-list (APPEND CCoeff_Utils
+list (APPEND CCoef_Utils
   CloudCoeff_NC2BIN
-	CloudCoeff_BIN2NC
-	CloudCoeff_Inspect
+  CloudCoeff_BIN2NC
+  CloudCoeff_Inspect
 )
-foreach(testtype IN LISTS CCoeff_Utils)
+foreach(testtype IN LISTS CCoef_Utils)
 	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/CloudCoeff/${testtype}/${testtype}.f90)
 	target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+list (APPEND SEcategoryCoef_Utils
+  SEcategory_NC2BIN
+  SEcategory_BIN2NC
+)
+foreach(testtype IN LISTS SEcategoryCoef_Utils)
+        add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/EmisCoeff/SEcategory/${testtype}/${testtype}.f90)
+        target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+list (APPEND IRsnowCoef_Utils
+#  IRsnowCoeff_BIN2NC  !** doesn't exist yet (BTJ)
+  IRsnowCoeff_NC2BIN
+)
+foreach(testtype IN LISTS IRsnowCoef_Utils)
+        add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/EmisCoeff/IR_Snow/${testtype}/${testtype}.f90)
+        target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+list (APPEND IRwaterCoef_Utils
+  IRwaterCoeff_BIN2NC
+  IRwaterCoeff_NC2BIN
+)
+foreach(testtype IN LISTS IRwaterCoef_Utils)
+        add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/EmisCoeff/IR_Water/${testtype}/${testtype}.f90)
+        target_link_libraries(${testtype} PRIVATE crtm)
 endforeach()
 
 

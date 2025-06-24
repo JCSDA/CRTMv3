@@ -34,10 +34,11 @@ PROGRAM CloudCoeff_BIN2NC
   ! ---------
   INTEGER :: err_stat
   CHARACTER(256) :: msg
-  CHARACTER(256) :: BIN_filename
-  CHARACTER(256) :: NC_filename
+  CHARACTER(256) :: bin_filename
+  CHARACTER(256) :: nc_filename, tmp_filename
   CHARACTER(256) :: answer
   CHARACTER(256) :: version_str
+  INTEGER :: n_args
   
   ! Program header
   CALL CRTM_Version(version_str)
@@ -45,18 +46,30 @@ PROGRAM CloudCoeff_BIN2NC
                         'Program to convert a CRTM CloudCoeff data file from Binary to netCDF format.', &
                         'CRTM Version: '//TRIM(version_str) )
 
-  ! Get the filenames
-  IF ( Big_Endian() ) THEN
-     WRITE(*,FMT='(/5x,"Enter the INPUT Binary [Big Endian] CloudCoeff filename : ")', ADVANCE='NO')
+  ! Get the filename                                                                                                                                                                                   ! Check for command line argument
+  n_args = COMMAND_ARGUMENT_COUNT()
+  IF ( n_args > 0 ) THEN
+     CALL GET_COMMAND_ARGUMENT(1, BIN_filename)
+     tmp_filename = BIN_filename(1:LEN_TRIM(bin_filename) - 4)//".nc"
+     nc_filename = TRIM(ADJUSTL(tmp_filename))
+     PRINT *, "nc_filename:", nc_filename
   ELSE
-     WRITE(*,FMT='(/5x,"Enter the INPUT Binary [Little Endian] CloudCoeff filename : ")', ADVANCE='NO')
+     ! Get the filenames
+     IF ( Big_Endian() ) THEN
+        WRITE(*,FMT='(/5x,"Enter the INPUT Binary [Big Endian] CloudCoeff filename : ")', ADVANCE='NO')
+     ELSE
+        WRITE(*,FMT='(/5x,"Enter the INPUT Binary [Little Endian] CloudCoeff filename : ")', ADVANCE='NO')
+     END IF
+     READ(*,'(a)') bin_filename
+     bin_filename = ADJUSTL(bin_filename)
+     WRITE(*,FMT='(/5x,"Enter the OUTPUT netCDF CloudCoeff filename: ")', ADVANCE='NO')
+     READ(*,'(a)') nc_filename
+     nc_filename = ADJUSTL(nc_filename)
   END IF
-   READ(*,'(a)') BIN_filename
-  BIN_filename = ADJUSTL(BIN_filename)
-  WRITE(*,FMT='(/5x,"Enter the OUTPUT netCDF CloudCoeff filename: ")', ADVANCE='NO')
-  READ(*,'(a)') NC_filename
-  NC_filename = ADJUSTL(NC_filename)
 
+
+
+  
   ! ...Sanity check that they're not the same
   IF ( bin_filename == nc_filename ) THEN
     msg = 'CloudCoeff netCDF and Binary filenames are the same!'

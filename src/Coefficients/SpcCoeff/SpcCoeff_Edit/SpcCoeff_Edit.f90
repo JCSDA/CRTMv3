@@ -50,7 +50,7 @@ PROGRAM SpcCoeff_Edit
   TYPE(SpcCoeff_type) :: sc
   CHARACTER(256) :: sensor_id
   INTEGER :: wmo_sensor_id, wmo_satellite_id
-  INTEGER :: version
+  INTEGER :: version, n_args
 
   ! Output program header
   CALL Program_Message( PROGRAM_NAME, &
@@ -59,14 +59,19 @@ PROGRAM SpcCoeff_Edit
                         '$Revision$' )
 
   ! Get the filename
-  WRITE( *,FMT='(/5x,"Enter the Binary SpcCoeff filename: ")',ADVANCE='NO' )
-  READ( *,'(a)' ) filename
+  n_args = COMMAND_ARGUMENT_COUNT()
+  IF ( n_args > 0 ) THEN
+     CALL GET_COMMAND_ARGUMENT(1, filename)
+  ELSE
+     WRITE( *,FMT='(/5x,"Enter the SpcCoeff filename: ")',ADVANCE='NO' )
+     READ( *,'(a)' ) filename
+  END IF
   filename = ADJUSTL(filename)
   IF ( .NOT. File_Exists( TRIM(filename) ) ) THEN
-    msg = 'File '//TRIM(filename)//' not found.'
-    CALL Display_Message( PROGRAM_NAME, msg, FAILURE ); STOP
+     msg = 'File '//TRIM(filename)//' not found.'
+     CALL Display_Message( PROGRAM_NAME, msg, FAILURE ); STOP
   END IF
-
+  
   ! Read the binary data file
   err_stat = SpcCoeff_Binary_ReadFile( filename, sc )
   IF ( err_stat /= SUCCESS ) THEN
