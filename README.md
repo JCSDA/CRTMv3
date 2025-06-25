@@ -8,7 +8,7 @@ Preamble
 
 CRTM v3.1.2 release (`REL-3.1.2`)
 
-v3.1.2 released June 11, 2025
+v3.1.2 released July 11, 2025
 v3.1.1 released August 12, 2024
 v3.1.0 (alpha) Released October 31, 2023
 v3.0.0 Released March, 2023  
@@ -171,6 +171,19 @@ LIBS="-lcrtm ${LIBS}"
 **Feedback and Contact Information**
 
 CRTM SUPPORT: visit https://forums.jcsda.org/ or visit https://github.com/JCSDA/CRTMv3 and post an issue (be sure to assign someone from the team).
+
+System-specific notes
+---------------------
+WSL / Ubuntu installation:
+  sudo apt update && sudo apt upgrade
+  sudo apt install cmake
+  sudo apt install gcc   (probably installed already)
+  sudo apt install gfortran
+  sudo apt install libnetcdff-dev
+  
+Then continue with the build steps per above.  You can find your number of processors by 'cat /proc/cpuinfo' and then the -j ## values for make and ctest should be: number_processors-1  e.g., make -j31 if you have 32 processors.
+
+nvfortran also works on WSL, but has a more involved install process -- if you're using nvfortran, please visit https://github.com/JCSDA/CRTMv3 and create an issue. 
 
 
 Known Issues
