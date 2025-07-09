@@ -4,7 +4,7 @@
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
 
 cmake_minimum_required (VERSION 3.12)
-project("CRTM_Tests" VERSION 3.1.2 LANGUAGES Fortran C)
+project("CRTM_Tests" VERSION 3.2.0 LANGUAGES Fortran C)
 
 enable_testing ()
 
@@ -66,7 +66,7 @@ IF(EXISTS  ${FIX_FILE_PATH})
 
 else() # Download CRTM coefficients
   set( CRTM_COEFFS_BRANCH_PREFIX "" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
-  set( CRTM_COEFFS_BRANCH "fix_REL-3.1.2.0" )
+  set( CRTM_COEFFS_BRANCH "fix_REL-3.1.2.0" )  #Note switch to 3.2.0 when tarball ready
 
   set(CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${PROJECT_VERSION})
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
