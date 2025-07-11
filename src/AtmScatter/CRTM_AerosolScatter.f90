@@ -256,10 +256,10 @@ CONTAINS
                               ASV%asi(ka,n)                        ) ! Interpolation
 
         ! interpolation quality control
-        ! CD: kb quality control?
         IF( ASV%ke(ka,n) <= ZERO ) THEN
           ASV%ke(ka,n) = ZERO
           ASV%w(ka,n)  = ZERO
+          ASV%kb(ka,n)  = ZERO
         END IF
         IF( ASV%w(ka,n) <= ZERO ) THEN
           ASV%w(ka,n) = ZERO
@@ -492,6 +492,7 @@ CONTAINS
         IF( ASV%ke(ka,n) <= ZERO ) THEN
           ke_TL = ZERO
           w_TL = ZERO
+          kb_TL = ZERO
         END IF
         IF( ASV%w(ka,n) <= ZERO ) THEN
           w_TL  = ZERO
@@ -732,19 +733,21 @@ CONTAINS
                                               ( bs_AD * ASV%ke(ka,n) * ASV%w(ka,n) )
 
         ! ! Compute the adjoint of the backscattering coefficient
-        ! CD: placeholder for now
+        ! CD: to be implemented
 
+  
         ! interpolation quality control
         IF( ASV%w(ka,n) >= ONE ) THEN
-          w_AD = ZERO
-        END IF
-        IF( ASV%ke(ka,n) <= ZERO ) THEN
-          ke_AD = ZERO
           w_AD = ZERO
         END IF
         IF( ASV%w(ka,n) <= ZERO ) THEN
           w_AD = ZERO
           pcoeff_AD = ZERO
+        END IF
+        IF( ASV%ke(ka,n) <= ZERO ) THEN
+          ke_AD = ZERO
+          w_AD = ZERO
+          kb_AD = ZERO
         END IF
 
         CALL Get_Aerosol_Opt_AD(AScat_AD                                , & ! Input
@@ -924,7 +927,6 @@ CONTAINS
       ! Perform Interpolation
       CALL interp_2D( AeroC%ke( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k), asi%wlp, asi%hlp, ke )
       CALL interp_2D( AeroC%w(  asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k), asi%wlp, asi%hlp, w  )
-      ! CD: This is for GOCART-GEOS5 only, for NAAPS, kb is zero
       IF (AeroC%Scheme == 'GOCART-GEOS5') THEN
          CALL interp_2D( AeroC%kb( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k), asi%wlp, asi%hlp, kb )
       ELSE
