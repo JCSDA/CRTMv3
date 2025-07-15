@@ -19,7 +19,7 @@ MODULE CRTM_AOD_Module
   ! Module usage
   ! ------------
   USE Message_Handler,          ONLY: SUCCESS, FAILURE, Display_Message
-  USE CRTM_Parameters,          ONLY: ZERO, TWO, PI, &
+  USE CRTM_Parameters,          ONLY: ZERO, &
                                       MAX_N_PHASE_ELEMENTS, &
                                       MAX_N_LEGENDRE_TERMS
   USE CRTM_Atmosphere_Define,   ONLY: CRTM_Atmosphere_type, &
@@ -346,7 +346,7 @@ CONTAINS
 
           ! Save the Backscat_Coefficient, only non-zero for GOCART-GEOS5
           ! CD: double check if should be divided by 2PI
-          RTSolution(ln,m)%Backscat_Coefficient(1:Atmosphere(m)%n_Layers) = AtmOptics%Backscat_Coefficient/(TWO*PI)
+          RTSolution(ln,m)%Backscat_Coefficient(1:Atmosphere(m)%n_Layers) = AtmOptics%Backscat_Coefficient
           
         END DO Channel_Loop
 
@@ -675,8 +675,8 @@ CONTAINS
 
           ! Save the backscatter coefficient, only non-zero for GOCART-GEOS5
           ! CD: double check if should be divided by 2PI
-          RTSolution(ln,m)%Backscat_Coefficient(1:Atmosphere(m)%n_Layers) = AtmOptics%Backscat_Coefficient/(TWO*PI)
-          RTSolution_TL(ln,m)%Backscat_Coefficient(1:Atmosphere(m)%n_Layers) = AtmOptics_TL%Backscat_Coefficient/(TWO*PI)
+          RTSolution(ln,m)%Backscat_Coefficient(1:Atmosphere(m)%n_Layers) = AtmOptics%Backscat_Coefficient
+          RTSolution_TL(ln,m)%Backscat_Coefficient(1:Atmosphere(m)%n_Layers) = AtmOptics_TL%Backscat_Coefficient
 
         END DO Channel_Loop
 
