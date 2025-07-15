@@ -59,8 +59,8 @@ MODULE Common_RTSolution
   ! Module parameters
   ! -----------------
   ! Version Id for the module
-  CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
-  '$Id: $'
+  ! CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
+  ! '$Id: $'
 
 CONTAINS
 
@@ -1725,7 +1725,8 @@ CONTAINS
     ! on FORWARD model SfcOptics Compute_Switch
     ! -----------------------------------------
     IF ( SfcOptics%Compute ) THEN
-      Error_Status = CRTM_Compute_SfcOptics_AD( &
+        RTSolution_AD%Surface_Emissivity = SfcOptics_AD%Emissivity(SfcOptics_AD%Index_Sat_Ang,1)
+        Error_Status = CRTM_Compute_SfcOptics_AD( &
                        Surface     , & ! Input
                        SfcOptics   , & ! Input
                        SfcOptics_AD, & ! Input
@@ -1746,24 +1747,24 @@ CONTAINS
     ELSE
 
       IF( RTV%Scattering_RT ) THEN
-        User_Emissivity_AD = SUM(SfcOptics_AD%Emissivity(1:nZ,1))
+        ! User_Emissivity_AD = SUM(SfcOptics_AD%Emissivity(1:nZ,1)) ! V3.0 implementation
+        User_Emissivity_AD = ZERO ! V2.4 implementation
         IF( RTV%Diffuse_Surface) THEN
           IF( RTV%mth_Azi == 0 ) THEN
-        ! Assuming Lambertian surface isn't polarized!
-          DO i = SfcOptics%n_Angles, 1, -1
-            User_Emissivity_AD = User_Emissivity_AD - &
-            (SUM(SfcOptics_AD%Reflectivity(1:SfcOptics%n_Angles,1,i,1))*SfcOptics%Weight(i))
-          END DO
+            ! Assuming Lambertian surface isn't polarized!
+            DO i = SfcOptics%n_Angles, 1, -1
+              User_Emissivity_AD = User_Emissivity_AD - &
+              (SUM(SfcOptics_AD%Reflectivity(1:SfcOptics%n_Angles,1,i,1))*SfcOptics%Weight(i))
+            END DO
           ELSE
             SfcOptics_AD%Reflectivity(1:SfcOptics%n_Angles, 1, 1:SfcOptics%n_Angles, 1) = ZERO
             SfcOptics_AD%Direct_Reflectivity(1:SfcOptics%n_Angles,1) = ZERO
             SfcOptics_AD%Emissivity(1:SfcOptics%n_Angles,1) = ZERO
           END IF
-
         ELSE ! Specular surface
-        DO i = nZ, 1, -1
-          User_Emissivity_AD = User_Emissivity_AD - SfcOptics_AD%Reflectivity(i,1,i,1)
-        END DO
+          DO i = nZ, 1, -1
+            User_Emissivity_AD = User_Emissivity_AD - SfcOptics_AD%Reflectivity(i,1,i,1)
+          END DO
         END IF
 !      Direct_Reflectivity_AD = SUM(SfcOptics_AD%Direct_Reflectivity(1:nZ,1))
 !      SfcOptics_AD%Direct_Reflectivity(1,1) = SfcOptics_AD%Direct_Reflectivity(1,1) +
