@@ -854,7 +854,7 @@ CONTAINS
 !$OMP END PARALLEL DO
         IF ( Error_Status == FAILURE ) RETURN
 
-      END IF ! If ractional cloud coverage
+      END IF ! fractional cloud coverage
 
 
       ! Average surface skin temperature for multi-surface types
