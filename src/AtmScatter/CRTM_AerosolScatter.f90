@@ -885,7 +885,7 @@ CONTAINS
          ke = ke * (ONE- w)
       END IF
 
-    ELSE IF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'NAAPS' ) THEN
+    ELSE IF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'NAAPS' .OR. AeroC%Scheme == 'NIER' ) THEN
       ! Fixed indices
       fix_sig = 1
       fix_r   = 1
@@ -1102,7 +1102,7 @@ CONTAINS
       END IF
       NULLIFY(zc)
 
-   ELSE IF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'NAAPS' ) THEN
+   ELSE IF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'NAAPS' .OR. AeroC%Scheme == 'NIER' ) THEN
      ! Fixed indices
      fix_sig  = 1
      fix_r    = 1
@@ -1358,7 +1358,7 @@ CONTAINS
       Rsig_AD = Rsig_AD + v_int_AD
       Reff_AD = Reff_AD + r_int_AD
 
-   ELSE IF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'NAAPS' ) THEN
+   ELSE IF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'NAAPS' .OR. AeroC%Scheme == 'NIER' ) THEN
      ! Fixed indices
      fix_sig = 1
      fix_r   = 1
