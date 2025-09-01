@@ -23,7 +23,7 @@ jobs:
           # otherwise the token will be scoped to the repository.
           app-id: 321361
           private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
+          owner: JCSDA-internal
 
       - name: checkout repository
         uses: actions/checkout@v4
