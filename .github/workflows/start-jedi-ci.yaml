@@ -43,8 +43,9 @@ jobs:
           container_version: latest
           unittest_tag: crtm
           target_project_name: crtm
-          simple_bundle_dependencies: oops ioda ioda-data saber vader gsw oasim soca ufo fv3-jedi fv3-jedi-lm fv3-jedi-data mpas mpas-jedi mpas-jedi-data
-          test_script: run_tests_simple.sh
+          integration_test_dependencies: ioda oops gsw ufo-data ufo
+          test_script: run_tests.sh
+          bundle_repository: https://github.com/JCSDA/jedi-bundle.git
           target_repo_dir: target_repository
           bundle_branch: develop
           jedi_ci_token: ${{ steps.generate-token.outputs.token }}
