@@ -41,9 +41,9 @@ jobs:
         uses: JCSDA-internal/jedi-ci@feature/downstream-trim
         with:
           container_version: latest
-          unittest_tag: crtm
           target_project_name: crtm
-          integration_test_dependencies: ioda oops gsw ufo-data ufo
+          test_dependencies: ioda oops gsw ufo-data ufo
+          test_strategy: INTEGRATION
           test_script: run_tests.sh
           bundle_repository: https://github.com/JCSDA/jedi-bundle.git
           target_repo_dir: target_repository
