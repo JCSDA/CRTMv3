@@ -21,7 +21,7 @@ elseif( CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM" )
   include( compiler_flags_IntelLLVM_Fortran )
 
 elseif( CMAKE_Fortran_COMPILER_ID STREQUAL "Intel" )
-    include( compiler_flags_Intel_Fortran )
+  include( compiler_flags_Intel_Fortran )
 
 elseif( CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" )
   include( compiler_flags_NVHPC_Fortran )
