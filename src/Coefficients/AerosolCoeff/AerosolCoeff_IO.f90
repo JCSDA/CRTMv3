@@ -88,7 +88,7 @@ CONTAINS
 !                          - CMAQ
 !                          - GOCART-GEOS5
 !                          - NAAPS
-!                          - NIER
+!                          - MADEVBS
 !                          UNITS:      N/A
 !                          TYPE:       CHARACTER(*)
 !                          DIMENSION:  Scalar
@@ -324,7 +324,7 @@ CONTAINS
 !                          - CMAQ
 !                          - GOCART-GEOS5
 !                          - NAAPS
-!                          - NIER
+!                          - MADEVBS
 !                          UNITS:      N/A
 !                          TYPE:       CHARACTER(*)
 !                          DIMENSION:  Scalar
@@ -483,7 +483,7 @@ CONTAINS
 !                          - CMAQ
 !                          - GOCART-GEOS5
 !                          - NAAPS
-!                          - NIER
+!                          - MADEVBS
 !                          UNITS:      N/A
 !                          TYPE:       CHARACTER(*)
 !                          DIMENSION:  Scalar
