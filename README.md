@@ -129,7 +129,7 @@ From the top level of the CRTM directory, e.g., `CRTMv3/`
 <pre>
 mkdir build/
 cd build/
-cmake -D<cmake variables here, see below> ..
+cmake ..
 make clean
 make -j8
 make install (optional, see -DCMAKE_INSTALL_PREFIX below, default install location is `<build>/.`)
