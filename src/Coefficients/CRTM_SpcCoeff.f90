@@ -233,20 +233,27 @@ CONTAINS
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_SpcCoeff_Load'
     ! Local variables
+    CHARACTER(LEN=:), ALLOCATABLE :: base
+    CHARACTER(LEN=1) :: lastch
     CHARACTER(ML) :: msg, pid_msg
-    CHARACTER(ML) :: path
     CHARACTER(ML) :: spccoeff_file
     LOGICAL :: noisy
     INTEGER :: alloc_stat
     INTEGER :: n, n_sensors
+    INTEGER :: blen
 
     ! Setup
     err_stat = SUCCESS
     ! ...Check the File_Path argument
-    IF ( PRESENT(File_Path) ) THEN
-      path = ADJUSTL(File_Path)
+    IF (PRESENT(File_Path)) THEN
+      base = TRIM(ADJUSTL(File_Path))
+      blen = LEN_TRIM(base)
+      IF (blen > 0) THEN
+        lastch = base(blen:blen)
+        IF (lastch /= '/' .AND. lastch /= '\') base = base // '/'
+      END IF
     ELSE
-      path = ''
+      base = ''
     END IF
     ! ...Check Quiet argument
     noisy = .TRUE.
@@ -275,10 +282,10 @@ CONTAINS
 
     ! Read the SpcCoeff data files
     DO n = 1, n_Sensors
-      spccoeff_file = TRIM(ADJUSTL(path)) // '/' // TRIM(ADJUSTL(Sensor_ID(n))) // '.SpcCoeff.bin'
+      spccoeff_file = TRIM(ADJUSTL(base)) // TRIM(ADJUSTL(Sensor_ID(n))) // '.SpcCoeff.bin'
       IF( PRESENT(netCDF) ) THEN
         IF( netCDF ) THEN
-          spccoeff_file = TRIM(ADJUSTL(path)) // '/' // TRIM(ADJUSTL(Sensor_ID(n))) // '.SpcCoeff.nc'
+          spccoeff_file = TRIM(ADJUSTL(base)) // TRIM(ADJUSTL(Sensor_ID(n))) // '.SpcCoeff.nc'
         END IF
       END IF
       err_stat = SpcCoeff_ReadFile( &
