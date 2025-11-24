@@ -152,7 +152,7 @@ PROGRAM test_MWSurfEM
 
   CALL CRTM_SfcOptics_Create(SfcOptics, &
                               1, & ! n_Angles
-                              1)   ! n_Stokes
+                              4)   ! n_Stokes
 
   !Error_Status = Compute_MW_Water_SfcOptics( &
   !  Sfc(1)     , &  ! Input
