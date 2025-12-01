@@ -97,6 +97,9 @@ PROGRAM test_AOD
   WRITE( *,'(/5x,"Initializing the CRTM...")' )
   Error_Status = CRTM_Init( (/Sensor_Id/), &
                             ChannelInfo, &
+                            Aerosol_Model = 'MADEVBS', &
+                            AerosolCoeff_Format = 'netCDF', &
+                            AerosolCoeff_File = 'AerosolCoeff.MADEVBS.nc4', &
                             File_Path=COEFFICIENTS_PATH)
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error initializing CRTM'

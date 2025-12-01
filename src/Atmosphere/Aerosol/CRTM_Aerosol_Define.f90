@@ -1517,7 +1517,7 @@ CONTAINS
          aerosol%Effective_Radius, &
          aerosol%Effective_Variance, &
          aerosol%Concentration
-    ELSEIF ( AeroC%Scheme == 'GOCART-GEOS5' ) THEN
+    ELSEIF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'MADEVBS') THEN
       READ( fid,IOSTAT=io_stat,IOMSG=io_msg ) &
          aerosol%Type, &
          aerosol%Effective_Radius, &
@@ -1602,7 +1602,7 @@ CONTAINS
          Aerosol%Effective_Radius(1:Aerosol%n_Layers), &
          Aerosol%Effective_Variance(1:Aerosol%n_Layers), &
          Aerosol%Concentration(1:Aerosol%n_Layers)
-    ELSEIF ( AeroC%Scheme == 'GOCART-GEOS5' ) THEN
+    ELSEIF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'MADEVBS' ) THEN
       WRITE( fid,IOSTAT=io_stat,IOMSG=io_msg ) &
          Aerosol%Type, &
          Aerosol%Effective_Radius(1:Aerosol%n_Layers), &
