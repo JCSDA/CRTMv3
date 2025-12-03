@@ -416,6 +416,13 @@ add_test(NAME test_TauCoeff_IO_NC
          COMMAND $<TARGET_FILE:TauCoeff_IO_NC>)
 set_tests_properties(test_TauCoeff_IO_NC PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
+#./mains/unit/input_output/test_EmisCoeff_NC/test_emis_coeff_io_nc.f90
+add_executable(EmisCoeff_IO_NC mains/unit/input_output/test_EmisCoeff_NC/test_emis_coeff_io_nc.f90)
+target_link_libraries(EmisCoeff_IO_NC PRIVATE crtm)
+add_test(NAME test_EmisCoeff_IO_NC
+         COMMAND $<TARGET_FILE:EmisCoeff_IO_NC>)
+set_tests_properties(test_EmisCoeff_IO_NC PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
 #(CD) AerosolCoeff I/O test
 add_executable(AerosolCoeff_IO mains/unit/input_output/test_AerosolCoeff/test_aerosol_coeff_io.f90)
 target_link_libraries(AerosolCoeff_IO PRIVATE crtm)
