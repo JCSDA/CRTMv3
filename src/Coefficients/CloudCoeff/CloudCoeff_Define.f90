@@ -521,15 +521,15 @@ CONTAINS
     
     WRITE(*,'(1x,"CloudCoeff OBJECT")')
     ! Dimensions
-    WRITE(*,'(3x,"n_MW_Frequencies :",1x,i0)') CloudCoeff%n_MW_Frequencies
-    WRITE(*,'(3x,"n_MW_Radii       :",1x,i0)') CloudCoeff%n_MW_Radii
-    WRITE(*,'(3x,"n_MW_Densities      :",1x,i0)') CloudCoeff%n_MW_Densities
-    WRITE(*,'(3x,"n_IR_Frequencies :",1x,i0)') CloudCoeff%n_IR_Frequencies
-    WRITE(*,'(3x,"n_IR_Radii       :",1x,i0)') CloudCoeff%n_IR_Radii
-    WRITE(*,'(3x,"n_IR_Densities      :",1x,i0)') CloudCoeff%n_IR_Densities
-    WRITE(*,'(3x,"n_Temperatures   :",1x,i0)') CloudCoeff%n_Temperatures
-    WRITE(*,'(3x,"n_Legendre_Terms :",1x,i0)') CloudCoeff%n_Legendre_Terms
-    WRITE(*,'(3x,"n_Phase_Elements :",1x,i0)') CloudCoeff%n_Phase_Elements
+    WRITE(*,'(3x,"n_MW_Frequencies :",1x,i3)') CloudCoeff%n_MW_Frequencies
+    WRITE(*,'(3x,"n_MW_Radii       :",1x,i3)') CloudCoeff%n_MW_Radii
+    WRITE(*,'(3x,"n_MW_Densities      :",1x,i3)') CloudCoeff%n_MW_Densities
+    WRITE(*,'(3x,"n_IR_Frequencies :",1x,i3)') CloudCoeff%n_IR_Frequencies
+    WRITE(*,'(3x,"n_IR_Radii       :",1x,i3)') CloudCoeff%n_IR_Radii
+    WRITE(*,'(3x,"n_IR_Densities      :",1x,i3)') CloudCoeff%n_IR_Densities
+    WRITE(*,'(3x,"n_Temperatures   :",1x,i3)') CloudCoeff%n_Temperatures
+    WRITE(*,'(3x,"n_Legendre_Terms :",1x,i3)') CloudCoeff%n_Legendre_Terms
+    WRITE(*,'(3x,"n_Phase_Elements :",1x,i3)') CloudCoeff%n_Phase_Elements
     IF ( .NOT. CloudCoeff_Associated(CloudCoeff) ) RETURN
     ! Dimensional vectors
     WRITE(*,'(/3x,"Dimensional vectors...")')

@@ -27,8 +27,8 @@ set( CMAKE_Fortran_FLAGS_DEBUG
 ####################################################################
 
 set( CMAKE_Fortran_FLAGS_RELWITHDEBINFO
-     "-g -O0 -traceback -fno-openmp" )
-#     "-O2 -g -DNDEBUG -check bounds -traceback -no-heap-arrays -assume byterecl -qopenmp" )
+#     "-g -O0 -traceback -fno-openmp" )
+     "-O2 -g -DNDEBUG -check bounds -traceback -no-heap-arrays -assume byterecl -qopenmp" )
 
 ####################################################################
 # BIT REPRODUCIBLE FLAGS
