@@ -11,11 +11,12 @@
 !       Modified by:    Quanhua (Mark) Liu, 20-Nov-2020
 !                       Quanhua.Liu@noaa.gov
 !
+!       Modified by:    Benjamin T. Johnson 12-Dec-2025
+!                       Benjamin.T.Johnson@noaa.gov / bjohns@ucar.edu
 !
-! WARNING: This is experimental software!
+!
 ! This software is licensed under the terms of the Apache Licence Version 2.0
 ! which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
-
 
 MODULE CRTM_Adjoint_Module
 
@@ -36,8 +37,8 @@ MODULE CRTM_Adjoint_Module
                                         MIN_COVERAGE_THRESHOLD , &
                                         SCATTERING_ALBEDO_THRESHOLD
   USE CRTM_SpcCoeff,              ONLY: SC, &
-                                        SpcCoeff_IsInfraredSensor , &
-                                        SpcCoeff_IsMicrowaveSensor, &
+                                        SpcCoeff_IsInfraredSensor   , &
+                                        SpcCoeff_IsMicrowaveSensor  , &
                                         SpcCoeff_IsUltravioletSensor, &
                                         SpcCoeff_IsVisibleSensor
   USE CRTM_Atmosphere_Define,     ONLY: OPERATOR(+)                    , &
@@ -69,7 +70,7 @@ MODULE CRTM_Adjoint_Module
                                         CRTM_Atmosphere_Coverage       , &
                                         CRTM_Atmosphere_ClearSkyCopy   , &
                                         CRTM_Atmosphere_ClearSkyCopy_AD
-  USE CRTM_GeometryInfo_Define,   ONLY: CRTM_GeometryInfo_type, &
+  USE CRTM_GeometryInfo_Define,   ONLY: CRTM_GeometryInfo_type    , &
                                         CRTM_GeometryInfo_SetValue, &
                                         CRTM_GeometryInfo_GetValue
   USE CRTM_GeometryInfo,          ONLY: CRTM_GeometryInfo_Compute
@@ -88,12 +89,12 @@ MODULE CRTM_Adjoint_Module
                                         CRTM_AtmOptics_Create    , &
                                         CRTM_AtmOptics_Destroy   , &
                                         CRTM_AtmOptics_Zero
-  USE CRTM_AerosolScatter,        ONLY: CRTM_Compute_AerosolScatter   , &
+  USE CRTM_AerosolScatter,        ONLY: CRTM_Compute_AerosolScatter  , &
                                         CRTM_Compute_AerosolScatter_AD
-  USE CRTM_CloudScatter,          ONLY: CRTM_Compute_CloudScatter   , &
+  USE CRTM_CloudScatter,          ONLY: CRTM_Compute_CloudScatter    , &
                                         CRTM_Compute_CloudScatter_AD
-  USE CRTM_AtmOptics,             ONLY: AOvar_type  , &
-                                        AOvar_Create, &
+  USE CRTM_AtmOptics,             ONLY: AOvar_type                   , &
+                                        AOvar_Create                 , &
                                         CRTM_No_Scattering           , &
                                         CRTM_Include_Scattering      , &
                                         CRTM_Compute_Transmittance   , &
@@ -108,7 +109,7 @@ MODULE CRTM_Adjoint_Module
                                         CRTM_SfcOptics_Create    , &
                                         CRTM_SfcOptics_Destroy   , &
                                         CRTM_SfcOptics_Zero, crtm_sfcoptics_inspect
-  USE CRTM_SfcOptics,             ONLY: CRTM_Compute_SurfaceT   , &
+  USE CRTM_SfcOptics,             ONLY: CRTM_Compute_SurfaceT    , &
                                         CRTM_Compute_SurfaceT_AD
   USE CRTM_RTSolution,            ONLY: CRTM_RTSolution_type      , &
                                         CRTM_Compute_nStreams     , &
@@ -132,23 +133,23 @@ MODULE CRTM_Adjoint_Module
   USE CRTM_Planck_Functions,      ONLY: CRTM_Planck_Temperature   , &
                                         CRTM_Planck_Temperature_AD
   USE CRTM_CloudCover_Define,     ONLY: CRTM_CloudCover_type
-  USE CRTM_Active_Sensor,         ONLY: CRTM_Compute_Reflectivity, &
+  USE CRTM_Active_Sensor,         ONLY: CRTM_Compute_Reflectivity   , &
                                         CRTM_Compute_Reflectivity_AD, &
                                         Calculate_Cloud_Water_Density
 
   ! Internal variable definition modules
   ! ...AtmOptics
-  USE AOvar_Define, ONLY: AOvar_type, &
+  USE AOvar_Define, ONLY: AOvar_type      , &
                           AOvar_Associated, &
                           AOvar_Destroy   , &
                           AOvar_Create
   ! ...CloudScatter
-  USE CSvar_Define, ONLY: CSvar_type, &
+  USE CSvar_Define, ONLY: CSvar_type      , &
                           CSvar_Associated, &
                           CSvar_Destroy   , &
                           CSvar_Create
   ! ...AerosolScatter
-  USE ASvar_Define, ONLY: ASvar_type, &
+  USE ASvar_Define, ONLY: ASvar_type      , &
                           ASvar_Associated, &
                           ASvar_Destroy   , &
                           ASvar_Create
@@ -349,24 +350,24 @@ CONTAINS
     ! ------
     Error_Status = SUCCESS
     IF (enable_timing) THEN
-      CALL SYSTEM_CLOCK (count_rate=count_rate)
-      CALL SYSTEM_CLOCK (count=count_start)
+       CALL SYSTEM_CLOCK (count_rate=count_rate)
+       CALL SYSTEM_CLOCK (count=count_start)
     END IF
 
     ! If no sensors or channels, simply return
     n_Sensors  = SIZE(ChannelInfo)
     n_Channels = SUM(CRTM_ChannelInfo_n_Channels(ChannelInfo))
     IF ( n_Sensors == 0 .OR. n_Channels == 0 ) RETURN
-
+    
     ! Check spectral arrays
     IF ( SIZE(RTSolution   ,DIM=1) < n_Channels .OR. &
          SIZE(RTSolution_AD,DIM=1) < n_Channels      ) THEN
-      Error_Status = FAILURE
-      WRITE( Message,'("Output RTSolution structure arrays too small (",i0," and ",i0,&
-             &") to hold results for the number of requested channels (",i0,")")') &
-             SIZE(RTSolution,DIM=1), SIZE(RTSolution_AD,DIM=1), n_Channels
-      CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-      RETURN
+       Error_Status = FAILURE
+       WRITE( Message,'("Output RTSolution structure arrays too small (",i0," and ",i0,&
+            &") to hold results for the number of requested channels (",i0,")")') &
+            SIZE(RTSolution,DIM=1), SIZE(RTSolution_AD,DIM=1), n_Channels
+       CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+       RETURN
     END IF
 
 
@@ -379,48 +380,46 @@ CONTAINS
          SIZE(Geometry)            /= n_Profiles .OR. &
          SIZE(Atmosphere_AD)       /= n_Profiles .OR. &
          SIZE(Surface_AD)          /= n_Profiles .OR. &
-         SIZE(RTSolution,   DIM=2) /= n_Profiles      ) THEN
-      Error_Status = FAILURE
-      Message = 'Inconsistent profile dimensionality for input arguments.'
-      CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-      RETURN
+         SIZE(RTSolution,   DIM=2) /= n_Profiles       ) THEN
+       Error_Status = FAILURE
+       Message = 'Inconsistent profile dimensionality for input arguments.'
+       CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+       RETURN
     END IF
     ! ...Check the profile dimensionality of the other optional arguments
     Options_Present = .FALSE.
     IF ( PRESENT( Options ) ) THEN
-      Options_Present = .TRUE.
-      IF ( SIZE( Options ) /= n_Profiles ) THEN
-        Error_Status = FAILURE
-        Message = 'Inconsistent profile dimensionality for Options optional input argument.'
-        CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-        RETURN
-      END IF
+       Options_Present = .TRUE.
+       IF ( SIZE( Options ) /= n_Profiles ) THEN
+          Error_Status = FAILURE
+          Message = 'Inconsistent profile dimensionality for Options optional input argument.'
+          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+          RETURN
+       END IF
     END IF
 
     ! ------------
     ! PROFILE LOOPS
     ! ------------
-
-!JR First loop just checks validity of Atmosphere(m) contents
-!$OMP PARALLEL DO PRIVATE (m, Opt, AncillaryInput) SCHEDULE (runtime)
+    
     Profile_Loop2: DO m = 1, n_Profiles
-      ! Check the optional Options structure argument
-      Opt = Default_Options
-      IF ( Options_Present ) THEN
-        Opt = Options(m)
-        ! Copy over ancillary input
-        AncillaryInput%SSU    = Options(m)%SSU
-        AncillaryInput%Zeeman = Options(m)%Zeeman
-      END IF
-      ret(m) = profile_solution (m, Opt, AncillaryInput)
+       ! Check the optional Options structure argument
+       Opt = Default_Options
+       IF ( Options_Present ) THEN
+          Opt = Options(m)
+          ! Copy over ancillary input
+          AncillaryInput%SSU    = Options(m)%SSU
+          AncillaryInput%Zeeman = Options(m)%Zeeman
+       END IF
+       ret(m) = profile_solution (m, Opt, AncillaryInput)
     END DO Profile_Loop2
-!$OMP END PARALLEL DO
+    
     nfailure = COUNT (ret(:) /= SUCCESS)
     IF (nfailure > 0) THEN
-      Error_Status = FAILURE
-      WRITE(Message,'(i0," profiles failed")') nfailure
-      CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-      RETURN
+       Error_Status = FAILURE
+       WRITE(Message,'(i0," profiles failed")') nfailure
+       CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+       RETURN
     END IF
 
     IF (enable_timing) THEN
@@ -442,11 +441,6 @@ CONTAINS
 
   CONTAINS
 
-    ! Function profile_solution contains all the computational code inside of CRTM_K_Matrix that
-    ! is contained inside an OMP loop. It is "contain"ed inside the function mainly so it can
-    ! access arrays which are arguments to CRTM_K_Matrix. Subroutines Pre_Process_RTSolution_K
-    ! and Post_Process_RTSolution_K also access CRTM_K_Matrix data, but multi-level function
-    ! "contain" clauses cause compiler errors so arguments to these functions were needed.
     FUNCTION profile_solution (m, Opt, AncillaryInput) RESULT( Error_Status )
 !
       INTEGER, INTENT(in) :: m               ! profile index
