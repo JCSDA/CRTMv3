@@ -255,7 +255,7 @@ CONTAINS
     LOGICAL :: Options_Present
     INTEGER :: n_Sensors
     INTEGER :: n_Channels
-    INTEGER :: m, n_Profiles, nc
+    INTEGER :: m, n_Profiles, nc, n_channel_threads
     ! Local ancillary input structure
     TYPE(CRTM_AncillaryInput_type) :: AncillaryInput
     ! Local options structure for default and use values

@@ -230,7 +230,7 @@ set(MODULE_DIR module/${PROJECT_NAME}/${CMAKE_Fortran_COMPILER_ID}/${CMAKE_Fortr
 add_library(${PROJECT_NAME} ${LIBRARY_TYPE} ${crtm_src_files})
 
 # Link dependencies
-target_link_libraries(${PROJECT_NAME} PUBLIC OpenMP::OpenMP_Fortran)
+#target_link_libraries(${PROJECT_NAME} PUBLIC OpenMP::OpenMP_Fortran)
 target_link_libraries(${PROJECT_NAME} PUBLIC NetCDF::NetCDF_Fortran)
 
 # Set the Fortran module directory for build and install phases
