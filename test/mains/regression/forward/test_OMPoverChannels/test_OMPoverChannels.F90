@@ -284,6 +284,7 @@ PROGRAM test_OMPoverChannels
   ELSE
     Message = 'RTSolution results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_DiffStats( PROGRAM_NAME, 'RTSolution', RTSolution, rts )
     ! Write the current RTSolution results to file
     rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, Quiet=.TRUE. )
@@ -324,5 +325,6 @@ CONTAINS
 
   INCLUDE 'Load_Atm_Data.inc'
   INCLUDE 'Load_Sfc_Data.inc'
+  INCLUDE 'Compare_Diagnostics.inc'
 
 END PROGRAM test_OMPoverChannels

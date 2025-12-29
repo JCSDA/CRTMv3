@@ -391,6 +391,7 @@ PROGRAM test_ClearSky
   ELSE
     Message = 'Atmosphere_AD Adjoints are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_Atmosphere_DiffStats_R1( PROGRAM_NAME, 'Atmosphere_AD', Atmosphere_AD, atm_AD )
     ! Write the current Atmosphere_AD results to file
     atmad_file = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.bin'
     Error_Status = CRTM_Atmosphere_WriteFile( atmad_file, Atmosphere_AD, Quiet=.TRUE. )
@@ -407,6 +408,7 @@ PROGRAM test_ClearSky
   ELSE
     Message = 'Surface_AD Adjoints are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_Surface_DiffStats_R1( PROGRAM_NAME, 'Surface_AD', Surface_AD, sfc_AD )
     ! Write the current Surface_AD results to file
     sfcad_file = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.bin'
     Error_Status = CRTM_Surface_WriteFile( sfcad_file, Surface_AD, Quiet=.TRUE. )
@@ -423,6 +425,7 @@ PROGRAM test_ClearSky
   ELSE
     Message = 'RTSolution_AD results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_DiffStats( PROGRAM_NAME, 'RTSolution_AD', RTSolution_AD, rts_AD )
     rtsad_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution_AD.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rtsad_File, RTSolution_AD, Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
@@ -466,5 +469,6 @@ CONTAINS
 
   INCLUDE 'Load_Atm_Data.inc'
   INCLUDE 'Load_Sfc_Data.inc'
+  INCLUDE 'Compare_Diagnostics.inc'
 
 END PROGRAM test_ClearSky

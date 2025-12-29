@@ -611,6 +611,7 @@ PROGRAM test_VerticalCoordinates
   ELSE
     Message = 'Atmosphere_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_Atmosphere_DiffStats( PROGRAM_NAME, 'Atmosphere_K', Atmosphere_K, atm_k )
     ! Write the current Atmosphere_K results to file
     atmk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.bin'
     Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, Quiet=.TRUE. )
@@ -627,6 +628,7 @@ PROGRAM test_VerticalCoordinates
   ELSE
     Message = 'Atmosphere_NAM_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_Atmosphere_DiffStats( PROGRAM_NAME, 'Atmosphere_NAM_K', Atmosphere_NAM_K, atm_NAM_k )
     ! Write the current Atmosphere_NAM_K results to file
     atmk_NAM_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.Atmosphere.bin'
     Error_Status = CRTM_Atmosphere_WriteFile( atmk_NAM_file, Atmosphere_NAM_K, Quiet=.TRUE. )
@@ -643,6 +645,7 @@ PROGRAM test_VerticalCoordinates
   ELSE
     Message = 'Atmosphere_GFS_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_Atmosphere_DiffStats( PROGRAM_NAME, 'Atmosphere_GFS_K', Atmosphere_GFS_K, atm_GFS_k )
     ! Write the current Atmosphere_GFS_K results to file
     atmk_GFS_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.Atmosphere.bin'
     Error_Status = CRTM_Atmosphere_WriteFile( atmk_GFS_file, Atmosphere_GFS_K, Quiet=.TRUE. )
@@ -661,6 +664,7 @@ PROGRAM test_VerticalCoordinates
   ELSE
     Message = 'Surface_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_Surface_DiffStats( PROGRAM_NAME, 'Surface_K', Surface_K, sfc_k )
     ! Write the current Surface_K results to file
     sfck_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.bin'
     Error_Status = CRTM_Surface_WriteFile( sfck_file, Surface_K, Quiet=.TRUE. )
@@ -677,6 +681,7 @@ PROGRAM test_VerticalCoordinates
   ELSE
     Message = 'Surface_NAM_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_Surface_DiffStats( PROGRAM_NAME, 'Surface_NAM_K', Surface_NAM_K, sfc_NAM_k )
     ! Write the current Surface_NAM_K results to file
     sfck_NAM_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.Surface.bin'
     Error_Status = CRTM_Surface_WriteFile( sfck_NAM_file, Surface_NAM_K, Quiet=.TRUE. )
@@ -693,6 +698,7 @@ PROGRAM test_VerticalCoordinates
   ELSE
     Message = 'Surface_GFS_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_Surface_DiffStats( PROGRAM_NAME, 'Surface_GFS_K', Surface_GFS_K, sfc_GFS_k )
     ! Write the current Surface_GFS_K results to file
     sfck_GFS_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.Surface.bin'
     Error_Status = CRTM_Surface_WriteFile( sfck_GFS_file, Surface_GFS_K, Quiet=.TRUE. )
@@ -752,5 +758,6 @@ CONTAINS
   INCLUDE 'Load_Atm_Data.inc'
   INCLUDE 'Load_Sfc_Data.inc'
   INCLUDE 'Map_To_NCEP_Model_Coordinates.inc'
+  INCLUDE 'Compare_Diagnostics.inc'
 
 END PROGRAM test_VerticalCoordinates

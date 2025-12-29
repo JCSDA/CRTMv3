@@ -390,6 +390,7 @@ PROGRAM test_VerticalCoordinates
   ELSE
     Message = 'RTSolution results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_DiffStats( PROGRAM_NAME, 'RTSolution', RTSolution, rts )
     ! Write the current RTSolution results to file
     rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, Quiet=.TRUE. )
@@ -406,6 +407,7 @@ PROGRAM test_VerticalCoordinates
   ELSE
     Message = 'regional RTSolution results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_DiffStats( PROGRAM_NAME, 'RTSolution_NAM', RTSolution_NAM, rts_NAM )
     ! Write the current RTSolution results to file
     rts_NAM_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.RTSolution.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rts_NAM_File, RTSolution_NAM, Quiet=.TRUE. )
@@ -422,6 +424,7 @@ PROGRAM test_VerticalCoordinates
   ELSE
     Message = 'global RTSolution results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_DiffStats( PROGRAM_NAME, 'RTSolution_GFS', RTSolution_GFS, rts_GFS )
     ! Write the current RTSolution results to file
     rts_GFS_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.RTSolution.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rts_GFS_File, RTSolution_GFS, Quiet=.TRUE. )
@@ -469,5 +472,6 @@ CONTAINS
   INCLUDE 'Load_Atm_Data.inc'
   INCLUDE 'Load_Sfc_Data.inc'
   INCLUDE 'Map_To_NCEP_Model_Coordinates.inc'
+  INCLUDE 'Compare_Diagnostics.inc'
 
 END PROGRAM test_VerticalCoordinates

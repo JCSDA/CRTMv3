@@ -310,6 +310,7 @@ PROGRAM test_ClearSky
   ELSE
     Message = 'RTSolution_TL results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_DiffStats( PROGRAM_NAME, 'RTSolution_TL', RTSolution_TL, rts_TL )
     ! Write the current RTSolution results to file
     rts_File = TRIM(Sensor_Id)//'.RTSolution_TL.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution_TL, Quiet=.TRUE. )
@@ -354,5 +355,6 @@ CONTAINS
 
   INCLUDE 'Load_Atm_Data.inc'
   INCLUDE 'Load_Sfc_Data.inc'
+  INCLUDE 'Compare_Diagnostics.inc'
 
 END PROGRAM test_ClearSky

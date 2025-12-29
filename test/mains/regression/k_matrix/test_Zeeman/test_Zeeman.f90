@@ -422,6 +422,7 @@ PROGRAM test_Zeeman
   ELSE
     Message = 'Atmosphere_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_Atmosphere_DiffStats( PROGRAM_NAME, 'Atmosphere_K', Atmosphere_K, atm_k )
     ! Write the current Atmosphere_K results to file
     atmk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.bin'
     Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, Quiet=.TRUE. )
@@ -438,6 +439,7 @@ PROGRAM test_Zeeman
   ELSE
     Message = 'Surface_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_Surface_DiffStats( PROGRAM_NAME, 'Surface_K', Surface_K, sfc_k )
     ! Write the current Surface_K results to file
     sfck_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.bin'
     Error_Status = CRTM_Surface_WriteFile( sfck_file, Surface_K, Quiet=.TRUE. )
@@ -454,6 +456,7 @@ PROGRAM test_Zeeman
   ELSE
     Message = 'RTSolution_K results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_DiffStats( PROGRAM_NAME, 'RTSolution_K', RTSolution_K, rts_k )
     rtsk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution_K.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rtsk_File, RTSolution_K, Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
@@ -626,5 +629,7 @@ CONTAINS
     Atmosphere(1)%Absorber(:,2) = 0.01_fp
 
   END SUBROUTINE Load_AtmSfc_Data
+
+  INCLUDE 'Compare_Diagnostics.inc'
 
 END PROGRAM test_Zeeman

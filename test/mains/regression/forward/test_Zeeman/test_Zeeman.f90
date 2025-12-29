@@ -299,6 +299,7 @@ PROGRAM test_Zeeman
   ELSE
     Message = 'RTSolution results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_DiffStats( PROGRAM_NAME, 'RTSolution', RTSolution, rts )
     ! Write the current RTSolution results to file
     rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, Quiet=.TRUE. )
@@ -468,5 +469,7 @@ CONTAINS
     Atm(1)%Absorber(:,2) = 0.01_fp
 
   END SUBROUTINE Load_AtmSfc_Data
+
+  INCLUDE 'Compare_Diagnostics.inc'
 
 END PROGRAM test_Zeeman

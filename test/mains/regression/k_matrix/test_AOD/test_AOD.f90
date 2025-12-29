@@ -286,6 +286,7 @@ PROGRAM test_AOD
   ELSE
     Message = 'Atmosphere_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_Atmosphere_DiffStats( PROGRAM_NAME, 'Atmosphere_K', Atmosphere_K, atm_k )
     ! Write the current Atmosphere_K results to file
     atmk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.bin'
     Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, Quiet=.TRUE. )
@@ -330,5 +331,6 @@ PROGRAM test_AOD
 CONTAINS
 
   INCLUDE 'Load_Atm_Data.inc'
+  INCLUDE 'Compare_Diagnostics.inc'
 
 END PROGRAM test_AOD
