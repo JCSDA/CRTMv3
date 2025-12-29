@@ -2,11 +2,13 @@
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'FitCoeff_SetValue'
     ! Local variables
     CHARACTER(ML) :: msg
+    INTEGER :: dimensions(SIZE(self%Dimensions))
     INTEGER :: i
 
     ! Allocate structure if necessary    
     IF ( .NOT. FitCoeff_Associated(self) ) THEN
-      CALL FitCoeff_Create( self, SHAPE(C) )
+      dimensions = SHAPE(C)
+      CALL FitCoeff_Create( self, dimensions )
       IF ( .NOT. FitCoeff_Associated(self) ) THEN
         msg = 'Allocation of FitCoeff structure failed'
         CALL Display_Message( ROUTINE_NAME, msg, FAILURE ); RETURN
