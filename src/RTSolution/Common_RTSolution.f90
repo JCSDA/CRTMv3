@@ -769,7 +769,7 @@ CONTAINS
         SfcOptics_TL%Reflectivity       = ZERO
         User_Emissivity_TL              = SfcOptics_TL%Emissivity(1,1)
         SfcOptics_TL%Emissivity(1,1)    = ZERO
-        Direct_Reflectivity_TL          = SfcOptics_TL%Direct_Reflectivity(1,1)/PI
+        Direct_Reflectivity_TL          = SfcOptics_TL%Direct_Reflectivity(1,1)
         SfcOptics_TL%Emissivity(1:nZ,1) = User_Emissivity_TL
         ! Replicate the user reflectivities for all angles
         SfcOptics_TL%Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity_TL
@@ -1372,7 +1372,8 @@ CONTAINS
     SensorIndex            , & ! Input
     ChannelIndex           , & ! Input
     RTV                    , & ! Input
-    RTSolution_TL          ) & ! Output
+    RTSolution_TL          , & ! Output
+    Down_Radiance_TL       ) & ! Optional input
   RESULT( Error_Status )
     ! Arguments
     TYPE(CRTM_SfcOptics_type)   , INTENT(IN)     :: SfcOptics
@@ -1384,6 +1385,7 @@ CONTAINS
     INTEGER                     , INTENT(IN)     :: ChannelIndex
     TYPE(RTV_type)              , INTENT(IN)     :: RTV
     TYPE(CRTM_RTSolution_type)  , INTENT(IN OUT) :: RTSolution_TL
+    REAL(fp)                    , INTENT(IN), OPTIONAL :: Down_Radiance_TL
 
     ! Function Result
     INTEGER :: Error_Status,n1
@@ -1399,7 +1401,11 @@ CONTAINS
         SRadiance_TL(:) = Scattering_Radiance_TL(n1:n1-1+RTV%n_Stokes)
     ! Emission specific assignments
     ELSE
-        SRadiance_TL(1) = Radiance_TL
+        IF ( RTV%obs_4_downward%rt .AND. PRESENT(Down_Radiance_TL) ) THEN
+          SRadiance_TL(1) = Down_Radiance_TL
+        ELSE
+          SRadiance_TL(1) = Radiance_TL
+        END IF
     END IF
 
     ! accumulate Fourier component
@@ -1662,6 +1668,7 @@ CONTAINS
     CHARACTER(256) :: Message
     INTEGER :: no, na, nt
     INTEGER :: k, i
+    REAL(fp) :: Direct_Reflectivity_AD
 
     Error_Status = SUCCESS
 
@@ -1708,6 +1715,14 @@ CONTAINS
     SfcOptics_AD%n_Angles = SfcOptics%n_Angles
     SfcOptics_AD%Angle    = SfcOptics%Angle
     SfcOptics_AD%Weight   = SfcOptics%Weight
+
+    IF ( RTV%Visible_Flag_true ) THEN
+      DO i = 1, nZ
+        IF ( SfcOptics%Direct_Reflectivity(i,1) >= ONE ) THEN
+          SfcOptics_AD%Direct_Reflectivity(i,1) = ZERO
+        END IF
+      END DO
+    END IF
 
 
     ! --------------------------------------------------------------------------------
@@ -1766,9 +1781,9 @@ CONTAINS
             User_Emissivity_AD = User_Emissivity_AD - SfcOptics_AD%Reflectivity(i,1,i,1)
           END DO
         END IF
-!      Direct_Reflectivity_AD = SUM(SfcOptics_AD%Direct_Reflectivity(1:nZ,1))
-!      SfcOptics_AD%Direct_Reflectivity(1,1) = SfcOptics_AD%Direct_Reflectivity(1,1) +
-!                                              (Direct_Reflectivity_AD/PI)
+        Direct_Reflectivity_AD = SUM(SfcOptics_AD%Direct_Reflectivity(1:nZ,1))
+        SfcOptics_AD%Direct_Reflectivity(1:nZ,1) = ZERO
+        SfcOptics_AD%Direct_Reflectivity(1,1) = Direct_Reflectivity_AD
         RTSolution_AD%Surface_Emissivity = User_Emissivity_AD
       ELSE
 !! need to check !!

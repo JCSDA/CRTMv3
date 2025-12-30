@@ -90,7 +90,7 @@ CONTAINS
 
    ! -------------- internal variables --------------------------------- !
 
-      INTEGER :: i, k, niter
+      INTEGER :: i, k, niter, iter
       REAL(fp) :: rad, rad_change
       REAL(fp), PARAMETER :: initial_error = 1.E10   
       REAL(fp), PARAMETER :: SMALL = 1.E-15   
@@ -277,6 +277,17 @@ CONTAINS
 
       END DO soi_loop
 
+      IF ( RTV%obs_4_downward%rt ) THEN
+        RTV%s_Level_Rad_DOWN( 1 : RTV%n_Angles, 0 : n_Layers ) = ZERO
+        DO iter = 1, niter
+          RTV%s_Level_Rad_DOWN( 1 : RTV%n_Angles, 0 : n_Layers ) = &
+            RTV%s_Level_Rad_DOWN( 1 : RTV%n_Angles, 0 : n_Layers ) + &
+            RTV%s_Level_IterRad_DOWN( 1 : RTV%n_Angles, 0 : n_Layers, iter )
+        END DO
+        RTV%s_Level_Rad_DOWNT( 1 : RTV%n_Angles, 0 : n_Layers ) = &
+          RTV%s_Level_Rad_DOWN( 1 : RTV%n_Angles, 0 : n_Layers )
+      END IF
+
       RTV%Number_SOI_Iter = niter
 
       RETURN
@@ -298,7 +309,8 @@ CONTAINS
                     reflectivity_TL, & ! Input  TL  reflectivity
                              Pff_TL, & ! Input  TL forward phase matrix
                              Pbb_TL, & ! Input  TL backward phase matrix
-                          s_rad_up_TL) ! Output TL upward radiance 
+                          s_rad_up_TL, & ! Output TL upward radiance
+                       down_rad_TL_out) ! Optional output, TL downwelling radiance
 ! ------------------------------------------------------------------------- !
 !                                                                           !
 ! FUNCTION:                                                                 !
@@ -323,11 +335,14 @@ CONTAINS
       REAL (fp), INTENT(IN), DIMENSION( : ) ::  emissivity_TL
       REAL (fp), INTENT(IN), DIMENSION( :, : ) :: reflectivity_TL 
       REAL (fp), INTENT(IN), DIMENSION( :, :, : ) ::  Pff_TL, Pbb_TL
-      REAL (fp), INTENT(INOUT), DIMENSION( : ) :: s_rad_up_TL 
+      REAL (fp), INTENT(INOUT), DIMENSION( : ) :: s_rad_up_TL
+      REAL (fp), INTENT(OUT), OPTIONAL, DIMENSION( : ) :: down_rad_TL_out
 
    ! -------------- internal variables --------------------------------- !
 
       INTEGER :: i, k, iter
+      INTEGER :: obs_idx
+      LOGICAL :: compute_down
       REAL(fp), PARAMETER :: SNGL_SCAT_ALB_THRESH = 0.8
       REAL(fp), PARAMETER :: OPT_DEPTH_THRESH = 4.0
       REAL(fp), DIMENSION( RTV%n_Angles ) :: source_TL
@@ -335,6 +350,8 @@ CONTAINS
       REAL(fp), DIMENSION( RTV%n_Angles, n_Layers ) :: s_source_up_TL, s_source_down_TL
       REAL(fp), DIMENSION( RTV%n_Angles, RTV%n_Angles, n_Layers ) :: s_trans_TL, s_refl_TL
       REAL(fp), DIMENSION( RTV%n_Angles, 0:n_Layers, RTV%Number_SOI_Iter ) :: s_IterRad_UP_TL, s_IterRad_DOWN_TL
+      compute_down = PRESENT(down_rad_TL_out) .AND. RTV%obs_4_downward%rt
+      obs_idx = RTV%obs_4_downward%idx
 
 
       DO k = 1, n_Layers
@@ -467,9 +484,19 @@ CONTAINS
         !----------------
         ! Add up terms
         !----------------
-        s_Rad_UP_TL( Index_Sat_Angle ) = s_Rad_UP_TL( Index_Sat_Angle ) + s_IterRad_UP_TL( Index_Sat_Angle, 0, iter )
+      s_Rad_UP_TL( Index_Sat_Angle ) = s_Rad_UP_TL( Index_Sat_Angle ) + s_IterRad_UP_TL( Index_Sat_Angle, 0, iter )
 
       END DO  
+
+      IF ( compute_down ) THEN
+        down_rad_TL_out = ZERO
+        IF ( obs_idx > 0 ) THEN
+          DO iter = 1, RTV%Number_SOI_Iter
+            down_rad_TL_out( 1 : RTV%n_Angles ) = down_rad_TL_out( 1 : RTV%n_Angles ) + &
+              s_IterRad_DOWN_TL( 1 : RTV%n_Angles, obs_idx, iter )
+          END DO
+        END IF
+      END IF
 
       RETURN
       END SUBROUTINE CRTM_SOI_TL
@@ -489,7 +516,8 @@ CONTAINS
                      emissivity_AD, & ! Output AD surface emissivity
                    reflectivity_AD, & ! Output AD surface reflectivity
                             Pff_AD, & ! Output AD forward phase matrix
-                            Pbb_AD)   ! Output AD backward phase matrix
+                            Pbb_AD, & ! Output AD backward phase matrix
+                       down_rad_AD_in)   ! Optional input, AD downwelling radiance
 ! ------------------------------------------------------------------------- !
 ! FUNCTION:                                                                 !
 !   This subroutine calculates IR/MW adjoint radiance at the top of         !
@@ -511,12 +539,15 @@ CONTAINS
       REAL (fp),INTENT(INOUT) ::  Planck_Surface_AD
       REAL (fp),INTENT(INOUT),DIMENSION( : ) ::  emissivity_AD
       REAL (fp),INTENT(INOUT),DIMENSION( :, : ) :: reflectivity_AD 
-      REAL (fp),INTENT(INOUT),DIMENSION( : ) :: s_rad_up_AD 
+      REAL (fp),INTENT(INOUT),DIMENSION( : ) :: s_rad_up_AD
+      REAL (fp), INTENT(IN), OPTIONAL, DIMENSION( : ) :: down_rad_AD_in
 
 ! Local variables 
       REAL(fp), PARAMETER :: SNGL_SCAT_ALB_THRESH = 0.8
       REAL(fp), PARAMETER :: OPT_DEPTH_THRESH = 4.0
       INTEGER :: iter, k, i, j
+      INTEGER :: obs_idx
+      LOGICAL :: compute_down
       REAL(fp), DIMENSION( RTV%n_Angles, 0:n_Layers, RTV%Number_SOI_Iter ) :: s_IterRad_UP_AD      
       REAL(fp), DIMENSION( RTV%n_Angles, 0:n_Layers, RTV%Number_SOI_Iter ) :: s_IterRad_DOWN_AD      
       REAL(fp), DIMENSION( RTV%n_Angles ) :: source_AD
@@ -537,6 +568,18 @@ CONTAINS
       s_Trans_AD = ZERO
       Pff_AD = ZERO
       Pbb_AD = ZERO
+
+      compute_down = PRESENT(down_rad_AD_in) .AND. RTV%obs_4_downward%rt
+      obs_idx = RTV%obs_4_downward%idx
+
+      IF ( compute_down ) THEN
+        IF ( obs_idx > 0 ) THEN
+          DO iter = 1, RTV%Number_SOI_Iter
+            s_IterRad_DOWN_AD( 1 : RTV%n_Angles, obs_idx, iter ) = &
+              s_IterRad_DOWN_AD( 1 : RTV%n_Angles, obs_idx, iter ) + down_rad_AD_in( 1 : RTV%n_Angles )
+          END DO
+        END IF
+      END IF
 
 
 !--------------------------------------------------------------------
@@ -1482,4 +1525,3 @@ CONTAINS
   END SUBROUTINE CRTM_Doubling_layer_AD
 
 END MODULE SOI_Module
-

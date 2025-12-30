@@ -1712,13 +1712,126 @@ CONTAINS
 
       ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) ) THEN
 
+        mth_Azi_Test: IF( SfcOptics%mth_Azi == 0 ) THEN
 
-        ! -------------------
-        ! Default values only
-        ! -------------------
-        SfcOptics_TL%Emissivity(1:nZ,1)          = ZERO
-        SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) = ZERO
-        SfcOptics_TL%Direct_Reflectivity = ZERO
+          !  ==================
+          !  Lambertian surface
+          !  ==================
+
+          ! -------------------------------------
+          ! Visible LAND emissivity/reflectivity
+          ! -------------------------------------
+          Visible_Land: IF( Surface%Land_Coverage > ZERO ) THEN
+
+            ! Compute the surface optics
+            Error_Status = Compute_VIS_Land_SfcOptics_TL( SfcOptics_TL )
+            IF ( Error_Status /= SUCCESS ) THEN
+              WRITE( Message,'("Error computing VIS land SfcOptics_TL at ",&
+                              &"channel index ",i0)' ) ChannelIndex
+              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              RETURN
+            END IF
+
+            ! Accumulate the surface optics properties
+            ! based on land coverage fraction
+            Emissivity_TL(1:nZ,1) = &
+              SfcOptics_TL%Emissivity(1:nZ,1) * Surface%Land_Coverage
+            Reflectivity_TL(1:nZ,1,1:nZ,1) = &
+              SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Land_Coverage
+            Direct_Reflectivity_TL(1:nZ,1) = &
+              SfcOptics_TL%Direct_Reflectivity(1:nZ,1) * Surface%Land_Coverage
+          END IF Visible_Land
+
+
+          ! -------------------------------------
+          ! Visible WATER emissivity/reflectivity
+          ! -------------------------------------
+          Visible_Water: IF( Surface%Water_Coverage > ZERO ) THEN
+
+            ! Compute the surface optics
+            Error_Status = Compute_VIS_Water_SfcOptics_TL( SfcOptics_TL )
+            IF ( Error_Status /= SUCCESS ) THEN
+              WRITE( Message,'("Error computing VIS water SfcOptics_TL at ",&
+                              &"channel index ",i0)' ) ChannelIndex
+              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              RETURN
+            END IF
+
+            ! Accumulate the surface optics properties
+            ! based on water coverage fraction
+            Emissivity_TL(1:nZ,1) = Emissivity_TL(1:nZ,1) + &
+              ( SfcOptics_TL%Emissivity(1:nZ,1) * Surface%Water_Coverage )
+            Reflectivity_TL(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,1,1:nZ,1) + &
+              ( SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Water_Coverage )
+            Direct_Reflectivity_TL(1:nZ,1) = Direct_Reflectivity_TL(1:nZ,1) + &
+              ( SfcOptics_TL%Direct_Reflectivity(1:nZ,1) * Surface%Water_Coverage )
+          END IF Visible_Water
+
+
+          ! ------------------------------------
+          ! Visible SNOW emissivity/reflectivity
+          ! ------------------------------------
+          Visible_Snow: IF( Surface%Snow_Coverage > ZERO ) THEN
+
+            ! Compute the surface optics
+            Error_Status = Compute_VIS_Snow_SfcOptics_TL( SfcOptics_TL )
+            IF ( Error_Status /= SUCCESS ) THEN
+              WRITE( Message,'("Error computing VIS snow SfcOptics_TL at ",&
+                              &"channel index ",i0)' ) ChannelIndex
+              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              RETURN
+            END IF
+
+            ! Accumulate the surface optics properties
+            ! based on snow coverage fraction
+            Emissivity_TL(1:nZ,1) = Emissivity_TL(1:nZ,1) + &
+              ( SfcOptics_TL%Emissivity(1:nZ,1) * Surface%Snow_Coverage )
+            Reflectivity_TL(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,1,1:nZ,1) + &
+              ( SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Snow_Coverage )
+            Direct_Reflectivity_TL(1:nZ,1) = Direct_Reflectivity_TL(1:nZ,1) + &
+              ( SfcOptics_TL%Direct_Reflectivity(1:nZ,1) * Surface%Snow_Coverage )
+          END IF Visible_Snow
+
+
+          ! -----------------------------------
+          ! Visible ICE emissivity/reflectivity
+          ! -----------------------------------
+          Visible_Ice: IF( Surface%Ice_Coverage > ZERO ) THEN
+
+            ! Compute the surface optics
+            Error_Status = Compute_VIS_Ice_SfcOptics_TL( SfcOptics_TL )
+            IF ( Error_Status /= SUCCESS ) THEN
+              WRITE( Message,'("Error computing VIS ice SfcOptics_TL at ",&
+                              &"channel index ",i0)' ) ChannelIndex
+              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              RETURN
+            END IF
+
+            ! Accumulate the surface optics properties
+            ! based on ice coverage fraction
+            Emissivity_TL(1:nZ,1) = Emissivity_TL(1:nZ,1) + &
+              ( SfcOptics_TL%Emissivity(1:nZ,1) * Surface%Ice_Coverage )
+            Reflectivity_TL(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,1,1:nZ,1) + &
+              ( SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Ice_Coverage )
+            Direct_Reflectivity_TL(1:nZ,1) = Direct_Reflectivity_TL(1:nZ,1) + &
+              ( SfcOptics_TL%Direct_Reflectivity(1:nZ,1) * Surface%Ice_Coverage )
+          END IF Visible_Ice
+
+
+          ! -----------------------
+          ! Assign the final result
+          ! -----------------------
+          SfcOptics_TL%Emissivity(1:nZ,1)          = Emissivity_TL(1:nZ,1)
+          SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,1,1:nZ,1)
+          SfcOptics_TL%Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity_TL(1:nZ,1)
+
+        ELSE
+
+          SfcOptics_TL%Emissivity(1:nZ,1)          = ZERO
+          SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) = ZERO
+          SfcOptics_TL%Direct_Reflectivity         = ZERO
+
+        END IF mth_Azi_Test
 
 
       !##########################################################################
@@ -1939,22 +2052,22 @@ CONTAINS
             ! r = (rV + rH)/2
             ! Note: INTENSITY == UNPOLARIZED == FIRST_STOKES_COMPONENT
             CASE( INTENSITY )
-              Emissivity_AD(1:nZ,1) = SfcOptics_AD%Emissivity(1:nZ,1)
-              Emissivity_AD(1:nZ,2) = SfcOptics_AD%Emissivity(1:nZ,1)
+              Emissivity_AD(1:nZ,1) = POINT_5 * SfcOptics_AD%Emissivity(1:nZ,1)
+              Emissivity_AD(1:nZ,2) = POINT_5 * SfcOptics_AD%Emissivity(1:nZ,1)
               SfcOptics_AD%Emissivity = ZERO
-              Reflectivity_AD(1:nZ,1,1:nZ,1) = SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
-              Reflectivity_AD(1:nZ,2,1:nZ,2) = SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
+              Reflectivity_AD(1:nZ,1,1:nZ,1) = POINT_5 * SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
+              Reflectivity_AD(1:nZ,2,1:nZ,2) = POINT_5 * SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
               SfcOptics_AD%Reflectivity = ZERO
 
             ! The second Stokes component, Q, the polarisation difference.
             ! e = (eV - eH)/2
             ! r = (rV - rH)/2
             CASE( SECOND_STOKES_COMPONENT )
-              Emissivity_AD(1:nZ,1) =  SfcOptics_AD%Emissivity(1:nZ,1)
-              Emissivity_AD(1:nZ,2) = -SfcOptics_AD%Emissivity(1:nZ,1)
+              Emissivity_AD(1:nZ,1) =  POINT_5 * SfcOptics_AD%Emissivity(1:nZ,1)
+              Emissivity_AD(1:nZ,2) = -POINT_5 * SfcOptics_AD%Emissivity(1:nZ,1)
               SfcOptics_AD%Emissivity = ZERO
-              Reflectivity_AD(1:nZ,1,1:nZ,1) =  SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
-              Reflectivity_AD(1:nZ,2,1:nZ,2) = -SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
+              Reflectivity_AD(1:nZ,1,1:nZ,1) =  POINT_5 * SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
+              Reflectivity_AD(1:nZ,2,1:nZ,2) = -POINT_5 * SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
               SfcOptics_AD%Reflectivity = ZERO
 
             ! The third Stokes component, U.
@@ -2395,13 +2508,98 @@ CONTAINS
 
       ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) ) THEN
 
+        mth_Azi_Test: IF( SfcOptics%mth_Azi == 0 ) THEN
 
-        ! -------------------
-        ! Default values only
-        ! -------------------
-        SfcOptics_AD%Emissivity(1:nZ,1)          = ZERO
-        SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1) = ZERO
-        SfcOptics_AD%Direct_Reflectivity         = ZERO
+          Emissivity_AD(1:nZ,1) = SfcOptics_AD%Emissivity(1:nZ,1)
+          Reflectivity_AD(1:nZ,1,1:nZ,1) = SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
+          Direct_Reflectivity_AD(1:nZ,1) = SfcOptics_AD%Direct_Reflectivity(1:nZ,1)
+          SfcOptics_AD%Emissivity          = ZERO
+          SfcOptics_AD%Reflectivity        = ZERO
+          SfcOptics_AD%Direct_Reflectivity = ZERO
+
+          ! -----------------------------------
+          ! Visible ICE emissivity/reflectivity
+          ! -----------------------------------
+          Visible_Ice: IF( Surface%Ice_Coverage > ZERO ) THEN
+            SfcOptics_AD%Emissivity(1:nZ,1) = &
+              SfcOptics_AD%Emissivity(1:nZ,1) + (Emissivity_AD(1:nZ,1) * Surface%Ice_Coverage)
+            SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1) = &
+              SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1) + (Reflectivity_AD(1:nZ,1,1:nZ,1) * Surface%Ice_Coverage)
+            SfcOptics_AD%Direct_Reflectivity(1:nZ,1) = &
+              SfcOptics_AD%Direct_Reflectivity(1:nZ,1) + (Direct_Reflectivity_AD(1:nZ,1) * Surface%Ice_Coverage)
+            Error_Status = Compute_VIS_Ice_SfcOptics_AD( SfcOptics_AD )
+            IF ( Error_Status /= SUCCESS ) THEN
+              WRITE( Message,'("Error computing VIS ice SfcOptics_AD at ",&
+                              &"channel index ",i0)' ) ChannelIndex
+              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              RETURN
+            END IF
+          END IF Visible_Ice
+
+          ! ------------------------------------
+          ! Visible SNOW emissivity/reflectivity
+          ! ------------------------------------
+          Visible_Snow: IF( Surface%Snow_Coverage > ZERO ) THEN
+            SfcOptics_AD%Emissivity(1:nZ,1) = &
+              SfcOptics_AD%Emissivity(1:nZ,1) + (Emissivity_AD(1:nZ,1) * Surface%Snow_Coverage)
+            SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1) = &
+              SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1) + (Reflectivity_AD(1:nZ,1,1:nZ,1) * Surface%Snow_Coverage)
+            SfcOptics_AD%Direct_Reflectivity(1:nZ,1) = &
+              SfcOptics_AD%Direct_Reflectivity(1:nZ,1) + (Direct_Reflectivity_AD(1:nZ,1) * Surface%Snow_Coverage)
+            Error_Status = Compute_VIS_Snow_SfcOptics_AD( SfcOptics_AD )
+            IF ( Error_Status /= SUCCESS ) THEN
+              WRITE( Message,'("Error computing VIS snow SfcOptics_AD at ",&
+                              &"channel index ",i0)' ) ChannelIndex
+              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              RETURN
+            END IF
+          END IF Visible_Snow
+
+          ! -------------------------------------
+          ! Visible WATER emissivity/reflectivity
+          ! -------------------------------------
+          Visible_Water: IF( Surface%Water_Coverage > ZERO ) THEN
+            SfcOptics_AD%Emissivity(1:nZ,1) = &
+              SfcOptics_AD%Emissivity(1:nZ,1) + (Emissivity_AD(1:nZ,1) * Surface%Water_Coverage)
+            SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1) = &
+              SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1) + (Reflectivity_AD(1:nZ,1,1:nZ,1) * Surface%Water_Coverage)
+            SfcOptics_AD%Direct_Reflectivity(1:nZ,1) = &
+              SfcOptics_AD%Direct_Reflectivity(1:nZ,1) + (Direct_Reflectivity_AD(1:nZ,1) * Surface%Water_Coverage)
+            Error_Status = Compute_VIS_Water_SfcOptics_AD( SfcOptics_AD )
+            IF ( Error_Status /= SUCCESS ) THEN
+              WRITE( Message,'("Error computing VIS water SfcOptics_AD at ",&
+                              &"channel index ",i0)' ) ChannelIndex
+              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              RETURN
+            END IF
+          END IF Visible_Water
+
+          ! -------------------------------------
+          ! Visible LAND emissivity/reflectivity
+          ! -------------------------------------
+          Visible_Land: IF( Surface%Land_Coverage > ZERO ) THEN
+            SfcOptics_AD%Emissivity(1:nZ,1) = &
+              SfcOptics_AD%Emissivity(1:nZ,1) + (Emissivity_AD(1:nZ,1) * Surface%Land_Coverage)
+            SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1) = &
+              SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1) + (Reflectivity_AD(1:nZ,1,1:nZ,1) * Surface%Land_Coverage)
+            SfcOptics_AD%Direct_Reflectivity(1:nZ,1) = &
+              SfcOptics_AD%Direct_Reflectivity(1:nZ,1) + (Direct_Reflectivity_AD(1:nZ,1) * Surface%Land_Coverage)
+            Error_Status = Compute_VIS_Land_SfcOptics_AD( SfcOptics_AD )
+            IF ( Error_Status /= SUCCESS ) THEN
+              WRITE( Message,'("Error computing VIS land SfcOptics_AD at ",&
+                              &"channel index ",i0)' ) ChannelIndex
+              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              RETURN
+            END IF
+          END IF Visible_Land
+
+        ELSE
+
+          SfcOptics_AD%Emissivity(1:nZ,1)          = ZERO
+          SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1) = ZERO
+          SfcOptics_AD%Direct_Reflectivity         = ZERO
+
+        END IF mth_Azi_Test
 
 
       !##########################################################################

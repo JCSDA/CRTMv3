@@ -135,9 +135,9 @@ CONTAINS
     CHARACTER(256) :: Message
 
     total_opt(0) = ZERO
-    DO k = 1, n_Layers
-      total_opt(k) = total_opt(k-1) + T_OD(k)
-    END DO
+      DO k = 1, n_Layers
+        total_opt(k) = total_opt(k-1) + T_OD(k)
+      END DO
 
     nZ = RTV%n_Angles * RTV%n_Stokes
     RTV%s_Layer_Trans = ZERO
@@ -1248,7 +1248,8 @@ CONTAINS
             direct_reflectivity_TL, & ! Input  TL  direct reflectivity
                             Pff_TL, & ! Input  TL forward phase matrix
                             Pbb_TL, & ! Input  TL backward phase matrix
-                         s_rad_up_TL) ! Output TL upward radiance
+                         s_rad_up_TL, & ! Output TL upward radiance
+                    down_rad_TL_out) ! Optional output TL downwelling radiance
 ! ------------------------------------------------------------------------- !
 ! FUNCTION:                                                                 !
 !   This subroutine calculates IR/MW tangent-linear radiance at the top of  !
@@ -1277,6 +1278,7 @@ CONTAINS
       REAL (fp),INTENT(IN),DIMENSION( :,: ) :: reflectivity_TL
       REAL (fp),INTENT(INOUT),DIMENSION( : ) :: s_rad_up_TL
       REAL (fp),INTENT(INOUT),DIMENSION( : ) :: direct_reflectivity_TL
+      REAL (fp),INTENT(OUT), OPTIONAL, DIMENSION( : ) :: down_rad_TL_out
    ! -------------- internal variables --------------------------------- !
    !  Abbreviations:                                                     !
    !      s: scattering, rad: radiance, trans: transmission,             !
@@ -1290,9 +1292,29 @@ CONTAINS
       REAL (fp), DIMENSION( RTV%n_Angles*RTV%n_Stokes, RTV%n_Angles*RTV%n_Stokes ) :: s_trans_TL,s_refl_TL,Refl_Trans_TL
       REAL (fp), DIMENSION( RTV%n_Angles*RTV%n_Stokes, RTV%n_Angles*RTV%n_Stokes ) :: s_refl_up_TL,Inv_Gamma_TL,Inv_GammaT_TL
       REAL (fp), DIMENSION(0:n_Layers) :: total_opt, total_opt_TL
+      LOGICAL :: compute_down
+      INTEGER :: obs_idx
+      REAL(fp), ALLOCATABLE :: rad_up_TL(:,:)
+      REAL(fp), ALLOCATABLE :: refl_up_TL(:,:,:)
+      REAL(fp), ALLOCATABLE :: layer_trans_TL(:,:,:)
+      REAL(fp), ALLOCATABLE :: layer_refl_TL(:,:,:)
+      REAL(fp), ALLOCATABLE :: layer_source_up_TL(:,:)
+      REAL(fp), ALLOCATABLE :: layer_source_down_TL(:,:)
+      REAL(fp), ALLOCATABLE :: rad_down_fwd(:,:)
+      REAL(fp), ALLOCATABLE :: rad_down_TL(:,:)
+      REAL(fp), ALLOCATABLE :: refl_down_TL_mat(:,:,:)
+      REAL(fp), ALLOCATABLE :: inv_gamma2_TL(:,:,:)
+      REAL(fp), ALLOCATABLE :: inv_gamma2T_TL(:,:,:)
+      REAL(fp), ALLOCATABLE :: inv_gamma3_TL(:,:,:)
+      REAL(fp), ALLOCATABLE :: temp_vec(:)
+      REAL(fp), ALLOCATABLE :: temp_vec_TL(:)
+      REAL(fp), ALLOCATABLE :: rad_downt_TL(:)
+      REAL(fp), ALLOCATABLE :: temporal_matrix_TL2(:,:)
       INTEGER :: i, j, k, nZ
 !
        nZ = RTV%n_Angles*RTV%n_Stokes
+       compute_down = PRESENT(down_rad_TL_out) .AND. RTV%obs_4_downward%rt
+       obs_idx = RTV%obs_4_downward%idx
        total_opt(0) = ZERO
        total_opt_TL(0) = ZERO
        DO k = 1, n_Layers
@@ -1304,15 +1326,48 @@ CONTAINS
        s_rad_up_TL = ZERO
 
        s_refl_up_TL = reflectivity_TL(1:nZ,1:nZ)
+       IF ( compute_down ) THEN
+         ALLOCATE(rad_up_TL(nZ,0:n_Layers))
+         ALLOCATE(refl_up_TL(nZ,nZ,0:n_Layers))
+         ALLOCATE(layer_trans_TL(nZ,nZ,n_Layers))
+         ALLOCATE(layer_refl_TL(nZ,nZ,n_Layers))
+         ALLOCATE(layer_source_up_TL(nZ,n_Layers))
+         ALLOCATE(layer_source_down_TL(nZ,n_Layers))
+         ALLOCATE(rad_down_fwd(nZ,0:obs_idx))
+         ALLOCATE(rad_down_TL(nZ,0:obs_idx))
+         ALLOCATE(refl_down_TL_mat(nZ,nZ,0:obs_idx))
+         ALLOCATE(inv_gamma2_TL(nZ,nZ,obs_idx))
+         ALLOCATE(inv_gamma2T_TL(nZ,nZ,obs_idx))
+         ALLOCATE(inv_gamma3_TL(nZ,nZ,obs_idx))
+         ALLOCATE(temp_vec(nZ))
+         ALLOCATE(temp_vec_TL(nZ))
+         ALLOCATE(rad_downt_TL(nZ))
+         ALLOCATE(temporal_matrix_TL2(nZ,nZ))
+         rad_up_TL = ZERO
+         refl_up_TL = ZERO
+         layer_trans_TL = ZERO
+         layer_refl_TL = ZERO
+         layer_source_up_TL = ZERO
+         layer_source_down_TL = ZERO
+         rad_down_fwd = ZERO
+         rad_down_TL = ZERO
+         refl_down_TL_mat = ZERO
+         inv_gamma2_TL = ZERO
+         inv_gamma2T_TL = ZERO
+         inv_gamma3_TL = ZERO
+         refl_up_TL(:,:,n_Layers) = s_refl_up_TL
+       END IF
        IF( RTV%mth_Azi == 0 ) THEN
        s_rad_up_TL = emissivity_TL(1:nZ)* RTV%Planck_Surface + emissivity(1:nZ) * Planck_Surface_TL
        END IF
-
        IF( RTV%Solar_Flag_true ) THEN
          s_rad_up_TL = s_rad_up_TL+direct_reflectivity_TL(1:nZ)*RTV%COS_SUN*RTV%Solar_irradiance/PI  &
                      * exp(-total_opt(n_Layers)/RTV%COS_SUN) &
                      - direct_reflectivity(1:nZ) * RTV%Solar_irradiance/PI  &
                      * total_opt_TL(n_Layers) * exp(-total_opt(n_Layers)/RTV%COS_SUN)
+       END IF
+       IF ( compute_down ) THEN
+         rad_up_TL(:,n_Layers) = s_rad_up_TL
        END IF
 
        DO 10 k = n_Layers, 1, -1
@@ -1395,6 +1450,14 @@ CONTAINS
         ENDDO
 
       ENDIF
+      IF ( compute_down ) THEN
+        layer_trans_TL(:,:,k) = s_trans_TL
+        layer_refl_TL(:,:,k) = s_refl_TL
+        layer_source_up_TL(:,k) = s_source_up_TL
+        layer_source_down_TL(:,k) = s_source_down_TL
+        rad_up_TL(:,k-1) = s_rad_up_TL
+        refl_up_TL(:,:,k-1) = s_refl_up_TL
+      END IF
    10     CONTINUE
 !
 !  Adding reflected cosmic background radiation
@@ -1402,6 +1465,83 @@ CONTAINS
       DO i = 1, nZ, RTV%n_Stokes
       s_rad_up_TL(i)=s_rad_up_TL(i)+sum(s_refl_up_TL(i,1:nZ))*cosmic_background
       ENDDO
+    END IF
+
+    IF ( compute_down ) THEN
+      IF ( RTV%mth_Azi == 0 ) THEN
+        DO i = 1, nZ, RTV%n_Stokes
+          rad_down_fwd(i,0) = cosmic_background
+        END DO
+      END IF
+
+      DO k = 1, obs_idx
+        IF(w(k) > SCATTERING_ALBEDO_THRESHOLD .and. maxval(abs(RTV%Pff(1:nZ,1:nZ,k))) > ZERO) THEN
+          temporal_matrix_TL2 = -matmul(refl_down_TL_mat(:,:,k-1), RTV%s_Layer_Refl(1:nZ,1:nZ,k)) &
+                               - matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1), layer_refl_TL(:,:,k))
+          inv_gamma2_TL(:,:,k) = -matmul(RTV%Inv_Gamma2(1:nZ,1:nZ,k), &
+                                matmul(temporal_matrix_TL2, RTV%Inv_Gamma2(1:nZ,1:nZ,k)))
+          inv_gamma2T_TL(:,:,k) = matmul(layer_trans_TL(:,:,k), RTV%Inv_Gamma2(1:nZ,1:nZ,k)) + &
+                                  matmul(RTV%s_Layer_Trans(1:nZ,1:nZ,k), inv_gamma2_TL(:,:,k))
+
+          temp_vec = matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1), RTV%s_Layer_Source_UP(1:nZ,k))
+          temp_vec_TL = matmul(refl_down_TL_mat(:,:,k-1), RTV%s_Layer_Source_UP(1:nZ,k)) + &
+                        matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1), layer_source_up_TL(:,k))
+
+          rad_down_fwd(:,k) = RTV%s_Layer_Source_DOWN(1:nZ,k) + &
+                              matmul(RTV%Inv_Gamma2T(1:nZ,1:nZ,k), temp_vec + rad_down_fwd(:,k-1))
+          rad_down_TL(:,k) = layer_source_down_TL(:,k) + &
+                             matmul(inv_gamma2T_TL(:,:,k), temp_vec + rad_down_fwd(:,k-1)) + &
+                             matmul(RTV%Inv_Gamma2T(1:nZ,1:nZ,k), temp_vec_TL + rad_down_TL(:,k-1))
+
+          temporal_matrix_TL2 = matmul(refl_down_TL_mat(:,:,k-1), RTV%s_Layer_Trans(1:nZ,1:nZ,k)) + &
+                                matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1), layer_trans_TL(:,:,k))
+          refl_down_TL_mat(:,:,k) = layer_refl_TL(:,:,k) + &
+                                matmul(inv_gamma2T_TL(:,:,k), RTV%Refl_Trans_DOWN(1:nZ,1:nZ,k)) + &
+                                matmul(RTV%Inv_Gamma2T(1:nZ,1:nZ,k), temporal_matrix_TL2)
+        ELSE
+          temp_vec = matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1), RTV%s_Layer_Source_UP(1:nZ,k))
+          temp_vec_TL = matmul(refl_down_TL_mat(:,:,k-1), RTV%s_Layer_Source_UP(1:nZ,k)) + &
+                        matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1), layer_source_up_TL(:,k))
+          DO i = 1, nZ
+            rad_down_fwd(i,k) = RTV%s_Layer_Source_DOWN(i,k) + &
+              RTV%s_Layer_Trans(i,i,k) * (temp_vec(i) + rad_down_fwd(i,k-1))
+            rad_down_TL(i,k) = layer_source_down_TL(i,k) + &
+              layer_trans_TL(i,i,k) * (temp_vec(i) + rad_down_fwd(i,k-1)) + &
+              RTV%s_Layer_Trans(i,i,k) * (temp_vec_TL(i) + rad_down_TL(i,k-1))
+          END DO
+            DO i = 1, nZ
+            DO j = 1, nZ
+              refl_down_TL_mat(i,j,k) = layer_trans_TL(i,i,k) * RTV%s_Level_Refl_DOWN(i,j,k-1) * &
+                                        RTV%s_Layer_Trans(j,j,k) + &
+                                        RTV%s_Layer_Trans(i,i,k) * refl_down_TL_mat(i,j,k-1) * &
+                                        RTV%s_Layer_Trans(j,j,k) + &
+                                        RTV%s_Layer_Trans(i,i,k) * RTV%s_Level_Refl_DOWN(i,j,k-1) * &
+                                        layer_trans_TL(j,j,k)
+            END DO
+          END DO
+        END IF
+
+        IF (maxval(abs(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k))) > ZERO) THEN
+          temporal_matrix_TL2 = -matmul(refl_down_TL_mat(:,:,k), RTV%s_Level_Refl_UP(1:nZ,1:nZ,k)) - &
+                                matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k), refl_up_TL(:,:,k))
+          inv_gamma3_TL(:,:,k) = -matmul(RTV%Inv_Gamma3(1:nZ,1:nZ,k), &
+                                 matmul(temporal_matrix_TL2, RTV%Inv_Gamma3(1:nZ,1:nZ,k)))
+          temp_vec = matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k), RTV%s_Level_Rad_UP(1:nZ,k)) + &
+                     rad_down_fwd(:,k)
+          temp_vec_TL = matmul(refl_down_TL_mat(:,:,k), RTV%s_Level_Rad_UP(1:nZ,k)) + &
+                        matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k), rad_up_TL(:,k)) + &
+                        rad_down_TL(:,k)
+          rad_downt_TL(:) = matmul(inv_gamma3_TL(:,:,k), temp_vec) + &
+                            matmul(RTV%Inv_Gamma3(1:nZ,1:nZ,k), temp_vec_TL)
+        ELSE
+          rad_downt_TL(:) = rad_down_TL(:,k)
+        END IF
+      END DO
+
+      down_rad_TL_out(:) = ZERO
+      IF ( obs_idx > 0 ) THEN
+        down_rad_TL_out(1:nZ) = rad_downt_TL(1:nZ)
+      END IF
     END IF
 
       RETURN
@@ -1683,7 +1823,8 @@ CONTAINS
                    reflectivity_AD, & ! Output AD surface reflectivity
             direct_reflectivity_AD, & ! Output AD surface direct reflectivity
                             Pff_AD, & ! Output AD forward phase matrix
-                            Pbb_AD)   ! Output AD backward phase matrix
+                            Pbb_AD, & ! Output AD backward phase matrix
+                     down_rad_AD_in)   ! Optional input AD downwelling radiance
 ! ------------------------------------------------------------------------- !
 ! FUNCTION:                                                                 !
 !   This subroutine calculates IR/MW adjoint radiance at the top of         !
@@ -1711,6 +1852,7 @@ CONTAINS
       REAL (fp),INTENT(INOUT),DIMENSION( : ) ::  emissivity_AD,direct_reflectivity_AD
       REAL (fp),INTENT(INOUT),DIMENSION( :,: ) :: reflectivity_AD
       REAL (fp),INTENT(INOUT),DIMENSION( : ) :: s_rad_up_AD
+      REAL (fp),INTENT(IN), OPTIONAL, DIMENSION( : ) :: down_rad_AD_in
    ! -------------- internal variables --------------------------------- !
    !  Abbreviations:                                                     !
    !      s: scattering, rad: radiance, trans: transmission,             !
@@ -1727,7 +1869,27 @@ CONTAINS
          Inv_Gamma_AD,Inv_GammaT_AD
       REAL (fp) :: sum_s_AD, sums_AD, xx
       REAL (fp), DIMENSION(0:n_Layers) :: total_opt, total_opt_AD
-      INTEGER :: i, j, k,nZ
+      INTEGER :: i, j, k, nZ
+      LOGICAL :: compute_down
+      INTEGER :: obs_idx
+      REAL(fp), ALLOCATABLE :: rad_down_fwd(:,:)
+      REAL(fp), ALLOCATABLE :: rad_down_AD(:,:)
+      REAL(fp), ALLOCATABLE :: refl_down_AD_mat(:,:,:)
+      REAL(fp), ALLOCATABLE :: layer_trans_AD_dn(:,:,:)
+      REAL(fp), ALLOCATABLE :: layer_refl_AD_dn(:,:,:)
+      REAL(fp), ALLOCATABLE :: layer_source_up_AD_dn(:,:)
+      REAL(fp), ALLOCATABLE :: layer_source_down_AD_dn(:,:)
+      REAL(fp), ALLOCATABLE :: rad_up_AD_src(:,:)
+      REAL(fp), ALLOCATABLE :: refl_up_AD_src(:,:,:)
+      REAL(fp), ALLOCATABLE :: rprev_ad(:,:)
+      REAL(fp), ALLOCATABLE :: inv_gamma2T_AD_dn(:,:)
+      REAL(fp), ALLOCATABLE :: inv_gamma2_AD_dn(:,:)
+      REAL(fp), ALLOCATABLE :: refl_trans_AD_dn(:,:)
+      REAL(fp), ALLOCATABLE :: ltrans_ad_diag(:)
+      REAL(fp), ALLOCATABLE :: temp_vec(:)
+      REAL(fp), ALLOCATABLE :: temp_vec_AD(:)
+      REAL(fp), ALLOCATABLE :: temporal_matrix(:,:)
+      REAL(fp), ALLOCATABLE :: temporal_matrix_AD_dn(:,:)
 !
 
        s_trans_AD = ZERO
@@ -1736,11 +1898,178 @@ CONTAINS
        s_refl_up_AD = ZERO
 
       nZ = RTV%n_Angles*RTV%n_Stokes
+      compute_down = PRESENT(down_rad_AD_in) .AND. RTV%obs_4_downward%rt
+      obs_idx = RTV%obs_4_downward%idx
+      IF ( compute_down ) THEN
+        ALLOCATE(rad_down_fwd(nZ,0:obs_idx))
+        ALLOCATE(rad_down_AD(nZ,0:obs_idx))
+        ALLOCATE(refl_down_AD_mat(nZ,nZ,0:obs_idx))
+        ALLOCATE(layer_trans_AD_dn(nZ,nZ,n_Layers))
+        ALLOCATE(layer_refl_AD_dn(nZ,nZ,n_Layers))
+        ALLOCATE(layer_source_up_AD_dn(nZ,n_Layers))
+        ALLOCATE(layer_source_down_AD_dn(nZ,n_Layers))
+        ALLOCATE(rad_up_AD_src(nZ,0:n_Layers))
+        ALLOCATE(refl_up_AD_src(nZ,nZ,0:n_Layers))
+        ALLOCATE(rprev_ad(nZ,nZ))
+        ALLOCATE(inv_gamma2T_AD_dn(nZ,nZ))
+        ALLOCATE(inv_gamma2_AD_dn(nZ,nZ))
+        ALLOCATE(refl_trans_AD_dn(nZ,nZ))
+        ALLOCATE(ltrans_ad_diag(nZ))
+        ALLOCATE(temp_vec(nZ))
+        ALLOCATE(temp_vec_AD(nZ))
+        ALLOCATE(temporal_matrix(nZ,nZ))
+        ALLOCATE(temporal_matrix_AD_dn(nZ,nZ))
+        rad_down_fwd = ZERO
+        rad_down_AD = ZERO
+        refl_down_AD_mat = ZERO
+        layer_trans_AD_dn = ZERO
+        layer_refl_AD_dn = ZERO
+        layer_source_up_AD_dn = ZERO
+        layer_source_down_AD_dn = ZERO
+        rad_up_AD_src = ZERO
+        refl_up_AD_src = ZERO
+        rprev_ad = ZERO
+        inv_gamma2T_AD_dn = ZERO
+        inv_gamma2_AD_dn = ZERO
+        refl_trans_AD_dn = ZERO
+        ltrans_ad_diag = ZERO
+        temp_vec = ZERO
+        temp_vec_AD = ZERO
+        temporal_matrix = ZERO
+        temporal_matrix_AD_dn = ZERO
+      END IF
        total_opt_AD = ZERO
        total_opt(0) = ZERO
        DO k = 1, n_Layers
          total_opt(k) = total_opt(k-1) + T_OD(k)
        END DO
+
+      IF ( compute_down ) THEN
+        IF ( RTV%mth_Azi == 0 ) THEN
+          DO i = 1, nZ, RTV%n_Stokes
+            rad_down_fwd(i,0) = cosmic_background
+          END DO
+        END IF
+        DO k = 1, obs_idx
+          IF(w(k) > SCATTERING_ALBEDO_THRESHOLD .and. maxval(abs(RTV%Pff(1:nZ,1:nZ,k))) > ZERO) THEN
+            temp_vec = matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1), RTV%s_Layer_Source_UP(1:nZ,k))
+            rad_down_fwd(:,k) = RTV%s_Layer_Source_DOWN(1:nZ,k) + &
+                                matmul(RTV%Inv_Gamma2T(1:nZ,1:nZ,k), temp_vec + rad_down_fwd(:,k-1))
+          ELSE
+            temp_vec = matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1), RTV%s_Layer_Source_UP(1:nZ,k))
+            DO i = 1, nZ
+              rad_down_fwd(i,k) = RTV%s_Layer_Source_DOWN(i,k) + &
+                RTV%s_Layer_Trans(i,i,k) * (temp_vec(i) + rad_down_fwd(i,k-1))
+            END DO
+          END IF
+        END DO
+
+        rad_down_AD(:,obs_idx) = down_rad_AD_in(1:nZ)
+        IF (maxval(abs(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,obs_idx))) > ZERO) THEN
+          temp_vec = matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,obs_idx), RTV%s_Level_Rad_UP(1:nZ,obs_idx)) + &
+                     rad_down_fwd(:,obs_idx)
+          temp_vec_AD = matmul(transpose(RTV%Inv_Gamma3(1:nZ,1:nZ,obs_idx)), rad_down_AD(:,obs_idx))
+          temporal_matrix = matmul(reshape(rad_down_AD(:,obs_idx), (/nZ,1/)), &
+                                   reshape(temp_vec, (/1,nZ/)))
+          temporal_matrix_AD_dn = -matmul(transpose(RTV%Inv_Gamma3(1:nZ,1:nZ,obs_idx)), &
+                                   matmul(temporal_matrix, transpose(RTV%Inv_Gamma3(1:nZ,1:nZ,obs_idx))))
+
+          refl_down_AD_mat(:,:,obs_idx) = refl_down_AD_mat(:,:,obs_idx) + &
+            matmul(reshape(temp_vec_AD, (/nZ,1/)), &
+                   reshape(RTV%s_Level_Rad_UP(1:nZ,obs_idx), (/1,nZ/)))
+          rad_up_AD_src(:,obs_idx) = rad_up_AD_src(:,obs_idx) + &
+            matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,obs_idx)), temp_vec_AD)
+          rad_down_AD(:,obs_idx) = rad_down_AD(:,obs_idx) + temp_vec_AD
+
+          refl_down_AD_mat(:,:,obs_idx) = refl_down_AD_mat(:,:,obs_idx) - &
+            matmul(temporal_matrix_AD_dn, transpose(RTV%s_Level_Refl_UP(1:nZ,1:nZ,obs_idx)))
+          refl_up_AD_src(:,:,obs_idx) = refl_up_AD_src(:,:,obs_idx) - &
+            matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,obs_idx)), temporal_matrix_AD_dn)
+        END IF
+
+        DO k = obs_idx, 1, -1
+          rprev_ad = ZERO
+          inv_gamma2T_AD_dn = ZERO
+          inv_gamma2_AD_dn = ZERO
+          refl_trans_AD_dn = ZERO
+          ltrans_ad_diag = ZERO
+          temp_vec_AD = ZERO
+
+          IF(w(k) > SCATTERING_ALBEDO_THRESHOLD .and. maxval(abs(RTV%Pff(1:nZ,1:nZ,k))) > ZERO) THEN
+            temp_vec = matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1), RTV%s_Layer_Source_UP(1:nZ,k))
+
+            layer_source_down_AD_dn(:,k) = layer_source_down_AD_dn(:,k) + rad_down_AD(:,k)
+            inv_gamma2T_AD_dn = inv_gamma2T_AD_dn + &
+              matmul(reshape(rad_down_AD(:,k), (/nZ,1/)), &
+                     reshape(temp_vec + rad_down_fwd(:,k-1), (/1,nZ/)))
+            temp_vec_AD = temp_vec_AD + matmul(transpose(RTV%Inv_Gamma2T(1:nZ,1:nZ,k)), rad_down_AD(:,k))
+            rad_down_AD(:,k-1) = rad_down_AD(:,k-1) + temp_vec_AD
+
+            layer_refl_AD_dn(:,:,k) = layer_refl_AD_dn(:,:,k) + refl_down_AD_mat(:,:,k)
+            inv_gamma2T_AD_dn = inv_gamma2T_AD_dn + &
+              matmul(refl_down_AD_mat(:,:,k), transpose(RTV%Refl_Trans_DOWN(1:nZ,1:nZ,k)))
+            refl_trans_AD_dn = refl_trans_AD_dn + &
+              matmul(transpose(RTV%Inv_Gamma2T(1:nZ,1:nZ,k)), refl_down_AD_mat(:,:,k))
+
+            rprev_ad = rprev_ad + matmul(reshape(temp_vec_AD, (/nZ,1/)), &
+                                         reshape(RTV%s_Layer_Source_UP(1:nZ,k), (/1,nZ/)))
+            layer_source_up_AD_dn(:,k) = layer_source_up_AD_dn(:,k) + &
+              matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1)), temp_vec_AD)
+
+            rprev_ad = rprev_ad + matmul(refl_trans_AD_dn, transpose(RTV%s_Layer_Trans(1:nZ,1:nZ,k)))
+            layer_trans_AD_dn(:,:,k) = layer_trans_AD_dn(:,:,k) + &
+              matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1)), refl_trans_AD_dn)
+
+            layer_trans_AD_dn(:,:,k) = layer_trans_AD_dn(:,:,k) + &
+              matmul(inv_gamma2T_AD_dn, transpose(RTV%Inv_Gamma2(1:nZ,1:nZ,k)))
+            inv_gamma2_AD_dn = matmul(transpose(RTV%s_Layer_Trans(1:nZ,1:nZ,k)), inv_gamma2T_AD_dn)
+
+            temporal_matrix_AD_dn = -matmul(transpose(RTV%Inv_Gamma2(1:nZ,1:nZ,k)), &
+                                    matmul(inv_gamma2_AD_dn, transpose(RTV%Inv_Gamma2(1:nZ,1:nZ,k))))
+            rprev_ad = rprev_ad - matmul(temporal_matrix_AD_dn, transpose(RTV%s_Layer_Refl(1:nZ,1:nZ,k)))
+            layer_refl_AD_dn(:,:,k) = layer_refl_AD_dn(:,:,k) - &
+              matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1)), temporal_matrix_AD_dn)
+
+            refl_down_AD_mat(:,:,k-1) = refl_down_AD_mat(:,:,k-1) + rprev_ad
+          ELSE
+            temp_vec = matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1), RTV%s_Layer_Source_UP(1:nZ,k))
+
+            DO i = 1, nZ
+              layer_source_down_AD_dn(i,k) = layer_source_down_AD_dn(i,k) + rad_down_AD(i,k)
+              temp_vec_AD(i) = temp_vec_AD(i) + RTV%s_Layer_Trans(i,i,k) * rad_down_AD(i,k)
+              ltrans_ad_diag(i) = ltrans_ad_diag(i) + rad_down_AD(i,k) * &
+                (temp_vec(i) + rad_down_fwd(i,k-1))
+              rad_down_AD(i,k-1) = rad_down_AD(i,k-1) + RTV%s_Layer_Trans(i,i,k) * rad_down_AD(i,k)
+            END DO
+
+            DO i = 1, nZ
+              DO j = 1, nZ
+                rprev_ad(i,j) = rprev_ad(i,j) + RTV%s_Layer_Trans(i,i,k) * refl_down_AD_mat(i,j,k) * &
+                                RTV%s_Layer_Trans(j,j,k)
+                ltrans_ad_diag(i) = ltrans_ad_diag(i) + refl_down_AD_mat(i,j,k) * &
+                                    RTV%s_Level_Refl_DOWN(i,j,k-1) * RTV%s_Layer_Trans(j,j,k)
+                ltrans_ad_diag(j) = ltrans_ad_diag(j) + refl_down_AD_mat(i,j,k) * &
+                                    RTV%s_Layer_Trans(i,i,k) * RTV%s_Level_Refl_DOWN(i,j,k-1)
+              END DO
+            END DO
+
+            DO i = 1, nZ
+              layer_trans_AD_dn(i,i,k) = layer_trans_AD_dn(i,i,k) + ltrans_ad_diag(i)
+            END DO
+
+            rprev_ad = rprev_ad + matmul(reshape(temp_vec_AD, (/nZ,1/)), &
+                                         reshape(RTV%s_Layer_Source_UP(1:nZ,k), (/1,nZ/)))
+            layer_source_up_AD_dn(:,k) = layer_source_up_AD_dn(:,k) + &
+              matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1)), temp_vec_AD)
+            refl_down_AD_mat(:,:,k-1) = refl_down_AD_mat(:,:,k-1) + rprev_ad
+          END IF
+        END DO
+      END IF
+
+      IF ( compute_down .AND. obs_idx == 0 ) THEN
+        s_rad_up_AD = s_rad_up_AD + rad_up_AD_src(:,0)
+        s_refl_up_AD = s_refl_up_AD + refl_up_AD_src(:,:,0)
+      END IF
 
 !  Adding reflected cosmic background radiation
 
@@ -1753,9 +2082,20 @@ CONTAINS
 
 !
        DO 10 k = 1, n_Layers
+       IF ( compute_down .AND. obs_idx == (k-1) ) THEN
+         s_rad_up_AD = s_rad_up_AD + rad_up_AD_src(:,k-1)
+         s_refl_up_AD = s_refl_up_AD + refl_up_AD_src(:,:,k-1)
+       END IF
        s_source_up_AD = ZERO
        s_source_down_AD = ZERO
        s_trans_AD = ZERO
+       s_refl_AD = ZERO
+       IF ( compute_down ) THEN
+         s_source_up_AD = s_source_up_AD + layer_source_up_AD_dn(:,k)
+         s_source_down_AD = s_source_down_AD + layer_source_down_AD_dn(:,k)
+         s_trans_AD = s_trans_AD + layer_trans_AD_dn(:,:,k)
+         s_refl_AD = s_refl_AD + layer_refl_AD_dn(:,:,k)
+       END IF
 !
 !      Compute tranmission and reflection matrices for a layer
       IF(w(k) > SCATTERING_ALBEDO_THRESHOLD .and. maxval(abs(RTV%Pff(1:nZ,1:nZ,k))) > ZERO) THEN
@@ -1763,7 +2103,7 @@ CONTAINS
         refl_down(1:nZ,k) = matmul(RTV%s_Level_Refl_UP(1:nZ,1:nZ,k),  &
                                RTV%s_Layer_Source_DOWN(1:nZ,k))
 
-        s_refl_AD = s_refl_up_AD
+        s_refl_AD = s_refl_AD + s_refl_up_AD
         Inv_GammaT_AD = matmul(s_refl_up_AD,transpose(RTV%Refl_Trans(1:nZ,1:nZ,k)))
         Refl_Trans_AD = matmul(transpose(RTV%Inv_GammaT(1:nZ,1:nZ,k)),s_refl_up_AD)
 
@@ -1850,6 +2190,11 @@ CONTAINS
 
       ENDIF
    10     CONTINUE
+
+       IF ( compute_down .AND. obs_idx == n_Layers ) THEN
+         s_rad_up_AD = s_rad_up_AD + rad_up_AD_src(:,n_Layers)
+         s_refl_up_AD = s_refl_up_AD + refl_up_AD_src(:,:,n_Layers)
+       END IF
 
 !
        IF( RTV%Solar_Flag_true ) THEN

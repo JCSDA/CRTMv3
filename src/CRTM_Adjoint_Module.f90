@@ -957,6 +957,7 @@ CONTAINS
           IF( SC(SensorIndex)%Solar_Irradiance(ChannelIndex) > ZERO .AND. &
               Source_ZA < MAX_SOURCE_ZENITH_ANGLE) THEN
              RTV%Solar_Flag_true = .TRUE.
+             IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) RTV_Clear%Solar_Flag_true = .TRUE.
           END IF
           ! ...Visible channel with solar radiation
           IF( (SpcCoeff_IsVisibleSensor(SC(SensorIndex)).or.SpcCoeff_IsUltravioletSensor(SC(SensorIndex))) &

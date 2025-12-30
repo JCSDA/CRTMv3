@@ -558,6 +558,7 @@ CONTAINS
     ! Local variables
     CHARACTER(256) :: Message
     INTEGER :: nZ
+    INTEGER :: i
     REAL(fp) :: User_Emissivity_TL, Direct_Reflectivity_TL
     REAL(fp)                                     :: Planck_Surface_TL    ! Surface TL radiance
     REAL(fp), DIMENSION( 0:Atmosphere%n_Layers ) :: Planck_Atmosphere_TL ! *LAYER* TL radiances
@@ -570,12 +571,16 @@ CONTAINS
                          (RTV%n_Angles+1) * RTV%n_Stokes, &
                          Atmosphere%n_Layers ) :: Pbb_TL ! Backward scattering TL phase matrix
     REAL(fp), DIMENSION( RTV%n_Angles * RTV%n_Stokes ) :: Scattering_Radiance_TL
+    REAL(fp), DIMENSION( RTV%n_Angles * RTV%n_Stokes ) :: Down_Scatter_TL
     REAL(fp) :: Radiance_TL
+    REAL(fp) :: Down_Radiance_TL
 
     ! ------
     ! Set up
     ! ------
     Error_Status = SUCCESS
+    Down_Radiance_TL = ZERO
+    Down_Scatter_TL = ZERO
 
     RTSolution_TL%RT_Algorithm_Name = RTSolution%RT_Algorithm_Name
 
@@ -607,6 +612,13 @@ CONTAINS
     END IF
 
     nZ = RTV%n_Angles * RTV%n_Stokes
+    IF ( RTV%Visible_Flag_true ) THEN
+      DO i = 1, nZ
+        IF ( SfcOptics%Direct_Reflectivity(i,1) >= ONE ) THEN
+          SfcOptics_TL%Direct_Reflectivity(i,1) = ZERO
+        END IF
+      END DO
+    END IF
     IF( RTV%n_Stokes > 1 ) THEN
        CALL Reshape_Surf_Opt(RTV%n_Angles, RTV%n_Stokes, SfcOptics_TL%Emissivity, SfcOptics_TL%Direct_Reflectivity, &
         SfcOptics_TL%Reflectivity, SfcOptics_TL%S_Emissivity, SfcOptics_TL%S_Direct_Ref, SfcOptics_TL%S_Reflectivity)
@@ -615,6 +627,28 @@ CONTAINS
     ! ---------------------------------------------
     ! Select the RT model
       IF( RTV%Scattering_RT ) THEN
+        IF ( RTV%obs_4_downward%rt ) THEN
+          CALL CRTM_ADA_TL( &
+                 Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
+                 AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
+                 AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
+                 RTV%Cosmic_Background_Radiance,           & ! cosmic background radiation
+                 SfcOptics%S_Emissivity(1:nZ),             & ! Input, FWD surface emissivity
+                 SfcOptics%S_Direct_Ref(1:nZ),    & ! Input, surface direct reflectivity
+                 RTV,                                      & ! Input, structure containing forward results
+                 Planck_Atmosphere_TL,                     & ! Input, TL layer radiances
+                 Planck_Surface_TL,                        & ! Input, TL surface radiance
+                 AtmOptics_TL%Single_Scatter_Albedo,       & ! Input, TL layer single scattering albedo
+                 AtmOptics_TL%Optical_Depth,               & ! Input, TL layer optical depth
+                 SfcOptics_TL%S_Emissivity(1:nZ),          & ! Input, TL surface emissivity
+                 SfcOptics_TL%S_Reflectivity(1:nZ,1:nZ), & ! Input, TL surface reflectivity
+                 SfcOptics_TL%S_Direct_Ref(1:nZ), & ! Input, TL surface direct reflectivity
+                 Pff_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer forward phase matrix
+                 Pbb_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer backward phase matrix
+                 Scattering_Radiance_TL(1:nZ),             & ! Output, TL radiances
+                 down_rad_TL_out=Down_Scatter_TL(1:nZ)      ) ! Optional output, TL downwelling radiance
+          Scattering_Radiance_TL(1:nZ) = Down_Scatter_TL(1:nZ)
+        ELSE
           CALL CRTM_ADA_TL( &
                  Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
                  AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
@@ -633,7 +667,9 @@ CONTAINS
                  Pff_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer forward phase matrix
                  Pbb_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer backward phase matrix
                  Scattering_Radiance_TL(1:nZ)              ) ! Output, TL radiances
+        END IF
       ELSE
+        Down_Radiance_TL = ZERO
         CALL CRTM_Emission_TL( &
              Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
              RTV%n_Angles,                             & ! Input, number of discrete zenith angles
@@ -653,7 +689,8 @@ CONTAINS
              SfcOptics_TL%S_Emissivity(1:nZ),          & ! Input, TL surface emissivity
              SfcOptics_TL%S_Reflectivity(1:nZ,1:nZ), & ! Input, TL surface reflectivity
              SfcOptics_TL%S_Direct_Ref(1:nZ), & ! Input, TL surface reflectivity for a point source
-             Radiance_TL                               ) ! Output, TL radiances    
+             Radiance_TL,                              & ! Output, TL radiances
+             Down_Radiance_TL                          ) ! Optional output, TL downwelling radiance
       END IF
 
    ELSE IF( RTV%Scattering_RT ) THEN
@@ -661,44 +698,89 @@ CONTAINS
       SELECT CASE(RTV%RT_Algorithm_Id)
         CASE (RT_ADA, RT_VMOM)
           ! NESDIS advanced adding-doubling method    
-          CALL CRTM_ADA_TL( &
-                 Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
-                 AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
-                 AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
-                 RTV%Cosmic_Background_Radiance,           & ! cosmic background radiation
-                 SfcOptics%Emissivity(1:nZ,1),             & ! Input, FWD surface emissivity
-                 SfcOptics%Direct_Reflectivity(1:nZ,1),    & ! Input, surface direct reflectivity
-                 RTV,                                      & ! Input, structure containing forward results
-                 Planck_Atmosphere_TL,                     & ! Input, TL layer radiances
-                 Planck_Surface_TL,                        & ! Input, TL surface radiance
-                 AtmOptics_TL%Single_Scatter_Albedo,       & ! Input, TL layer single scattering albedo
-                 AtmOptics_TL%Optical_Depth,               & ! Input, TL layer optical depth
-                 SfcOptics_TL%Emissivity(1:nZ,1),          & ! Input, TL surface emissivity
-                 SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1), & ! Input, TL surface reflectivity
-                 SfcOptics_TL%Direct_Reflectivity(1:nZ,1), & ! Input, TL surface direct reflectivity
-                 Pff_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer forward phase matrix
-                 Pbb_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer backward phase matrix
-                 Scattering_Radiance_TL(1:nZ)              ) ! Output, TL radiances
+          IF ( RTV%obs_4_downward%rt ) THEN
+            CALL CRTM_ADA_TL( &
+                   Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
+                   AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
+                   AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
+                   RTV%Cosmic_Background_Radiance,           & ! cosmic background radiation
+                   SfcOptics%Emissivity(1:nZ,1),             & ! Input, FWD surface emissivity
+                   SfcOptics%Direct_Reflectivity(1:nZ,1),    & ! Input, surface direct reflectivity
+                   RTV,                                      & ! Input, structure containing forward results
+                   Planck_Atmosphere_TL,                     & ! Input, TL layer radiances
+                   Planck_Surface_TL,                        & ! Input, TL surface radiance
+                   AtmOptics_TL%Single_Scatter_Albedo,       & ! Input, TL layer single scattering albedo
+                   AtmOptics_TL%Optical_Depth,               & ! Input, TL layer optical depth
+                   SfcOptics_TL%Emissivity(1:nZ,1),          & ! Input, TL surface emissivity
+                   SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1), & ! Input, TL surface reflectivity
+                   SfcOptics_TL%Direct_Reflectivity(1:nZ,1), & ! Input, TL surface direct reflectivity
+                   Pff_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer forward phase matrix
+                   Pbb_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer backward phase matrix
+                   Scattering_Radiance_TL(1:nZ),             & ! Output, TL radiances
+                   down_rad_TL_out=Down_Scatter_TL(1:nZ)      ) ! Optional output, TL downwelling radiance
+            Scattering_Radiance_TL(1:nZ) = Down_Scatter_TL(1:nZ)
+          ELSE
+            CALL CRTM_ADA_TL( &
+                   Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
+                   AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
+                   AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
+                   RTV%Cosmic_Background_Radiance,           & ! cosmic background radiation
+                   SfcOptics%Emissivity(1:nZ,1),             & ! Input, FWD surface emissivity
+                   SfcOptics%Direct_Reflectivity(1:nZ,1),    & ! Input, surface direct reflectivity
+                   RTV,                                      & ! Input, structure containing forward results
+                   Planck_Atmosphere_TL,                     & ! Input, TL layer radiances
+                   Planck_Surface_TL,                        & ! Input, TL surface radiance
+                   AtmOptics_TL%Single_Scatter_Albedo,       & ! Input, TL layer single scattering albedo
+                   AtmOptics_TL%Optical_Depth,               & ! Input, TL layer optical depth
+                   SfcOptics_TL%Emissivity(1:nZ,1),          & ! Input, TL surface emissivity
+                   SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1), & ! Input, TL surface reflectivity
+                   SfcOptics_TL%Direct_Reflectivity(1:nZ,1), & ! Input, TL surface direct reflectivity
+                   Pff_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer forward phase matrix
+                   Pbb_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer backward phase matrix
+                   Scattering_Radiance_TL(1:nZ)              ) ! Output, TL radiances
+          END IF
 
         CASE (RT_SOI)
           ! UW SOI RT solver
-          CALL CRTM_SOI_TL( &
-                 Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
-                 AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
-                 AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
-                 SfcOptics%Emissivity(1:nZ,1),             & ! Input, FWD surface emissivity
-                 SfcOptics%Reflectivity(1:nZ,1,1:nZ,1),    & ! Input, surface reflectivity
-                 SfcOptics%Index_Sat_Ang,                  & ! Input, Satellite angle index
-                 RTV,                                      & ! Input, structure containing forward results
-                 Planck_Atmosphere_TL,                     & ! Input, TL layer radiances
-                 Planck_Surface_TL,                        & ! Input, TL surface radiance
-                 AtmOptics_TL%Single_Scatter_Albedo,       & ! Input, TL layer single scattering albedo
-                 AtmOptics_TL%Optical_Depth,               & ! Input, TL layer optical depth
-                 SfcOptics_TL%Emissivity(1:nZ,1),          & ! Input, TL surface emissivity
-                 SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1), & ! Input, TL surface reflectivity
-                 Pff_TL(1:nZ,1:nZ,:),                      & ! Input, TL layer forward phase matrix
-                 Pbb_TL(1:nZ,1:nZ,:),                      & ! Input, TL layer backward phase matrix
-                 Scattering_Radiance_TL(1:nZ)              ) ! Output, TL radiances
+          IF ( RTV%obs_4_downward%rt ) THEN
+            CALL CRTM_SOI_TL( &
+                   Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
+                   AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
+                   AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
+                   SfcOptics%Emissivity(1:nZ,1),             & ! Input, FWD surface emissivity
+                   SfcOptics%Reflectivity(1:nZ,1,1:nZ,1),    & ! Input, surface reflectivity
+                   SfcOptics%Index_Sat_Ang,                  & ! Input, Satellite angle index
+                   RTV,                                      & ! Input, structure containing forward results
+                   Planck_Atmosphere_TL,                     & ! Input, TL layer radiances
+                   Planck_Surface_TL,                        & ! Input, TL surface radiance
+                   AtmOptics_TL%Single_Scatter_Albedo,       & ! Input, TL layer single scattering albedo
+                   AtmOptics_TL%Optical_Depth,               & ! Input, TL layer optical depth
+                   SfcOptics_TL%Emissivity(1:nZ,1),          & ! Input, TL surface emissivity
+                   SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1), & ! Input, TL surface reflectivity
+                   Pff_TL(1:nZ,1:nZ,:),                      & ! Input, TL layer forward phase matrix
+                   Pbb_TL(1:nZ,1:nZ,:),                      & ! Input, TL layer backward phase matrix
+                   Scattering_Radiance_TL(1:nZ),             & ! Output, TL radiances
+                   down_rad_TL_out=Down_Scatter_TL(1:nZ)      ) ! Optional output, TL downwelling radiance
+            Scattering_Radiance_TL(1:nZ) = Down_Scatter_TL(1:nZ)
+          ELSE
+            CALL CRTM_SOI_TL( &
+                   Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
+                   AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
+                   AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
+                   SfcOptics%Emissivity(1:nZ,1),             & ! Input, FWD surface emissivity
+                   SfcOptics%Reflectivity(1:nZ,1,1:nZ,1),    & ! Input, surface reflectivity
+                   SfcOptics%Index_Sat_Ang,                  & ! Input, Satellite angle index
+                   RTV,                                      & ! Input, structure containing forward results
+                   Planck_Atmosphere_TL,                     & ! Input, TL layer radiances
+                   Planck_Surface_TL,                        & ! Input, TL surface radiance
+                   AtmOptics_TL%Single_Scatter_Albedo,       & ! Input, TL layer single scattering albedo
+                   AtmOptics_TL%Optical_Depth,               & ! Input, TL layer optical depth
+                   SfcOptics_TL%Emissivity(1:nZ,1),          & ! Input, TL surface emissivity
+                   SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1), & ! Input, TL surface reflectivity
+                   Pff_TL(1:nZ,1:nZ,:),                      & ! Input, TL layer forward phase matrix
+                   Pbb_TL(1:nZ,1:nZ,:),                      & ! Input, TL layer backward phase matrix
+                   Scattering_Radiance_TL(1:nZ)              ) ! Output, TL radiances
+          END IF
         CASE DEFAULT
           Error_Status = FAILURE
           WRITE(Message,'("Incorrect TL RT_Algorithm_ID, ",i0,", do not fit model")') &
@@ -710,6 +792,7 @@ CONTAINS
       ! -----------------
       ! Emission model RT
       ! -----------------
+      Down_Radiance_TL = ZERO
       CALL CRTM_Emission_TL( &
              Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
              RTV%n_Angles,                             & ! Input, number of discrete zenith angles
@@ -729,7 +812,8 @@ CONTAINS
              SfcOptics_TL%Emissivity(1:nZ,1),          & ! Input, TL surface emissivity
              SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1), & ! Input, TL surface reflectivity
              SfcOptics_TL%Direct_Reflectivity(1:nZ,1), & ! Input, TL surface reflectivity for a point source
-             Radiance_TL                               ) ! Output, TL radiances
+             Radiance_TL,                              & ! Output, TL radiances
+             Down_Radiance_TL                          ) ! Optional output, TL downwelling radiance
     END IF
 
     Error_Status = Assign_Common_Output_TL( SfcOptics             , &
@@ -740,7 +824,8 @@ CONTAINS
                                             SensorIndex           , &
                                             ChannelIndex          , &
                                             RTV                   , &
-                                            RTSolution_TL           )
+                                            RTSolution_TL         , &
+                                            Down_Radiance_TL        )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error assigning output for TL RTSolution algorithms'
       CALL Display_Message( ROUTINE_NAME, TRIM(Message), Error_Status )
@@ -943,6 +1028,7 @@ CONTAINS
                          (RTV%n_Angles+1) * RTV%n_Stokes, &
                          Atmosphere%n_Layers ) :: Pbb_AD ! Backward scattering AD phase matrix
     REAL (fp),DIMENSION( RTV%n_Angles * RTV%n_Stokes ) :: Scattering_Radiance_AD
+    REAL (fp),DIMENSION( RTV%n_Angles * RTV%n_Stokes ) :: Down_Scatter_AD
     REAL (fp) :: Radiance_AD(MAX_N_STOKES)
 
 
@@ -950,6 +1036,7 @@ CONTAINS
     ! Setup
     ! -----
     Error_Status = SUCCESS
+    Down_Scatter_AD = ZERO
 
     Pff_AD = ZERO
     Pbb_AD = ZERO
@@ -986,32 +1073,81 @@ CONTAINS
 
       ! Initialise the input adjoint radiance
       Scattering_Radiance_AD = ZERO
-      Scattering_Radiance_AD(n1:n1-1+RTV%n_Stokes) = Radiance_AD(1:RTV%n_Stokes)    ! qliu 1/11
+      IF ( RTV%obs_4_downward%rt ) THEN
+        Down_Scatter_AD(n1:n1-1+RTV%n_Stokes) = Radiance_AD(1:RTV%n_Stokes)
+      ELSE
+        Scattering_Radiance_AD(n1:n1-1+RTV%n_Stokes) = Radiance_AD(1:RTV%n_Stokes)    ! qliu 1/11
+      END IF
     END IF
 
     IF( RTV%n_Stokes > 1 ) THEN
         ! Select the RT model
       IF( RTV%Scattering_RT ) THEN
-        CALL CRTM_ADA_AD( &
+        IF ( RTV%obs_4_downward%rt ) THEN
+          CALL CRTM_ADA_AD( &
+               Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
+               AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
+               AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
+               RTV%Cosmic_Background_Radiance,           & ! Input, cosmic background radiation
+               SfcOptics%S_Emissivity(1:nZ),                   & ! Input, FWD surface emissivity
+               SfcOptics%S_Direct_Ref(1:nZ),    & ! Input, FWD surface reflectivity for a point source
+               RTV,                                      & ! In/Output, internal variables
+               Scattering_Radiance_AD(1:nZ),             & ! Input, AD radiances
+               Planck_Atmosphere_AD,                     & ! Output, AD layer radiances
+               Planck_Surface_AD,                        & ! Output, AD surface radiance
+               AtmOptics_AD%Single_Scatter_Albedo,       & ! Output, AD layer single scattering albedo
+               AtmOptics_AD%Optical_Depth,               & ! Output, AD layer optical depth
+               SfcOptics_AD%S_Emissivity(1:nZ),          & ! Output, AD surface emissivity
+               SfcOptics_AD%S_Reflectivity(1:nZ,1:nZ), & ! Output, AD surface reflectivity
+               SfcOptics_AD%S_Direct_Ref(1:nZ), & ! Output, AD surface reflectivity for a point source
+               Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
+               Pbb_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer backward phase matrix
+               down_rad_AD_in=Down_Scatter_AD(1:nZ)      ) ! Optional input, AD downwelling radiance
+        ELSE
+          CALL CRTM_ADA_AD( &
+               Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
+               AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
+               AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
+               RTV%Cosmic_Background_Radiance,           & ! Input, cosmic background radiation
+               SfcOptics%S_Emissivity(1:nZ),                   & ! Input, FWD surface emissivity
+               SfcOptics%S_Direct_Ref(1:nZ),    & ! Input, FWD surface reflectivity for a point source
+               RTV,                                      & ! In/Output, internal variables
+               Scattering_Radiance_AD(1:nZ),             & ! Input, AD radiances
+               Planck_Atmosphere_AD,                     & ! Output, AD layer radiances
+               Planck_Surface_AD,                        & ! Output, AD surface radiance
+               AtmOptics_AD%Single_Scatter_Albedo,       & ! Output, AD layer single scattering albedo
+               AtmOptics_AD%Optical_Depth,               & ! Output, AD layer optical depth
+               SfcOptics_AD%S_Emissivity(1:nZ),          & ! Output, AD surface emissivity
+               SfcOptics_AD%S_Reflectivity(1:nZ,1:nZ), & ! Output, AD surface reflectivity
+               SfcOptics_AD%S_Direct_Ref(1:nZ), & ! Output, AD surface reflectivity for a point source
+               Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
+               Pbb_AD(1:nZ,1:(nZ+1),:)                   ) ! Output, AD layer backward phase matrix      
+        END IF
+      ELSE
+        IF ( RTV%obs_4_downward%rt ) THEN
+          CALL CRTM_Emission_AD( &
              Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
-             AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
-             AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
-             RTV%Cosmic_Background_Radiance,           & ! Input, cosmic background radiation
-             SfcOptics%S_Emissivity(1:nZ),                   & ! Input, FWD surface emissivity
+             RTV%n_Angles,                             & ! Input, number of discrete zenith angles
+             GeometryInfo%Cosine_Sensor_Zenith,        & ! Input, cosine of sensor zenith angle
+             RTV%Planck_Atmosphere,                    & ! Input, FWD layer radiances
+             RTV%Planck_Surface,                       & ! Input, FWD surface radiance
+             SfcOptics%S_Emissivity(1:nZ),             & ! Input, FWD surface emissivity
+             SfcOptics%S_Reflectivity(1:nZ,1:nZ),    & ! Input, FWD surface reflectivity
              SfcOptics%S_Direct_Ref(1:nZ),    & ! Input, FWD surface reflectivity for a point source
-             RTV,                                      & ! In/Output, internal variables
-             Scattering_Radiance_AD(1:nZ),             & ! Input, AD radiances
+             RTV%Solar_Irradiance,                     & ! Input, Source irradiance at TOA
+             RTV%Is_Solar_Channel,                     & ! Input, Source sensitive channel info.
+             GeometryInfo%Source_Zenith_Radian,        & ! Input, Source zenith angle
+             RTV,                                      & ! Input, internal variables
+             Radiance_AD(1),                         & ! Input, AD radiance
+             AtmOptics_AD%Optical_Depth,               & ! Output, AD layer optical depth
              Planck_Atmosphere_AD,                     & ! Output, AD layer radiances
              Planck_Surface_AD,                        & ! Output, AD surface radiance
-             AtmOptics_AD%Single_Scatter_Albedo,       & ! Output, AD layer single scattering albedo
-             AtmOptics_AD%Optical_Depth,               & ! Output, AD layer optical depth
              SfcOptics_AD%S_Emissivity(1:nZ),          & ! Output, AD surface emissivity
              SfcOptics_AD%S_Reflectivity(1:nZ,1:nZ), & ! Output, AD surface reflectivity
              SfcOptics_AD%S_Direct_Ref(1:nZ), & ! Output, AD surface reflectivity for a point source
-             Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
-             Pbb_AD(1:nZ,1:(nZ+1),:)                   ) ! Output, AD layer backward phase matrix      
-      ELSE
-        CALL CRTM_Emission_AD( &
+             down_rad_AD_in=Radiance_AD(1)  ) ! Optional input, AD downwelling radiance      
+        ELSE
+          CALL CRTM_Emission_AD( &
              Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
              RTV%n_Angles,                             & ! Input, number of discrete zenith angles
              GeometryInfo%Cosine_Sensor_Zenith,        & ! Input, cosine of sensor zenith angle
@@ -1031,6 +1167,7 @@ CONTAINS
              SfcOptics_AD%S_Emissivity(1:nZ),          & ! Output, AD surface emissivity
              SfcOptics_AD%S_Reflectivity(1:nZ,1:nZ), & ! Output, AD surface reflectivity
              SfcOptics_AD%S_Direct_Ref(1:nZ)  ) ! Output, AD surface reflectivity for a point source      
+        END IF
       END IF
       CALL Reshape_Surf_Opt_AD(RTV%n_Angles, RTV%n_Stokes, SfcOptics_AD%Emissivity, SfcOptics_AD%Direct_Reflectivity, &
         SfcOptics_AD%Reflectivity, SfcOptics_AD%S_Emissivity, SfcOptics_AD%S_Direct_Ref, SfcOptics_AD%S_Reflectivity)
@@ -1042,7 +1179,28 @@ CONTAINS
 
         CASE (RT_ADA, RT_VMOM)
         ! NESDIS advanced adding-doubling method
-        CALL CRTM_ADA_AD( &
+        IF ( RTV%obs_4_downward%rt ) THEN
+          CALL CRTM_ADA_AD( &
+             Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
+             AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
+             AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
+             RTV%Cosmic_Background_Radiance,           & ! Input, cosmic background radiation
+             SfcOptics%Emissivity(1:nZ,1),             & ! Input, FWD surface emissivity
+             SfcOptics%Direct_Reflectivity(1:nZ,1),    & ! Input, FWD surface reflectivity for a point source
+             RTV,                                      & ! In/Output, internal variables
+             Scattering_Radiance_AD(1:nZ),             & ! Input, AD radiances
+             Planck_Atmosphere_AD,                     & ! Output, AD layer radiances
+             Planck_Surface_AD,                        & ! Output, AD surface radiance
+             AtmOptics_AD%Single_Scatter_Albedo,       & ! Output, AD layer single scattering albedo
+             AtmOptics_AD%Optical_Depth,               & ! Output, AD layer optical depth
+             SfcOptics_AD%Emissivity(1:nZ,1),          & ! Output, AD surface emissivity
+             SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1), & ! Output, AD surface reflectivity
+             SfcOptics_AD%Direct_Reflectivity(1:nZ,1), & ! Output, AD surface reflectivity for a point source
+             Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
+             Pbb_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer backward phase matrix
+             down_rad_AD_in=Down_Scatter_AD(1:nZ)      ) ! Optional input, AD downwelling radiance
+        ELSE
+          CALL CRTM_ADA_AD( &
              Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
              AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
              AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
@@ -1060,26 +1218,48 @@ CONTAINS
              SfcOptics_AD%Direct_Reflectivity(1:nZ,1), & ! Output, AD surface reflectivity for a point source
              Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
              Pbb_AD(1:nZ,1:(nZ+1),:)                   ) ! Output, AD layer backward phase matrix
+        END IF
 
         CASE (RT_SOI)
         ! UW SOI RT solver
-        CALL CRTM_SOI_AD( &
-             Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
-             AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
-             AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
-             SfcOptics%Emissivity(1:nZ,1),             & ! Input, FWD surface emissivity
-             SfcOptics%Reflectivity(1:nZ,1,1:nZ,1),    & ! Input, FWD surface reflectivity
-             SfcOptics%Index_Sat_Ang,                  & ! Input, Satellite angle index
-             RTV,                                      & ! In/Output, internal variables
-             Scattering_Radiance_AD(1:nZ),             & ! Input, AD radiances
-             Planck_Atmosphere_AD,                     & ! Output AD atmospheric layer Planck radiance
-             Planck_Surface_AD,                        & ! Output AD surface Planck radiance
-             AtmOptics_AD%Single_Scatter_Albedo,       & ! Output, AD layer single scattering albedo
-             AtmOptics_AD%Optical_Depth,               & ! Output, AD layer optical depth
-             SfcOptics_AD%Emissivity(1:nZ,1),          & ! Output, AD surface emissivity
-             SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1), & ! Output, AD surface reflectivity
-             Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
-             Pbb_AD(1:nZ,1:(nZ+1),:)                   ) ! Output, AD layer backward phase matrix
+        IF ( RTV%obs_4_downward%rt ) THEN
+          CALL CRTM_SOI_AD( &
+               Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
+               AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
+               AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
+               SfcOptics%Emissivity(1:nZ,1),             & ! Input, FWD surface emissivity
+               SfcOptics%Reflectivity(1:nZ,1,1:nZ,1),    & ! Input, FWD surface reflectivity
+               SfcOptics%Index_Sat_Ang,                  & ! Input, Satellite angle index
+               RTV,                                      & ! In/Output, internal variables
+               Scattering_Radiance_AD(1:nZ),             & ! Input, AD radiances
+               Planck_Atmosphere_AD,                     & ! Output AD atmospheric layer Planck radiance
+               Planck_Surface_AD,                        & ! Output AD surface Planck radiance
+               AtmOptics_AD%Single_Scatter_Albedo,       & ! Output, AD layer single scattering albedo
+               AtmOptics_AD%Optical_Depth,               & ! Output, AD layer optical depth
+               SfcOptics_AD%Emissivity(1:nZ,1),          & ! Output, AD surface emissivity
+               SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1), & ! Output, AD surface reflectivity
+               Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
+               Pbb_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer backward phase matrix
+               down_rad_AD_in=Down_Scatter_AD(1:nZ)      ) ! Optional input, AD downwelling radiance
+        ELSE
+          CALL CRTM_SOI_AD( &
+               Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
+               AtmOptics%Single_Scatter_Albedo,          & ! Input, FWD layer single scattering albedo
+               AtmOptics%Optical_Depth,                  & ! Input, FWD layer optical depth
+               SfcOptics%Emissivity(1:nZ,1),             & ! Input, FWD surface emissivity
+               SfcOptics%Reflectivity(1:nZ,1,1:nZ,1),    & ! Input, FWD surface reflectivity
+               SfcOptics%Index_Sat_Ang,                  & ! Input, Satellite angle index
+               RTV,                                      & ! In/Output, internal variables
+               Scattering_Radiance_AD(1:nZ),             & ! Input, AD radiances
+               Planck_Atmosphere_AD,                     & ! Output AD atmospheric layer Planck radiance
+               Planck_Surface_AD,                        & ! Output AD surface Planck radiance
+               AtmOptics_AD%Single_Scatter_Albedo,       & ! Output, AD layer single scattering albedo
+               AtmOptics_AD%Optical_Depth,               & ! Output, AD layer optical depth
+               SfcOptics_AD%Emissivity(1:nZ,1),          & ! Output, AD surface emissivity
+               SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1), & ! Output, AD surface reflectivity
+               Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
+               Pbb_AD(1:nZ,1:(nZ+1),:)                   ) ! Output, AD layer backward phase matrix
+        END IF
       CASE DEFAULT
       Error_Status = FAILURE
       WRITE(Message,'("Incorrect AD RT_Algorithm_ID, ",i0,", do not fit model")') &
@@ -1093,7 +1273,30 @@ CONTAINS
       ! -----------------
       ! Emission model RT
       ! -----------------
-      CALL CRTM_Emission_AD( &
+      IF ( RTV%obs_4_downward%rt ) THEN
+        CALL CRTM_Emission_AD( &
+             Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
+             RTV%n_Angles,                             & ! Input, number of discrete zenith angles
+             GeometryInfo%Cosine_Sensor_Zenith,        & ! Input, cosine of sensor zenith angle
+             RTV%Planck_Atmosphere,                    & ! Input, FWD layer radiances
+             RTV%Planck_Surface,                       & ! Input, FWD surface radiance
+             SfcOptics%Emissivity(1:nZ,1),             & ! Input, FWD surface emissivity
+             SfcOptics%Reflectivity(1:nZ,1,1:nZ,1),    & ! Input, FWD surface reflectivity
+             SfcOptics%Direct_Reflectivity(1:nZ,1),    & ! Input, FWD surface reflectivity for a point source
+             RTV%Solar_Irradiance,                     & ! Input, Source irradiance at TOA
+             RTV%Is_Solar_Channel,                     & ! Input, Source sensitive channel info.
+             GeometryInfo%Source_Zenith_Radian,        & ! Input, Source zenith angle
+             RTV,                                      & ! Input, internal variables
+             Radiance_AD(1),                         & ! Input, AD radiance
+             AtmOptics_AD%Optical_Depth,               & ! Output, AD layer optical depth
+             Planck_Atmosphere_AD,                     & ! Output, AD layer radiances
+             Planck_Surface_AD,                        & ! Output, AD surface radiance
+             SfcOptics_AD%Emissivity(1:nZ,1),          & ! Output, AD surface emissivity
+             SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1), & ! Output, AD surface reflectivity
+             SfcOptics_AD%Direct_Reflectivity(1:nZ,1), & ! Output, AD surface reflectivity for a point source
+             down_rad_AD_in=Radiance_AD(1)  ) ! Optional input, AD downwelling radiance
+      ELSE
+        CALL CRTM_Emission_AD( &
              Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
              RTV%n_Angles,                             & ! Input, number of discrete zenith angles
              GeometryInfo%Cosine_Sensor_Zenith,        & ! Input, cosine of sensor zenith angle
@@ -1113,6 +1316,7 @@ CONTAINS
              SfcOptics_AD%Emissivity(1:nZ,1),          & ! Output, AD surface emissivity
              SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1), & ! Output, AD surface reflectivity
              SfcOptics_AD%Direct_Reflectivity(1:nZ,1)  ) ! Output, AD surface reflectivity for a point source
+      END IF
     END IF
 
     Error_Status = Assign_Common_Output_AD( Atmosphere           , & ! Input

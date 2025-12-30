@@ -247,17 +247,22 @@ CONTAINS
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_VIS_Ice_SfcOptics_TL'
     ! Local variables
+    INTEGER :: j
+    INTEGER :: nZ
+    REAL(fp) :: emissivity_TL
 
 
     ! Set up
     err_stat = SUCCESS
 
 
-    ! Compute the tangent-linear surface optical parameters
-    ! ***No TL models yet, so default TL output is zero***
-    SfcOptics_TL%Reflectivity        = ZERO
-    SfcOptics_TL%Direct_Reflectivity = ZERO
-    SfcOptics_TL%Emissivity          = ZERO
+    nZ = SfcOptics_TL%n_Angles
+    emissivity_TL = SfcOptics_TL%Emissivity(1,1)
+    SfcOptics_TL%Direct_Reflectivity(1:nZ,1) = -emissivity_TL
+    SfcOptics_TL%Emissivity(1:nZ,1) = emissivity_TL
+    DO j = 1, nZ
+      SfcOptics_TL%Reflectivity(1:nZ,1,j,1) = -emissivity_TL * SfcOptics_TL%Weight(j)
+    END DO
 
   END FUNCTION Compute_VIS_Ice_SfcOptics_TL
 
@@ -318,17 +323,27 @@ CONTAINS
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_VIS_Ice_SfcOptics_AD'
     ! Local variables
+    INTEGER :: j
+    INTEGER :: nZ
+    REAL(fp) :: emissivity_AD
 
 
     ! Set up
     err_stat = SUCCESS
 
 
-    ! Compute the adjoint surface optical parameters
-    ! ***No AD models yet, so there is no impact on AD result***
+    nZ = SfcOptics_AD%n_Angles
+    emissivity_AD = SUM(SfcOptics_AD%Emissivity(1:nZ,1)) - &
+                    SUM(SfcOptics_AD%Direct_Reflectivity(1:nZ,1))
+    DO j = 1, nZ
+      emissivity_AD = emissivity_AD - &
+        ( SfcOptics_AD%Weight(j) * SUM(SfcOptics_AD%Reflectivity(1:nZ,1,j,1)) )
+    END DO
+
     SfcOptics_AD%Reflectivity        = ZERO
     SfcOptics_AD%Direct_Reflectivity = ZERO
     SfcOptics_AD%Emissivity          = ZERO
+    SfcOptics_AD%Emissivity(1,1)     = emissivity_AD
 
   END FUNCTION Compute_VIS_Ice_SfcOptics_AD
 

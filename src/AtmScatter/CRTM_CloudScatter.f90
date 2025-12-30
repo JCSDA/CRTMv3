@@ -609,9 +609,11 @@ CONTAINS
                                      (CSV%ke(kc,n) * Atm_TL%Cloud(n)%Water_Content(kc))
 
         ! Compute the Backscatering coefficient
-        CScat_TL%Backscat_Coefficient(kc) = CScat_TL%Backscat_Coefficient(kc) + &
-                                     (kb_TL        * Atm%Cloud(n)%Water_Content(kc)) + &
-                                     (CSV%kb(kc,n) * Atm_TL%Cloud(n)%Water_Content(kc))
+        IF ( SC(SensorIndex)%Is_Active_Sensor .and. CScat%Include_Scattering ) THEN
+          CScat_TL%Backscat_Coefficient(kc) = CScat_TL%Backscat_Coefficient(kc) + &
+                                       (kb_TL        * Atm%Cloud(n)%Water_Content(kc)) + &
+                                       (CSV%kb(kc,n) * Atm_TL%Cloud(n)%Water_Content(kc))
+        END IF
 
         ! Compute the phase matrix coefficients
         IF( n_Phase_Elements > 0 .and. CScat%Include_Scattering ) THEN

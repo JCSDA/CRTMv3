@@ -173,7 +173,7 @@ CONTAINS
 
   END SUBROUTINE CRTM_Emission
   
-  SUBROUTINE CRTM_Emission_TL(n_Layers, & ! Input  number of atmospheric layers
+   SUBROUTINE CRTM_Emission_TL(n_Layers, & ! Input  number of atmospheric layers
                               n_Angles, & ! number angles used in SfcOptics
                                      u, & ! Input  cosine of local viewing angle
                      Planck_Atmosphere, & ! Input  atmospheric layer Planck radiance
@@ -188,10 +188,11 @@ CONTAINS
                                T_OD_TL, & ! Input  tangent-linear of layer optical depth
                   Planck_Atmosphere_TL, & ! Input  TL atmospheric layer Planck radiance
                      Planck_Surface_TL, & ! Input  TL surface Planck radiance
-                         emissivity_TL, & ! Input  TL surface emissivity
-                       reflectivity_TL, & ! Input  TL surface reflectivity matrix
+                        emissivity_TL, & ! Input  TL surface emissivity
+                      reflectivity_TL, & ! Input  TL surface reflectivity matrix
                 direct_reflectivity_TL, & ! Input  TL surface ditrct reflectivity
-                             up_rad_TL)   ! Output TL TOA radiance
+                             up_rad_TL, & ! Output TL TOA radiance
+                      down_rad_TL_out)   ! Optional output TL downwelling radiance
 ! --------------------------------------------------------------------------- !
 !  FUNCTION: Compute tangent-linear upward radiance at the top of the         !
 !    atmosphere using carried results in RTV structure from forward           !
@@ -208,13 +209,16 @@ CONTAINS
       REAL (fp), INTENT(IN), DIMENSION( 0: ) :: Planck_Atmosphere,Planck_Atmosphere_TL
       REAL (fp), INTENT(IN) :: Planck_Surface,u,Planck_Surface_TL
       REAL (fp), INTENT(INOUT) :: up_rad_TL
+      REAL (fp), INTENT(OUT), OPTIONAL :: down_rad_TL_out
 
     !   Structure RTV carried in variables from forward calculation. 
       TYPE(RTV_type), INTENT( IN) :: RTV
     !  internal variables
       REAL (fp) :: layer_source_up_TL, layer_source_down_TL,a_TL,down_rad_TL
       REAL (fp) :: Total_OD, Total_OD_TL
+      REAL (fp) :: down_rad_TL_level
       INTEGER :: k
+      INTEGER :: obs_idx
       REAL( fp) :: cosine_u0
 
     !#--------------------------------------------------------------------------#
@@ -225,6 +229,8 @@ CONTAINS
       Total_OD_TL = ZERO
     
       Total_OD = RTV%Total_OD
+      down_rad_TL_level = ZERO
+      obs_idx = RTV%obs_4_downward%idx
  
       DO k = 1, n_Layers
        ! accumulate tangent-linear optical depth
@@ -238,6 +244,7 @@ CONTAINS
      !    down_rad(k) = down_rad(k-1) * layer_trans(k) + layer_source_down 
        down_rad_TL = down_rad_TL*RTV%e_Layer_Trans_DOWN(k)  &
        +RTV%e_Level_Rad_DOWN(k-1)*RTV%e_Layer_Trans_DOWN(k)*a_TL+layer_source_down_TL
+       IF ( RTV%obs_4_downward%rt .AND. k == obs_idx ) down_rad_TL_level = down_rad_TL
       ENDDO
 
     !#--------------------------------------------------------------------------#
@@ -273,6 +280,14 @@ CONTAINS
        +RTV%e_Level_Rad_UP(k)*RTV%e_Layer_Trans_UP(k)*a_TL+layer_source_up_TL 
       ENDDO
 !
+      IF ( PRESENT(down_rad_TL_out) ) THEN
+        IF ( RTV%obs_4_downward%rt ) THEN
+          down_rad_TL_out = down_rad_TL_level
+        ELSE
+          down_rad_TL_out = ZERO
+        END IF
+      END IF
+
       RETURN
       END SUBROUTINE CRTM_Emission_TL 
 !
@@ -295,7 +310,8 @@ CONTAINS
                          Planck_Surface_AD, & ! Output AD surface Planck radiance
                              emissivity_AD, & ! Output AD surface emissivity
                            reflectivity_AD, & ! Output AD surface reflectivity matrix
-                    direct_reflectivity_AD)   ! Output AD surface direct reflectivity
+                    direct_reflectivity_AD, & ! Output AD surface direct reflectivity
+                       down_rad_AD_in)   ! Optional input AD downwelling radiance
 ! --------------------------------------------------------------------------- !
 !  FUNCTION: Compute adjoint upward radiance at the top of the                !
 !    atmosphere using carried results in RTV structure from forward           !
@@ -312,6 +328,7 @@ CONTAINS
       REAL (fp), INTENT(IN), DIMENSION( 0: ) ::  Planck_Atmosphere
       REAL (fp), INTENT(IN) :: Planck_Surface,u
       REAL (fp), INTENT(IN) :: up_rad_AD_in
+      REAL (fp), INTENT(IN), OPTIONAL :: down_rad_AD_in
       REAL (fp), INTENT(IN OUT), DIMENSION( : ) ::  T_OD_AD,emissivity_AD
       REAL (fp), INTENT(IN OUT), DIMENSION( :,: ) :: reflectivity_AD
       REAL (fp), INTENT(IN OUT), DIMENSION( : ) :: direct_reflectivity_AD
@@ -322,6 +339,7 @@ CONTAINS
       REAL (fp) :: layer_source_up_AD, layer_source_down_AD,a_AD,down_rad_AD
       REAL (fp) :: cosine_u0, up_rad_AD, Total_OD, Total_OD_AD
       INTEGER :: k
+      INTEGER :: obs_idx
 !
     ! Initialize variables
       Total_OD_AD = ZERO
@@ -335,6 +353,24 @@ CONTAINS
 
     ! Total column optical depth carried from forward part
       Total_OD = RTV%Total_OD 
+      obs_idx = RTV%obs_4_downward%idx
+
+      IF ( PRESENT(down_rad_AD_in) ) THEN
+        down_rad_AD = down_rad_AD_in
+        DO k = obs_idx, 1, -1
+         a_AD = RTV%e_Level_Rad_DOWN(k-1)*RTV%e_Layer_Trans_DOWN(k)*down_rad_AD
+         layer_source_down_AD = down_rad_AD
+         down_rad_AD = down_rad_AD*RTV%e_Layer_Trans_DOWN(k)
+
+         Planck_Atmosphere_AD(k) = Planck_Atmosphere_AD(k) + layer_source_down_AD * &
+                                   (ONE - RTV%e_Layer_Trans_DOWN(k))
+         a_AD = a_AD - Planck_Atmosphere(k) * RTV%e_Layer_Trans_DOWN(k)* layer_source_down_AD
+
+         T_OD_AD(k) = T_OD_AD(k) - a_AD * RTV%Secant_Down_Angle
+        ENDDO
+        down_rad_AD = ZERO
+        RETURN
+      END IF
 
     !#--------------------------------------------------------------------------#
     !#                -- Upwelling adjoint radiance   --                        #

@@ -1156,6 +1156,7 @@ CONTAINS
             IF( SC(SensorIndex)%Solar_Irradiance(ChannelIndex) > ZERO .AND. &
                 Source_ZA < MAX_SOURCE_ZENITH_ANGLE ) THEN
               RTV(nt)%Solar_Flag_true = .TRUE.
+              IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) RTV_Clear(nt)%Solar_Flag_true = .TRUE.
             END IF
 
             ! ...Visible channel with solar radiation
@@ -1437,6 +1438,11 @@ CONTAINS
                     RTSolution(ln,m)%Tb_Clear = RTSolution_Clear(nt)%Brightness_Temperature
                   END IF
                   ! The adjoint radiance pre-processing
+                  IF ( RTV(nt)%obs_4_downward%rt ) THEN
+                    IF ( RTSolution_K(ln,m)%Radiance == ZERO ) THEN
+                      RTSolution_K(ln,m)%Radiance = RTSolution_K(ln,m)%Down_Radiance
+                    END IF
+                  END IF
                   CALL Pre_Process_RTSolution_K(Opt, RTSolution(ln,m), RTSolution_K(ln,m), &
                                                 NLTE_Predictor, NLTE_Predictor_K(nt), &
                                                 ChannelIndex, SensorIndex, &

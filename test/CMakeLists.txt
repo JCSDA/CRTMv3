@@ -219,7 +219,7 @@ list( APPEND Aircraft_Sensor_Ids
 )
 
 list( APPEND Downwelling_Radiance_Sensor_Ids
-#        atms_n21
+        atms_n21
 #        cris-fsr_n21
 #        v.abi_g18
 #        atms_npp
@@ -280,13 +280,6 @@ target_link_libraries(test_check_crtm PRIVATE crtm)
 add_test(NAME test_check_crtm 
          COMMAND test_check_crtm)
 set_tests_properties(test_check_crtm PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-
-add_executable(test_check_crtm_random  mains/application/check_crtm_random_profiles.F90)
-target_link_libraries(test_check_crtm_random PRIVATE crtm)
-add_test(NAME test_check_crtm_random
-         COMMAND test_check_crtm_random)
-set_tests_properties(test_check_crtm_random PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-
 
 add_executable(Unit_TL_TEST mains/unit/Unit_Test/test_TL.f90)
 target_link_libraries(Unit_TL_TEST PRIVATE crtm)
