@@ -144,6 +144,9 @@ MODULE CRTM_Fastem1
        0.226701E-05_fp, -.119072E-02_fp, -.263165E-04_fp,  .114597E-06_fp,&
        0.406300E+00_fp,  .200031E-02_fp, -.781635E-05_fp/), (/59/) )
 
+  REAL( fp ), PARAMETER :: MIN_EXP = TINY(ONE)
+  REAL( fp ), PARAMETER :: MAX_EXP_ARG = -LOG(MIN_EXP)
+
 
 CONTAINS
 
@@ -322,7 +325,7 @@ CONTAINS
            rhorzs=rhorzsr*rhorzsr+rhorzsi*rhorzsi
 
 !          calculate small scale xcorr to reflection coefficients
-           xcorr1=exp(emc(21)*u10mps*pc2/freqghz2)
+           xcorr1=exp(min(emc(21)*u10mps*pc2/freqghz2, MAX_EXP_ARG))
 
 !          calculate large scale geometric correction
 !          to calculate a correction to the fresnel reflection coefficients

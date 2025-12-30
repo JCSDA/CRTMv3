@@ -39,8 +39,40 @@ MODULE ADA_Module
   ! -----------------
   ! Module parameters
   ! -----------------
+  REAL(fp), PARAMETER :: MIN_TRANSMITTANCE = TINY(ONE)
+  REAL(fp), PARAMETER :: MAX_OPTICAL_DEPTH = -LOG(MIN_TRANSMITTANCE)
 
 CONTAINS
+
+  SUBROUTINE Safe_Exp_Neg(x, exp_x, is_clamped)
+    REAL(fp), INTENT(IN)  :: x
+    REAL(fp), INTENT(OUT) :: exp_x
+    LOGICAL , INTENT(OUT) :: is_clamped
+
+    IF ( x >= MAX_OPTICAL_DEPTH ) THEN
+      exp_x = MIN_TRANSMITTANCE
+      is_clamped = .TRUE.
+    ELSE
+      exp_x = EXP(-x)
+      is_clamped = .FALSE.
+    END IF
+  END SUBROUTINE Safe_Exp_Neg
+
+
+  SUBROUTINE Safe_Exp_Neg_TL(x, x_TL, exp_x, exp_x_TL)
+    REAL(fp), INTENT(IN)  :: x
+    REAL(fp), INTENT(IN)  :: x_TL
+    REAL(fp), INTENT(OUT) :: exp_x
+    REAL(fp), INTENT(OUT) :: exp_x_TL
+    LOGICAL :: is_clamped
+
+    CALL Safe_Exp_Neg(x, exp_x, is_clamped)
+    IF ( is_clamped ) THEN
+      exp_x_TL = ZERO
+    ELSE
+      exp_x_TL = -exp_x * x_TL
+    END IF
+  END SUBROUTINE Safe_Exp_Neg_TL
 
 !################################################################################
 !################################################################################
@@ -56,9 +88,11 @@ CONTAINS
     TYPE(RTV_type), INTENT( INOUT ) :: RTV
     REAL (fp), INTENT(IN) ::  total_od
     REAL (fp) :: Rsphere, Ref_0, Ref_1, Rfac, dire,  SRef(3), S0a(3)
+    REAL (fp) :: optical_depth, exp_term
     REAL (fp), DIMENSION(RTV%n_Angles*RTV%n_Stokes, RTV%n_Angles*RTV%n_Stokes) :: temporal_matrix,R0, T0, R2, R1
     REAL (fp), DIMENSION( RTV%n_Angles*RTV%n_Stokes) :: refl_down, S0, Sun0
     INTEGER :: i, j, k, L, Error_Status, nZ,Index_Sat_Angle
+    LOGICAL :: is_clamped
     REAL(fp), PARAMETER :: rFactor(3) = (/ 0.0_fp, 0.5_fp, 1.0_fp/)
     Sun0(:) = ZERO
     DO i = 1, RTV%n_Angles
@@ -70,7 +104,9 @@ CONTAINS
   DO 101 L = 1, 2
     R0(:,:) = RTV%s_Level_Refl_UP(1:nZ,1:nZ,n_Layers)*rFactor(L)
     SRef(L) = dire*rFactor(L)
-    S0(:)=(ONE-dire)*RTV%Planck_Surface+SRef(L)*RTV%COS_SUN*RTV%Solar_irradiance/PI*exp(-total_od/RTV%COS_SUN)*Sun0(:)
+    optical_depth = total_od / RTV%COS_SUN
+    CALL Safe_Exp_Neg(optical_depth, exp_term, is_clamped)
+    S0(:)=(ONE-dire)*RTV%Planck_Surface+SRef(L)*RTV%COS_SUN*RTV%Solar_irradiance/PI*exp_term*Sun0(:)
     T0(:,:) = RTV%s_Layer_Trans(1:nZ,1:nZ,n_Layers)
     DO k = n_Layers, 1, -1
       temporal_matrix = -matmul(R0,RTV%s_Layer_Refl(1:nZ,1:nZ,k))
@@ -131,6 +167,8 @@ CONTAINS
     REAL (fp), DIMENSION(RTV%n_Angles*RTV%n_Stokes) :: temporal_vector
     REAL (fp), DIMENSION(0:n_Layers) :: total_opt
     INTEGER :: i, j, k, Error_Status
+    REAL(fp) :: optical_depth, exp_term
+    LOGICAL :: is_clamped
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_ADA'
     CHARACTER(256) :: Message
 
@@ -156,8 +194,10 @@ CONTAINS
     END IF
 
     IF( RTV%Solar_Flag_true ) THEN
+      optical_depth = total_opt(n_Layers) / RTV%COS_SUN
+      CALL Safe_Exp_Neg(optical_depth, exp_term, is_clamped)
       RTV%s_Level_Rad_UP(1:nZ,n_Layers ) = RTV%s_Level_Rad_UP(1:nZ,n_Layers )+direct_reflectivity(1:nZ)* &
-        RTV%COS_SUN*RTV%Solar_irradiance/PI*exp(-total_opt(n_Layers)/RTV%COS_SUN)
+        RTV%COS_SUN*RTV%Solar_irradiance/PI*exp_term
     END IF
 
     ! UPWARD ADDING LOOP STARTS FROM BOTTOM LAYER TO ATMOSPHERIC TOP LAYER.
@@ -226,7 +266,8 @@ CONTAINS
     matmul(RTV%Inv_GammaT(1:nZ,1:nZ,k),RTV%Refl_Trans(1:nZ,1:nZ,k))
     ELSE
       DO i = 1, nZ
-        RTV%s_Layer_Trans(i,i,k) = exp(-T_OD(k)/RTV%COS_AngleS(i))
+        optical_depth = T_OD(k)/RTV%COS_AngleS(i)
+        CALL Safe_Exp_Neg(optical_depth, RTV%s_Layer_Trans(i,i,k), is_clamped)
       END DO
       DO i = 1, nZ, RTV%n_Stokes
         RTV%s_Layer_Source_UP(i,k) = RTV%Planck_Atmosphere(k) * (ONE - RTV%s_Layer_Trans(i,i,k) )
@@ -393,6 +434,7 @@ CONTAINS
    CHARACTER(256) :: Message
    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'MOM'
    REAL(fp) :: xx
+   LOGICAL :: is_clamped
    REAL(fp), DIMENSION(nZ,nZ) :: tempo
 
    RTV%PPM(1:nZ,1:nZ,KL) = RTV%PP(1:nZ,1:nZ,KL) - RTV%PM(1:nZ,1:nZ,KL)
@@ -444,7 +486,7 @@ CONTAINS
 
    DO i = 1, nZ
      xx = RTV%EigValue(i,KL)*optical_depth
-     RTV%Exp_x(i,KL) = exp(-xx)
+     CALL Safe_Exp_Neg(xx, RTV%Exp_x(i,KL), is_clamped)
    END DO
 
    DO i = 1, nZ
@@ -489,7 +531,7 @@ CONTAINS
    INTEGER :: i, j
 
    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'MOM_TL'
-   REAL(fp) :: xx_TL
+   REAL(fp) :: xx_TL, xx
    REAL(fp), DIMENSION(nZ,nZ) :: PPM_TL, i_PPM_TL, PPP_TL, HH_TL
    REAL(fp), DIMENSION(nZ,nZ) :: EigVeF_TL,Gp_TL,Gm_TL,A1_TL,A2_TL,A3_TL,A4_TL,A5_TL,A6_TL
    REAL(fp), DIMENSION(nZ,nZ) :: Gm_A5_TL,i_Gm_A5_TL,EigVe_TL,EigVeVa_TL,i_Gm_TL
@@ -529,7 +571,12 @@ CONTAINS
      i_Gm_TL = -matmul( RTV%i_Gm(1:nZ,1:nZ,KL), matmul(Gm_TL,RTV%i_Gm(1:nZ,1:nZ,KL)) )
      DO i = 1, nZ
        xx_TL = EigValue_TL(i)*optical_depth+RTV%EigValue(i,KL)*optical_depth_TL
-       Exp_x_TL(i) = -xx_TL*RTV%Exp_x(i,KL)
+       xx = RTV%EigValue(i,KL)*optical_depth
+       IF ( xx >= MAX_OPTICAL_DEPTH ) THEN
+         Exp_x_TL(i) = ZERO
+       ELSE
+         Exp_x_TL(i) = -xx_TL*RTV%Exp_x(i,KL)
+       END IF
      END DO
 
      DO i = 1, nZ
@@ -573,7 +620,7 @@ CONTAINS
    INTEGER :: i, j
 
    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'MOM_TL'
-   REAL(fp) :: xx_AD
+   REAL(fp) :: xx_AD, xx
 
 
    REAL(fp), DIMENSION(nZ) :: Exp_x_AD,EigValue_AD,EigVa_AD
@@ -617,8 +664,14 @@ CONTAINS
      END DO
 
      DO i = nZ, 1, -1
-       xx_AD = -Exp_x_AD(i)*RTV%Exp_x(i,KL)
-       Exp_x_AD(i) = ZERO
+       xx = RTV%EigValue(i,KL)*optical_depth
+       IF ( xx >= MAX_OPTICAL_DEPTH ) THEN
+         Exp_x_AD(i) = ZERO
+         xx_AD = ZERO
+       ELSE
+         xx_AD = -Exp_x_AD(i)*RTV%Exp_x(i,KL)
+         Exp_x_AD(i) = ZERO
+       END IF
        EigValue_AD(i) = xx_AD*optical_depth
        optical_depth_AD = optical_depth_AD + RTV%EigValue(i,KL)*xx_AD
      END DO
@@ -714,6 +767,8 @@ CONTAINS
    INTEGER :: Error_Status
    REAL(fp) :: EXPfactor,Sfactor,s_transmittance,Solar(2*nZ),V0(2*nZ,2*nZ),Solar1(2*nZ)
    REAL(fp) :: V1(2*nZ,2*nZ),Sfac2,source_up(nZ),source_down(nZ)
+   REAL(fp) :: optical_depth_sun, total_opt_sun
+   LOGICAL :: is_clamped
    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_AMOM_layer'
    CHARACTER(256) :: Message
 
@@ -807,8 +862,10 @@ CONTAINS
      ! Solar source
      Sfactor = single_albedo*RTV%Solar_irradiance/PI
      IF( RTV%mth_Azi == 0 ) Sfactor = Sfactor/TWO
-       EXPfactor = exp(-optical_depth/RTV%COS_SUN)
-       s_transmittance = exp(-total_opt/RTV%COS_SUN)
+       optical_depth_sun = optical_depth / RTV%COS_SUN
+       CALL Safe_Exp_Neg(optical_depth_sun, EXPfactor, is_clamped)
+       total_opt_sun = total_opt / RTV%COS_SUN
+       CALL Safe_Exp_Neg(total_opt_sun, s_transmittance, is_clamped)
 
        DO i = 1, nZ
          Solar(i) = -bb(i,nZ+1)*Sfactor
@@ -1290,6 +1347,7 @@ CONTAINS
       REAL (fp), DIMENSION( RTV%n_Angles*RTV%n_Stokes, RTV%n_Angles*RTV%n_Stokes ) :: s_trans_TL,s_refl_TL,Refl_Trans_TL
       REAL (fp), DIMENSION( RTV%n_Angles*RTV%n_Stokes, RTV%n_Angles*RTV%n_Stokes ) :: s_refl_up_TL,Inv_Gamma_TL,Inv_GammaT_TL
       REAL (fp), DIMENSION(0:n_Layers) :: total_opt, total_opt_TL
+      REAL (fp) :: optical_depth, optical_depth_TL, exp_term, exp_term_TL
       INTEGER :: i, j, k, nZ
 !
        nZ = RTV%n_Angles*RTV%n_Stokes
@@ -1309,10 +1367,12 @@ CONTAINS
        END IF
 
        IF( RTV%Solar_Flag_true ) THEN
-         s_rad_up_TL = s_rad_up_TL+direct_reflectivity_TL(1:nZ)*RTV%COS_SUN*RTV%Solar_irradiance/PI  &
-                     * exp(-total_opt(n_Layers)/RTV%COS_SUN) &
-                     - direct_reflectivity(1:nZ) * RTV%Solar_irradiance/PI  &
-                     * total_opt_TL(n_Layers) * exp(-total_opt(n_Layers)/RTV%COS_SUN)
+         optical_depth = total_opt(n_Layers) / RTV%COS_SUN
+         optical_depth_TL = total_opt_TL(n_Layers) / RTV%COS_SUN
+         CALL Safe_Exp_Neg_TL(optical_depth, optical_depth_TL, exp_term, exp_term_TL)
+         s_rad_up_TL = s_rad_up_TL + direct_reflectivity_TL(1:nZ)*RTV%COS_SUN*RTV%Solar_irradiance/PI  &
+                     * exp_term + direct_reflectivity(1:nZ) * RTV%Solar_irradiance/PI  &
+                     * RTV%COS_SUN * exp_term_TL
        END IF
 
        DO 10 k = n_Layers, 1, -1
@@ -1465,6 +1525,8 @@ CONTAINS
      REAL(fp) :: V1(2*nZ,2*nZ),Sfac2,source_up(nZ),source_down(nZ)
      REAL(fp) :: EXPfactor_TL,Sfactor_TL,s_transmittance_TL,Solar_TL(2*nZ),V0_TL(2*nZ,2*nZ),Solar1_TL(2*nZ)
      REAL(fp) :: Sfac2_TL
+     REAL(fp) :: optical_depth_sun, total_opt_sun
+     REAL(fp) :: optical_depth_sun_TL, total_opt_sun_TL
      REAL(fp), DIMENSION( nZ ) :: thermal_up_TL,thermal_down_TL
      REAL(fp), DIMENSION(nZ,nZ) :: trans, refl
      INTEGER :: N2, N2_1
@@ -1581,11 +1643,13 @@ CONTAINS
          Sfactor = Sfactor/TWO
          Sfactor_TL = Sfactor_TL/TWO
        END IF
-       EXPfactor = exp(-optical_depth/RTV%COS_SUN)
-       EXPfactor_TL = -optical_depth_TL/RTV%COS_SUN*EXPfactor
+       optical_depth_sun = optical_depth / RTV%COS_SUN
+       optical_depth_sun_TL = optical_depth_TL / RTV%COS_SUN
+       CALL Safe_Exp_Neg_TL(optical_depth_sun, optical_depth_sun_TL, EXPfactor, EXPfactor_TL)
 
-       s_transmittance = exp(-total_opt/RTV%COS_SUN)
-       s_transmittance_TL = -total_opt_TL/RTV%COS_SUN*s_transmittance
+       total_opt_sun = total_opt / RTV%COS_SUN
+       total_opt_sun_TL = total_opt_TL / RTV%COS_SUN
+       CALL Safe_Exp_Neg_TL(total_opt_sun, total_opt_sun_TL, s_transmittance, s_transmittance_TL)
 
        DO i = 1, nZ
          Solar(i) = -bb(i,nZ+1)*Sfactor
@@ -1727,6 +1791,8 @@ CONTAINS
          Inv_Gamma_AD,Inv_GammaT_AD
       REAL (fp) :: sum_s_AD, sums_AD, xx
       REAL (fp), DIMENSION(0:n_Layers) :: total_opt, total_opt_AD
+      REAL (fp) :: optical_depth, exp_term
+      LOGICAL :: is_clamped
       INTEGER :: i, j, k,nZ
 !
 
@@ -1853,9 +1919,13 @@ CONTAINS
 
 !
        IF( RTV%Solar_Flag_true ) THEN
-         xx = RTV%Solar_irradiance/PI * exp(-total_opt(n_Layers)/RTV%COS_SUN)
-         total_opt_AD(n_Layers) = total_opt_AD(n_Layers)  &
-            - xx*sum(direct_reflectivity(1:nZ)*s_rad_up_AD(1:nZ))
+         optical_depth = total_opt(n_Layers) / RTV%COS_SUN
+         CALL Safe_Exp_Neg(optical_depth, exp_term, is_clamped)
+         xx = RTV%Solar_irradiance/PI * exp_term
+         IF ( .NOT. is_clamped ) THEN
+           total_opt_AD(n_Layers) = total_opt_AD(n_Layers)  &
+              - xx*sum(direct_reflectivity(1:nZ)*s_rad_up_AD(1:nZ))
+         END IF
          direct_reflectivity_AD(1:nZ) = direct_reflectivity_AD(1:nZ) &
             + s_rad_up_AD(1:nZ) * RTV%COS_SUN * xx
        END IF
@@ -1940,6 +2010,8 @@ CONTAINS
      REAL(fp) :: V1(2*nZ,2*nZ),Sfac2,source_up(nZ),source_down(nZ)
      REAL(fp) :: EXPfactor_AD,Sfactor_AD,s_transmittance_AD,Solar_AD(2*nZ),V0_AD(2*nZ,2*nZ),Solar1_AD(2*nZ)
      REAL(fp) :: V1_AD(2*nZ,2*nZ),Sfac2_AD
+     REAL(fp) :: optical_depth_sun, total_opt_sun
+     LOGICAL :: is_clamped_exp, is_clamped_total
      REAL(fp), DIMENSION(nZ,nZ) :: trans, refl
      INTEGER :: N2, N2_1
      REAL(fp) :: Thermal_C_AD
@@ -2011,8 +2083,10 @@ CONTAINS
        ! Solar source
        Sfactor = single_albedo*RTV%Solar_irradiance/PI
        IF( RTV%mth_Azi == 0 ) Sfactor = Sfactor/TWO
-       EXPfactor = exp(-optical_depth/RTV%COS_SUN)
-       s_transmittance = exp(-total_opt/RTV%COS_SUN)
+       optical_depth_sun = optical_depth / RTV%COS_SUN
+       CALL Safe_Exp_Neg(optical_depth_sun, EXPfactor, is_clamped_exp)
+       total_opt_sun = total_opt / RTV%COS_SUN
+       CALL Safe_Exp_Neg(total_opt_sun, s_transmittance, is_clamped_total)
 
        DO i = 1, nZ
          Solar(i) = -bb(i,nZ+1)*Sfactor
@@ -2126,8 +2200,12 @@ CONTAINS
          bb_AD(i,nZ+1)=bb_AD(i,nZ+1) - Solar_AD(i)*Sfactor
        ENDDO
 
-       total_opt_AD = total_opt_AD -s_transmittance_AD/RTV%COS_SUN*s_transmittance
-       optical_depth_AD = optical_depth_AD -EXPfactor_AD/RTV%COS_SUN*EXPfactor
+       IF ( .NOT. is_clamped_total ) THEN
+         total_opt_AD = total_opt_AD - s_transmittance_AD/RTV%COS_SUN*s_transmittance
+       END IF
+       IF ( .NOT. is_clamped_exp ) THEN
+         optical_depth_AD = optical_depth_AD -EXPfactor_AD/RTV%COS_SUN*EXPfactor
+       END IF
 
        IF( RTV%mth_Azi == 0 ) THEN
          Sfactor_AD = Sfactor_AD/TWO

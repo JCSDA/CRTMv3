@@ -39,6 +39,8 @@ MODULE Emission_Module
   ! Version Id for the module
   CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
   '$Id: $'
+  REAL(fp), PARAMETER :: MIN_TRANSMITTANCE = TINY(ONE)
+  REAL(fp), PARAMETER :: MAX_OPTICAL_DEPTH = -LOG(MIN_TRANSMITTANCE)
     
 CONTAINS
 
@@ -99,7 +101,8 @@ CONTAINS
     REAL(fp),                    INTENT(IN)     :: Source_Zenith_Radian
     TYPE(RTV_type),              INTENT(IN OUT) :: RTV
     ! Local variables
-    REAL(fp) :: layer_source_up, cosine_u0 
+    REAL(fp) :: layer_source_up, cosine_u0
+    REAL(fp) :: layer_optical_depth, optical_depth, exp_term
     INTEGER :: k
 
     ! --------------------
@@ -121,12 +124,22 @@ CONTAINS
       ! Accumulate optical depth 
       RTV%Total_OD = RTV%Total_OD + T_OD(k)
       ! Layer downward transmittance
-      RTV%e_Layer_Trans_DOWN(k) = EXP(-T_OD(k)*RTV%Secant_Down_Angle)
+      layer_optical_depth = T_OD(k) * RTV%Secant_Down_Angle
+      IF ( layer_optical_depth >= MAX_OPTICAL_DEPTH ) THEN
+        RTV%e_Layer_Trans_DOWN(k) = MIN_TRANSMITTANCE
+      ELSE
+        RTV%e_Layer_Trans_DOWN(k) = EXP(-layer_optical_depth)
+      END IF
       ! Downward radiance  
       RTV%e_Level_Rad_DOWN(k) = (RTV%e_Level_Rad_DOWN(k-1)*RTV%e_Layer_Trans_DOWN(k)) + &
                                 (Planck_Atmosphere(k)*(ONE-RTV%e_Layer_Trans_DOWN(k)))
 
-      RTV%e_Layer_Trans_UP(k) = EXP(-T_OD(k)/u)
+      layer_optical_depth = T_OD(k) / u
+      IF ( layer_optical_depth >= MAX_OPTICAL_DEPTH ) THEN
+        RTV%e_Layer_Trans_UP(k) = MIN_TRANSMITTANCE
+      ELSE
+        RTV%e_Layer_Trans_UP(k) = EXP(-layer_optical_depth)
+      END IF
 
       ! GSI cloud detection
       RTV%e_Cloud_Radiance_UP(k) = RTV%e_Source_UP(k-1) + Planck_Atmosphere(k)*RTV%e_Level_Trans_UP(k-1)
@@ -146,7 +159,13 @@ CONTAINS
     IF( Is_Solar_Channel ) THEN
       cosine_u0 = COS(Source_Zenith_Radian)
       IF( cosine_u0 > ZERO) THEN
-        RTV%Down_Solar_Radiance = cosine_u0*EXP(-RTV%Total_OD/cosine_u0)*Solar_Irradiance/PI
+        optical_depth = RTV%Total_OD / cosine_u0
+        IF ( optical_depth >= MAX_OPTICAL_DEPTH ) THEN
+          exp_term = MIN_TRANSMITTANCE
+        ELSE
+          exp_term = EXP(-optical_depth)
+        END IF
+        RTV%Down_Solar_Radiance = cosine_u0 * exp_term * Solar_Irradiance / PI
         RTV%e_Level_Rad_UP(n_Layers) = RTV%e_Level_Rad_UP(n_Layers) + &
           (RTV%Down_Solar_Radiance*direct_reflectivity(1))
       END IF
@@ -215,7 +234,7 @@ CONTAINS
       REAL (fp) :: layer_source_up_TL, layer_source_down_TL,a_TL,down_rad_TL
       REAL (fp) :: Total_OD, Total_OD_TL
       INTEGER :: k
-      REAL( fp) :: cosine_u0
+      REAL( fp) :: cosine_u0, optical_depth, exp_term
 
     !#--------------------------------------------------------------------------#
     !#                -- Downwelling TL radiance   --                           #
@@ -252,10 +271,18 @@ CONTAINS
        IF( Is_Solar_Channel ) THEN
         cosine_u0 = cos(Source_Zenith_Radian)
         IF( cosine_u0 > ZERO) THEN
-        up_rad_TL = up_rad_TL + cosine_u0*Solar_Irradiance/PI &
-                  * direct_reflectivity_TL(1) * exp(-Total_OD/cosine_u0)   &
-                  - Solar_Irradiance/PI * direct_reflectivity(1)    &
-                  * Total_OD_TL * exp(-Total_OD/cosine_u0)
+        optical_depth = Total_OD / cosine_u0
+        IF ( optical_depth >= MAX_OPTICAL_DEPTH ) THEN
+          exp_term = MIN_TRANSMITTANCE
+          up_rad_TL = up_rad_TL + cosine_u0*Solar_Irradiance/PI &
+                    * direct_reflectivity_TL(1) * exp_term
+        ELSE
+          exp_term = EXP(-optical_depth)
+          up_rad_TL = up_rad_TL + cosine_u0*Solar_Irradiance/PI &
+                    * direct_reflectivity_TL(1) * exp_term   &
+                    - Solar_Irradiance/PI * direct_reflectivity(1)    &
+                    * Total_OD_TL * exp_term
+        ENDIF
         ENDIF
        ENDIF
 
@@ -321,6 +348,7 @@ CONTAINS
     !  internal variables
       REAL (fp) :: layer_source_up_AD, layer_source_down_AD,a_AD,down_rad_AD
       REAL (fp) :: cosine_u0, up_rad_AD, Total_OD, Total_OD_AD
+      REAL (fp) :: optical_depth, exp_term
       INTEGER :: k
 !
     ! Initialize variables
@@ -358,10 +386,17 @@ CONTAINS
        IF( Is_Solar_Channel ) THEN
         cosine_u0 = cos(Source_Zenith_Radian)
         IF( cosine_u0 > ZERO) THEN
-        Total_OD_AD = -Solar_Irradiance/PI * direct_reflectivity(1) &
-                    * up_rad_AD * exp(-Total_OD/cosine_u0)
+        optical_depth = Total_OD / cosine_u0
+        IF ( optical_depth >= MAX_OPTICAL_DEPTH ) THEN
+          exp_term = MIN_TRANSMITTANCE
+          Total_OD_AD = ZERO
+        ELSE
+          exp_term = EXP(-optical_depth)
+          Total_OD_AD = -Solar_Irradiance/PI * direct_reflectivity(1) &
+                      * up_rad_AD * exp_term
+        END IF
         direct_reflectivity_AD(1) = cosine_u0 * Solar_Irradiance/PI &
-                    * up_rad_AD* exp(-Total_OD/cosine_u0)
+                    * up_rad_AD * exp_term
         ENDIF
        ENDIF
 

@@ -21,6 +21,9 @@ MODULE NESDIS_SEAICE_PHYEM_MODULE
   ! -----------------
   ! Module parameters
   ! -----------------
+  REAL(fp), PARAMETER :: one = 1.0_fp
+  REAL(fp), PARAMETER :: MIN_EXP = TINY(one)
+  REAL(fp), PARAMETER :: MAX_EXP_ARG = -LOG(MIN_EXP)
 
 
 CONTAINS
@@ -178,7 +181,7 @@ CONTAINS
      real(fp) ::  ESWI, EW0, TPTW, FH, X, Y, TPTWFQ
      real(fp) ::  e_real, e_img
 
-     real(fp) ::  s,t4,t5,sigma
+     real(fp) ::  s,t4,t5,sigma,exp_term
      real(fp) ::  ebo,eb,sb,nb,eb_real,eb_imag
      real(fp) ::   den_ice,den_sice,den_brine
 
@@ -223,7 +226,8 @@ CONTAINS
       fi = d * (2.033e-2 + 1.266e-4 * d + 2.464e-6 * d * d -   &
         s * (1.849e-5 - 2.551e-7 * d + 2.551e-8 * d * d))
 
-      ssw = sswo * exp(-fi)
+      exp_term = exp(-min(fi, MAX_EXP_ARG))
+      ssw = sswo * exp_term
       epspp = tsw * f * (esw - ESWI) / (1.0 + (tsw * f)**2)
       epspp = epspp + ssw/(2.0 * pi * eo * f)
 

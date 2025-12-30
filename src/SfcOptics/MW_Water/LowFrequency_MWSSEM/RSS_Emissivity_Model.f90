@@ -36,6 +36,9 @@ save
 ! Declare local constant Pi
 REAL, PARAMETER :: Pi = 3.14159265358979323846
 REAL(fp), parameter  :: f0=17.97510
+REAL(fp), PARAMETER :: MIN_EXP = TINY(1.0_fp)
+REAL(fp), PARAMETER :: MIN_EXP_ARG = LOG(MIN_EXP)
+REAL(fp), PARAMETER :: MAX_EXP_ARG = -MIN_EXP_ARG
 
 public ::  fdem0_meissner_wentz, &
  FDEM0_MEISSNER_WENTZ_TL, &
@@ -43,6 +46,24 @@ public ::  fdem0_meissner_wentz, &
 
 contains
 
+
+
+subroutine Safe_Exp(arg, exp_val, is_clamped)
+  real(fp), intent(in) :: arg
+  real(fp), intent(out) :: exp_val
+  logical, intent(out) :: is_clamped
+
+  if (arg > MAX_EXP_ARG) then
+    exp_val = exp(MAX_EXP_ARG)
+    is_clamped = .true.
+  elseif (arg < MIN_EXP_ARG) then
+    exp_val = exp(MIN_EXP_ARG)
+    is_clamped = .true.
+  else
+    exp_val = exp(arg)
+    is_clamped = .false.
+  end if
+end subroutine Safe_Exp
 
 subroutine fdem0_meissner_wentz(freq,tht,sst,salinity, em0) 
 !    input:
@@ -134,6 +155,8 @@ real(fp), dimension(3), parameter :: a0coef=(/ -0.33330E-02,  4.74868e-06,  0.0e
 real(fp), dimension(5), parameter :: b1coef=(/0.23232E-02, -0.79208E-04, 0.36764E-05, -0.35594E-06, 0.89795E-08/)
 real(fp)                          :: e0,e1,e2,n1,n2
 real(fp)                          :: a0,a1,a2,b1,b2
+real(fp)                          :: arg0,arg1
+logical                           :: clamp0, clamp1
 real(fp)                          :: sig35,r15,rtr15,alpha0,alpha1
 real(fp)                          :: sst,sst2,sst3,sst4,s2
 	 
@@ -164,7 +187,8 @@ s2=s*s
       sig = sig35*r15*rtr15
  
 !     permittivity
-      a0 = exp(a0coef(1)*s + a0coef(2)*s2 + a0coef(3)*s*sst)
+      arg0 = a0coef(1)*s + a0coef(2)*s2 + a0coef(3)*s*sst
+      call Safe_Exp(arg0, a0, clamp0)
       e0s = a0*e0
 
       if(sst.le.30) then
@@ -174,7 +198,8 @@ s2=s*s
       endif
       n1s = n1*b1
 
-      a1  = exp(z(7)*s + z(8)*s2 + z(9)*s*sst)
+      arg1  = z(7)*s + z(8)*s2 + z(9)*s*sst
+      call Safe_Exp(arg1, a1, clamp1)
       e1s = e1*a1
 
 !     b2 = 1.0 + s*(z(10) + z(11)*sst)
@@ -359,9 +384,12 @@ SUBROUTINE DIELECTRIC_MEISSNER_WENTZ_TL(sst_in, sst_in_TL, salinity, salinity_TL
   sig       = sig35*r15*rtr15
 !     permittivity                                                                                    
   temp0 = a0coef(1)*s + a0coef(2)*s2 + a0coef(3)*s*sst
-  a0_TL = EXP(temp0)*(a0coef(1)*s_TL+a0coef(2)*s2_TL+a0coef(3)*(sst*s_TL+s*sst_TL)&
-&   )
-  a0     = EXP(temp0)
+  call Safe_Exp(temp0, a0, clamp0)
+  if (clamp0) then
+    a0_TL = 0.0_fp
+  else
+    a0_TL = a0*(a0coef(1)*s_TL+a0coef(2)*s2_TL+a0coef(3)*(sst*s_TL+s*sst_TL))
+  end if
   e0s_TL = e0*a0_TL + a0*e0_TL
   e0s    = a0*e0
   IF (sst .LE. 30) THEN
@@ -378,8 +406,12 @@ SUBROUTINE DIELECTRIC_MEISSNER_WENTZ_TL(sst_in, sst_in_TL, salinity, salinity_TL
   n1s_TL = b1*n1_TL + n1*b1_TL
   n1s    = n1*b1
   temp0  = z(7)*s + z(8)*s2 + z(9)*s*sst
-  a1_TL  = EXP(temp0)*(z(7)*s_TL+z(8)*s2_TL+z(9)*(sst*s_TL+s*sst_TL))
-  a1     = EXP(temp0)
+  call Safe_Exp(temp0, a1, clamp1)
+  if (clamp1) then
+    a1_TL = 0.0_fp
+  else
+    a1_TL = a1*(z(7)*s_TL+z(8)*s2_TL+z(9)*(sst*s_TL+s*sst_TL))
+  end if
   e1s_TL = a1*e1_TL + e1*a1_TL
   e1s    = e1*a1
 !     b2 = 1.0 + s*(z(10) + z(11)*sst)                                                                
@@ -504,6 +536,8 @@ d_n1s_ds, d_n2s_dsst, d_n2s_ds, d_sig_dsst, d_sig_ds)
   REAL(FP) :: d_n2_dsst, d_sig35_dsst,d_r15_ds, d_alpha0_ds
   REAL(FP) :: d_alpha1_ds,d_rtr15_dsst,d_rtr15_ds
   REAL(FP) :: d_a0_dsst,d_a0_ds,d_a1_dsst,d_a1_ds,d_a2_dsst
+  REAL(FP) :: arg0, arg1
+  LOGICAL :: clamp0, clamp1
   REAL(FP) :: d_a2_ds,d_b1_dsst,d_b1_ds,d_b2_dsst,d_b2_ds
   sst = sst_in
   s = salinity
@@ -548,9 +582,15 @@ d_n1s_ds, d_n2s_dsst, d_n2s_ds, d_sig_dsst, d_sig_ds)
       d_sig_ds  = sig35 *(d_r15_ds *rtr15 + r15*d_rtr15_ds)                                                                                        
 
 !     permittivity                                                                                                                             
-      a0 = exp(a0coef(1)*s + a0coef(2)*s**2 + a0coef(3)*s*sst)
-      d_a0_dsst =(a0coef(3)*s) * exp(a0coef(1)*s + a0coef(2)*s**2 + a0coef(3)*s*sst)                                                                
-      d_a0_ds   =(2*a0coef(2)*s+a0coef(1)+a0coef(3)*sst)* exp(s*(a0coef(2)*s+a0coef(1)+a0coef(3)*sst))                                              
+      arg0 = a0coef(1)*s + a0coef(2)*s**2 + a0coef(3)*s*sst
+      call Safe_Exp(arg0, a0, clamp0)
+      if (clamp0) then
+        d_a0_dsst = 0.0_fp
+        d_a0_ds   = 0.0_fp
+      else
+        d_a0_dsst =(a0coef(3)*s) * a0
+        d_a0_ds   =(2*a0coef(2)*s+a0coef(1)+a0coef(3)*sst) * a0
+      end if
 
       !e0s = a0*e0
       d_e0s_dsst= d_a0_dsst * e0 +a0*d_e0_dsst                                                                                                      
@@ -569,9 +609,15 @@ d_n1s_ds, d_n2s_dsst, d_n2s_ds, d_sig_dsst, d_sig_ds)
       d_n1s_dsst= d_n1_dsst *b1 + n1 * d_b1_dsst                                                                                                   
       d_n1s_ds  = n1 * d_b1_ds
                                                                
-      a1        = exp(z(7)*s + z(8)*s**2 + z(9)*s*sst)
-      d_a1_dsst = exp(z(7)*s + z(8)*s**2) *z(9)*s*exp(z(9)*s*sst)                                                                                     
-      d_a1_ds   = (2*z(8)*s+z(7)+z(9)*sst) * exp(s*(z(8)*s+z(7)+z(9)*sst)) 
+      arg1 = z(7)*s + z(8)*s**2 + z(9)*s*sst
+      call Safe_Exp(arg1, a1, clamp1)
+      if (clamp1) then
+        d_a1_dsst = 0.0_fp
+        d_a1_ds   = 0.0_fp
+      else
+        d_a1_dsst = (z(9)*s) * a1
+        d_a1_ds   = (2*z(8)*s+z(7)+z(9)*sst) * a1
+      end if
 
       !e1s = e1*a1
       d_e1s_dsst = d_e1_dsst*a1 +e1* d_a1_dsst                                                                                                       

@@ -16,7 +16,7 @@ MODULE CRTM_Planck_Functions
   ! -----------------
   ! Module use statements
   USE Type_Kinds     , ONLY: fp
-  USE CRTM_Parameters, ONLY: ONE
+  USE CRTM_Parameters, ONLY: ONE, ZERO
   USE CRTM_SpcCoeff  , ONLY: SC
   ! Disable all implicit typing
   IMPLICIT NONE
@@ -37,6 +37,7 @@ MODULE CRTM_Planck_Functions
   ! ----------
   ! Parameters
   ! ----------
+  REAL(fp), PARAMETER :: MIN_RADIANCE = TINY(ONE)
     
     
 CONTAINS
@@ -477,11 +478,13 @@ CONTAINS
     REAL(fp), INTENT(OUT) :: Temperature
     ! Local variables
     REAL(fp) :: Effective_Temperature
+    REAL(fp) :: Radiance_Safe
 
     ! Calculate the effective temperature
+    Radiance_Safe = MAX(Radiance, MIN_RADIANCE)
     Effective_Temperature =              SC(n)%Planck_C2(l)  / &
     !                       ----------------------------------------------
-                            LOG( ( SC(n)%Planck_C1(l) / Radiance ) + ONE )
+                            LOG( ( SC(n)%Planck_C1(l) / Radiance_Safe ) + ONE )
 
     ! Apply the polychromatic correction to 
     ! obtain the true temperature
@@ -588,15 +591,21 @@ CONTAINS
     ! Local variables
     REAL(fp) :: Argument
     REAL(fp) :: F
+    REAL(fp) :: Radiance_Safe
 
     ! Calculate the Planck function operator
     !
     ! The logarithm argument
-    Argument = ( SC(n)%Planck_C1(l) / Radiance ) + ONE
+    IF ( Radiance <= MIN_RADIANCE ) THEN
+      Temperature_TL = ZERO
+      RETURN
+    END IF
+    Radiance_Safe = Radiance
+    Argument = ( SC(n)%Planck_C1(l) / Radiance_Safe ) + ONE
     ! The operator, call it F
     F =            SC(n)%Planck_C1(l) * SC(n)%Planck_C2(l) / &
     !   -------------------------------------------------------------------
-        ( SC(n)%Band_C2(l) * Argument * ( Radiance * LOG( Argument ) )**2 )
+        ( SC(n)%Band_C2(l) * Argument * ( Radiance_Safe * LOG( Argument ) )**2 )
 
     ! Calculate the tangent-linear temperature
     Temperature_TL = F * Radiance_TL
@@ -707,15 +716,18 @@ CONTAINS
     ! Local variables
     REAL(fp) :: Argument
     REAL(fp) :: F
+    REAL(fp) :: Radiance_Safe
 
     ! Calculate the Planck function operator
     !
     ! The logarithm Argument
-    Argument = ( SC(n)%Planck_C1(l) / Radiance ) + ONE
+    IF ( Radiance <= MIN_RADIANCE ) RETURN
+    Radiance_Safe = Radiance
+    Argument = ( SC(n)%Planck_C1(l) / Radiance_Safe ) + ONE
     ! The operator, call it F
     F =            SC(n)%Planck_C1(l) * SC(n)%Planck_C2(l) / &
     !   -------------------------------------------------------------------
-        ( SC(n)%Band_C2(l) * Argument * ( Radiance * LOG( Argument ) )**2 )
+        ( SC(n)%Band_C2(l) * Argument * ( Radiance_Safe * LOG( Argument ) )**2 )
 
     ! Calculate the adjoint radiance
     Radiance_AD = Radiance_AD + ( F * Temperature_AD )

@@ -47,6 +47,8 @@ MODULE Azimuth_Emissivity_F6_Module
   REAL(fp), PARAMETER :: FOUR   = 4.0_fp
   REAL(fp), PARAMETER :: PI = 3.141592653589793238462643383279_fp
   REAL(fp), PARAMETER :: DEGREES_TO_RADIANS = PI / 180.0_fp
+  REAL(fp), PARAMETER :: MIN_EXP = TINY(ONE)
+  REAL(fp), PARAMETER :: MAX_EXP_ARG = -LOG(MIN_EXP)
 
   ! Dimensions
   ! ...Number of Stokes parameters handled
@@ -131,6 +133,8 @@ CONTAINS
     TYPE(iVar_type)       , INTENT(IN OUT) :: iVar
     ! Local variables
     INTEGER :: j
+    REAL(fp) :: exp_arg_v, exp_arg_h
+    REAL(fp) :: exp_term_v, exp_term_h
 
     ! Initialise output
     e_Azimuth = ZERO
@@ -152,14 +156,27 @@ CONTAINS
     ! Loop over frequencies to compute the intermediate terms
     Frequency_Loop: DO j = 1, N_FREQUENCIES
 
-      iVar%A1v(j) = AZCoeff%C(1,j,IVPOL) * ( EXP(-AZCoeff%C(5,j,IVPOL) * iVar%w18**2 ) - ONE ) * &
+      exp_arg_v = AZCoeff%C(5,j,IVPOL) * iVar%w18**2
+      IF ( exp_arg_v >= MAX_EXP_ARG ) THEN
+        exp_term_v = MIN_EXP
+      ELSE
+        exp_term_v = EXP(-exp_arg_v)
+      END IF
+      exp_arg_h = AZCoeff%C(6,j,IHPOL) * iVar%w18**2
+      IF ( exp_arg_h >= MAX_EXP_ARG ) THEN
+        exp_term_h = MIN_EXP
+      ELSE
+        exp_term_h = EXP(-exp_arg_h)
+      END IF
+
+      iVar%A1v(j) = AZCoeff%C(1,j,IVPOL) * ( exp_term_v - ONE ) * &
                     ( AZCoeff%C(2,j,IVPOL) * iVar%w18    + &
                       AZCoeff%C(3,j,IVPOL) * iVar%w18**2 + &
                       AZCoeff%C(4,j,IVPOL) * iVar%w18**3   )
       iVar%A2v(j) = AZCoeff%C(6,j,IVPOL) * iVar%w18
 
       iVar%A1h(j) = AZCoeff%C(1,j,IHPOL) * iVar%w18
-      iVar%A2h(j) = AZCoeff%C(2,j,IHPOL) * ( EXP(-AZCoeff%C(6,j,IHPOL) * iVar%w18**2 ) - ONE ) * &
+      iVar%A2h(j) = AZCoeff%C(2,j,IHPOL) * ( exp_term_h - ONE ) * &
                     ( AZCoeff%C(3,j,IHPOL) * iVar%w18    + &
                       AZCoeff%C(4,j,IHPOL) * iVar%w18**2 + &
                       AZCoeff%C(5,j,IHPOL) * iVar%w18**3   )
@@ -239,6 +256,9 @@ CONTAINS
     REAL(fp), DIMENSION(N_FREQUENCIES) :: A1s1_theta_TL, A1s2_theta_TL, A2s1_theta_TL, A2s2_theta_TL
     REAL(fp), DIMENSION(N_FREQUENCIES) :: A1v_theta_TL , A1h_theta_TL , A2v_theta_TL , A2h_theta_TL
     REAL(fp) :: azimuth_component_TL(N_FREQUENCIES, N_STOKES)
+    REAL(fp) :: exp_arg_v, exp_arg_h
+    REAL(fp) :: exp_term_v, exp_term_h
+    LOGICAL  :: exp_clamped_v, exp_clamped_h
 
     ! Initialise output
     e_Azimuth_TL = ZERO
@@ -256,28 +276,59 @@ CONTAINS
         A1h_TL(j) = ZERO
         A2h_TL(j) = ZERO
       ELSE
-        A1v_TL(j) = ( AZCoeff%C(1,j,IVPOL) * ( EXP(-AZCoeff%C(5,j,IVPOL) * iVar%w18**2 ) - ONE ) * &
-                      (         AZCoeff%C(2,j,IVPOL)               + &
-                        TWO   * AZCoeff%C(3,j,IVPOL) * iVar%w18    + &
-                        THREE * AZCoeff%C(4,j,IVPOL) * iVar%w18**2   ) - &
-                      TWO * AZCoeff%C(1,j,IVPOL) * AZCoeff%C(5,j,IVPOL) * iVar%w18 * &
-                      EXP(-AZCoeff%C(5,j,IVPOL) * iVar%w18**2 ) * &
-                      ( AZCoeff%C(2,j,IVPOL) * iVar%w18    + &
-                        AZCoeff%C(3,j,IVPOL) * iVar%w18**2 + &
-                        AZCoeff%C(4,j,IVPOL) * iVar%w18**3   ) ) * Wind_Speed_TL
+        exp_arg_v = AZCoeff%C(5,j,IVPOL) * iVar%w18**2
+        IF ( exp_arg_v >= MAX_EXP_ARG ) THEN
+          exp_term_v = MIN_EXP
+          exp_clamped_v = .TRUE.
+        ELSE
+          exp_term_v = EXP(-exp_arg_v)
+          exp_clamped_v = .FALSE.
+        END IF
+        exp_arg_h = AZCoeff%C(6,j,IHPOL) * iVar%w18**2
+        IF ( exp_arg_h >= MAX_EXP_ARG ) THEN
+          exp_term_h = MIN_EXP
+          exp_clamped_h = .TRUE.
+        ELSE
+          exp_term_h = EXP(-exp_arg_h)
+          exp_clamped_h = .FALSE.
+        END IF
+
+        IF ( exp_clamped_v ) THEN
+          A1v_TL(j) = ( AZCoeff%C(1,j,IVPOL) * ( exp_term_v - ONE ) * &
+                        (         AZCoeff%C(2,j,IVPOL)               + &
+                          TWO   * AZCoeff%C(3,j,IVPOL) * iVar%w18    + &
+                          THREE * AZCoeff%C(4,j,IVPOL) * iVar%w18**2   ) ) * Wind_Speed_TL
+        ELSE
+          A1v_TL(j) = ( AZCoeff%C(1,j,IVPOL) * ( exp_term_v - ONE ) * &
+                        (         AZCoeff%C(2,j,IVPOL)               + &
+                          TWO   * AZCoeff%C(3,j,IVPOL) * iVar%w18    + &
+                          THREE * AZCoeff%C(4,j,IVPOL) * iVar%w18**2   ) - &
+                        TWO * AZCoeff%C(1,j,IVPOL) * AZCoeff%C(5,j,IVPOL) * iVar%w18 * &
+                        exp_term_v * &
+                        ( AZCoeff%C(2,j,IVPOL) * iVar%w18    + &
+                          AZCoeff%C(3,j,IVPOL) * iVar%w18**2 + &
+                          AZCoeff%C(4,j,IVPOL) * iVar%w18**3   ) ) * Wind_Speed_TL
+        END IF
         A2v_TL(j) = AZCoeff%C(6,j,IVPOL) * Wind_Speed_TL
 
         A1h_TL(j) = AZCoeff%C(1,j,IHPOL) * Wind_Speed_TL
 
-        A2h_TL(j) = ( AZCoeff%C(2,j,IHPOL) * ( EXP(-AZCoeff%C(6,j,IHPOL) * iVar%w18**2 ) - ONE ) * &
-                      (         AZCoeff%C(3,j,IHPOL)               + &
-                        TWO   * AZCoeff%C(4,j,IHPOL) * iVar%w18    + &
-                        THREE * AZCoeff%C(5,j,IHPOL) * iVar%w18**2   ) - &
-                      TWO * AZCoeff%C(2,j,IHPOL) * AZCoeff%C(6,j,IHPOL) * iVar%w18 * &
-                      EXP(-AZCoeff%C(6,j,IHPOL) * iVar%w18**2 ) * &
-                      ( AZCoeff%C(3,j,IHPOL) * iVar%w18    + &
-                        AZCoeff%C(4,j,IHPOL) * iVar%w18**2 + &
-                        AZCoeff%C(5,j,IHPOL) * iVar%w18**3   ) ) * Wind_Speed_TL
+        IF ( exp_clamped_h ) THEN
+          A2h_TL(j) = ( AZCoeff%C(2,j,IHPOL) * ( exp_term_h - ONE ) * &
+                        (         AZCoeff%C(3,j,IHPOL)               + &
+                          TWO   * AZCoeff%C(4,j,IHPOL) * iVar%w18    + &
+                          THREE * AZCoeff%C(5,j,IHPOL) * iVar%w18**2   ) ) * Wind_Speed_TL
+        ELSE
+          A2h_TL(j) = ( AZCoeff%C(2,j,IHPOL) * ( exp_term_h - ONE ) * &
+                        (         AZCoeff%C(3,j,IHPOL)               + &
+                          TWO   * AZCoeff%C(4,j,IHPOL) * iVar%w18    + &
+                          THREE * AZCoeff%C(5,j,IHPOL) * iVar%w18**2   ) - &
+                        TWO * AZCoeff%C(2,j,IHPOL) * AZCoeff%C(6,j,IHPOL) * iVar%w18 * &
+                        exp_term_h * &
+                        ( AZCoeff%C(3,j,IHPOL) * iVar%w18    + &
+                          AZCoeff%C(4,j,IHPOL) * iVar%w18**2 + &
+                          AZCoeff%C(5,j,IHPOL) * iVar%w18**3   ) ) * Wind_Speed_TL
+        END IF
 
       END IF
 
@@ -366,6 +417,9 @@ CONTAINS
     REAL(fp), DIMENSION(N_FREQUENCIES) :: A1s1_theta_AD, A1s2_theta_AD, A2s1_theta_AD, A2s2_theta_AD
     REAL(fp), DIMENSION(N_FREQUENCIES) :: A1v_theta_AD , A1h_theta_AD , A2v_theta_AD , A2h_theta_AD
     REAL(fp) :: azimuth_component_AD(N_FREQUENCIES, N_STOKES)
+    REAL(fp) :: exp_arg_v, exp_arg_h
+    REAL(fp) :: exp_term_v, exp_term_h
+    LOGICAL  :: exp_clamped_v, exp_clamped_h
 
     ! Initialise local adjoint variables
     phi_AD = ZERO
@@ -482,16 +536,41 @@ CONTAINS
         A1h_AD(j) = ZERO
         A2h_AD(j) = ZERO
       ELSE
-        Wind_Speed_AD = Wind_Speed_AD + &
-                        ( AZCoeff%C(2,j,IHPOL) * ( EXP(-AZCoeff%C(6,j,IHPOL) * iVar%w18**2 ) - ONE ) * &
-                          (         AZCoeff%C(3,j,IHPOL)               + &
-                            TWO   * AZCoeff%C(4,j,IHPOL) * iVar%w18    + &
-                            THREE * AZCoeff%C(5,j,IHPOL) * iVar%w18**2   ) - &
-                          TWO * AZCoeff%C(2,j,IHPOL) * AZCoeff%C(6,j,IHPOL) * iVar%w18 * &
-                          EXP(-AZCoeff%C(6,j,IHPOL) * iVar%w18**2 ) * &
-                          ( AZCoeff%C(3,j,IHPOL) * iVar%w18    + &
-                            AZCoeff%C(4,j,IHPOL) * iVar%w18**2 + &
-                            AZCoeff%C(5,j,IHPOL) * iVar%w18**3   ) ) * A2h_AD(j)
+        exp_arg_v = AZCoeff%C(5,j,IVPOL) * iVar%w18**2
+        IF ( exp_arg_v >= MAX_EXP_ARG ) THEN
+          exp_term_v = MIN_EXP
+          exp_clamped_v = .TRUE.
+        ELSE
+          exp_term_v = EXP(-exp_arg_v)
+          exp_clamped_v = .FALSE.
+        END IF
+        exp_arg_h = AZCoeff%C(6,j,IHPOL) * iVar%w18**2
+        IF ( exp_arg_h >= MAX_EXP_ARG ) THEN
+          exp_term_h = MIN_EXP
+          exp_clamped_h = .TRUE.
+        ELSE
+          exp_term_h = EXP(-exp_arg_h)
+          exp_clamped_h = .FALSE.
+        END IF
+
+        IF ( exp_clamped_h ) THEN
+          Wind_Speed_AD = Wind_Speed_AD + &
+                          ( AZCoeff%C(2,j,IHPOL) * ( exp_term_h - ONE ) * &
+                            (         AZCoeff%C(3,j,IHPOL)               + &
+                              TWO   * AZCoeff%C(4,j,IHPOL) * iVar%w18    + &
+                              THREE * AZCoeff%C(5,j,IHPOL) * iVar%w18**2   ) ) * A2h_AD(j)
+        ELSE
+          Wind_Speed_AD = Wind_Speed_AD + &
+                          ( AZCoeff%C(2,j,IHPOL) * ( exp_term_h - ONE ) * &
+                            (         AZCoeff%C(3,j,IHPOL)               + &
+                              TWO   * AZCoeff%C(4,j,IHPOL) * iVar%w18    + &
+                              THREE * AZCoeff%C(5,j,IHPOL) * iVar%w18**2   ) - &
+                            TWO * AZCoeff%C(2,j,IHPOL) * AZCoeff%C(6,j,IHPOL) * iVar%w18 * &
+                            exp_term_h * &
+                            ( AZCoeff%C(3,j,IHPOL) * iVar%w18    + &
+                              AZCoeff%C(4,j,IHPOL) * iVar%w18**2 + &
+                              AZCoeff%C(5,j,IHPOL) * iVar%w18**3   ) ) * A2h_AD(j)
+        END IF
         A2h_AD(j) = ZERO
         
         Wind_Speed_AD = Wind_Speed_AD + AZCoeff%C(1,j,IHPOL)*A1h_AD(j) 
@@ -500,16 +579,24 @@ CONTAINS
         Wind_Speed_AD = Wind_Speed_AD + AZCoeff%C(6,j,IVPOL)*A2v_AD(j) 
         A2v_AD(j) = ZERO
       
-        Wind_Speed_AD = Wind_Speed_AD + &
-                        ( AZCoeff%C(1,j,IVPOL) * ( EXP(-AZCoeff%C(5,j,IVPOL) * iVar%w18**2 ) - ONE ) * &
-                          (         AZCoeff%C(2,j,IVPOL)               + &
-                            TWO   * AZCoeff%C(3,j,IVPOL) * iVar%w18    + &
-                            THREE * AZCoeff%C(4,j,IVPOL) * iVar%w18**2   ) - &
-                          TWO * AZCoeff%C(1,j,IVPOL) * AZCoeff%C(5,j,IVPOL) * iVar%w18 * &
-                          EXP(-AZCoeff%C(5,j,IVPOL) * iVar%w18**2 ) * &
-                          ( AZCoeff%C(2,j,IVPOL) * iVar%w18    + &
-                            AZCoeff%C(3,j,IVPOL) * iVar%w18**2 + &
-                            AZCoeff%C(4,j,IVPOL) * iVar%w18**3   ) ) * A1v_AD(j)
+        IF ( exp_clamped_v ) THEN
+          Wind_Speed_AD = Wind_Speed_AD + &
+                          ( AZCoeff%C(1,j,IVPOL) * ( exp_term_v - ONE ) * &
+                            (         AZCoeff%C(2,j,IVPOL)               + &
+                              TWO   * AZCoeff%C(3,j,IVPOL) * iVar%w18    + &
+                              THREE * AZCoeff%C(4,j,IVPOL) * iVar%w18**2   ) ) * A1v_AD(j)
+        ELSE
+          Wind_Speed_AD = Wind_Speed_AD + &
+                          ( AZCoeff%C(1,j,IVPOL) * ( exp_term_v - ONE ) * &
+                            (         AZCoeff%C(2,j,IVPOL)               + &
+                              TWO   * AZCoeff%C(3,j,IVPOL) * iVar%w18    + &
+                              THREE * AZCoeff%C(4,j,IVPOL) * iVar%w18**2   ) - &
+                            TWO * AZCoeff%C(1,j,IVPOL) * AZCoeff%C(5,j,IVPOL) * iVar%w18 * &
+                            exp_term_v * &
+                            ( AZCoeff%C(2,j,IVPOL) * iVar%w18    + &
+                              AZCoeff%C(3,j,IVPOL) * iVar%w18**2 + &
+                              AZCoeff%C(4,j,IVPOL) * iVar%w18**3   ) ) * A1v_AD(j)
+        END IF
         A1v_AD(j) = ZERO
       END IF
 

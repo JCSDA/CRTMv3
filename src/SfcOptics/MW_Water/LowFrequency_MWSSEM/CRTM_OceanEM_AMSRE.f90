@@ -62,6 +62,8 @@ MODULE CRTM_OCEANEM_AMSRE
   REAL( fp ), PARAMETER :: Salinity_Defaults = 35.0_fp
   REAL( fp ), PARAMETER :: GHz2Hz = 1.0E09_fp
   REAL( fp ), PARAMETER :: Kelvin2Celsius = 273.15_fp
+  REAL( fp ), PARAMETER :: MIN_EXP = TINY(ONE)
+  REAL( fp ), PARAMETER :: MAX_EXP_ARG = -LOG(MIN_EXP)
   REAL( fp ), SAVE :: MODEL_LIMIT(3) ! 1: Permittivity_limit(GHz), Foam_limit(m/s), Small scale limit(GHz)
   REAL( fp ), SAVE :: sdd(40,100)
   REAL( fp ), SAVE :: Coeff(8)
@@ -1006,6 +1008,7 @@ CONTAINS
 
   REAL(fp) frequency_sdd(100),wind_speed_sdd(40)
   REAL(fp) freq,x1,x2,y1,y2,sdd_intrp,satellite_zenith,salinity
+  REAL(fp) exp_arg, exp_term
   REAL(fp) csl,csl2
 
   COMPLEX( fp ) :: eps_ocean,Rvv,Rhh
@@ -1081,8 +1084,10 @@ CONTAINS
 
 
   IF ( freq > MODEL_LIMIT(3) ) THEN
-    Rv_Small = exp( - sdd_intrp * csl2)
-    Rh_Small = exp( - sdd_intrp * csl2)
+    exp_arg = sdd_intrp * csl2
+    exp_term = exp(-min(exp_arg, MAX_EXP_ARG))
+    Rv_Small = exp_term
+    Rh_Small = exp_term
   ELSE
     Rv_Small = ONE
     Rh_Small = ONE
@@ -1128,6 +1133,8 @@ CONTAINS
 
   REAL(fp) frequency_sdd(100),wind_speed_sdd(40)
   REAL(fp) freq,satellite_zenith,salinity
+  REAL(fp) exp_arg, exp_term
+  REAL(fp) exp_arg, exp_term, exp_term_tl
 
   REAL(fp) x1,x2,y1,y2,sdd_intrp
   REAL(fp) x1_tl,x2_tl,sdd_intrp_tl
@@ -1234,10 +1241,17 @@ CONTAINS
   END IF
 
   IF ( freq > MODEL_LIMIT(3) ) THEN
-    Rv_Small = exp( - sdd_intrp * csl2)
-    Rh_Small = exp( - sdd_intrp * csl2)
-    Rv_Small_tl = -csl2 * exp( - sdd_intrp * csl2) * sdd_intrp_tl
-    Rh_Small_tl = -csl2 * exp( - sdd_intrp * csl2) * sdd_intrp_tl
+    exp_arg = sdd_intrp * csl2
+    exp_term = exp(-min(exp_arg, MAX_EXP_ARG))
+    Rv_Small = exp_term
+    Rh_Small = exp_term
+    IF ( exp_arg >= MAX_EXP_ARG ) THEN
+      exp_term_tl = ZERO
+    ELSE
+      exp_term_tl = -csl2 * exp_term * sdd_intrp_tl
+    END IF
+    Rv_Small_tl = exp_term_tl
+    Rh_Small_tl = exp_term_tl
   ELSE
     Rv_Small = ONE
     Rh_Small = ONE
@@ -1414,8 +1428,10 @@ CONTAINS
 
 
   IF ( freq > MODEL_LIMIT(3) ) THEN
-    Rv_Small = exp( - sdd_intrp * csl2)
-    Rh_Small = exp( - sdd_intrp * csl2)
+    exp_arg = sdd_intrp * csl2
+    exp_term = exp(-min(exp_arg, MAX_EXP_ARG))
+    Rv_Small = exp_term
+    Rh_Small = exp_term
   ELSE
     Rv_Small = ONE
     Rh_Small = ONE
@@ -1464,8 +1480,12 @@ CONTAINS
 
 
   IF ( freq > MODEL_LIMIT(3) ) THEN  
-   sdd_intrp_ad = - csl2 * exp( - sdd_intrp * csl2) * Rh_Small_ad
-   sdd_intrp_ad = sdd_intrp_ad  -csl2  * exp( - sdd_intrp * csl2)  * Rv_Small_ad
+   IF ( exp_arg >= MAX_EXP_ARG ) THEN
+     sdd_intrp_ad = ZERO
+   ELSE
+     sdd_intrp_ad = - csl2 * exp_term * Rh_Small_ad
+     sdd_intrp_ad = sdd_intrp_ad  -csl2  * exp_term  * Rv_Small_ad
+   END IF
   ELSE
    sdd_intrp_ad = ZERO
   END IF
@@ -2200,4 +2220,3 @@ END FUNCTION Compute_Fh
 
 
 END MODULE CRTM_OCEANEM_AMSRE
-

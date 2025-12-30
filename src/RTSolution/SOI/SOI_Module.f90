@@ -47,6 +47,8 @@ MODULE SOI_Module
   ! -----------------
   ! Module parameters
   ! -----------------
+  REAL(fp), PARAMETER :: MIN_TRANSMITTANCE = TINY(ONE)
+  REAL(fp), PARAMETER :: MAX_OPTICAL_DEPTH = -LOG(MIN_TRANSMITTANCE)
 
 
 CONTAINS
@@ -98,11 +100,19 @@ CONTAINS
       REAL(fp), PARAMETER :: OPT_DEPTH_THRESH = 4.0
       REAL(fp) :: radiance_thresh
       REAL(fp), DIMENSION( MAX_N_ANGLES ) :: source
+      REAL(fp) :: optical_depth
   
       ! Precompute layer R/T matrices and thermal sources
       DO k = 1, n_Layers
         ! Precompute simple layer properties
-        RTV%e_Layer_Trans( 1 : RTV%n_Angles, k ) = EXP( -T_OD( k ) / RTV%COS_Angle( 1 : RTV%n_Angles ) )
+        DO i = 1, RTV%n_Angles
+          optical_depth = T_OD(k) / RTV%COS_Angle(i)
+          IF ( optical_depth >= MAX_OPTICAL_DEPTH ) THEN
+            RTV%e_Layer_Trans(i, k) = MIN_TRANSMITTANCE
+          ELSE
+            RTV%e_Layer_Trans(i, k) = EXP(-optical_depth)
+          END IF
+        END DO
         
         IF ( w( k ) > SCATTERING_ALBEDO_THRESHOLD ) THEN 
           IF ( w( k ) < SNGL_SCAT_ALB_THRESH .AND. T_OD( k ) < OPT_DEPTH_THRESH ) THEN 
@@ -335,12 +345,19 @@ CONTAINS
       REAL(fp), DIMENSION( RTV%n_Angles, n_Layers ) :: s_source_up_TL, s_source_down_TL
       REAL(fp), DIMENSION( RTV%n_Angles, RTV%n_Angles, n_Layers ) :: s_trans_TL, s_refl_TL
       REAL(fp), DIMENSION( RTV%n_Angles, 0:n_Layers, RTV%Number_SOI_Iter ) :: s_IterRad_UP_TL, s_IterRad_DOWN_TL
+      REAL(fp) :: optical_depth
 
 
       DO k = 1, n_Layers
 
-        e_Trans_TL( 1 : RTV%n_Angles, k ) = -T_OD_TL(k) * (EXP( -T_OD( k ) / RTV%COS_Angle( 1 : RTV%n_Angles ) ) ) / &
-                                             RTV%COS_Angle( 1 : RTV%n_Angles )
+        DO i = 1, RTV%n_Angles
+          optical_depth = T_OD(k) / RTV%COS_Angle(i)
+          IF ( optical_depth >= MAX_OPTICAL_DEPTH ) THEN
+            e_Trans_TL(i, k) = ZERO
+          ELSE
+            e_Trans_TL(i, k) = -T_OD_TL(k) * RTV%e_Layer_Trans(i, k) / RTV%COS_Angle(i)
+          END IF
+        END DO
 
         IF ( w( k ) > SCATTERING_ALBEDO_THRESHOLD ) THEN 
           IF ( w( k ) < SNGL_SCAT_ALB_THRESH .AND. T_OD( k ) < OPT_DEPTH_THRESH ) THEN 
@@ -525,6 +542,7 @@ CONTAINS
       REAL(fp), DIMENSION( RTV%n_Angles, n_Layers ) :: e_Trans_AD
       REAL(fp), DIMENSION( RTV%n_Angles, RTV%n_Angles, n_Layers ) :: s_Refl_AD
       REAL(fp), DIMENSION( RTV%n_Angles, RTV%n_Angles, n_Layers ) :: s_Trans_AD
+      REAL(fp) :: optical_depth
       
 ! Zero out all local variables
       s_IterRad_UP_AD = ZERO
@@ -678,8 +696,12 @@ CONTAINS
           END DO 
         END IF
 
-        T_OD_AD( k ) = T_OD_AD( k ) - SUM( e_Trans_AD( :, k ) * RTV%e_Layer_Trans( 1:RTV%n_Angles, k ) / &
-                             RTV%COS_Angle(1:RTV%n_Angles) )
+        DO i = 1, RTV%n_Angles
+          optical_depth = T_OD(k) / RTV%COS_Angle(i)
+          IF ( optical_depth < MAX_OPTICAL_DEPTH ) THEN
+            T_OD_AD( k ) = T_OD_AD( k ) - e_Trans_AD(i, k) * RTV%e_Layer_Trans(i, k) / RTV%COS_Angle(i)
+          END IF
+        END DO
         e_Trans_AD( 1 : RTV%n_Angles, k ) = ZERO
 
       END DO
@@ -1182,7 +1204,11 @@ CONTAINS
           print *,' error at matinv in CRTM_Doubling_layer '
           RTV%s_Layer_Trans(1:NANG,1:NANG,KL) = ZERO
           DO i = 1, NANG
-            RTV%s_Layer_Trans(i,i,KL) = exp(-optical_depth/COS_Angle(i)) 
+            IF ( optical_depth/COS_Angle(i) >= MAX_OPTICAL_DEPTH ) THEN
+              RTV%s_Layer_Trans(i,i,KL) = MIN_TRANSMITTANCE
+            ELSE
+              RTV%s_Layer_Trans(i,i,KL) = exp(-optical_depth/COS_Angle(i))
+            END IF
           ENDDO
           RTV%s_Layer_Refl(1:NANG,1:NANG,KL) = ZERO 
           RTV%s_Layer_Source_DOWN(1:NANG,KL) = ZERO 
@@ -1482,4 +1508,3 @@ CONTAINS
   END SUBROUTINE CRTM_Doubling_layer_AD
 
 END MODULE SOI_Module
-

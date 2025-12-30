@@ -74,6 +74,9 @@ MODULE CRTM_Fastem3
   CHARACTER(*), PRIVATE, PARAMETER :: MODULE_RCS_ID = &
   ! Literal constants
   REAL(fp), PARAMETER :: HUNDRED = 100.0_fp
+  REAL(fp), PARAMETER :: MIN_TRANSMITTANCE = TINY(ONE)
+  REAL(fp), PARAMETER :: MAX_TRANSMITTANCE = ONE - TINY(ONE)
+  REAL(fp), PARAMETER :: MAX_OPTICAL_DEPTH = -LOG(MIN_TRANSMITTANCE)
   
   
   ! -------------------------
@@ -428,6 +431,8 @@ CONTAINS
   REAL(fp) :: opdpsfc,freqr
   REAL(fp) :: zrough_v,zrough_h
   REAL(fp) :: zreflmod_v,zreflmod_h
+  REAL(fp) :: transmittance_safe, denom
+  REAL(fp) :: transmittance_safe, denom
   REAL(fp) :: delta,delta2
   REAL(fp) :: qdepol,emissfactor
   REAL(fp) :: emissfactor_v,emissfactor_h
@@ -669,7 +674,9 @@ CONTAINS
            If ( variance < ZERO  ) variance = ZERO
 
            !Compute surface to space optical depth
-           opdpsfc = -log(Transmittance ) / seczen
+           transmittance_safe = MIN(MAX(Transmittance, MIN_TRANSMITTANCE), MAX_TRANSMITTANCE)
+           denom = ONE - transmittance_safe
+           opdpsfc = -log(transmittance_safe) / seczen
 
            !Define nine predictors for the effective angle calculation
            zx(1) = ONE
@@ -697,10 +704,8 @@ CONTAINS
                    & + zx(9)    *   c(119+jcofm1*3) )
            End Do
 
-           zreflmod_v = (ONE-Transmittance ** zrough_v) &
-              & / (ONE-Transmittance )
-           zreflmod_h = (ONE-Transmittance ** zrough_h) &
-              & / (ONE-Transmittance ) 
+           zreflmod_v = (ONE-transmittance_safe ** zrough_v) / denom
+           zreflmod_h = (ONE-transmittance_safe ** zrough_h) / denom
            Reflectivity(1)  = zreflmod_v * (ONE-Emissivity(1))
            Reflectivity(2)  = zreflmod_h * (ONE-Emissivity(2))
            Reflectivity(3)  = ZERO
@@ -859,6 +864,7 @@ End SUBROUTINE Fastem3
   REAL(fp) :: opdpsfc_tl, freqr_tl
   REAL(fp) :: zrough_v_tl, zrough_h_tl
   REAL(fp) :: zreflmod_v_tl, zreflmod_h_tl
+  REAL(fp) :: transmittance_safe, transmittance_tl_safe, denom
   REAL(fp) :: delta_tl, delta2_tl
   REAL(fp) :: qdepol_tl, emissfactor_tl
   REAL(fp) :: emissfactor_v_tl, emissfactor_h_tl
@@ -1187,8 +1193,15 @@ End SUBROUTINE Fastem3
            Endif
 
            !Compute surface to space optical depth
-           opdpsfc    = -log(Transmittance) / seczen
-           opdpsfc_tl = -Transmittance_TL / ( Transmittance * seczen )
+           transmittance_safe = MIN(MAX(Transmittance, MIN_TRANSMITTANCE), MAX_TRANSMITTANCE)
+           IF ( transmittance_safe /= Transmittance ) THEN
+             transmittance_tl_safe = ZERO
+           ELSE
+             transmittance_tl_safe = Transmittance_TL
+           END IF
+           denom = ONE - transmittance_safe
+           opdpsfc    = -log(transmittance_safe) / seczen
+           opdpsfc_tl = -transmittance_tl_safe / ( transmittance_safe * seczen )
 
            !Define nine predictors for the effective angle calculation
            zx(1) = ONE
@@ -1245,26 +1258,26 @@ End SUBROUTINE Fastem3
                    & + zx(9)  *   c(119+jcofm1*3) )
            End Do
 
-           zreflmod_v = (ONE-Transmittance**zrough_v)/(ONE-Transmittance)
-           zreflmod_h = (ONE-Transmittance**zrough_h)/(ONE-Transmittance)
+           zreflmod_v = (ONE-transmittance_safe**zrough_v)/denom
+           zreflmod_h = (ONE-transmittance_safe**zrough_h)/denom
 
-           zreflmod_v_tl = Transmittance_tl  *&
-                 & (-zrough_v * Transmittance**(zrough_v-ONE) * &
-                 & (ONE-Transmittance)+&
-                          & ( ONE-Transmittance**zrough_v)) &
-                 & / (ONE-Transmittance)**2
+           zreflmod_v_tl = transmittance_tl_safe * &
+                 & (-zrough_v * transmittance_safe**(zrough_v-ONE) * &
+                 & (ONE-transmittance_safe)+&
+                          & ( ONE-transmittance_safe**zrough_v)) &
+                 & / denom**2
 
            zreflmod_v_tl = zreflmod_v_tl - &
-                & ( Transmittance**zrough_v * Log(Transmittance) * zrough_v_tl ) / &
-                & (ONE-Transmittance)
+                & ( transmittance_safe**zrough_v * Log(transmittance_safe) * zrough_v_tl ) / &
+                & denom
 
-           zreflmod_h_tl = Transmittance_tl  *&
-                & (-zrough_h * Transmittance**(zrough_h-1.0) * (1.0-Transmittance) +  &
-                &   ( 1.0-Transmittance**zrough_h)    ) &
-                & / (1.0-Transmittance)**2
+           zreflmod_h_tl = transmittance_tl_safe * &
+                & (-zrough_h * transmittance_safe**(zrough_h-1.0) * (1.0-transmittance_safe) +  &
+                &   ( 1.0-transmittance_safe**zrough_h)    ) &
+                & / denom**2
            zreflmod_h_tl = zreflmod_h_tl - &
-                & ( Transmittance**zrough_h * Log(Transmittance) * zrough_h_tl ) / &
-                & (1.0-Transmittance)
+                & ( transmittance_safe**zrough_h * Log(transmittance_safe) * zrough_h_tl ) / &
+                & denom
 
            Reflectivity_tl(1)  = zreflmod_v_tl * (1.0-Emissivity(1)) - zreflmod_v * Emissivity_TL(1)
            Reflectivity_tl(2)  = zreflmod_h_tl * (1.0-Emissivity(2)) - zreflmod_h * Emissivity_TL(2)
@@ -1620,7 +1633,9 @@ End SUBROUTINE Fastem3
         Endif
 
         !Compute surface to space optical depth
-        opdpsfc    = -log(Transmittance) / seczen
+        transmittance_safe = MIN(MAX(Transmittance, MIN_TRANSMITTANCE), MAX_TRANSMITTANCE)
+        denom = ONE - transmittance_safe
+        opdpsfc    = -log(transmittance_safe) / seczen
 
         !Define nine predictors for the effective angle calculation
         zx(1) = ONE
@@ -1648,8 +1663,8 @@ End SUBROUTINE Fastem3
                 & + zx(8)    *   c(118+jcofm1*3) &
                 & + zx(9)    *   c(119+jcofm1*3) )
         End Do
-        zreflmod_v = (ONE-Transmittance**zrough_v) / (ONE-Transmittance)
-        zreflmod_h = (ONE-Transmittance**zrough_h) / (ONE-Transmittance)
+        zreflmod_v = (ONE-transmittance_safe**zrough_v) / denom
+        zreflmod_h = (ONE-transmittance_safe**zrough_h) / denom
 
      End If
 
@@ -1668,24 +1683,24 @@ End SUBROUTINE Fastem3
         emissstokes_ad(2) = emissstokes_ad(2) - reflectstokes_ad(2) * zreflmod_h
         emissstokes_ad(1) = emissstokes_ad(1) - reflectstokes_ad(1) * zreflmod_v
         zrough_h_ad = - zreflmod_h_ad * &
-              & ( Transmittance**zrough_h * Log(Transmittance) ) / &
-              & (ONE-Transmittance)
+              & ( transmittance_safe**zrough_h * Log(transmittance_safe) ) / &
+              & denom
 
         Transmittance_AD = Transmittance_AD + zreflmod_h_ad *&
-          & (-zrough_h * Transmittance**(zrough_h-ONE) * &
-                        & (ONE-Transmittance) +  &
-          &     ( ONE-TRansmittance**zrough_h)          ) &
-          & / (ONE-Transmittance)**2
+          & (-zrough_h * transmittance_safe**(zrough_h-ONE) * &
+                        & (ONE-transmittance_safe) +  &
+          &     ( ONE-transmittance_safe**zrough_h)          ) &
+          & / denom**2
 
         zrough_v_ad = -zreflmod_v_ad * &
-          & ( Transmittance**zrough_v * Log(Transmittance) ) / &
-          & (ONE-Transmittance)
+          & ( transmittance_safe**zrough_v * Log(transmittance_safe) ) / &
+          & denom
 
         Transmittance_AD = Transmittance_AD + zreflmod_v_ad *&
-          & (-zrough_v * Transmittance**(zrough_v-ONE) * &
-                  & (ONE-Transmittance) +  &
-          &    ( ONE-Transmittance**zrough_v)         ) &
-          & / (ONE-Transmittance)**2
+          & (-zrough_v * transmittance_safe**(zrough_v-ONE) * &
+                  & (ONE-transmittance_safe) +  &
+          &    ( ONE-transmittance_safe**zrough_v)         ) &
+          & / denom**2
 
         zx_ad(:) = ZERO
         Do jcof = 1,7

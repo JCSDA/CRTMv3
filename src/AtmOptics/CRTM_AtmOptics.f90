@@ -72,6 +72,8 @@ MODULE CRTM_AtmOptics
   ! ---------------
   ! Message string length
   INTEGER, PARAMETER :: ML = 256
+  REAL(fp), PARAMETER :: MIN_TRANSMITTANCE = TINY(ONE)
+  REAL(fp), PARAMETER :: MAX_OPTICAL_DEPTH = -LOG(MIN_TRANSMITTANCE)
 
 
 CONTAINS
@@ -211,8 +213,14 @@ CONTAINS
     TYPE(CRTM_AtmOptics_type), INTENT(IN)  :: atmoptics
     REAL(fp)                 , INTENT(OUT) :: transmittance
     INTEGER :: k
+    REAL(fp) :: optical_depth
     k = atmoptics%n_layers
-    transmittance = EXP(-ONE*SUM(atmoptics%optical_depth(1:k)))
+    optical_depth = SUM(atmoptics%optical_depth(1:k))
+    IF ( optical_depth >= MAX_OPTICAL_DEPTH ) THEN
+      transmittance = MIN_TRANSMITTANCE
+    ELSE
+      transmittance = EXP(-optical_depth)
+    END IF
   END SUBROUTINE CRTM_Compute_Transmittance
 
 !--------------------------------------------------------------------------------
@@ -265,10 +273,16 @@ CONTAINS
     ! Local variables
     INTEGER :: k
     REAL(fp) :: transmittance
+    REAL(fp) :: optical_depth
 
     k = atmoptics%n_layers
-    transmittance    = EXP(-ONE*SUM(atmoptics%optical_depth(1:k)))
-    transmittance_TL = -transmittance * SUM(atmoptics_TL%optical_depth(1:k))
+    optical_depth = SUM(atmoptics%optical_depth(1:k))
+    IF ( optical_depth >= MAX_OPTICAL_DEPTH ) THEN
+      transmittance_TL = ZERO
+    ELSE
+      transmittance    = EXP(-optical_depth)
+      transmittance_TL = -transmittance * SUM(atmoptics_TL%optical_depth(1:k))
+    END IF
   END SUBROUTINE CRTM_Compute_Transmittance_TL
 
 
@@ -322,9 +336,15 @@ CONTAINS
     ! Local variables
     INTEGER :: k
     REAL(fp) :: transmittance, t_delstar_t
+    REAL(fp) :: optical_depth
 
     k = atmoptics%n_layers
-    transmittance = EXP(-ONE*SUM(atmoptics%optical_depth(1:k)))
+    optical_depth = SUM(atmoptics%optical_depth(1:k))
+    IF ( optical_depth >= MAX_OPTICAL_DEPTH ) THEN
+      transmittance_AD = ZERO
+      RETURN
+    END IF
+    transmittance = EXP(-optical_depth)
     t_delstar_t   = transmittance*transmittance_AD
     DO k = 1, atmoptics%n_layers
       atmoptics_AD%optical_depth(k) = atmoptics_AD%optical_depth(k) - t_delstar_t

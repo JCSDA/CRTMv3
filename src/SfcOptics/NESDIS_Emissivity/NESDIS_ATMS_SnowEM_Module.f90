@@ -91,6 +91,7 @@ MODULE NESDIS_ATMS_SnowEM_Module
 
   PRIVATE
   PUBLIC  :: NESDIS_ATMS_SNOWEM
+  REAL(fp), PARAMETER :: MIN_LOG_ARG = TINY(1.0_fp)
 
 
 CONTAINS
@@ -543,7 +544,7 @@ CONTAINS
    !*** adjustment from the library values
      emw=em(windex,snow_type)
      X=1.0_fp/emw
-     Y((/1,2,4,5/)) = log(Tb((/1,2,4,5/))/(Ts*emw((/1,2,4,5/))))
+     Y((/1,2,4,5/)) = log(MAX(Tb((/1,2,4,5/))/(Ts*emw((/1,2,4,5/))), MIN_LOG_ARG))
      IF(frequency > 100.0_fp) THEN
        XX=DOT_PRODUCT(X((/1,2,4,5/)),X((/1,2,4,5/)))
        XY=DOT_PRODUCT(X((/1,2,4,5/)),Y((/1,2,4,5/)))

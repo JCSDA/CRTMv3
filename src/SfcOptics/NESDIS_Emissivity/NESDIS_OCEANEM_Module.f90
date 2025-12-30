@@ -33,6 +33,8 @@ MODULE NESDIS_OCEANEM_Module
   REAL(fp), PARAMETER :: SST_max = 330.0_fp
   REAL(fp), PARAMETER :: wind_min = 0.0_fp
   REAL(fp), PARAMETER :: wind_max = 100.0_fp
+  REAL(fp), PARAMETER :: MIN_EXP = TINY(one)
+  REAL(fp), PARAMETER :: MAX_EXP_ARG = -LOG(MIN_EXP)
 
 
 CONTAINS
@@ -205,6 +207,7 @@ CONTAINS
         real(fp) :: Emissivity_H,Emissivity_V,EH_dSST, EH_dSSW, EV_dSST, EV_dSSW
 
         real(fp) :: f,foam,g,tr,rfoam,ref,rclear
+        real(fp) :: exp_arg, exp_term
 
         complex mu, eps, aid1,aid2,aid3,cang,rh,rv
 
@@ -247,7 +250,9 @@ CONTAINS
 
         else
 
-           foam=0.006_fp*(1.0_fp-exp(-f*1.0e-9/7.5_fp))*(wind-7.0_fp)
+           exp_arg = f*1.0e-9/7.5_fp
+           exp_term = exp(-min(exp_arg, MAX_EXP_ARG))
+           foam=0.006_fp*(1.0_fp-exp_term)*(wind-7.0_fp)
 
         endif
 
@@ -327,10 +332,10 @@ real function EPSP (t1,s,f)
   end  function EPSP
 
 
- real function EPSPP (t1,s,f)
+real function EPSPP (t1,s,f)
 
 
-  real(fp) s,f,t1,t,t2,eswi,eo,eswo,a,b,d,esw,tswo,tsw,sswo,fi,ssw
+  real(fp) s,f,t1,t,t2,eswi,eo,eswo,a,b,d,esw,tswo,tsw,sswo,fi,ssw,exp_term
 
 
   t=t1-273.0_fp
@@ -359,7 +364,8 @@ real function EPSP (t1,s,f)
 
   fi = d*(2.033e-2+1.266e-4*d+2.464e-6*d**2- s*(1.849e-5-2.551e-7*d+2.551e-8*d*d))
 
-  ssw = sswo*exp(-fi)
+  exp_term = exp(-min(fi, MAX_EXP_ARG))
+  ssw = sswo*exp_term
 
   EPSPP = tsw*f*(esw-eswi)/(1.0_fp+(tsw*f)**2)
 
@@ -425,9 +431,11 @@ real function EPSP (t1,s,f)
            dfoam_dw=zero
         else
 
-           foam=0.006_fp*(one-exp(-f*1.0e-9/7.5_fp))*(wind-7.0_fp)
+           exp_arg = f*1.0e-9/7.5_fp
+           exp_term = exp(-min(exp_arg, MAX_EXP_ARG))
+           foam=0.006_fp*(one-exp_term)*(wind-7.0_fp)
 
-           dfoam_dw=0.006_fp*(one-exp(-f*1.0e-9/7.5_fp))
+           dfoam_dw=0.006_fp*(one-exp_term)
        endif
 
 
@@ -555,7 +563,7 @@ real function EPSP (t1,s,f)
       real function depspp_dt (t1,s,f)
 
 
-      real(fp) ::  s,f,t1,t,t2,eswi,eo,eswo,a,b,d,esw,tswo,tsw,sswo,fi,ssw,epspp
+      real(fp) ::  s,f,t1,t,t2,eswi,eo,eswo,a,b,d,esw,tswo,tsw,sswo,fi,ssw,epspp,exp_term
 
       real(fp) ::  deswo_dt,da_dt,db_dt,desw_dt,dtswo_dt,dtsw_dt,dfi_dt,dssw_dt,aid
 
@@ -602,9 +610,10 @@ real function EPSP (t1,s,f)
 
                - d*(1.266e-4+2.464e-6*d- s*(-2.551e-7+2.0*2.551e-8*d))
 
-      ssw = sswo*exp(-fi)
+      exp_term = exp(-min(fi, MAX_EXP_ARG))
+      ssw = sswo*exp_term
 
-      dssw_dt = - sswo*exp(-fi)*dfi_dt
+      dssw_dt = - sswo*exp_term*dfi_dt
 
 
       epspp = tsw*f*(esw-eswi)/(1.0_fp+(tsw*f)**2)
