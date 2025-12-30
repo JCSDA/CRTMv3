@@ -802,7 +802,7 @@ CONTAINS
                   WRITE( Message,'("Difference between Obs pressure level (",es22.15,&
                                    &"hPa) and closest input profile level (",es22.15,&
                                    &"hPa) is larger than recommended (",f4.1,"hPa) for profile #",i0)') &
-                                   Opt%Obs_4_downward_P, Atm%Level_Pressure(RTV%Obs_4_downward%idx), &
+                                   Opt%Obs_4_downward_P, Atm%Level_Pressure(RTV(nt)%Obs_4_downward%idx), &
                                    AIRCRAFT_PRESSURE_THRESHOLD, m
                   CALL Display_Message( ROUTINE_NAME, Message, WARNING )
                END IF
