@@ -33,6 +33,7 @@ MODULE CRTM_Adjoint_Module
                                         MAX_N_AZIMUTH_FOURIER  , &
                                         MAX_SOURCE_ZENITH_ANGLE, &
                                         MAX_N_STREAMS          , &
+                                        AIRCRAFT_PRESSURE_THRESHOLD, &
                                         MIN_COVERAGE_THRESHOLD , &
                                         SCATTERING_ALBEDO_THRESHOLD
   USE CRTM_SpcCoeff,              ONLY: SC, &
@@ -400,8 +401,7 @@ CONTAINS
     ! ------------
     ! PROFILE LOOPS
     ! ------------
-
-!JR First loop just checks validity of Atmosphere(m) contents
+!JR Loop handles per-profile solution
 !$OMP PARALLEL DO PRIVATE (m, Opt, AncillaryInput) SCHEDULE (runtime)
     Profile_Loop2: DO m = 1, n_Profiles
       ! Check the optional Options structure argument
@@ -448,6 +448,7 @@ CONTAINS
     ! and Post_Process_RTSolution_K also access CRTM_K_Matrix data, but multi-level function
     ! "contain" clauses cause compiler errors so arguments to these functions were needed.
     FUNCTION profile_solution (m, Opt, AncillaryInput) RESULT( Error_Status )
+      USE ADA_Module, ONLY: CRTM_SurfRef
 !
       INTEGER, INTENT(in) :: m               ! profile index
       TYPE(CRTM_Options_type), INTENT(IN) :: Opt
@@ -533,6 +534,7 @@ CONTAINS
       CALL CRTM_Surface_NonVariableCopy( Surface(m), Surface_AD(m) )
 
       IF( Opt%n_Stokes > 0 ) RTV%n_Stokes = Opt%n_Stokes
+      IF( Opt%n_Stokes > 0 ) RTV_Clear%n_Stokes = Opt%n_Stokes
       AtmOptics%n_Stokes = RTV%n_Stokes
       ! ...Assign the option specific SfcOptics input
       SfcOptics%n_Stokes = RTV%n_Stokes
@@ -617,6 +619,17 @@ CONTAINS
                Atm%n_Added_Layers, Atm%n_Layers, MAX_N_LAYERS, m
         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
         RETURN
+      END IF
+      ! Fix for cloud_Fraction < MIN_COVERAGE_THRESHOLD
+      IF ( Atm%n_Clouds > 0 ) THEN
+        !** clear clouds where cloud_fraction < threshold
+        DO nc = 1, Atm%n_Clouds
+          WHERE (Atm%Cloud_Fraction(:) < MIN_COVERAGE_THRESHOLD)
+            Atm%Cloud_Fraction(:) = ZERO
+            Atm%Cloud(nc)%Water_Content(:)    = ZERO
+            Atm%Cloud(nc)%Effective_Radius(:) = ZERO
+          END WHERE
+        END DO
       END IF
       ! Calculate cloud water density
       CALL Calculate_Cloud_Water_Density(Atm)
@@ -775,6 +788,41 @@ CONTAINS
         compute_antenna_correction = ( Opt%Use_Antenna_Correction               .AND. &
                                        ACCoeff_Associated( SC(SensorIndex)%AC ) .AND. &
                                        iFOV /= 0 )
+
+        ! Process aircraft pressure altitude
+        IF ( Opt%Aircraft_Pressure > ZERO ) THEN
+          RTV%aircraft%rt = .TRUE.
+          RTV%aircraft%idx = CRTM_Get_PressureLevelIdx(Atm, Opt%Aircraft_Pressure)
+          ! ...Issue warning if profile level is TOO different from flight level
+          IF ( ABS(Atm%Level_Pressure(RTV%aircraft%idx)-Opt%Aircraft_Pressure) > AIRCRAFT_PRESSURE_THRESHOLD ) THEN
+            WRITE( Message,'("Difference between aircraft pressure level (",es22.15,&
+                 &"hPa) and closest input profile level (",es22.15,&
+                 &"hPa) is larger than recommended (",f4.1,"hPa) for profile #",i0)') &
+                 Opt%Aircraft_Pressure, Atm%Level_Pressure(RTV%aircraft%idx), &
+                 AIRCRAFT_PRESSURE_THRESHOLD, m
+            CALL Display_Message( ROUTINE_NAME, Message, WARNING )
+          END IF
+        ELSE
+          RTV%aircraft%rt = .FALSE.
+        END IF
+
+        ! Process observing downward radiance, Obs_4_downward_P = ZERO means at surface
+        !  Obs_4_downward_P > ZERO, sensor at the pressure
+        IF ( Opt%Obs_4_downward_P > ZERO ) THEN
+          RTV%Obs_4_downward%rt = .TRUE.
+          RTV%Obs_4_downward%idx = CRTM_Get_PressureLevelIdx(Atm, Opt%Obs_4_downward_P)
+          ! ...Issue warning if profile level is TOO different from flight level
+          IF ( ABS(Atm%Level_Pressure(RTV%Obs_4_downward%idx)-Opt%Obs_4_downward_P) > AIRCRAFT_PRESSURE_THRESHOLD ) THEN
+            WRITE( Message,'("Difference between Obs pressure level (",es22.15,&
+                             &"hPa) and closest input profile level (",es22.15,&
+                             &"hPa) is larger than recommended (",f4.1,"hPa) for profile #",i0)') &
+                             Opt%Obs_4_downward_P, Atm%Level_Pressure(RTV%Obs_4_downward%idx), &
+                             AIRCRAFT_PRESSURE_THRESHOLD, m
+            CALL Display_Message( ROUTINE_NAME, Message, WARNING )
+          END IF
+        ELSE
+          RTV%Obs_4_downward%rt = .FALSE.
+        END IF
 
 
         ! Allocate the AtmAbsorption predictor structures
@@ -1109,6 +1157,15 @@ CONTAINS
                 RETURN
               END IF
 
+              IF( Options_Present ) THEN
+                IF(opt%Derive_Surface_Refl.AND.RTV%mth_Azi==0.AND.RTV%COS_SUN>ZERO) THEN
+                  CALL CRTM_SurfRef(Atm%n_Layers,SUM( AtmOptics%Optical_Depth(:)), & ! Input  layer optical depth
+                       SfcOptics%Direct_Reflectivity(SfcOptics%Index_Sat_Ang,1), &
+                       SfcOptics%Index_Sat_Ang, RTSolution(ln,m)%Surface_Planck_Radiance, &
+                       RTSolution(ln,m)%Up_Radiance, RTSolution(ln,m)%Down_Radiance,RTV, Error_Status)
+                END IF
+              END IF
+
               ! Repeat clear sky for fractionally cloudy atmospheres
               IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV%mth_Azi==0 ) THEN
                 RTV_Clear%mth_Azi = RTV%mth_Azi
@@ -1298,6 +1355,12 @@ CONTAINS
             END IF
          END IF
        END IF
+      END IF
+
+      !** output Tb_clear in the case of n_clouds = 0  (note this is NOT aerosol cleared)
+      IF (Atm%n_Clouds == 0 .OR. CloudCover%Total_Cloud_Cover < MIN_COVERAGE_THRESHOLD) THEN
+        RTSolution(ln,m)%Tb_clear = RTSolution(ln,m)%Brightness_Temperature
+        RTSolution(ln,m)%R_clear  = RTSolution(ln,m)%Radiance
       END IF
 
           ! ###################################################

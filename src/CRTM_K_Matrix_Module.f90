@@ -31,6 +31,7 @@ MODULE CRTM_K_Matrix_Module
                                         MAX_N_AZIMUTH_FOURIER  , &
                                         MAX_SOURCE_ZENITH_ANGLE, &
                                         MAX_N_STREAMS          , &
+                                        AIRCRAFT_PRESSURE_THRESHOLD, &
                                         MIN_COVERAGE_THRESHOLD , &
                                         SCATTERING_ALBEDO_THRESHOLD
   USE CRTM_SpcCoeff,              ONLY: SC, &
@@ -541,6 +542,7 @@ CONTAINS
     ! and Post_Process_RTSolution_K also access CRTM_K_Matrix data, but multi-level function
     ! "contain" clauses cause compiler errors so arguments to these functions were needed.
     FUNCTION profile_solution (m, Opt, AncillaryInput) RESULT( Error_Status )
+      USE ADA_Module, ONLY: CRTM_SurfRef
       INTEGER, INTENT(in) :: m               ! profile index
       TYPE(CRTM_Options_type), INTENT(IN) :: Opt
       TYPE(CRTM_AncillaryInput_type), INTENT(IN) :: AncillaryInput
@@ -631,6 +633,7 @@ CONTAINS
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
       DO nt = 1, n_channel_threads
         SfcOptics(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
+        SfcOptics_K(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
       END DO
 !$OMP END PARALLEL DO
 
@@ -759,6 +762,7 @@ CONTAINS
           AtmOptics(nt)%depolarization = Opt%depolarization
           AtmOptics_K(nt)%depolarization = Opt%depolarization
           IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
+          IF( Opt%n_Stokes > 0 ) RTV_Clear(nt)%n_Stokes = Opt%n_Stokes
           AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
           AtmOptics_K(nt)%n_Stokes = RTV(nt)%n_Stokes
         END IF
@@ -797,6 +801,14 @@ CONTAINS
       END DO ! Channel threads
 !$OMP END PARALLEL DO
       IF ( Error_Status == FAILURE ) RETURN
+
+      ! Ensure SfcOptics n_Stokes matches any option overrides
+!$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
+      DO nt = 1, n_channel_threads
+        SfcOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
+        SfcOptics_K(nt)%n_Stokes = RTV(nt)%n_Stokes
+      END DO
+!$OMP END PARALLEL DO
 
       ! Determine the type of cloud coverage
       cloud_coverage_flag = CRTM_Atmosphere_Coverage( atm )
@@ -845,6 +857,7 @@ CONTAINS
           END IF
           ! ...Copy over surface optics input
           SfcOptics_Clear(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
+          SfcOptics_Clear_K(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
           SfcOptics_Clear(nt)%n_Stokes = RTV(nt)%n_Stokes
           SfcOptics_Clear_K(nt)%n_Stokes = RTV(nt)%n_Stokes
 
@@ -888,6 +901,41 @@ CONTAINS
 
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
         DO nt = 1, n_channel_threads
+
+          ! Process aircraft pressure altitude
+          IF ( Opt%Aircraft_Pressure > ZERO ) THEN
+            RTV(nt)%aircraft%rt = .TRUE.
+            RTV(nt)%aircraft%idx = CRTM_Get_PressureLevelIdx(Atm, Opt%Aircraft_Pressure)
+            ! ...Issue warning if profile level is TOO different from flight level
+            IF ( ABS(Atm%Level_Pressure(RTV(nt)%aircraft%idx)-Opt%Aircraft_Pressure) > AIRCRAFT_PRESSURE_THRESHOLD ) THEN
+              WRITE( Message,'("Difference between aircraft pressure level (",es22.15,&
+                   &"hPa) and closest input profile level (",es22.15,&
+                   &"hPa) is larger than recommended (",f4.1,"hPa) for profile #",i0)') &
+                   Opt%Aircraft_Pressure, Atm%Level_Pressure(RTV(nt)%aircraft%idx), &
+                   AIRCRAFT_PRESSURE_THRESHOLD, m
+              CALL Display_Message( ROUTINE_NAME, Message, WARNING )
+            END IF
+          ELSE
+            RTV(nt)%aircraft%rt = .FALSE.
+          END IF
+
+          ! Process observing downward radiance, Obs_4_downward_P = ZERO means at surface
+          !  Obs_4_downward_P > ZERO, sensor at the pressure
+          IF ( Opt%Obs_4_downward_P > ZERO ) THEN
+            RTV(nt)%Obs_4_downward%rt = .TRUE.
+            RTV(nt)%Obs_4_downward%idx = CRTM_Get_PressureLevelIdx(Atm, Opt%Obs_4_downward_P)
+            ! ...Issue warning if profile level is TOO different from flight level
+            IF ( ABS(Atm%Level_Pressure(RTV(nt)%Obs_4_downward%idx)-Opt%Obs_4_downward_P) > AIRCRAFT_PRESSURE_THRESHOLD ) THEN
+              WRITE( Message,'("Difference between Obs pressure level (",es22.15,&
+                               &"hPa) and closest input profile level (",es22.15,&
+                               &"hPa) is larger than recommended (",f4.1,"hPa) for profile #",i0)') &
+                               Opt%Obs_4_downward_P, Atm%Level_Pressure(RTV(nt)%Obs_4_downward%idx), &
+                               AIRCRAFT_PRESSURE_THRESHOLD, m
+              CALL Display_Message( ROUTINE_NAME, Message, WARNING )
+            END IF
+          ELSE
+            RTV(nt)%Obs_4_downward%rt = .FALSE.
+          END IF
 
 
           ! Allocate the AtmAbsorption predictor structures
@@ -1301,6 +1349,15 @@ CONTAINS
                 CYCLE Thread_Loop
               END IF
 
+              IF( Options_Present ) THEN
+                IF(opt%Derive_Surface_Refl.AND.RTV(nt)%mth_Azi==0.AND.RTV(nt)%COS_SUN>ZERO) THEN
+                  CALL CRTM_SurfRef(Atm%n_Layers,SUM( AtmOptics(nt)%Optical_Depth(:)), & ! Input  layer optical depth
+                       SfcOptics(nt)%Direct_Reflectivity(SfcOptics(nt)%Index_Sat_Ang,1), &
+                       SfcOptics(nt)%Index_Sat_Ang, RTSolution(ln,m)%Surface_Planck_Radiance, &
+                       RTSolution(ln,m)%Up_Radiance, RTSolution(ln,m)%Down_Radiance,RTV(nt), Error_Status)
+                END IF
+              END IF
+
 
               ! Repeat clear sky for fractionally cloudy atmospheres
               IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV(nt)%mth_Azi==0 ) THEN
@@ -1487,6 +1544,12 @@ CONTAINS
                   END IF
                 END IF
               END IF
+            END IF
+
+            !** output Tb_clear in the case of n_clouds = 0  (note this is NOT aerosol cleared)
+            IF (Atm%n_Clouds == 0 .OR. CloudCover%Total_Cloud_Cover < MIN_COVERAGE_THRESHOLD) THEN
+              RTSolution(ln,m)%Tb_clear = RTSolution(ln,m)%Brightness_Temperature
+              RTSolution(ln,m)%R_clear  = RTSolution(ln,m)%Radiance
             END IF
 
             ! ###################################################

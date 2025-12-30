@@ -551,6 +551,7 @@ CONTAINS
       IF ( Options_Present ) THEN
       ! ...Assign the option specific SfcOptics input
          IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
+         IF( Opt%n_Stokes > 0 ) RTV_Clear(nt)%n_Stokes = Opt%n_Stokes
          RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
       END IF
 
@@ -874,6 +875,41 @@ CONTAINS
                                          AncillaryInput, &  ! Input
                                          Predictor_TL(nt)  , &  ! Output
                                          PVar(nt)            )  ! Internal variable input
+
+        ! Process aircraft pressure altitude
+        IF ( Opt%Aircraft_Pressure > ZERO ) THEN
+          RTV(nt)%aircraft%rt = .TRUE.
+          RTV(nt)%aircraft%idx = CRTM_Get_PressureLevelIdx(Atm, Opt%Aircraft_Pressure)
+          ! ...Issue warning if profile level is TOO different from flight level
+          IF ( ABS(Atm%Level_Pressure(RTV(nt)%aircraft%idx)-Opt%Aircraft_Pressure) > AIRCRAFT_PRESSURE_THRESHOLD ) THEN
+            WRITE( Message,'("Difference between aircraft pressure level (",es22.15,&
+                 &"hPa) and closest input profile level (",es22.15,&
+                 &"hPa) is larger than recommended (",f4.1,"hPa) for profile #",i0)') &
+                 Opt%Aircraft_Pressure, Atm%Level_Pressure(RTV(nt)%aircraft%idx), &
+                 AIRCRAFT_PRESSURE_THRESHOLD, m
+            CALL Display_Message( ROUTINE_NAME, Message, WARNING )
+          END IF
+        ELSE
+          RTV(nt)%aircraft%rt = .FALSE.
+        END IF
+
+        ! Process observing downward radiance, Obs_4_downward_P = ZERO means at surface
+        !  Obs_4_downward_P > ZERO, sensor at the pressure
+        IF ( Opt%Obs_4_downward_P > ZERO ) THEN
+          RTV(nt)%Obs_4_downward%rt = .TRUE.
+          RTV(nt)%Obs_4_downward%idx = CRTM_Get_PressureLevelIdx(Atm, Opt%Obs_4_downward_P)
+          ! ...Issue warning if profile level is TOO different from flight level
+          IF ( ABS(Atm%Level_Pressure(RTV(nt)%Obs_4_downward%idx)-Opt%Obs_4_downward_P) > AIRCRAFT_PRESSURE_THRESHOLD ) THEN
+            WRITE( Message,'("Difference between Obs pressure level (",es22.15,&
+                             &"hPa) and closest input profile level (",es22.15,&
+                             &"hPa) is larger than recommended (",f4.1,"hPa) for profile #",i0)') &
+                             Opt%Obs_4_downward_P, Atm%Level_Pressure(RTV(nt)%Obs_4_downward%idx), &
+                             AIRCRAFT_PRESSURE_THRESHOLD, m
+            CALL Display_Message( ROUTINE_NAME, Message, WARNING )
+          END IF
+        ELSE
+          RTV(nt)%Obs_4_downward%rt = .FALSE.
+        END IF
 
 
           ! Compute predictors for AtmAbsorption calcs
@@ -1226,6 +1262,15 @@ CONTAINS
               CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             END IF
 
+            IF( Options_Present ) THEN
+              IF(opt%Derive_Surface_Refl.AND.RTV(nt)%mth_Azi==0.AND.RTV(nt)%COS_SUN>ZERO) THEN
+                CALL CRTM_SurfRef(Atm%n_Layers,SUM( AtmOptics(nt)%Optical_Depth(:)), & ! Input  layer optical depth
+                     SfcOptics(nt)%Direct_Reflectivity(SfcOptics(nt)%Index_Sat_Ang,1), &
+                     SfcOptics(nt)%Index_Sat_Ang, RTSolution(ln,m)%Surface_Planck_Radiance, &
+                     RTSolution(ln,m)%Up_Radiance, RTSolution(ln,m)%Down_Radiance,RTV(nt), Error_Status)
+              END IF
+            END IF
+
 
             ! ...Tangent-linear model
             Error_Status = CRTM_Compute_RTSolution_TL( &
@@ -1345,6 +1390,14 @@ CONTAINS
             RTSolution(ln,m)%Tb_Clear    = RTSolution_Clear(nt)%Brightness_Temperature
             RTSolution_TL(ln,m)%R_Clear  = RTSolution_Clear_TL(nt)%Radiance
             RTSolution_TL(ln,m)%Tb_Clear = RTSolution_Clear_TL(nt)%Brightness_Temperature
+          END IF
+
+          !** output Tb_clear in the case of n_clouds = 0  (note this is NOT aerosol cleared)
+          IF (Atm%n_Clouds == 0 .OR. CloudCover%Total_Cloud_Cover < MIN_COVERAGE_THRESHOLD) THEN
+            RTSolution(ln,m)%Tb_clear = RTSolution(ln,m)%Brightness_Temperature
+            RTSolution(ln,m)%R_clear  = RTSolution(ln,m)%Radiance
+            RTSolution_TL(ln,m)%Tb_clear = RTSolution_TL(ln,m)%Brightness_Temperature
+            RTSolution_TL(ln,m)%R_clear  = RTSolution_TL(ln,m)%Radiance
           END IF
 
           ! Calculate reflectivity for active instruments

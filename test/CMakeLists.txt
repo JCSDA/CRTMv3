@@ -219,14 +219,14 @@ list( APPEND Aircraft_Sensor_Ids
 )
 
 list( APPEND Downwelling_Radiance_Sensor_Ids
-        atms_n21
-        cris-fsr_n21
-        v.abi_g18
-        atms_npp
-        cris399_npp
-        v.abi_gr
-        abi_g18
-        modis_aqua
+#        atms_n21
+#        cris-fsr_n21
+#        v.abi_g18
+#        atms_npp
+#        cris399_npp
+#        v.abi_gr
+#        abi_g18
+#        modis_aqua
 )
 
 
