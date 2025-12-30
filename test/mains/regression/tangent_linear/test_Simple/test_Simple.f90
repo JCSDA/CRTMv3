@@ -53,6 +53,7 @@ PROGRAM test_Simple
   INTEGER :: Allocate_Status
   INTEGER :: n_Channels
   INTEGER :: l, m
+  INTEGER :: obs_level
   ! Declarations for RTSolution comparison
   INTEGER :: n_l, n_m
   CHARACTER(256) :: rts_File
@@ -67,6 +68,7 @@ PROGRAM test_Simple
   TYPE(CRTM_Atmosphere_type)              :: Atm(N_PROFILES), Atm_TL(N_PROFILES)
   TYPE(CRTM_Surface_type)                 :: Sfc(N_PROFILES), Sfc_TL(N_PROFILES)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution(:,:), RTSolution_TL(:,:)
+  TYPE(CRTM_Options_type)                :: Options(N_PROFILES)
   ! ============================================================================
 
   !First, make sure the right number of inputs have been provided
@@ -159,6 +161,10 @@ PROGRAM test_Simple
   ! ------------------------------------
   CALL Load_Atm_Data()
   CALL Load_Sfc_Data()
+  obs_level = N_LAYERS / 2
+  DO m = 1, N_PROFILES
+    Options(m)%Obs_4_downward_P = Atm(m)%Level_Pressure(obs_level)
+  END DO
 
 
   ! 4b. GeometryInfo input
@@ -206,7 +212,8 @@ PROGRAM test_Simple
                                       Geometry     , &
                                       ChannelInfo  , &
                                       RTSolution   , &
-                                      RTSolution_TL  )
+                                      RTSolution_TL , &
+                                      Options=Options )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error in CRTM Tangent-Linear Model'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
