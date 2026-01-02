@@ -311,6 +311,12 @@ add_test(NAME test_Unit_Aerosol_Bypass_k_matrix
          COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass_k_matrix>)
 set_tests_properties(test_Unit_Aerosol_Bypass_k_matrix  PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
+add_executable(test_Options_Overrides mains/unit/Unit_Test/test_Options_Overrides.f90)
+target_link_libraries(test_Options_Overrides PRIVATE crtm)
+add_test(NAME test_Options_Overrides
+         COMMAND $<TARGET_FILE:test_Options_Overrides>)
+set_tests_properties(test_Options_Overrides  PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
 #SpcCoeff utilities
 list (APPEND SCoeff_Utils
   SpcCoeff_Edit

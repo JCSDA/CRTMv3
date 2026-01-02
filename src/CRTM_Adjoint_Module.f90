@@ -328,7 +328,7 @@ CONTAINS
     ! Local variables
     CHARACTER(256) :: Message
     LOGICAL :: Options_Present
-    INTEGER :: n_Sensors, nc
+    INTEGER :: n_Sensors
     INTEGER :: n_Channels
     INTEGER :: m, n_Profiles
     ! Local ancillary input structure
@@ -464,7 +464,7 @@ CONTAINS
       INTEGER :: n, l    ! sensor index, channel index
       INTEGER :: SensorIndex
       INTEGER :: ChannelIndex
-      INTEGER :: ln, ks
+      INTEGER :: ln, ks, nc
       INTEGER :: n_Full_Streams, mth_Azi
       INTEGER :: cloud_coverage_flag
       REAL(fp) :: Source_ZA
@@ -475,6 +475,7 @@ CONTAINS
 
       ! Local atmosphere structure for extra layering
       TYPE(CRTM_Atmosphere_type) :: Atm, Atm_AD
+      TYPE(CRTM_Atmosphere_type) :: Atm_Input
 
       ! Clear sky structures
       TYPE(CRTM_Atmosphere_type) :: Atm_Clear       , Atm_Clear_AD
@@ -501,7 +502,20 @@ CONTAINS
 
       Error_Status = SUCCESS
 
-    ! Allocate the profile independent surface optics local structure
+      Atm_Input = Atmosphere(m)
+      ! Fix for cloud_Fraction < MIN_COVERAGE_THRESHOLD
+      IF ( Atm_Input%n_Clouds > 0 ) THEN
+        !** clear clouds where cloud_fraction < threshold
+        DO nc = 1, Atm_Input%n_Clouds
+          WHERE (Atm_Input%Cloud_Fraction(:) < MIN_COVERAGE_THRESHOLD)
+            Atm_Input%Cloud_Fraction(:) = ZERO
+            Atm_Input%Cloud(nc)%Water_Content(:)    = ZERO
+            Atm_Input%Cloud(nc)%Effective_Radius(:) = ZERO
+          END WHERE
+        END DO
+      END IF
+
+      ! Allocate the profile independent surface optics local structure
     CALL CRTM_SfcOptics_Create( SfcOptics   , MAX_N_ANGLES, MAX_N_STOKES )
     CALL CRTM_SfcOptics_Create( SfcOptics_AD, MAX_N_ANGLES, MAX_N_STOKES )
     IF ( (.NOT. CRTM_SfcOptics_Associated(SfcOptics   )) .OR. &
@@ -513,14 +527,14 @@ CONTAINS
     END IF
 
       ! Check the cloud and aerosol coeff. data for cases with clouds and aerosol
-      IF( Atmosphere(m)%n_Clouds > 0 .AND. .NOT. CRTM_CloudCoeff_IsLoaded() )THEN
+      IF( Atm_Input%n_Clouds > 0 .AND. .NOT. CRTM_CloudCoeff_IsLoaded() )THEN
          Error_Status = FAILURE
          WRITE( Message,'("The CloudCoeff data must be loaded (with CRTM_Init routine) ", &
                 &"for the cloudy case profile #",i0)' ) m
          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
          RETURN
       END IF
-      IF( Atmosphere(m)%n_Aerosols > 0 .AND. .NOT. CRTM_AerosolCoeff_IsLoaded() )THEN
+      IF( Atm_Input%n_Aerosols > 0 .AND. .NOT. CRTM_AerosolCoeff_IsLoaded() )THEN
          Error_Status = FAILURE
          WRITE( Message,'("The AerosolCoeff data must be loaded (with CRTM_Init routine) ", &
                 &"for the aerosol case profile #",i0)' ) m
@@ -530,11 +544,15 @@ CONTAINS
 
 
       ! Copy over forward "non-variable" inputs to adjoint outputs
-      CALL CRTM_Atmosphere_NonVariableCopy( Atmosphere(m), Atmosphere_AD(m) )
+      CALL CRTM_Atmosphere_NonVariableCopy( Atm_Input, Atmosphere_AD(m) )
       CALL CRTM_Surface_NonVariableCopy( Surface(m), Surface_AD(m) )
 
-      IF( Opt%n_Stokes > 0 ) RTV%n_Stokes = Opt%n_Stokes
-      IF( Opt%n_Stokes > 0 ) RTV_Clear%n_Stokes = Opt%n_Stokes
+      IF ( Options_Present ) THEN
+        IF( Opt%n_Stokes > 0 ) THEN
+          RTV%n_Stokes = Opt%n_Stokes
+          RTV_Clear%n_Stokes = Opt%n_Stokes
+        END IF
+      END IF
       AtmOptics%n_Stokes = RTV%n_Stokes
       ! ...Assign the option specific SfcOptics input
       SfcOptics%n_Stokes = RTV%n_Stokes
@@ -548,7 +566,7 @@ CONTAINS
       ! Check the input data if required
       IF ( Opt%Check_Input ) THEN
         ! ...Mandatory inputs
-        Atmosphere_Invalid = .NOT. CRTM_Atmosphere_IsValid( Atmosphere(m) )
+        Atmosphere_Invalid = .NOT. CRTM_Atmosphere_IsValid( Atm_Input )
         Surface_Invalid    = .NOT. CRTM_Surface_IsValid( Surface(m) )
         Geometry_Invalid   = .NOT. CRTM_Geometry_IsValid( Geometry(m) )
         IF ( Atmosphere_Invalid .OR. Surface_Invalid .OR. Geometry_Invalid ) THEN
@@ -604,7 +622,7 @@ CONTAINS
 
       ! Add extra layers to current atmosphere profile
       ! if necessary to handle upper atmosphere
-      Error_Status = CRTM_Atmosphere_AddLayers( Atmosphere(m), Atm )
+      Error_Status = CRTM_Atmosphere_AddLayers( Atm_Input, Atm )
       IF ( Error_Status /= SUCCESS ) THEN
         Error_Status = FAILURE
         WRITE( Message,'("Error adding FWD extra layers to profile #",i0)' ) m
@@ -619,17 +637,6 @@ CONTAINS
                Atm%n_Added_Layers, Atm%n_Layers, MAX_N_LAYERS, m
         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
         RETURN
-      END IF
-      ! Fix for cloud_Fraction < MIN_COVERAGE_THRESHOLD
-      IF ( Atm%n_Clouds > 0 ) THEN
-        !** clear clouds where cloud_fraction < threshold
-        DO nc = 1, Atm%n_Clouds
-          WHERE (Atm%Cloud_Fraction(:) < MIN_COVERAGE_THRESHOLD)
-            Atm%Cloud_Fraction(:) = ZERO
-            Atm%Cloud(nc)%Water_Content(:)    = ZERO
-            Atm%Cloud(nc)%Effective_Radius(:) = ZERO
-          END WHERE
-        END DO
       END IF
       ! Calculate cloud water density
       CALL Calculate_Cloud_Water_Density(Atm)
@@ -676,13 +683,10 @@ CONTAINS
                                   MAX_N_LEGENDRE_TERMS, &
                                   CloudC%N_PHASE_ELEMENTS  )
 
-      IF ( Options_Present ) THEN
-        AtmOptics%depolarization = Opt%depolarization
-        AtmOptics_AD%depolarization = Opt%depolarization
-        IF( Opt%n_Stokes > 0 ) RTV%n_Stokes = Opt%n_Stokes
-        AtmOptics%n_Stokes = RTV%n_Stokes
-        AtmOptics_AD%n_Stokes = RTV%n_Stokes
-      END IF
+      AtmOptics%depolarization = Opt%depolarization
+      AtmOptics_AD%depolarization = Opt%depolarization
+      AtmOptics%n_Stokes = RTV%n_Stokes
+      AtmOptics_AD%n_Stokes = RTV%n_Stokes
 
       IF ( .NOT. CRTM_AtmOptics_Associated( Atmoptics ) .OR. &
            .NOT. CRTM_AtmOptics_Associated( Atmoptics_AD ) ) THEN
@@ -761,8 +765,8 @@ CONTAINS
         ! ...Copy over surface optics input
         SfcOptics_Clear%Use_New_MWSSEM    = .NOT. Opt%Use_Old_MWSSEM
         SfcOptics_Clear_AD%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
-        SfcOptics_Clear%n_Stokes = RTV%n_Stokes
-        SfcOptics_Clear_AD%n_Stokes = RTV%n_Stokes
+        SfcOptics_Clear%n_Stokes = RTV_Clear%n_Stokes
+        SfcOptics_Clear_AD%n_Stokes = RTV_Clear%n_Stokes
         ! ...CLEAR SKY average surface skin temperature for multi-surface types
         CALL CRTM_Compute_SurfaceT( Surface(m), SfcOptics_Clear )
       END IF
@@ -859,7 +863,9 @@ CONTAINS
               SpcCoeff_IsVisibleSensor(SC(SensorIndex)) ) .AND. &
             AtmOptics%Include_Scattering ) THEN
           ! Assign algorithm selector
-          RTV%RT_Algorithm_Id = Opt%RT_Algorithm_Id
+          IF ( Options_Present ) THEN
+            RTV%RT_Algorithm_Id = Opt%RT_Algorithm_Id
+          END IF
           CALL RTV_Create( RTV, MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
           IF ( .NOT. RTV_Associated(RTV) ) THEN
             Error_Status=FAILURE
@@ -926,7 +932,7 @@ CONTAINS
 
 
           ! Determine the number of streams (n_Full_Streams) in up+downward directions
-          IF ( Opt%Use_N_Streams ) THEN
+          IF ( Options_Present .AND. Opt%Use_N_Streams ) THEN
             n_Full_Streams = Options(m)%n_Streams
             RTSolution(ln,m)%n_Full_Streams = n_Full_Streams + 2
             RTSolution(ln,m)%Scattering_Flag = .TRUE.
@@ -1074,7 +1080,7 @@ CONTAINS
           ! Fill the SfcOptics structure for the optional emissivity input case.
           SfcOptics%Compute       = .TRUE.
           SfcOptics_Clear%Compute = .TRUE.
-          IF ( Opt%Use_Emissivity ) THEN
+          IF ( Options_Present .AND. Opt%Use_Emissivity ) THEN
             SfcOptics%Compute = .FALSE.
             SfcOptics%Emissivity(1,1)       = Opt%Emissivity(ln)
             SfcOptics%Reflectivity(1,1,1,1) = ONE - Opt%Emissivity(ln)
@@ -1521,7 +1527,7 @@ CONTAINS
       END IF
 
       ! Adjoint of the atmosphere layer addition
-      Error_Status = CRTM_Atmosphere_AddLayers_AD( Atmosphere(m), Atm_AD, Atmosphere_AD(m) )
+      Error_Status = CRTM_Atmosphere_AddLayers_AD( Atm_Input, Atm_AD, Atmosphere_AD(m) )
 
       IF ( Error_Status /= SUCCESS ) THEN
         Error_Status = FAILURE

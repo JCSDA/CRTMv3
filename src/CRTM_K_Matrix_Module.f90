@@ -601,6 +601,13 @@ CONTAINS
 
       ! Reinitialise the output RTSolution
       CALL CRTM_RTSolution_Zero(RTSolution(:,m))
+      IF ( Options_Present ) THEN
+        IF( Opt%n_Stokes > 0 ) THEN
+          RTV(:)%n_Stokes = Opt%n_Stokes
+          RTV_Clear(:)%n_Stokes = Opt%n_Stokes
+        END IF
+        RTV(:)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
+      END IF
 
 
       ! Allocate the profile independent surface optics local structure
@@ -758,14 +765,10 @@ CONTAINS
                                     MAX_N_LEGENDRE_TERMS, &
                                     CloudC%N_PHASE_ELEMENTS  )
 
-        IF ( Options_Present ) THEN
-          AtmOptics(nt)%depolarization = Opt%depolarization
-          AtmOptics_K(nt)%depolarization = Opt%depolarization
-          IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
-          IF( Opt%n_Stokes > 0 ) RTV_Clear(nt)%n_Stokes = Opt%n_Stokes
-          AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
-          AtmOptics_K(nt)%n_Stokes = RTV(nt)%n_Stokes
-        END IF
+        AtmOptics(nt)%depolarization = Opt%depolarization
+        AtmOptics_K(nt)%depolarization = Opt%depolarization
+        AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
+        AtmOptics_K(nt)%n_Stokes = RTV(nt)%n_Stokes
 
         IF ( .NOT. CRTM_AtmOptics_Associated( Atmoptics(nt)   ) .OR. &
              .NOT. CRTM_AtmOptics_Associated( Atmoptics_K(nt) ) ) THEN
@@ -858,8 +861,8 @@ CONTAINS
           ! ...Copy over surface optics input
           SfcOptics_Clear(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
           SfcOptics_Clear_K(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
-          SfcOptics_Clear(nt)%n_Stokes = RTV(nt)%n_Stokes
-          SfcOptics_Clear_K(nt)%n_Stokes = RTV(nt)%n_Stokes
+          SfcOptics_Clear(nt)%n_Stokes = RTV_Clear(nt)%n_Stokes
+          SfcOptics_Clear_K(nt)%n_Stokes = RTV_Clear(nt)%n_Stokes
 
           ! ...CLEAR SKY average surface skin temperature for multi-surface types
           CALL CRTM_Compute_SurfaceT( Surface(m), SfcOptics_Clear(nt) )
@@ -981,7 +984,9 @@ CONTAINS
                 Atm%n_Aerosols > 0 .OR. &
                 SpcCoeff_IsVisibleSensor(SC(SensorIndex)).OR.SpcCoeff_IsUltravioletSensor(SC(SensorIndex)) ) .AND. &
                 AtmOptics(nt)%Include_Scattering ) THEN
-            RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
+            IF ( Options_Present ) THEN
+              RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
+            END IF
             CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
             IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
               Error_Status=FAILURE
@@ -1125,7 +1130,7 @@ CONTAINS
             Atm_K(nt)%Height = Atm%Height
 
             ! Determine the number of streams (n_Full_Streams) in up+downward directions
-            IF ( Opt%Use_N_Streams ) THEN
+            IF ( Options_Present .AND. Opt%Use_N_Streams ) THEN
               n_Full_Streams = Options(m)%n_Streams
               RTSolution(ln,m)%n_Full_Streams = n_Full_Streams + 2
               RTSolution(ln,m)%Scattering_Flag = .TRUE.
@@ -1277,7 +1282,7 @@ CONTAINS
             ! Fill the SfcOptics structure for the optional emissivity input case.
             SfcOptics(nt)%Compute       = .TRUE.
             SfcOptics_Clear(nt)%Compute = .TRUE.
-            IF ( Opt%Use_Emissivity ) THEN
+            IF ( Options_Present .AND. Opt%Use_Emissivity ) THEN
               SfcOptics(nt)%Compute = .FALSE.
               SfcOptics(nt)%Emissivity(1,1)       = Opt%Emissivity(ln)
               SfcOptics(nt)%Reflectivity(1,1,1,1) = ONE - Opt%Emissivity(ln)

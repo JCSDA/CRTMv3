@@ -912,7 +912,7 @@ CONTAINS
                END IF
 
                ! Determine the number of streams (n_Full_Streams) in up+downward directions
-               IF ( Opt%Use_N_Streams ) THEN
+               IF ( Options_Present .AND. Opt%Use_N_Streams ) THEN
                   n_Full_Streams = Opt%n_Streams
                   RTSolution(ln,m)%n_Full_Streams = n_Full_Streams + 2
                   RTSolution(ln,m)%Scattering_Flag = .TRUE.
@@ -1048,7 +1048,7 @@ CONTAINS
                ! Fill the SfcOptics structures for the optional emissivity input case.
                SfcOptics(nt)%Compute       = .TRUE.
 
-               IF ( Opt%Use_Emissivity ) THEN
+               IF ( Options_Present .AND. Opt%Use_Emissivity ) THEN
                   ! ...Cloudy/all-sky case
                   SfcOptics(nt)%Compute = .FALSE.
                   SfcOptics(nt)%Emissivity(1,1)       = Opt%Emissivity(ln)

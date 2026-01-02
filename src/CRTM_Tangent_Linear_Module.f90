@@ -544,17 +544,17 @@ CONTAINS
 
       ! Reinitialise the output RTSolution
       CALL CRTM_RTSolution_Zero(RTSolution(:,m))
+      IF ( Options_Present ) THEN
+        IF( Opt%n_Stokes > 0 ) THEN
+          RTV(:)%n_Stokes = Opt%n_Stokes
+          RTV_Clear(:)%n_Stokes = Opt%n_Stokes
+        END IF
+        RTV(:)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
+      END IF
 
       ! Allocate the profile independent surface opticss local structure
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
       DO nt = 1, n_channel_threads
-      IF ( Options_Present ) THEN
-      ! ...Assign the option specific SfcOptics input
-         IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
-         IF( Opt%n_Stokes > 0 ) RTV_Clear(nt)%n_Stokes = Opt%n_Stokes
-         RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
-      END IF
-
         CALL CRTM_SfcOptics_Create( SfcOptics(nt)  , MAX_N_ANGLES, MAX_N_STOKES )
         CALL CRTM_SfcOptics_Create( SfcOptics_TL(nt), MAX_N_ANGLES, MAX_N_STOKES )
         IF ( (.NOT. CRTM_SfcOptics_Associated(SfcOptics(nt)  )) .OR. &
@@ -709,15 +709,12 @@ CONTAINS
                                     MAX_N_LEGENDRE_TERMS, &
                                     CloudC%N_PHASE_ELEMENTS  )
 
-      IF ( Options_Present ) THEN
         AtmOptics(nt)%depolarization = Opt%depolarization
         AtmOptics_TL(nt)%depolarization = Opt%depolarization
-        IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
         AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
         AtmOptics_TL(nt)%n_Stokes = RTV(nt)%n_Stokes
         AtmOptics(nt)%Include_Scattering = Opt%Include_Scattering
         AtmOptics_TL(nt)%Include_Scattering = Opt%Include_Scattering
-      END IF
 
       IF ( (.NOT. CRTM_AtmOptics_Associated( Atmoptics(nt) )) .OR. &
            (.NOT. CRTM_AtmOptics_Associated( Atmoptics_TL(nt) )) ) THEN
@@ -799,8 +796,8 @@ CONTAINS
           ! ...Copy over surface optics input
           SfcOptics_Clear(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
           SfcOptics_Clear_TL(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
-          SfcOptics_Clear(nt)%n_Stokes = RTV(nt)%n_Stokes               ! It may be changed for CSEM.
-          SfcOptics_Clear_TL(nt)%n_Stokes = RTV(nt)%n_Stokes            ! It may be changed for CSEM.
+          SfcOptics_Clear(nt)%n_Stokes = RTV_Clear(nt)%n_Stokes         ! It may be changed for CSEM.
+          SfcOptics_Clear_TL(nt)%n_Stokes = RTV_Clear(nt)%n_Stokes      ! It may be changed for CSEM.
 
           ! ...CLEAR SKY average surface skin temperature for multi-surface types
           CALL CRTM_Compute_SurfaceT( Surface(m), SfcOptics_Clear(nt) )
@@ -922,7 +919,9 @@ CONTAINS
                 SpcCoeff_IsVisibleSensor(SC(SensorIndex)) ) .AND. &
                 AtmOptics(nt)%Include_Scattering ) THEN
           ! Assign algorithm selector
-            RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
+            IF ( Options_Present ) THEN
+              RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
+            END IF
             CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
 
             IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
@@ -1028,7 +1027,7 @@ CONTAINS
 !            CALL CRTM_SfcOptics_Zero( SfcOptics(nt) )
 !            CALL CRTM_SfcOptics_Zero( SfcOptics_TL(nt) )
             ! Determine the number of streams (n_Full_Streams) in up+downward directions
-            IF ( Opt%Use_N_Streams ) THEN
+            IF ( Options_Present .AND. Opt%Use_N_Streams ) THEN
               n_Full_Streams = Opt%n_Streams
               RTSolution(ln,m)%n_Full_Streams = n_Full_Streams + 2
               RTSolution(ln,m)%Scattering_Flag = .TRUE.
@@ -1204,7 +1203,7 @@ CONTAINS
           ! Fill the SfcOptics structures for the optional emissivity input case.
           SfcOptics(nt)%Compute       = .TRUE.
           SfcOptics_Clear(nt)%Compute = .TRUE.
-          IF ( Opt%Use_Emissivity ) THEN
+          IF ( Options_Present .AND. Opt%Use_Emissivity ) THEN
             ! ...Cloudy/all-sky case
             SfcOptics(nt)%Compute = .FALSE.
             SfcOptics(nt)%Emissivity(1,1)       = Opt%Emissivity(ln)
