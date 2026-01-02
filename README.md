@@ -1,4 +1,4 @@
-CRTM REL-3.1.2
+CRTM REL-3.2.0
 ====================
 
 [![Build Status](https://app.travis-ci.com/JCSDA/CRTMv3.svg?branch=develop)](https://app.travis-ci.com/JCSDA/CRTMv3)
@@ -6,8 +6,9 @@ CRTM REL-3.1.2
 Preamble
 --------
 
-CRTM v3.1.2 release (`REL-3.1.2`)
+CRTM v3.2.0 release (`REL-3.2.0`)
 
+v3.2.0 released TBD
 v3.1.2 released July 11, 2025
 v3.1.1 released August 12, 2024
 v3.1.0 (alpha) Released October 31, 2023
@@ -57,7 +58,7 @@ Contents
 
 Configuration, building, and testing the library
 ================================================  
-JCSDA CRTM v3.1.2 Build Instructions
+JCSDA CRTM v3.2.0 Build Instructions
 
 The CRTM repository directory structure looks (something) like:
 
@@ -192,7 +193,6 @@ Known Issues
 (2) No testing was done on PGI, XLF, or other less common compilers.  Feedback from users suggest that there's no major concerns though.  Please contact us with specifics.  Tested on GCC v5 and higher, and ifort v18 and higher.  Some specific compiler versions have issues, contact support if you run into problems.
 
   
-
 
 
 
