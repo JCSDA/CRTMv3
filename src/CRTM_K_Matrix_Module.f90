@@ -430,14 +430,7 @@ CONTAINS
     ELSE
       n_profile_threads = n_Profiles
 
-!** BTJ: temporary preprocessor directive for openMP over channels bypass, permitting modern ifort / ifx versions to run properly
-!** https://github.com/JCSDA/CRTMv3/issues/231
-
-#if 1
-      n_channel_threads = 1
-#else
       n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
-#endif
       IF(n_channel_threads > 1) THEN
         CALL OMP_SET_MAX_ACTIVE_LEVELS(2)
       ELSE
@@ -628,14 +621,6 @@ CONTAINS
 !$OMP END PARALLEL DO
       IF ( Error_Status == FAILURE ) RETURN
 
-      ! Copy over forward "non-variable" inputs to K-matrix outputs
-!$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
-      DO l = 1, n_Channels
-        CALL CRTM_Atmosphere_NonVariableCopy( Atmosphere(m), Atmosphere_K(l,m) )
-        CALL CRTM_Surface_NonVariableCopy( Surface(m), Surface_K(l,m) )
-      END DO
-!$OMP END PARALLEL DO
-
       ! ...Assign the option specific SfcOptics input
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
       DO nt = 1, n_channel_threads
@@ -692,6 +677,14 @@ CONTAINS
           END IF
         END IF
       END IF
+
+      ! Copy over forward "non-variable" inputs to K-matrix outputs
+!$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
+      DO l = 1, n_Channels
+        CALL CRTM_Atmosphere_NonVariableCopy( Atmosphere(m), Atmosphere_K(l,m) )
+        CALL CRTM_Surface_NonVariableCopy( Surface(m), Surface_K(l,m) )
+      END DO
+!$OMP END PARALLEL DO
 
 
       ! Process geometry

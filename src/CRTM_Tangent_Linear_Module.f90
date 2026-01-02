@@ -295,7 +295,7 @@ CONTAINS
     ! Function result
     INTEGER :: Error_Status
     ! Local parameters
-    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Forward'
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Tangent_Linear'
     ! Local variables
     CHARACTER(256) :: Message
     LOGICAL :: Options_Present
@@ -471,12 +471,12 @@ CONTAINS
       CALL SYSTEM_CLOCK (count=count_end)
       elapsed = REAL (count_end - count_start) / REAL (count_rate)
       elapsed_running = elapsed_running + elapsed
-      WRITE(6,*) 'CRTM_Forward elapsed              =',elapsed
-      WRITE(6,*) 'CRTM_Forward elapsed running total=',elapsed_running
+      WRITE(6,*) 'CRTM_Tangent_Linear elapsed              =',elapsed
+      WRITE(6,*) 'CRTM_Tangent_Linear elapsed running total=',elapsed_running
     END IF
 
     IF (output_verification) THEN
-      WRITE(6,*)'CRTM_Forward inspecting RTSolution...'
+      WRITE(6,*)'CRTM_Tangent_Linear inspecting RTSolution...'
       CALL CRTM_RTSolution_Inspect (RTSolution(:,:))
     END IF
     RETURN
@@ -544,6 +544,7 @@ CONTAINS
 
       ! Reinitialise the output RTSolution
       CALL CRTM_RTSolution_Zero(RTSolution(:,m))
+      CALL CRTM_RTSolution_Zero(RTSolution_TL(:,m))
       IF ( Options_Present ) THEN
         IF( Opt%n_Stokes > 0 ) THEN
           RTV(:)%n_Stokes = Opt%n_Stokes
@@ -648,9 +649,6 @@ CONTAINS
         RETURN
       END IF
 
-      ! Calculate cloud water density
-      CALL Calculate_Cloud_Water_Density(Atm)
-
       Error_Status = CRTM_Atmosphere_AddLayers_TL( Atmosphere(m), Atmosphere_TL(m), Atm_TL )
       IF ( Error_Status /= SUCCESS ) THEN
         Error_Status = FAILURE
@@ -695,6 +693,9 @@ CONTAINS
          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
          RETURN
       END IF
+
+      ! Calculate cloud water density
+      CALL Calculate_Cloud_Water_Density(Atm)
 
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
       DO nt = 1, n_channel_threads

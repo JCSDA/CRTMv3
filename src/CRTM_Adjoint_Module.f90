@@ -502,6 +502,9 @@ CONTAINS
 
       Error_Status = SUCCESS
 
+      ! Reinitialise the output RTSolution
+      CALL CRTM_RTSolution_Zero(RTSolution(:,m))
+
       Atm_Input = Atmosphere(m)
       ! Fix for cloud_Fraction < MIN_COVERAGE_THRESHOLD
       IF ( Atm_Input%n_Clouds > 0 ) THEN
@@ -638,9 +641,6 @@ CONTAINS
         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
         RETURN
       END IF
-      ! Calculate cloud water density
-      CALL Calculate_Cloud_Water_Density(Atm)
-
       ! ...Similarly extend a copy of the input adjoint atmosphere
       Atm_AD = CRTM_Atmosphere_AddLayerCopy( Atmosphere_AD(m), Atm%n_Added_Layers )
 
@@ -672,6 +672,9 @@ CONTAINS
          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
          RETURN
       END IF
+
+      ! Calculate cloud water density
+      CALL Calculate_Cloud_Water_Density(Atm)
       ! Prepare the atmospheric optics structures
       ! ...Allocate the atmospheric optics structures based on Atm extension
       CALL CRTM_AtmOptics_Create( AtmOptics, &
