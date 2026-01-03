@@ -280,7 +280,7 @@ CONTAINS
     Options      ) &  ! Optional FWD input, M
   RESULT( Error_Status )
     ! Arguments
-!!    USE OMP_LIB
+    USE OMP_LIB
     USE CRTM_CloudCoeff,          ONLY: CloudC
     USE CRTM_AerosolCoeff,        ONLY: AeroC
     TYPE(CRTM_Atmosphere_type),        INTENT(IN OUT)     :: Atmosphere(:)     ! M
