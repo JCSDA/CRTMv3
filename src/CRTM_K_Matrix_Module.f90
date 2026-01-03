@@ -538,6 +538,7 @@ CONTAINS
       LOGICAL :: compute_antenna_correction
       LOGICAL :: Atmosphere_Invalid, Surface_Invalid, Geometry_Invalid, Options_Invalid
       INTEGER :: Status_FWD, Status_K
+      INTEGER :: Err_Thread, thread_error
       INTEGER :: iFOV
       INTEGER :: n, l    ! sensor index, channel index
       INTEGER :: SensorIndex
@@ -901,8 +902,11 @@ CONTAINS
 
 
 
-!$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
+        thread_error = SUCCESS
+!$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message, Err_Thread) &
+!$OMP REDUCTION(MAX:thread_error)
         DO nt = 1, n_channel_threads
+          Err_Thread = SUCCESS
 
           ! Process aircraft pressure altitude
           IF ( Opt%Aircraft_Pressure > ZERO ) THEN
@@ -948,10 +952,11 @@ CONTAINS
                  SaveFWV = 1   )
 
           IF ( .NOT. CRTM_Predictor_Associated(Predictor(nt))  ) THEN
-            Error_Status=FAILURE
+            Err_Thread = FAILURE
             WRITE( Message,'("Error allocating predictor structures for profile #",i0, &
                    &" and ",a," sensor.")' ) m, SC(SensorIndex)%Sensor_Id
-            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+            CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+            thread_error = FAILURE
             CYCLE
           END IF
 
@@ -972,10 +977,11 @@ CONTAINS
                  atm%n_Layers, &
                  SensorIndex   )
           IF (  .NOT. CRTM_Predictor_Associated(Predictor_K(nt)) ) THEN
-            Error_Status=FAILURE
+            Err_Thread = FAILURE
             WRITE( Message,'("Error allocating predictor_K structures for profile #",i0, &
                    &" and ",a," sensor.")' ) m, SC(SensorIndex)%Sensor_Id
-            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+            CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+            thread_error = FAILURE
             CYCLE
           END IF
           ! Allocate the RTV structure if necessary
@@ -988,18 +994,23 @@ CONTAINS
             END IF
             CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
             IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
-              Error_Status=FAILURE
+              Err_Thread = FAILURE
               WRITE( Message,'("Error allocating RTV structure for profile #",i0, &
                      &" and ",a," sensor.")' ) m, TRIM(SC(SensorIndex)%Sensor_Id)
-              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+              thread_error = FAILURE
               CYCLE
             END IF
             ! Assign algorithm selector
           END IF
 
+          IF ( Err_Thread /= SUCCESS ) thread_error = FAILURE
         END DO ! n_channel_threads
 !$OMP END PARALLEL DO
-        IF ( Error_Status == FAILURE ) RETURN
+        IF ( thread_error == FAILURE ) THEN
+          Error_Status = FAILURE
+          RETURN
+        END IF
 
         ! Compute NLTE correction predictors
         IF ( Opt%Apply_NLTE_Correction ) THEN
@@ -1038,13 +1049,16 @@ CONTAINS
         ! ------------
         ! THREAD LOOP
         ! ------------
+        thread_error = SUCCESS
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
 !$OMP    FIRSTPRIVATE(ln, r_cloudy)                                     &
 !$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,          &
 !$OMP            start_ch, end_ch, Wavenumber, Status_FWD, Status_K,    &
 !$OMP            transmittance, transmittance_K, transmittance_clear,   &
-!$OMP            transmittance_clear_K, l, mth_Azi, ks)
+!$OMP            transmittance_clear_K, l, mth_Azi, ks, Err_Thread)     &
+!$OMP    REDUCTION(MAX:thread_error)
         Thread_Loop: DO nt = 1, n_channel_threads
+          Err_Thread = SUCCESS
 
           start_ch = (nt - 1) * chunk_ch + 1
           IF ( nt == n_channel_threads ) THEN
@@ -1101,15 +1115,15 @@ CONTAINS
             Atm_K(nt) = CRTM_Atmosphere_AddLayerCopy( Atmosphere_K(ln,m), Atm%n_Added_Layers )
             ! ...Same for K-matrix CLEAR sky structure for fractional cloud coverage
             IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-              Error_Status = CRTM_Atmosphere_ClearSkyCopy(Atm_K(nt), Atm_Clear_K(nt))
-              IF ( Error_Status /= SUCCESS  ) THEN
-                Error_status = FAILURE
+              Err_Thread = CRTM_Atmosphere_ClearSkyCopy(Atm_K(nt), Atm_Clear_K(nt))
+              IF ( Err_Thread /= SUCCESS  ) THEN
                 WRITE( Message,'("Error copying CLEAR SKY Atmosphere_K structure for ",a,&
                        &", channel ",i0,", profile #",i0)') &
                        TRIM(ChannelInfo(n)%Sensor_ID), &
                        ChannelInfo(n)%Sensor_Channel(l), &
                        m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = FAILURE
                 CYCLE Thread_Loop
               END IF
               CALL CRTM_Atmosphere_Zero( Atm_Clear_K(nt) )
@@ -1171,17 +1185,18 @@ CONTAINS
               RTV(nt)%n_Azi = MIN( AtmOptics(nt)%n_Legendre_Terms - 1, MAX_N_AZIMUTH_FOURIER )
               ! Get molecular scattering and extinction
               Wavenumber = SC(SensorIndex)%Wavenumber(ChannelIndex)
-              Error_Status = CRTM_Compute_MoleculeScatter( &
+              Err_Thread = CRTM_Compute_MoleculeScatter( &
                                Wavenumber, &  ! Input
                                Atm       , &  ! Input
                                AtmOptics(nt)   )  ! Input/Output
-              IF ( Error_Status /= SUCCESS ) THEN
+              IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing MoleculeScatter for ",a,&
                        &", channel ",i0,", profile #",i0)') &
                        TRIM(ChannelInfo(n)%Sensor_ID), &
                        ChannelInfo(n)%Sensor_Channel(l), &
                        m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = FAILURE
                 CYCLE Thread_Loop
               END IF
             ELSE
@@ -1201,11 +1216,12 @@ CONTAINS
               Status_FWD = CRTM_AtmOptics_NoScatterCopy( AtmOptics(nt), AtmOptics_Clear(nt) )
               Status_K   = CRTM_AtmOptics_NoScatterCopy( AtmOptics(nt), AtmOptics_Clear_K(nt) )
               IF ( Status_FWD /= SUCCESS .OR. Status_K /= SUCCESS ) THEN
-                Error_Status = FAILURE
+                Err_Thread = FAILURE
                 WRITE( Message,'("Error copying CLEAR SKY AtmOptics for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
                        TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = FAILURE
                 CYCLE Thread_Loop
               END IF
               ! Initialise the adjoint
@@ -1215,17 +1231,18 @@ CONTAINS
 
             ! Compute the cloud particle absorption/scattering properties
             IF( Atm%n_Clouds > 0 ) THEN
-              Error_Status = CRTM_Compute_CloudScatter( Atm          , &  ! Input
+              Err_Thread = CRTM_Compute_CloudScatter( Atm          , &  ! Input
                                                         GeometryInfo , &  ! Input
                                                         SensorIndex  , &  ! Input
                                                         ChannelIndex , &  ! Input
                                                         AtmOptics(nt), &  ! Output
                                                         CSvar(nt)      )  ! Internal variable output
-              IF (Error_Status /= SUCCESS) THEN
+              IF (Err_Thread /= SUCCESS) THEN
                 WRITE( Message,'("Error computing CloudScatter for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
                        TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = FAILURE
                 CYCLE Thread_Loop
               END IF
             END IF
@@ -1233,16 +1250,17 @@ CONTAINS
 
             ! Compute the aerosol absorption/scattering properties
             IF ( Atm%n_Aerosols > 0 ) THEN
-              Error_Status = CRTM_Compute_AerosolScatter( Atm          , &  ! Input
+              Err_Thread = CRTM_Compute_AerosolScatter( Atm          , &  ! Input
                                                           SensorIndex  , &  ! Input
                                                           ChannelIndex , &  ! Input
                                                           AtmOptics(nt), &  ! In/Output
                                                           ASvar(nt)      )  ! Internal variable output
-              IF ( Error_Status /= SUCCESS ) THEN
+              IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing AerosolScatter for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
                        TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = FAILURE
                 CYCLE Thread_Loop
               END IF
             END IF
@@ -1325,7 +1343,7 @@ CONTAINS
               SfcOptics(nt)%mth_Azi = mth_Azi
 
               ! Solve the forward radiative transfer problem
-              Error_Status = CRTM_Compute_RTSolution( &
+              Err_Thread = CRTM_Compute_RTSolution( &
                                Atm             , &  ! Input
                                Surface(m)      , &  ! Input
                                AtmOptics(nt)   , &  ! Input
@@ -1335,11 +1353,12 @@ CONTAINS
                                ChannelIndex    , &  ! Input
                                RTSolution(ln,m), &  ! Output
                                RTV(nt)           )  ! Internal variable output
-              IF ( Error_Status /= SUCCESS ) THEN
+              IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'( "Error computing RTSolution for ", a, &
                        &", channel ", i0,", profile #",i0)' ) &
                        TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = FAILURE
                 CYCLE Thread_Loop
               END IF
 
@@ -1348,7 +1367,7 @@ CONTAINS
                   CALL CRTM_SurfRef(Atm%n_Layers,SUM( AtmOptics(nt)%Optical_Depth(:)), & ! Input  layer optical depth
                        SfcOptics(nt)%Direct_Reflectivity(SfcOptics(nt)%Index_Sat_Ang,1), &
                        SfcOptics(nt)%Index_Sat_Ang, RTSolution(ln,m)%Surface_Planck_Radiance, &
-                       RTSolution(ln,m)%Up_Radiance, RTSolution(ln,m)%Down_Radiance,RTV(nt), Error_Status)
+                       RTSolution(ln,m)%Up_Radiance, RTSolution(ln,m)%Down_Radiance,RTV(nt), Err_Thread)
                 END IF
               END IF
 
@@ -1357,7 +1376,7 @@ CONTAINS
               IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV(nt)%mth_Azi==0 ) THEN
                 RTV_Clear(nt)%mth_Azi = RTV(nt)%mth_Azi
                 SfcOptics_Clear(nt)%mth_Azi = SfcOptics(nt)%mth_Azi
-                Error_Status = CRTM_Compute_RTSolution( &
+                Err_Thread = CRTM_Compute_RTSolution( &
                                  Atm_Clear           , &  ! Input
                                  Surface(m)          , &  ! Input
                                  AtmOptics_Clear(nt) , &  ! Input
@@ -1367,11 +1386,12 @@ CONTAINS
                                  ChannelIndex        , &  ! Input
                                  RTSolution_Clear(nt), &  ! Output
                                  RTV_Clear(nt)         )  ! Internal variable output
-                IF ( Error_Status /= SUCCESS ) THEN
+                IF ( Err_Thread /= SUCCESS ) THEN
                   WRITE( Message,'( "Error computing CLEAR SKY RTSolution for ", a, &
                          &", channel ", i0,", profile #",i0)' ) &
                          TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                  CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                  CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                  thread_error = FAILURE
                   CYCLE Thread_Loop
                 END IF
               END IF
@@ -1458,7 +1478,7 @@ CONTAINS
                 ! The adjoint of the clear sky radiative transfer for fractionally cloudy atmospheres
                 RTV_Clear(nt)%mth_Azi = RTV(nt)%mth_Azi
                 SfcOptics_Clear(nt)%mth_Azi = SfcOptics(nt)%mth_Azi
-                Error_Status = CRTM_Compute_RTSolution_AD( &
+                Err_Thread = CRTM_Compute_RTSolution_AD( &
                                  Atm_Clear             , &  ! FWD Input
                                  Surface(m)            , &  ! FWD Input
                                  AtmOptics_Clear(nt)   , &  ! FWD Input
@@ -1473,18 +1493,19 @@ CONTAINS
                                  AtmOptics_Clear_K(nt) , &  ! K  Output
                                  SfcOptics_Clear_K(nt) , &  ! K  Output
                                  RTV_Clear(nt)           )  ! Internal variable input
-                IF ( Error_Status /= SUCCESS ) THEN
+                IF ( Err_Thread /= SUCCESS ) THEN
                   WRITE( Message,'( "Error computing CLEAR SKY RTSolution_K for ", a, &
                          &", channel ", i0,", profile #",i0)' ) &
                          TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                  CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                  CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                  thread_error = FAILURE
                   CYCLE Thread_Loop
                 END IF
               END IF
 
 
               ! The adjoint of the radiative transfer
-              Error_Status = CRTM_Compute_RTSolution_AD( &
+              Err_Thread = CRTM_Compute_RTSolution_AD( &
                                Atm               , &  ! FWD Input
                                Surface(m)        , &  ! FWD Input
                                AtmOptics(nt)     , &  ! FWD Input
@@ -1499,11 +1520,12 @@ CONTAINS
                                AtmOptics_K(nt)   , &  ! K  Output
                                SfcOptics_K(nt)   , &  ! K  Output
                                RTV(nt)             )  ! Internal variable input
-              IF ( Error_Status /= SUCCESS ) THEN
+              IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'( "Error computing RTSolution_K for ", a, &
                        &", channel ", i0,", profile #",i0)' ) &
                        TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = FAILURE
                 CYCLE Thread_Loop
               END IF
               ! Calculate the adjoint for the active sensor reflectivity
@@ -1579,18 +1601,19 @@ CONTAINS
 
             ! Compute the adjoint aerosol absorption/scattering properties
             IF ( Atm%n_Aerosols > 0 ) THEN
-              Error_Status = CRTM_Compute_AerosolScatter_AD( Atm             , &  ! FWD Input
+              Err_Thread = CRTM_Compute_AerosolScatter_AD( Atm             , &  ! FWD Input
                                                              AtmOptics(nt)   , &  ! FWD Input
                                                              AtmOptics_K(nt) , &  ! K   Input
                                                              SensorIndex     , &  ! Input
                                                              ChannelIndex    , &  ! Input
                                                              Atm_K(nt)       , &  ! K   Output
                                                              ASvar(nt)         )  ! Internal variable input
-              IF ( Error_Status /= SUCCESS ) THEN
+              IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing AerosolScatter_K for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
                        TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = FAILURE
                 CYCLE Thread_Loop
               END IF
             END IF
@@ -1598,7 +1621,7 @@ CONTAINS
 
             ! Compute the adjoint cloud absorption/scattering properties
             IF ( Atm%n_Clouds > 0 ) THEN
-              Error_Status = CRTM_Compute_CloudScatter_AD( Atm             , &  ! FWD Input
+              Err_Thread = CRTM_Compute_CloudScatter_AD( Atm             , &  ! FWD Input
                                                            AtmOptics(nt)   , &  ! FWD Input
                                                            AtmOptics_K(nt) , &  ! K   Input
                                                            GeometryInfo    , &  ! Input
@@ -1606,11 +1629,12 @@ CONTAINS
                                                            ChannelIndex    , &  ! Input
                                                            Atm_K(nt)       , &  ! K   Output
                                                            CSvar(nt)         )  ! Internal variable input
-              IF ( Error_Status /= SUCCESS ) THEN
+              IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing CloudScatter_K for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
                        TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = FAILURE
                 CYCLE Thread_Loop
               END IF
             END IF
@@ -1618,12 +1642,13 @@ CONTAINS
 
             ! Adjoint of clear-sky AtmOptics copy
             IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-              Error_Status = CRTM_AtmOptics_NoScatterCopy_AD( AtmOptics(nt), AtmOptics_Clear_K(nt), AtmOptics_K(nt) )
-              IF ( Error_Status /= SUCCESS ) THEN
+              Err_Thread = CRTM_AtmOptics_NoScatterCopy_AD( AtmOptics(nt), AtmOptics_Clear_K(nt), AtmOptics_K(nt) )
+              IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing CLEAR SKY AtmOptics_K for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
                        TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = FAILURE
                 CYCLE Thread_Loop
               END IF
             END IF
@@ -1632,17 +1657,18 @@ CONTAINS
             ! Compute the adjoint molecular scattering properties
             IF( RTV(nt)%Visible_Flag_true ) THEN
               Wavenumber = SC(SensorIndex)%Wavenumber(ChannelIndex)
-              Error_Status = CRTM_Compute_MoleculeScatter_AD( &
+              Err_Thread = CRTM_Compute_MoleculeScatter_AD( &
                                Wavenumber , &
                                AtmOptics_K(nt), &
                                Atm_K(nt)        )
-              IF ( Error_Status /= SUCCESS ) THEN
+              IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing MoleculeScatter_K for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
                        TRIM(ChannelInfo(n)%Sensor_ID), &
                        ChannelInfo(n)%Sensor_Channel(l), &
                        m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = FAILURE
                 CYCLE Thread_Loop
               END IF
             END IF
@@ -1687,54 +1713,58 @@ CONTAINS
               CALL CRTM_Compute_SurfaceT_AD( Surface(m), SfcOptics_Clear_K(nt), Surface_K(ln,m) )
               CALL CRTM_SfcOptics_Zero(SfcOptics_Clear_K(nt))
               ! ...Clear sky atmosphere
-              Error_Status = CRTM_Atmosphere_ClearSkyCopy_AD(Atm, Atm_Clear_K(nt), Atm_K(nt))
+              Err_Thread = CRTM_Atmosphere_ClearSkyCopy_AD(Atm, Atm_Clear_K(nt), Atm_K(nt))
 
-              IF ( Error_Status /= SUCCESS ) THEN
-                Error_status = FAILURE
+              IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing CLEAR SKY Atm_K object for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
                        TRIM(ChannelInfo(n)%Sensor_ID), &
                        ChannelInfo(n)%Sensor_Channel(l), &
                        m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = FAILURE
                 CYCLE Thread_Loop
               END IF
 
               ! K-matrix of the cloud coverage
-              Error_Status = CloudCover_K(nt)%Compute_CloudCover_AD(CloudCover, atm, atm_K(nt))
+              Err_Thread = CloudCover_K(nt)%Compute_CloudCover_AD(CloudCover, atm, atm_K(nt))
 
-              IF ( Error_Status /= SUCCESS ) THEN
-                Error_Status = FAILURE
+              IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing K-MATRIX cloud cover for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
                        TRIM(ChannelInfo(n)%Sensor_ID), &
                        ChannelInfo(n)%Sensor_Channel(l), &
                        m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = FAILURE
                 CYCLE Thread_Loop
               END IF
             END IF
 
             ! K-matrix of the atmosphere layer addition
-            Error_Status = CRTM_Atmosphere_AddLayers_AD( Atm_Input, Atm_K(nt), Atmosphere_K(ln,m) )
+            Err_Thread = CRTM_Atmosphere_AddLayers_AD( Atm_Input, Atm_K(nt), Atmosphere_K(ln,m) )
 
-            IF ( Error_Status /= SUCCESS ) THEN
-              Error_Status = FAILURE
+            IF ( Err_Thread /= SUCCESS ) THEN
               WRITE( Message,'("Error computing K-MATRIX atmosphere extra layers for ",a,&
                      &", channel ",i0,", profile #",i0)' ) &
                      TRIM(ChannelInfo(n)%Sensor_ID), &
                      ChannelInfo(n)%Sensor_Channel(l), &
                      m
-              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+              thread_error = FAILURE
               CYCLE Thread_Loop
             END IF
 
           END DO Channel_Loop
+          IF ( Err_Thread /= SUCCESS ) thread_error = FAILURE
        END DO Thread_Loop
 
 !$OMP END PARALLEL DO
 
-        IF ( Error_Status == FAILURE ) RETURN
+        IF ( thread_error == FAILURE ) THEN
+          Error_Status = FAILURE
+          RETURN
+        END IF
         ln = ln + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
 
       END DO Sensor_Loop
