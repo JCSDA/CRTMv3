@@ -1038,23 +1038,12 @@ CONTAINS
         ! ------------
         ! THREAD LOOP
         ! ------------
-!** BTJ preprocessor directive bypass of OMP directives causing issues when compiling with modern ifort/ifx
-!** https://github.com/JCSDA/CRTMv3/issues/231
-#if 1
-        IF (n_channel_threads > 1) THEN
-           WRITE( Message,'("ERROR: n_channel_threads > 1, this should not happen with the current preprocessor directives")')
-           
-           Error_status = FAILURE
-           CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-        END IF
-#else
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
 !$OMP    FIRSTPRIVATE(ln, r_cloudy)                                     &
 !$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,          &
 !$OMP            start_ch, end_ch, Wavenumber, Status_FWD, Status_K,    &
 !$OMP            transmittance, transmittance_K, transmittance_clear,   &
 !$OMP            transmittance_clear_K, l, mth_Azi, ks)
-#endif
         Thread_Loop: DO nt = 1, n_channel_threads
 
           start_ch = (nt - 1) * chunk_ch + 1
@@ -1743,11 +1732,7 @@ CONTAINS
           END DO Channel_Loop
        END DO Thread_Loop
 
-!** BTJ preprocessor directive bypass of OMP directives causing issues when compiling with modern ifort/ifx
-!** https://github.com/JCSDA/CRTMv3/issues/231
-#if 0
 !$OMP END PARALLEL DO
-#endif         
 
         IF ( Error_Status == FAILURE ) RETURN
         ln = ln + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
