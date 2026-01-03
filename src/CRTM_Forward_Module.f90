@@ -355,18 +355,8 @@ CONTAINS
     !JR First loop just checks validity of Atmosphere(m) contents
     !$OMP PARALLEL DO PRIVATE ( nc, Message ) NUM_THREADS(n_profile_threads)
     Profile_Loop1: DO m = 1, n_Profiles
-       ! Fix for cloud_Fraction < MIN_COVERAGE_THRESHOLD
+       ! Check the cloud and aerosol coeff. data for cases with clouds and aerosol
        IF ( Atmosphere(m)%n_Clouds > 0) THEN
-          !** clear clouds where cloud_fraction < threshold
-          DO nc = 1, Atmosphere(m)%n_clouds
-             WHERE (Atmosphere(m)%Cloud_Fraction(:) < MIN_COVERAGE_THRESHOLD)
-                Atmosphere(m)%Cloud_Fraction(:) = ZERO
-                Atmosphere(m)%Cloud(nc)%Water_Content(:)    = ZERO
-                Atmosphere(m)%Cloud(nc)%Effective_Radius(:) = ZERO
-             END WHERE
-          END DO
-
-          ! Check the cloud and aerosol coeff. data for cases with clouds and aerosol
           IF( .NOT. CRTM_CloudCoeff_IsLoaded() )THEN
              Error_Status = FAILURE
              WRITE( Message,'("The CloudCoeff data must be loaded (with CRTM_Init routine) ", &
@@ -458,6 +448,7 @@ CONTAINS
 
       ! Local atmosphere structure for extra layering
       TYPE(CRTM_Atmosphere_type) :: Atm
+      TYPE(CRTM_Atmosphere_type) :: Atm_Input
       ! Clear sky structures
       TYPE(CRTM_Atmosphere_type) :: Atm_Clear
       TYPE(CRTM_AtmOptics_type)  :: AtmOptics_Clear(n_channel_threads)
@@ -484,6 +475,19 @@ CONTAINS
 
       ! Reinitialise the output RTSolution
       CALL CRTM_RTSolution_Zero(RTSolution(:,m))
+
+      Atm_Input = Atmosphere(m)
+      ! Fix for cloud_Fraction < MIN_COVERAGE_THRESHOLD
+      IF ( Atm_Input%n_Clouds > 0 ) THEN
+        !** clear clouds where cloud_fraction < threshold
+        DO nc = 1, Atm_Input%n_Clouds
+          WHERE (Atm_Input%Cloud_Fraction(:) < MIN_COVERAGE_THRESHOLD)
+            Atm_Input%Cloud_Fraction(:) = ZERO
+            Atm_Input%Cloud(nc)%Water_Content(:)    = ZERO
+            Atm_Input%Cloud(nc)%Effective_Radius(:) = ZERO
+          END WHERE
+        END DO
+      END IF
       IF ( Options_Present ) THEN
          ! ...Assign the option specific SfcOptics input
          IF( Opt%n_Stokes > 0 ) THEN
@@ -526,7 +530,7 @@ CONTAINS
       ! Check the input data if required
       IF ( Opt%Check_Input ) THEN
          ! ...Mandatory inputs
-         Atmosphere_Invalid = .NOT. CRTM_Atmosphere_IsValid( Atmosphere(m) )
+         Atmosphere_Invalid = .NOT. CRTM_Atmosphere_IsValid( Atm_Input )
          Surface_Invalid    = .NOT. CRTM_Surface_IsValid( Surface(m) )
          Geometry_Invalid   = .NOT. CRTM_Geometry_IsValid( Geometry(m) )
          IF ( Atmosphere_Invalid .OR. Surface_Invalid .OR. Geometry_Invalid ) THEN
@@ -581,7 +585,7 @@ CONTAINS
 
       ! Add extra layers to current atmosphere profile
       ! if necessary to handle upper atmosphere
-      Error_Status = CRTM_Atmosphere_AddLayers( Atmosphere(m), Atm )
+      Error_Status = CRTM_Atmosphere_AddLayers( Atm_Input, Atm )
       IF ( Error_Status /= SUCCESS ) THEN
          Error_Status = FAILURE
          WRITE( Message,'("Error adding extra layers to profile #",i0)' ) m

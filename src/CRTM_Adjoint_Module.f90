@@ -555,6 +555,7 @@ CONTAINS
           RTV%n_Stokes = Opt%n_Stokes
           RTV_Clear%n_Stokes = Opt%n_Stokes
         END IF
+        RTV%RT_Algorithm_Id = Opt%RT_Algorithm_Id
       END IF
       AtmOptics%n_Stokes = RTV%n_Stokes
       ! ...Assign the option specific SfcOptics input
@@ -865,10 +866,6 @@ CONTAINS
               SpcCoeff_IsUltravioletSensor(SC(SensorIndex)) .OR. &
               SpcCoeff_IsVisibleSensor(SC(SensorIndex)) ) .AND. &
             AtmOptics%Include_Scattering ) THEN
-          ! Assign algorithm selector
-          IF ( Options_Present ) THEN
-            RTV%RT_Algorithm_Id = Opt%RT_Algorithm_Id
-          END IF
           CALL RTV_Create( RTV, MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
           IF ( .NOT. RTV_Associated(RTV) ) THEN
             Error_Status=FAILURE
@@ -936,7 +933,7 @@ CONTAINS
 
           ! Determine the number of streams (n_Full_Streams) in up+downward directions
           IF ( Options_Present .AND. Opt%Use_N_Streams ) THEN
-            n_Full_Streams = Options(m)%n_Streams
+            n_Full_Streams = Opt%n_Streams
             RTSolution(ln,m)%n_Full_Streams = n_Full_Streams + 2
             RTSolution(ln,m)%Scattering_Flag = .TRUE.
           ELSE

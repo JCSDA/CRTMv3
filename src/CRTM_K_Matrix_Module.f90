@@ -453,14 +453,6 @@ CONTAINS
       ! Check the cloud and aerosol coeff. data for cases with clouds and aerosol
       ! ...cloud
       IF ( Atmosphere(m)%n_Clouds > 0 ) THEN
-        !** clear clouds where cloud_fraction < threshold
-        DO nc = 1, Atmosphere(m)%n_clouds
-           WHERE (Atmosphere(m)%Cloud_Fraction(:) < MIN_COVERAGE_THRESHOLD)
-              Atmosphere(m)%Cloud_Fraction(:) = ZERO
-              Atmosphere(m)%Cloud(nc)%Water_Content(:)    = ZERO
-              Atmosphere(m)%Cloud(nc)%Effective_Radius(:) = ZERO
-           END WHERE
-        END DO
         IF( .NOT. CRTM_CloudCoeff_IsLoaded() )THEN
            Error_Status = FAILURE
            WRITE( Message,'("The CloudCoeff data must be loaded (with CRTM_Init routine) ", &
@@ -550,7 +542,7 @@ CONTAINS
       INTEGER :: n, l    ! sensor index, channel index
       INTEGER :: SensorIndex
       INTEGER :: ChannelIndex
-      INTEGER :: ln
+      INTEGER :: ln, nc
       INTEGER :: n_Full_Streams, mth_Azi
       INTEGER :: cloud_coverage_flag
       REAL(fp) :: Source_ZA
@@ -563,6 +555,7 @@ CONTAINS
 
       ! Local atmosphere structure for extra layering
       TYPE(CRTM_Atmosphere_type) :: Atm, Atm_K(n_channel_threads)
+      TYPE(CRTM_Atmosphere_type) :: Atm_Input
 
       ! Clear sky structures
       TYPE(CRTM_Atmosphere_type) :: Atm_Clear       , Atm_Clear_K(n_channel_threads)
@@ -594,6 +587,19 @@ CONTAINS
 
       ! Reinitialise the output RTSolution
       CALL CRTM_RTSolution_Zero(RTSolution(:,m))
+
+      Atm_Input = Atmosphere(m)
+      ! Fix for cloud_Fraction < MIN_COVERAGE_THRESHOLD
+      IF ( Atm_Input%n_Clouds > 0 ) THEN
+        !** clear clouds where cloud_fraction < threshold
+        DO nc = 1, Atm_Input%n_Clouds
+          WHERE (Atm_Input%Cloud_Fraction(:) < MIN_COVERAGE_THRESHOLD)
+            Atm_Input%Cloud_Fraction(:) = ZERO
+            Atm_Input%Cloud(nc)%Water_Content(:)    = ZERO
+            Atm_Input%Cloud(nc)%Effective_Radius(:) = ZERO
+          END WHERE
+        END DO
+      END IF
       IF ( Options_Present ) THEN
         IF( Opt%n_Stokes > 0 ) THEN
           RTV(:)%n_Stokes = Opt%n_Stokes
@@ -635,7 +641,7 @@ CONTAINS
       ! Check the input data if required
       IF ( Opt%Check_Input ) THEN
         ! ...Mandatory inputs
-        Atmosphere_Invalid = .NOT. CRTM_Atmosphere_IsValid( Atmosphere(m) )
+        Atmosphere_Invalid = .NOT. CRTM_Atmosphere_IsValid( Atm_Input )
         Surface_Invalid    = .NOT. CRTM_Surface_IsValid( Surface(m) )
         Geometry_Invalid   = .NOT. CRTM_Geometry_IsValid( Geometry(m) )
         IF ( Atmosphere_Invalid .OR. Surface_Invalid .OR. Geometry_Invalid ) THEN
@@ -681,7 +687,7 @@ CONTAINS
       ! Copy over forward "non-variable" inputs to K-matrix outputs
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
       DO l = 1, n_Channels
-        CALL CRTM_Atmosphere_NonVariableCopy( Atmosphere(m), Atmosphere_K(l,m) )
+        CALL CRTM_Atmosphere_NonVariableCopy( Atm_Input, Atmosphere_K(l,m) )
         CALL CRTM_Surface_NonVariableCopy( Surface(m), Surface_K(l,m) )
       END DO
 !$OMP END PARALLEL DO
@@ -700,7 +706,7 @@ CONTAINS
 
       ! Add extra layers to current atmosphere profile
       ! if necessary to handle upper atmosphere
-      Error_Status = CRTM_Atmosphere_AddLayers( Atmosphere(m), Atm )
+      Error_Status = CRTM_Atmosphere_AddLayers( Atm_Input, Atm )
       IF ( Error_Status /= SUCCESS ) THEN
         Error_Status = FAILURE
         WRITE( Message,'("Error adding FWD extra layers to profile #",i0)' ) m
@@ -1124,7 +1130,7 @@ CONTAINS
 
             ! Determine the number of streams (n_Full_Streams) in up+downward directions
             IF ( Options_Present .AND. Opt%Use_N_Streams ) THEN
-              n_Full_Streams = Options(m)%n_Streams
+              n_Full_Streams = Opt%n_Streams
               RTSolution(ln,m)%n_Full_Streams = n_Full_Streams + 2
               RTSolution(ln,m)%Scattering_Flag = .TRUE.
             ELSE
@@ -1721,7 +1727,7 @@ CONTAINS
             END IF
 
             ! K-matrix of the atmosphere layer addition
-            Error_Status = CRTM_Atmosphere_AddLayers_AD( Atmosphere(m), Atm_K(nt), Atmosphere_K(ln,m) )
+            Error_Status = CRTM_Atmosphere_AddLayers_AD( Atm_Input, Atm_K(nt), Atmosphere_K(ln,m) )
 
             IF ( Error_Status /= SUCCESS ) THEN
               Error_Status = FAILURE
