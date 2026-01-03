@@ -49,6 +49,8 @@ PROGRAM test_Options_Overrides
   TYPE(CRTM_Atmosphere_type)              :: Atm(N_PROFILES)
   TYPE(CRTM_Surface_type)                 :: Sfc(N_PROFILES)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution(:,:)
+  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution_noopt(:,:)
+  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution_opt(:,:)
   TYPE(CRTM_Options_type)                 :: Opt(N_PROFILES)
 
   TYPE(CRTM_Atmosphere_type)              :: Atmosphere_TL(N_PROFILES)
@@ -92,6 +94,8 @@ PROGRAM test_Options_Overrides
   ! 2. **** ALLOCATE STRUCTURE ARRAYS ****
   !
   ALLOCATE( RTSolution( n_Channels, N_PROFILES ), &
+            RTSolution_noopt( n_Channels, N_PROFILES ), &
+            RTSolution_opt( n_Channels, N_PROFILES ), &
             RTSolution_TL( n_Channels, N_PROFILES ), &
             RTSolution_AD( n_Channels, N_PROFILES ), &
             RTSolution_K( n_Channels, N_PROFILES ), &
@@ -160,6 +164,7 @@ PROGRAM test_Options_Overrides
     STOP 1
   END IF
   r_noopt = RTSolution(1,1)%Radiance
+  RTSolution_noopt = RTSolution
 
   ! ============================================================================
   ! 6. **** FORWARD WITH OPTIONS ****
@@ -176,6 +181,7 @@ PROGRAM test_Options_Overrides
     STOP 1
   END IF
   r_opt = RTSolution(1,1)%Radiance
+  RTSolution_opt = RTSolution
   n_full_opt = RTSolution(1,1)%n_Full_Streams
   IF ( n_full_opt /= (Opt(1)%n_Streams + 2) ) THEN
     WRITE(*,'(a,2i6)') 'n_Full_Streams mismatch: ', n_full_opt, Opt(1)%n_Streams + 2
@@ -198,15 +204,15 @@ PROGRAM test_Options_Overrides
                                       Surface_TL , &
                                       Geometry , &
                                       ChannelInfo , &
-                                      RTSolution , &
+                                      RTSolution_noopt , &
                                       RTSolution_TL )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error in CRTM Tangent-Linear Model (no options)'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
-  IF ( ABS(RTSolution(1,1)%Radiance - r_noopt) > DIFF_TOL ) THEN
-    WRITE(*,'(a,2es14.6)') 'TL forward mismatch (no options): ', RTSolution(1,1)%Radiance, r_noopt
+  IF ( ABS(RTSolution_noopt(1,1)%Radiance - r_noopt) > DIFF_TOL ) THEN
+    WRITE(*,'(a,2es14.6)') 'TL forward mismatch (no options): ', RTSolution_noopt(1,1)%Radiance, r_noopt
     STOP 1
   END IF
 
@@ -217,7 +223,7 @@ PROGRAM test_Options_Overrides
                                       Surface_TL , &
                                       Geometry , &
                                       ChannelInfo , &
-                                      RTSolution , &
+                                      RTSolution_opt , &
                                       RTSolution_TL , &
                                       Options = Opt )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -229,8 +235,8 @@ PROGRAM test_Options_Overrides
     WRITE(*,'(a,2i6)') 'TL n_Full_Streams mismatch: ', RTSolution(1,1)%n_Full_Streams, Opt(1)%n_Streams + 2
     STOP 1
   END IF
-  IF ( ABS(RTSolution(1,1)%Radiance - r_opt) > DIFF_TOL ) THEN
-    WRITE(*,'(a,2es14.6)') 'TL forward mismatch (options): ', RTSolution(1,1)%Radiance, r_opt
+  IF ( ABS(RTSolution_opt(1,1)%Radiance - r_opt) > DIFF_TOL ) THEN
+    WRITE(*,'(a,2es14.6)') 'TL forward mismatch (options): ', RTSolution_opt(1,1)%Radiance, r_opt
     STOP 1
   END IF
 
@@ -247,14 +253,14 @@ PROGRAM test_Options_Overrides
                                ChannelInfo  , &
                                Atmosphere_AD, &
                                Surface_AD   , &
-                               RTSolution   )
+                               RTSolution_noopt )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error in CRTM Adjoint Model (no options)'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
-  IF ( ABS(RTSolution(1,1)%Radiance - r_noopt) > DIFF_TOL ) THEN
-    WRITE(*,'(a,2es14.6)') 'AD forward mismatch (no options): ', RTSolution(1,1)%Radiance, r_noopt
+  IF ( ABS(RTSolution_noopt(1,1)%Radiance - r_noopt) > DIFF_TOL ) THEN
+    WRITE(*,'(a,2es14.6)') 'AD forward mismatch (no options): ', RTSolution_noopt(1,1)%Radiance, r_noopt
     STOP 1
   END IF
 
@@ -268,7 +274,7 @@ PROGRAM test_Options_Overrides
                                ChannelInfo  , &
                                Atmosphere_AD, &
                                Surface_AD   , &
-                               RTSolution   , &
+                               RTSolution_opt , &
                                Options = Opt )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error in CRTM Adjoint Model (options)'
@@ -279,8 +285,8 @@ PROGRAM test_Options_Overrides
     WRITE(*,'(a,2i6)') 'AD n_Full_Streams mismatch: ', RTSolution(1,1)%n_Full_Streams, Opt(1)%n_Streams + 2
     STOP 1
   END IF
-  IF ( ABS(RTSolution(1,1)%Radiance - r_opt) > DIFF_TOL ) THEN
-    WRITE(*,'(a,2es14.6)') 'AD forward mismatch (options): ', RTSolution(1,1)%Radiance, r_opt
+  IF ( ABS(RTSolution_opt(1,1)%Radiance - r_opt) > DIFF_TOL ) THEN
+    WRITE(*,'(a,2es14.6)') 'AD forward mismatch (options): ', RTSolution_opt(1,1)%Radiance, r_opt
     STOP 1
   END IF
 
@@ -297,14 +303,14 @@ PROGRAM test_Options_Overrides
                                 ChannelInfo , &
                                 Atmosphere_K, &
                                 Surface_K   , &
-                                RTSolution  )
+                                RTSolution_noopt )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error in CRTM K-Matrix Model (no options)'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
-  IF ( ABS(RTSolution(1,1)%Radiance - r_noopt) > DIFF_TOL ) THEN
-    WRITE(*,'(a,2es14.6)') 'K forward mismatch (no options): ', RTSolution(1,1)%Radiance, r_noopt
+  IF ( ABS(RTSolution_noopt(1,1)%Radiance - r_noopt) > DIFF_TOL ) THEN
+    WRITE(*,'(a,2es14.6)') 'K forward mismatch (no options): ', RTSolution_noopt(1,1)%Radiance, r_noopt
     STOP 1
   END IF
 
@@ -318,7 +324,7 @@ PROGRAM test_Options_Overrides
                                 ChannelInfo , &
                                 Atmosphere_K, &
                                 Surface_K   , &
-                                RTSolution  , &
+                                RTSolution_opt , &
                                 Options = Opt )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error in CRTM K-Matrix Model (options)'
@@ -329,8 +335,8 @@ PROGRAM test_Options_Overrides
     WRITE(*,'(a,2i6)') 'K n_Full_Streams mismatch: ', RTSolution(1,1)%n_Full_Streams, Opt(1)%n_Streams + 2
     STOP 1
   END IF
-  IF ( ABS(RTSolution(1,1)%Radiance - r_opt) > DIFF_TOL ) THEN
-    WRITE(*,'(a,2es14.6)') 'K forward mismatch (options): ', RTSolution(1,1)%Radiance, r_opt
+  IF ( ABS(RTSolution_opt(1,1)%Radiance - r_opt) > DIFF_TOL ) THEN
+    WRITE(*,'(a,2es14.6)') 'K forward mismatch (options): ', RTSolution_opt(1,1)%Radiance, r_opt
     STOP 1
   END IF
 
