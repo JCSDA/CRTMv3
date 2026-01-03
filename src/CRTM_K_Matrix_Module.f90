@@ -611,22 +611,29 @@ CONTAINS
 
 
       ! Allocate the profile independent surface optics local structure
-!$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
+      thread_error = SUCCESS
+!$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message, Err_Thread) &
+!$OMP REDUCTION(MAX:thread_error)
       DO nt = 1, n_channel_threads
+        Err_Thread = SUCCESS
         CALL CRTM_SfcOptics_Create( SfcOptics(nt)  , MAX_N_ANGLES, MAX_N_STOKES )
         CALL CRTM_SfcOptics_Create( SfcOptics_K(nt), MAX_N_ANGLES, MAX_N_STOKES )
         IF ( (.NOT. CRTM_SfcOptics_Associated(SfcOptics(nt))  ) .OR. &
              (.NOT. CRTM_SfcOptics_Associated(SfcOptics_K(nt))) ) THEN
-          Error_Status = FAILURE
+          Err_Thread = FAILURE
           Message = 'Error allocating SfcOptics data structures'
-          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+          CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+          thread_error = FAILURE
           CYCLE
         END IF
       SfcOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
       SfcOptics_K(nt)%n_Stokes = RTV(nt)%n_Stokes
       END DO
 !$OMP END PARALLEL DO
-      IF ( Error_Status == FAILURE ) RETURN
+      IF ( thread_error == FAILURE ) THEN
+        Error_Status = FAILURE
+        RETURN
+      END IF
 
       ! ...Assign the option specific SfcOptics input
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
@@ -754,8 +761,11 @@ CONTAINS
 
       ! Prepare the atmospheric optics structures
       ! ...Allocate the atmospheric optics structures based on Atm extension
-!$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
+      thread_error = SUCCESS
+!$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message, Err_Thread) &
+!$OMP REDUCTION(MAX:thread_error)
       DO nt = 1, n_channel_threads
+        Err_Thread = SUCCESS
         CALL CRTM_AtmOptics_Create( AtmOptics(nt)       , &
                                     Atm%n_Layers        , &
                                     MAX_N_LEGENDRE_TERMS, &
@@ -772,9 +782,10 @@ CONTAINS
 
         IF ( .NOT. CRTM_AtmOptics_Associated( Atmoptics(nt)   ) .OR. &
              .NOT. CRTM_AtmOptics_Associated( Atmoptics_K(nt) ) ) THEN
-          Error_Status = FAILURE
+          Err_Thread = FAILURE
           WRITE( Message,'("Error allocating AtmOptics data structures for profile #",i0)' ) m
-          CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+          CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+          thread_error = FAILURE
           CYCLE
         END IF
         ! ...Set the Scattering Switch
@@ -803,7 +814,10 @@ CONTAINS
         END IF
       END DO ! Channel threads
 !$OMP END PARALLEL DO
-      IF ( Error_Status == FAILURE ) RETURN
+      IF ( thread_error == FAILURE ) THEN
+        Error_Status = FAILURE
+        RETURN
+      END IF
 
       ! Ensure SfcOptics n_Stokes matches any option overrides
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
@@ -846,16 +860,20 @@ CONTAINS
           RETURN
         END IF
 
-!$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
+        thread_error = SUCCESS
+!$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message, Err_Thread) &
+!$OMP REDUCTION(MAX:thread_error)
         DO nt = 1, n_channel_threads
+          Err_Thread = SUCCESS
           ! ...Clear sky SfcOptics
           CALL CRTM_SfcOptics_Create( SfcOptics_Clear(nt)  , MAX_N_ANGLES, MAX_N_STOKES )
           CALL CRTM_SfcOptics_Create( SfcOptics_Clear_K(nt), MAX_N_ANGLES, MAX_N_STOKES )
           IF ( (.NOT. CRTM_SfcOptics_Associated(SfcOptics_Clear(nt))) .OR. &
                (.NOT. CRTM_SfcOptics_Associated(SfcOptics_Clear_K(nt)))) THEN
-            Error_Status = FAILURE
+            Err_Thread = FAILURE
             WRITE( Message,'("Error allocating CLEAR SKY SfcOptics data structures for profile #",i0)' ) m
-            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+            CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+            thread_error = FAILURE
             CYCLE
           END IF
           ! ...Copy over surface optics input
@@ -868,7 +886,10 @@ CONTAINS
           CALL CRTM_Compute_SurfaceT( Surface(m), SfcOptics_Clear(nt) )
         END DO
 !$OMP END PARALLEL DO
-        IF ( Error_Status == FAILURE ) RETURN
+        IF ( thread_error == FAILURE ) THEN
+          Error_Status = FAILURE
+          RETURN
+        END IF
 
       END IF ! If ractional cloud coverage
 
