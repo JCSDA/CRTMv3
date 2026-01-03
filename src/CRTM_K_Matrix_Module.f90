@@ -431,11 +431,9 @@ CONTAINS
       n_profile_threads = n_Profiles
 
       n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
-      IF(n_channel_threads > 1) THEN
-        CALL OMP_SET_MAX_ACTIVE_LEVELS(2)
-      ELSE
-        CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
-      END IF
+      ! Force single-threaded channels in K-matrix until AD routines are thread-safe.
+      n_channel_threads = 1
+      CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
     END IF
 
 
