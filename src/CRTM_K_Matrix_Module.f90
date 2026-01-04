@@ -420,21 +420,10 @@ CONTAINS
 !$OMP END PARALLEL
 
     ! print *,' n_omp_threads = ',n_omp_threads, n_Profiles
-    ! Determine how many threads to use for profiles and channels
-    ! After profiles get what they need, we use the left-over threads
-    ! to parallelize channels
-    IF ( n_omp_threads <= n_Profiles .OR. n_Profiles == 0) THEN
-      n_profile_threads = n_omp_threads
-      n_channel_threads = 1
-      CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
-    ELSE
-      n_profile_threads = n_Profiles
-
-      n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
-      ! Force single-threaded channels in K-matrix until AD routines are thread-safe.
-      n_channel_threads = 1
-      CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
-    END IF
+    ! Use OpenMP across channels only; keep profiles serial for consistency.
+    n_profile_threads = 1
+    n_channel_threads = MIN(n_Channels, MAX(1, n_omp_threads))
+    CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
 
 
 !    WRITE(6,*)
@@ -446,7 +435,6 @@ CONTAINS
     ! ------------
 
 !JR First loop just checks validity of Atmosphere(m) contents
-!$OMP PARALLEL DO PRIVATE (nc,Message) NUM_THREADS(n_profile_threads)
     Profile_Loop1: DO m = 1, n_Profiles
       ! Check the cloud and aerosol coeff. data for cases with clouds and aerosol
       ! ...cloud
@@ -468,13 +456,9 @@ CONTAINS
          CYCLE Profile_Loop1
       END IF
     END DO Profile_Loop1
-!$OMP END PARALLEL DO
-
     IF (Error_Status == FAILURE) THEN
        RETURN
     END IF
-
-!$OMP PARALLEL DO PRIVATE (Opt, AncillaryInput) NUM_THREADS(n_profile_threads) SCHEDULE (runtime)
     Profile_Loop2: DO m = 1, n_Profiles
       ! Check the optional Options structure argument
       Opt = Default_Options
@@ -486,7 +470,6 @@ CONTAINS
       END IF
       ret(m) = profile_solution (m, Opt, AncillaryInput)
     END DO Profile_Loop2
-!$OMP END PARALLEL DO
 
     nfailure = COUNT (ret(:) /= SUCCESS)
     IF (nfailure > 0) THEN
