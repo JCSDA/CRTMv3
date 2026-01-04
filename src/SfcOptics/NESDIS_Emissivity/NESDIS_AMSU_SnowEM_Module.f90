@@ -589,9 +589,8 @@ subroutine AMSU_ABTs(frequency,tb,ts,snow_type,em_vector)
        index_in(nind),threshold0(nind)
   real(fp)   :: LI_coe(0:nLIcoe-1),HI_coe(0:nHIcoe-1)
   real(fp)   :: ts,emissivity
-  real(fp)   :: discriminator(5)
+  REAL(fp)   :: discriminator(5)
   logical:: pick_status,tindex(nind)
-  save      threshold,DI_coe,LI_coe, HI_coe,nmodel
 
   data  nmodel/5,10,13,16,18,24,30,31,32,33,34,35,36,37,38/
 
@@ -870,11 +869,9 @@ subroutine AMSU_AB(frequency,tb,snow_type,em_vector)
 
   integer,parameter:: nch =10,nwch = 5,ncoe = 10
   real(fp)    :: tb(*),frequency
-  real(fp)    :: em_vector(*),emissivity,discriminator(nwch)
+  REAL(fp) :: em_vector(*),emissivity,discriminator(nwch)
   integer :: i,snow_type,ich,nvalid_ch
   real(fp)  :: coe(nwch*(ncoe+1))
-
-  save coe
 
   coe(1:7) = (/&
        -1.326040e+000_fp,  2.475904e-002_fp, &
@@ -934,11 +931,9 @@ subroutine AMSU_ATs(frequency,tba,ts,snow_type,em_vector)
 
   integer,parameter:: nch =10,nwch = 5,ncoe = 9
   real(fp)    :: tba(*)
-  real(fp)    :: em_vector(*),emissivity,ts,frequency,discriminator(nwch)
+  REAL(fp)  :: em_vector(*),emissivity,ts,frequency,discriminator(nwch)
   integer :: snow_type,i,ich,nvalid_ch
   real(fp)  :: coe(nch*(ncoe+1))
-
-  save coe
 
   coe(1:6) = (/ &
        8.210105e-001_fp,  1.216432e-002_fp,  &
@@ -997,10 +992,9 @@ subroutine AMSU_amsua(frequency,tba,snow_type,em_vector)
 
   integer,parameter:: nch =10,nwch = 5,ncoe = 8
   real(fp)    :: tba(*)
-  real(fp)    :: em_vector(*),emissivity,frequency,discriminator(nwch)
+  REAL(fp)    :: em_vector(*),emissivity,frequency,discriminator(nwch)
   integer :: snow_type,i,ich,nvalid_ch
   real(fp)  :: coe(50)
-  save coe
 
   coe(1:7) = (/ &
        -1.326040e+000_fp,  2.475904e-002_fp, -5.741361e-005_fp, &
@@ -1063,10 +1057,9 @@ subroutine AMSU_BTs(frequency,tbb,ts,snow_type,em_vector)
 
   integer,parameter:: nch =10,nwch = 3,ncoe = 5
   real(fp)    :: tbb(*)
-  real(fp)    :: em_vector(*),emissivity,ts,frequency,ed0(nwch),discriminator(5)
+  REAL(fp)  :: em_vector(*),emissivity,ts,frequency,ed0(nwch),discriminator(5)
   integer :: snow_type,i,ich,nvalid_ch
   real(fp)  :: coe(nch*(ncoe+1))
-  save coe
 
   coe(1:6) = (/ 3.110967e-001_fp,  1.100175e-002_fp, -1.677626e-005_fp,    &
        -4.020427e-003_fp,  9.242240e-006_fp, -2.363207e-003_fp/)
@@ -1107,10 +1100,9 @@ subroutine AMSU_amsub(frequency,tbb,snow_type,em_vector)
 
   integer,parameter:: nch =10,nwch = 3,ncoe = 4
   real(fp)    :: tbb(*)
-  real(fp)    :: em_vector(*),emissivity,frequency,ed0(nwch),discriminator(5)
+  REAL(fp)    :: em_vector(*),emissivity,frequency,ed0(nwch),discriminator(5)
   integer :: snow_type,i,ich,nvalid_ch
   real(fp)  :: coe(50)
-  save coe
 
   coe(1:5) = (/-4.015636e-001_fp,9.297894e-003_fp, -1.305068e-005_fp, &
        3.717131e-004_fp, -4.364877e-006_fp/)
@@ -1155,7 +1147,6 @@ subroutine AMSU_ALandEM_Snow(theta,frequency,snow_depth,ts,snow_type,em_vector)
   integer snow_type,ich
   real(fp)   freq_3w(nw_ind),esh_3w(nw_ind),esv_3w(nw_ind)
   complex(fp)  eair
-  save freq_3w
 
   freq_3w = (/31.4_fp,89.0_fp,150.0_fp/)
 
@@ -1201,8 +1192,6 @@ subroutine ems_adjust(theta,frequency,depth,ts,esv_3w,esh_3w,em_vector,snow_type
   real(fp)    :: emissivity,em_vector(2)
 
   real(Double)  :: dem_coe(nw_3,0:ncoe-1),sinthetas,costhetas,deg2rad
-
-  save  dem_coe
 
   dem_coe(1,0:ncoe-1) = (/ 2.306844e+000_Double, -7.287718e-003_Double, &
 
