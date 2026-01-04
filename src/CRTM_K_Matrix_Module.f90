@@ -409,9 +409,19 @@ CONTAINS
       END IF
     END IF
 
-    ! Keep profile and channel loops serial.
+    ! -------
+    ! OpenMP
+    ! -------
+!$OMP PARALLEL
+!$OMP SINGLE
+    n_channel_threads = OMP_GET_NUM_THREADS()
+!$OMP END SINGLE
+!$OMP END PARALLEL
+
+    ! Use OpenMP across channels only; keep profiles serial for consistency.
     n_profile_threads = 1
-    n_channel_threads = 1
+    n_channel_threads = MIN(n_Channels, MAX(1, n_channel_threads))
+    CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
 
 
 !    WRITE(6,*)
@@ -1042,7 +1052,7 @@ CONTAINS
         thread_error = SUCCESS
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
 !$OMP    FIRSTPRIVATE(ln, r_cloudy)                                     &
-!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,          &
+!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams,                 &
 !$OMP            start_ch, end_ch, Wavenumber, Status_FWD, Status_K,    &
 !$OMP            transmittance, transmittance_K, transmittance_clear,   &
 !$OMP            transmittance_clear_K, l, mth_Azi, ks, Err_Thread)     &
@@ -1464,7 +1474,6 @@ CONTAINS
                 ! The adjoint of the clear sky radiative transfer for fractionally cloudy atmospheres
                 RTV_Clear(nt)%mth_Azi = RTV(nt)%mth_Azi
                 SfcOptics_Clear(nt)%mth_Azi = SfcOptics(nt)%mth_Azi
-!$OMP CRITICAL(K_MATRIX_AD)
                 Err_Thread = CRTM_Compute_RTSolution_AD( &
                                  Atm_Clear             , &  ! FWD Input
                                  Surface(m)            , &  ! FWD Input
@@ -1480,7 +1489,6 @@ CONTAINS
                                  AtmOptics_Clear_K(nt) , &  ! K  Output
                                  SfcOptics_Clear_K(nt) , &  ! K  Output
                                  RTV_Clear(nt)           )  ! Internal variable input
-!$OMP END CRITICAL(K_MATRIX_AD)
                 IF ( Err_Thread /= SUCCESS ) THEN
                   WRITE( Message,'( "Error computing CLEAR SKY RTSolution_K for ", a, &
                          &", channel ", i0,", profile #",i0)' ) &
@@ -1493,7 +1501,6 @@ CONTAINS
 
 
               ! The adjoint of the radiative transfer
-!$OMP CRITICAL(K_MATRIX_AD)
               Err_Thread = CRTM_Compute_RTSolution_AD( &
                                Atm               , &  ! FWD Input
                                Surface(m)        , &  ! FWD Input
@@ -1509,7 +1516,6 @@ CONTAINS
                                AtmOptics_K(nt)   , &  ! K  Output
                                SfcOptics_K(nt)   , &  ! K  Output
                                RTV(nt)             )  ! Internal variable input
-!$OMP END CRITICAL(K_MATRIX_AD)
               IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'( "Error computing RTSolution_K for ", a, &
                        &", channel ", i0,", profile #",i0)' ) &
@@ -1520,7 +1526,6 @@ CONTAINS
               END IF
               ! Calculate the adjoint for the active sensor reflectivity
               IF ( SC(SensorIndex)%Is_Active_Sensor .AND. AtmOptics(nt)%Include_Scattering ) THEN
-!$OMP CRITICAL(K_MATRIX_AD)
                 CALL CRTM_Compute_Reflectivity_AD(Atm             , &  ! Input
                                                   AtmOptics(nt)   , &  ! Input
                                                   RTSolution(ln,m), & ! Input
@@ -1529,7 +1534,6 @@ CONTAINS
                                                   ChannelIndex    , &  ! Input
                                                   AtmOptics_K(nt) , &  ! Input/Output
                                                   RTSolution_K(ln,m))  ! Input/Output
-!$OMP END CRITICAL(K_MATRIX_AD)
               END IF
 
 
@@ -1573,16 +1577,12 @@ CONTAINS
             ! for use in FASTEM-X reflection correction
             transmittance_K = SfcOptics_K(nt)%transmittance
             SfcOptics_K(nt)%transmittance = ZERO
-!$OMP CRITICAL(K_MATRIX_AD)
             CALL CRTM_Compute_Transmittance_AD(AtmOptics(nt),transmittance_K,AtmOptics_K(nt))
-!$OMP END CRITICAL(K_MATRIX_AD)
             ! ...Clear sky for fractional cloud cover
             IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
               transmittance_clear_K = SfcOptics_Clear_K(nt)%transmittance
               SfcOptics_Clear_K(nt)%transmittance = ZERO
-!$OMP CRITICAL(K_MATRIX_AD)
               CALL CRTM_Compute_Transmittance_AD(AtmOptics_Clear(nt),transmittance_clear_K,AtmOptics_Clear_K(nt))
-!$OMP END CRITICAL(K_MATRIX_AD)
             END IF
 
 
@@ -1591,15 +1591,12 @@ CONTAINS
                                                    RTSolution_K(ln,m)%SOD
             RTSolution_K(ln,m)%SOD = ZERO
             IF( AtmOptics(nt)%Include_Scattering ) THEN
-!$OMP CRITICAL(K_MATRIX_AD)
               CALL CRTM_AtmOptics_Combine_AD( AtmOptics(nt), AtmOptics_K(nt), AOvar(nt) )
-!$OMP END CRITICAL(K_MATRIX_AD)
             END IF
 
 
             ! Compute the adjoint aerosol absorption/scattering properties
             IF ( Atm%n_Aerosols > 0 ) THEN
-!$OMP CRITICAL(K_MATRIX_AD)
               Err_Thread = CRTM_Compute_AerosolScatter_AD( Atm             , &  ! FWD Input
                                                              AtmOptics(nt)   , &  ! FWD Input
                                                              AtmOptics_K(nt) , &  ! K   Input
@@ -1607,7 +1604,6 @@ CONTAINS
                                                              ChannelIndex    , &  ! Input
                                                              Atm_K(nt)       , &  ! K   Output
                                                              ASvar(nt)         )  ! Internal variable input
-!$OMP END CRITICAL(K_MATRIX_AD)
               IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing AerosolScatter_K for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
@@ -1621,7 +1617,6 @@ CONTAINS
 
             ! Compute the adjoint cloud absorption/scattering properties
             IF ( Atm%n_Clouds > 0 ) THEN
-!$OMP CRITICAL(K_MATRIX_AD)
               Err_Thread = CRTM_Compute_CloudScatter_AD( Atm             , &  ! FWD Input
                                                            AtmOptics(nt)   , &  ! FWD Input
                                                            AtmOptics_K(nt) , &  ! K   Input
@@ -1630,7 +1625,6 @@ CONTAINS
                                                            ChannelIndex    , &  ! Input
                                                            Atm_K(nt)       , &  ! K   Output
                                                            CSvar(nt)         )  ! Internal variable input
-!$OMP END CRITICAL(K_MATRIX_AD)
               IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing CloudScatter_K for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
@@ -1644,9 +1638,7 @@ CONTAINS
 
             ! Adjoint of clear-sky AtmOptics copy
             IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-!$OMP CRITICAL(K_MATRIX_AD)
               Err_Thread = CRTM_AtmOptics_NoScatterCopy_AD( AtmOptics(nt), AtmOptics_Clear_K(nt), AtmOptics_K(nt) )
-!$OMP END CRITICAL(K_MATRIX_AD)
               IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing CLEAR SKY AtmOptics_K for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
@@ -1661,12 +1653,10 @@ CONTAINS
             ! Compute the adjoint molecular scattering properties
             IF( RTV(nt)%Visible_Flag_true ) THEN
               Wavenumber = SC(SensorIndex)%Wavenumber(ChannelIndex)
-!$OMP CRITICAL(K_MATRIX_AD)
               Err_Thread = CRTM_Compute_MoleculeScatter_AD( &
                                Wavenumber , &
                                AtmOptics_K(nt), &
                                Atm_K(nt)        )
-!$OMP END CRITICAL(K_MATRIX_AD)
               IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing MoleculeScatter_K for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
@@ -1681,29 +1671,24 @@ CONTAINS
 
 
             ! Compute the adjoint gaseous absorption
-!$OMP CRITICAL(K_MATRIX_AD)
             CALL CRTM_Compute_AtmAbsorption_AD( SensorIndex     , &  ! Input
                                                 ChannelIndex    , &  ! Input
                                                 Predictor(nt)   , &  ! FWD Input
                                                 AtmOptics_K(nt) , &  ! K   Input
                                                 Predictor_K(nt) , &  ! K   Output
                                                 AAvar(nt)         )  ! Internal variable input
-!$OMP END CRITICAL(K_MATRIX_AD)
 
 
             ! K-matrix of the NLTE correction predictor calculations
             IF ( Opt%Apply_NLTE_Correction ) THEN
-!$OMP CRITICAL(K_MATRIX_AD)
               CALL Compute_NLTE_Predictor_AD( &
                      NLTE_Predictor       , &  ! Input
                      NLTE_Predictor_K(nt) , &  ! Input
                      Atm_K(nt)              )  ! Output
-!$OMP END CRITICAL(K_MATRIX_AD)
             END IF
 
 
             ! K-matrix of the predictor calculations
-!$OMP CRITICAL(K_MATRIX_AD)
             CALL CRTM_Compute_Predictors_AD( SensorIndex       , &  ! Input
                                              Atm               , &  ! FWD Input
                                              Predictor(nt)     , &  ! FWD Input
@@ -1711,12 +1696,9 @@ CONTAINS
                                              AncillaryInput    , &  ! Input
                                              Atm_K(nt)         , &  ! K   Output
                                              PVar(nt)            )  ! Internal variable input
-!$OMP END CRITICAL(K_MATRIX_AD)
 
             ! K-matrix of average surface skin temperature for multi-surface types
-!$OMP CRITICAL(K_MATRIX_AD)
             CALL CRTM_Compute_SurfaceT_AD( Surface(m), SfcOptics_K(nt), Surface_K(ln,m) )
-!$OMP END CRITICAL(K_MATRIX_AD)
 
 
             ! Adjoint of cloud cover setup
@@ -1724,14 +1706,10 @@ CONTAINS
 
               ! Post process the CLEAR sky structures for fractional cloud coverage
               ! ...Clear sky SfcOptics
-!$OMP CRITICAL(K_MATRIX_AD)
               CALL CRTM_Compute_SurfaceT_AD( Surface(m), SfcOptics_Clear_K(nt), Surface_K(ln,m) )
               CALL CRTM_SfcOptics_Zero(SfcOptics_Clear_K(nt))
-!$OMP END CRITICAL(K_MATRIX_AD)
               ! ...Clear sky atmosphere
-!$OMP CRITICAL(K_MATRIX_AD)
               Err_Thread = CRTM_Atmosphere_ClearSkyCopy_AD(Atm, Atm_Clear_K(nt), Atm_K(nt))
-!$OMP END CRITICAL(K_MATRIX_AD)
 
               IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing CLEAR SKY Atm_K object for ",a,&
@@ -1745,9 +1723,7 @@ CONTAINS
               END IF
 
               ! K-matrix of the cloud coverage
-!$OMP CRITICAL(K_MATRIX_AD)
               Err_Thread = CloudCover_K(nt)%Compute_CloudCover_AD(CloudCover, atm, atm_K(nt))
-!$OMP END CRITICAL(K_MATRIX_AD)
 
               IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing K-MATRIX cloud cover for ",a,&
@@ -1762,9 +1738,7 @@ CONTAINS
             END IF
 
             ! K-matrix of the atmosphere layer addition
-!$OMP CRITICAL(K_MATRIX_AD)
             Err_Thread = CRTM_Atmosphere_AddLayers_AD( Atm_Input, Atm_K(nt), Atmosphere_K(ln,m) )
-!$OMP END CRITICAL(K_MATRIX_AD)
 
             IF ( Err_Thread /= SUCCESS ) THEN
               WRITE( Message,'("Error computing K-MATRIX atmosphere extra layers for ",a,&

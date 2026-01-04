@@ -963,7 +963,7 @@ CONTAINS
         ! ------------
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
 !$OMP    FIRSTPRIVATE(ln, r_cloudy)                                               &
-!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,    &
+!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams,           &
 !$OMP          start_ch, end_ch, Wavenumber, transmittance, transmittance_TL,   &
 !$OMP          transmittance_clear, transmittance_clear_TL, l, mth_Azi, ks, Status_FWD,Status_TL)
         Thread_Loop: DO nt = 1, n_channel_threads

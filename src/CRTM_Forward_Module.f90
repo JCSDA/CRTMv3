@@ -857,7 +857,7 @@ CONTAINS
          ! ------------
          !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
          !$OMP    FIRSTPRIVATE(ln)                                               &
-         !$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,    &
+         !$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams,           &
          !$OMP          start_ch, end_ch, Wavenumber, transmittance,             &
          !$OMP          transmittance_clear, l, mth_Azi, ks)
          Thread_Loop: DO nt = 1, n_channel_threads
