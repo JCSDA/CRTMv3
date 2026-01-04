@@ -271,6 +271,7 @@ CONTAINS
     INTEGER :: n_omp_threads
     INTEGER :: n_profile_threads
     INTEGER :: n_channel_threads
+    INTEGER :: thread_error, Err_Thread
 
     ! ------
     ! SET UP
@@ -487,19 +488,26 @@ CONTAINS
       END IF
 
       ! Allocate the profile independent surface opticss local structure
-      !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
+      thread_error = SUCCESS
+      !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message, Err_Thread) &
+      !$OMP REDUCTION(MAX:thread_error)
       DO nt = 1, n_channel_threads
+         Err_Thread = SUCCESS
          CALL CRTM_SfcOptics_Create( SfcOptics(nt)  , MAX_N_ANGLES, MAX_N_STOKES )
          IF ( .NOT. CRTM_SfcOptics_Associated(SfcOptics(nt) ) ) THEN
-            Error_Status = FAILURE
+            Err_Thread = FAILURE
             Message = 'Error allocating SfcOptics data structures'
-            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+            CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+            thread_error = FAILURE
             CYCLE
          END IF
          SfcOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
       END DO
       !$OMP END PARALLEL DO
-      IF ( Error_Status == FAILURE) RETURN
+      IF ( thread_error == FAILURE) THEN
+         Error_Status = FAILURE
+         RETURN
+      END IF
 
       ! ...Assign the option specific SfcOptics input
       !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
@@ -613,8 +621,10 @@ CONTAINS
       ! Calculate cloud water density
       CALL Calculate_Cloud_Water_Density(Atm)
 
-      !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
+      !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message, Err_Thread) &
+      !$OMP REDUCTION(MAX:thread_error)
       DO nt = 1, n_channel_threads
+         Err_Thread = SUCCESS
          ! Prepare the atmospheric optics structures
          ! ...Allocate the AtmOptics structure based on Atm extension
          CALL CRTM_AtmOptics_Create( AtmOptics(nt)  , &
@@ -623,9 +633,10 @@ CONTAINS
                               CloudC%N_PHASE_ELEMENTS  )
 
          IF ( .NOT. CRTM_AtmOptics_Associated( Atmoptics(nt) ) ) THEN
-            Error_Status = FAILURE
+            Err_Thread = FAILURE
             WRITE( Message,'("Error allocating AtmOptics data structure for profile #",i0)' ) m
-            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+            CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+            thread_error = FAILURE
          END IF
          ! ...Set the scattering switch
          AtmOptics(nt)%Include_Scattering = Opt%Include_Scattering
@@ -653,7 +664,10 @@ CONTAINS
          END IF
       END DO
       !$OMP END PARALLEL DO
-      IF ( Error_Status == FAILURE) RETURN
+      IF ( thread_error == FAILURE) THEN
+         Error_Status = FAILURE
+         RETURN
+      END IF
 
       ! Determine the type of cloud coverage
       cloud_coverage_flag = CRTM_Atmosphere_Coverage( atm )
@@ -678,14 +692,17 @@ CONTAINS
             CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
          END IF
-         !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
+         !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message, Err_Thread) &
+         !$OMP REDUCTION(MAX:thread_error)
          DO nt = 1, n_channel_threads
+            Err_Thread = SUCCESS
             ! ...Clear sky SfcOptics
             CALL CRTM_SfcOptics_Create( SfcOptics_Clear(nt), MAX_N_ANGLES, MAX_N_STOKES )
             IF ( .NOT. CRTM_SfcOptics_Associated(SfcOptics_Clear(nt)) ) THEN
-               Error_Status = FAILURE
+               Err_Thread = FAILURE
                WRITE( Message,'("Error allocating CLEAR SKY SfcOptics data structures for profile #",i0)' ) m
-               CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+               CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+               thread_error = FAILURE
                CYCLE
             END IF
             ! ...Copy over surface optics input
@@ -695,7 +712,10 @@ CONTAINS
             CALL CRTM_Compute_SurfaceT( Surface(m), SfcOptics_Clear(nt) )
          END DO
          !$OMP END PARALLEL DO
-         IF ( Error_Status == FAILURE) RETURN
+         IF ( thread_error == FAILURE) THEN
+            Error_Status = FAILURE
+            RETURN
+         END IF
       END IF
       ! Average surface skin temperature for multi-surface types
       !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
@@ -759,8 +779,10 @@ CONTAINS
                                        AncillaryInput, &  ! Input
                                        Predictor     , &  ! Output
                                        PVar             ) ! Internal variable output
-         !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
+         !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message, Err_Thread) &
+         !$OMP REDUCTION(MAX:thread_error)
          DO nt = 1, n_channel_threads
+            Err_Thread = SUCCESS
 
             ! Process aircraft pressure altitude
             IF ( Opt%Aircraft_Pressure > ZERO ) THEN
@@ -809,15 +831,19 @@ CONTAINS
                CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
 
                IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
-                  Error_Status=FAILURE
+                  Err_Thread=FAILURE
                   WRITE( Message,'("Error allocating RTV structure for profile #",i0, &
                        &" and ",a," sensor.")' ) m, TRIM(SC(SensorIndex)%Sensor_Id)
-                  CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                  CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                  thread_error = FAILURE
                END IF
             END IF
          END DO
          !$OMP END PARALLEL DO
-         IF ( Error_Status == FAILURE ) RETURN
+         IF ( thread_error == FAILURE ) THEN
+            Error_Status = FAILURE
+            RETURN
+         END IF
 
          ! Compute NLTE correction predictors
          IF ( Opt%Apply_NLTE_Correction ) THEN
