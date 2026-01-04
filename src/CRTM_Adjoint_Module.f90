@@ -402,7 +402,6 @@ CONTAINS
     ! PROFILE LOOPS
     ! ------------
 !JR Loop handles per-profile solution
-!$OMP PARALLEL DO PRIVATE (m, Opt, AncillaryInput) SCHEDULE (runtime)
     Profile_Loop2: DO m = 1, n_Profiles
       ! Check the optional Options structure argument
       Opt = Default_Options
@@ -414,7 +413,6 @@ CONTAINS
       END IF
       ret(m) = profile_solution (m, Opt, AncillaryInput)
     END DO Profile_Loop2
-!$OMP END PARALLEL DO
     nfailure = COUNT (ret(:) /= SUCCESS)
     IF (nfailure > 0) THEN
       Error_Status = FAILURE

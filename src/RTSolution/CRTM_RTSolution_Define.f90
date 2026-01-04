@@ -527,7 +527,12 @@ CONTAINS
     WRITE(fid,fmt) "Brightness Temperature        : ", RTSolution%Brightness_Temperature
     WRITE(fid,fmt) "Solar Irradiance              : ", RTSolution%Solar_Irradiance
     WRITE(fid,fmt) "Reflectance                   : ", RTSolution%Reflectance
-    WRITE(fid,fmt) "Stokes                        : ", RTSolution%Stokes
+    IF ( RTSolution%n_Stokes <= 1 ) THEN
+      WRITE(fid,fmt) "Stokes                        : ", RTSolution%Stokes(1)
+    ELSE
+      WRITE(fid,'(3x,"Stokes                        :")')
+      WRITE(fid,'(5(1x,es22.15,:))') RTSolution%Stokes(1:RTSolution%n_Stokes)
+    END IF
     IF ( CRTM_RTSolution_Associated(RTSolution) ) THEN
       WRITE(fid,'(3x,"n_Layers : ",i0)') RTSolution%n_Layers
       WRITE(fid,'(3x,"Upwelling Overcast Radiance :")')

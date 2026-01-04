@@ -1027,7 +1027,7 @@ CONTAINS
         ! ----------------------------
         ! counters for thread loop
         ! -----------------------------
-        n_sensor_channels = ChannelInfo(n)%n_Channels
+        n_sensor_channels = SIZE(ChannelInfo(n)%Process_Channel)
 !        chunk_ch = n_sensor_channels / n_channel_threads
         chunk_ch = CEILING( REAL(n_sensor_channels) / REAL(n_channel_threads) )
         !count inactive channels in each chunk
@@ -1035,7 +1035,7 @@ CONTAINS
         DO l = 1, n_sensor_channels
           IF ( .NOT. ChannelInfo(n)%Process_Channel(l) ) THEN
 !            nt = l / chunk_ch + 1
-            nt = FLOOR( REAL(l) / REAL(chunk_ch) ) + 1
+            nt = (l - 1) / chunk_ch + 1
             n_inactive_channels(nt) = n_inactive_channels(nt) + 1
           END IF
         END DO
@@ -1063,11 +1063,7 @@ CONTAINS
           Err_Thread = SUCCESS
 
           start_ch = (nt - 1) * chunk_ch + 1
-          IF ( nt == n_channel_threads ) THEN
-            end_ch = n_sensor_channels
-          ELSE
-            end_ch = start_ch + chunk_ch - 1
-          END IF
+          end_ch = MIN(start_ch + chunk_ch - 1, n_sensor_channels)
           ln = (start_ch - 1) - n_inactive_channels(nt)
 
           ! -------------
