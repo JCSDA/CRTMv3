@@ -345,7 +345,6 @@ CONTAINS
     INTEGER :: ret(SIZE(Atmosphere))     ! return codes from profile_solution
     INTEGER :: nfailure                  ! number of non-success calls to profile_solution
 
-    INTEGER :: n_omp_threads
     INTEGER :: n_profile_threads
     INTEGER :: n_channel_threads
 
@@ -410,25 +409,14 @@ CONTAINS
       END IF
     END IF
 
-    ! -------
-    ! OpenMP
-    ! -------
-!$OMP PARALLEL
-!$OMP SINGLE
-    n_omp_threads = OMP_GET_NUM_THREADS()
-!$OMP END SINGLE
-!$OMP END PARALLEL
-
-    ! print *,' n_omp_threads = ',n_omp_threads, n_Profiles
-    ! Use OpenMP across channels only; keep profiles serial for consistency.
+    ! Keep profile and channel loops serial.
     n_profile_threads = 1
-    n_channel_threads = MIN(n_Channels, MAX(1, n_omp_threads))
-    CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
+    n_channel_threads = 1
 
 
 !    WRITE(6,*)
 !    WRITE(6,'("   Using",i3," OpenMP threads =",i3," for profiles and",i3," for channels.")') &
-!         n_omp_threads, n_profile_threads, n_channel_threads
+!         1, n_profile_threads, n_channel_threads
 
     ! ------------
     ! PROFILE LOOPS
