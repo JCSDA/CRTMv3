@@ -295,7 +295,7 @@ CONTAINS
     REAL(fp) :: tb(:)
     REAL(fp) :: em_vector(*),emissivity,ts,frequency,discriminator(nwch)
     INTEGER  :: ich
-    REAL(fp),SAVE :: coe(100)
+    REAL(fp) :: coe(100)
     REAL(fp) :: X(nwch),Y(nwch)
     REAL(fp) :: XX,XY,del,deltb
 
