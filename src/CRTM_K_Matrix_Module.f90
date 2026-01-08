@@ -530,10 +530,292 @@ CONTAINS
       WRITE(6,*)'CRTM_K_Matrix inspecting Surface_K...'
       CALL CRTM_Surface_Inspect (Surface_K(:,:))
     END IF
+
+    ! Zero subnormal K-matrix fields introduced by safe exp floors.
+    CALL Zero_Subnormal_Atmosphere_K(Atmosphere_K)
+    CALL Zero_Subnormal_Surface_K(Surface_K)
+    CALL Zero_Subnormal_RTSolution_K(RTSolution_K)
     RETURN
 
 
   CONTAINS
+
+    SUBROUTINE Zero_Subnormal_Atmosphere_K(Atm_K)
+      TYPE(CRTM_Atmosphere_type), INTENT(IN OUT) :: Atm_K(:,:)
+      INTEGER :: i_channel, i_profile, i_layer, i_cloud, i_aero, i_abs
+      INTEGER :: i0, i1, j0, j1
+
+      DO i_profile = 1, SIZE(Atm_K, DIM=2)
+        DO i_channel = 1, SIZE(Atm_K, DIM=1)
+          IF ( ALLOCATED(Atm_K(i_channel,i_profile)%Level_Pressure) ) THEN
+            i0 = LBOUND(Atm_K(i_channel,i_profile)%Level_Pressure, 1)
+            i1 = UBOUND(Atm_K(i_channel,i_profile)%Level_Pressure, 1)
+            DO i_layer = i0, i1
+              IF ( ABS(Atm_K(i_channel,i_profile)%Level_Pressure(i_layer)) < TINY(ONE) ) THEN
+                Atm_K(i_channel,i_profile)%Level_Pressure(i_layer) = ZERO
+              END IF
+            END DO
+          END IF
+          IF ( ALLOCATED(Atm_K(i_channel,i_profile)%Height) ) THEN
+            i0 = LBOUND(Atm_K(i_channel,i_profile)%Height, 1)
+            i1 = UBOUND(Atm_K(i_channel,i_profile)%Height, 1)
+            DO i_layer = i0, i1
+              IF ( ABS(Atm_K(i_channel,i_profile)%Height(i_layer)) < TINY(ONE) ) THEN
+                Atm_K(i_channel,i_profile)%Height(i_layer) = ZERO
+              END IF
+            END DO
+          END IF
+          IF ( ALLOCATED(Atm_K(i_channel,i_profile)%Pressure) ) THEN
+            i0 = LBOUND(Atm_K(i_channel,i_profile)%Pressure, 1)
+            i1 = UBOUND(Atm_K(i_channel,i_profile)%Pressure, 1)
+            DO i_layer = i0, i1
+              IF ( ABS(Atm_K(i_channel,i_profile)%Pressure(i_layer)) < TINY(ONE) ) THEN
+                Atm_K(i_channel,i_profile)%Pressure(i_layer) = ZERO
+              END IF
+            END DO
+          END IF
+          IF ( ALLOCATED(Atm_K(i_channel,i_profile)%Temperature) ) THEN
+            i0 = LBOUND(Atm_K(i_channel,i_profile)%Temperature, 1)
+            i1 = UBOUND(Atm_K(i_channel,i_profile)%Temperature, 1)
+            DO i_layer = i0, i1
+              IF ( ABS(Atm_K(i_channel,i_profile)%Temperature(i_layer)) < TINY(ONE) ) THEN
+                Atm_K(i_channel,i_profile)%Temperature(i_layer) = ZERO
+              END IF
+            END DO
+          END IF
+          IF ( ALLOCATED(Atm_K(i_channel,i_profile)%Absorber) ) THEN
+            i0 = LBOUND(Atm_K(i_channel,i_profile)%Absorber, 1)
+            i1 = UBOUND(Atm_K(i_channel,i_profile)%Absorber, 1)
+            j0 = LBOUND(Atm_K(i_channel,i_profile)%Absorber, 2)
+            j1 = UBOUND(Atm_K(i_channel,i_profile)%Absorber, 2)
+            DO i_abs = j0, j1
+              DO i_layer = i0, i1
+                IF ( ABS(Atm_K(i_channel,i_profile)%Absorber(i_layer,i_abs)) < TINY(ONE) ) THEN
+                  Atm_K(i_channel,i_profile)%Absorber(i_layer,i_abs) = ZERO
+                END IF
+              END DO
+            END DO
+          END IF
+          IF ( ALLOCATED(Atm_K(i_channel,i_profile)%Cloud_Fraction) ) THEN
+            i0 = LBOUND(Atm_K(i_channel,i_profile)%Cloud_Fraction, 1)
+            i1 = UBOUND(Atm_K(i_channel,i_profile)%Cloud_Fraction, 1)
+            DO i_layer = i0, i1
+              IF ( ABS(Atm_K(i_channel,i_profile)%Cloud_Fraction(i_layer)) < TINY(ONE) ) THEN
+                Atm_K(i_channel,i_profile)%Cloud_Fraction(i_layer) = ZERO
+              END IF
+            END DO
+          END IF
+          IF ( ALLOCATED(Atm_K(i_channel,i_profile)%Relative_Humidity) ) THEN
+            i0 = LBOUND(Atm_K(i_channel,i_profile)%Relative_Humidity, 1)
+            i1 = UBOUND(Atm_K(i_channel,i_profile)%Relative_Humidity, 1)
+            DO i_layer = i0, i1
+              IF ( ABS(Atm_K(i_channel,i_profile)%Relative_Humidity(i_layer)) < TINY(ONE) ) THEN
+                Atm_K(i_channel,i_profile)%Relative_Humidity(i_layer) = ZERO
+              END IF
+            END DO
+          END IF
+          IF ( Atm_K(i_channel,i_profile)%n_Clouds > 0 .AND. ALLOCATED(Atm_K(i_channel,i_profile)%Cloud) ) THEN
+            DO i_cloud = 1, Atm_K(i_channel,i_profile)%n_Clouds
+              IF ( ALLOCATED(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Effective_Radius) ) THEN
+                i0 = LBOUND(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Effective_Radius, 1)
+                i1 = UBOUND(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Effective_Radius, 1)
+                DO i_layer = i0, i1
+                  IF ( ABS(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Effective_Radius(i_layer)) < TINY(ONE) ) THEN
+                    Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Effective_Radius(i_layer) = ZERO
+                  END IF
+                END DO
+              END IF
+              IF ( ALLOCATED(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Effective_Variance) ) THEN
+                i0 = LBOUND(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Effective_Variance, 1)
+                i1 = UBOUND(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Effective_Variance, 1)
+                DO i_layer = i0, i1
+                  IF ( ABS(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Effective_Variance(i_layer)) < TINY(ONE) ) THEN
+                    Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Effective_Variance(i_layer) = ZERO
+                  END IF
+                END DO
+              END IF
+              IF ( ALLOCATED(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Water_Content) ) THEN
+                i0 = LBOUND(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Water_Content, 1)
+                i1 = UBOUND(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Water_Content, 1)
+                DO i_layer = i0, i1
+                  IF ( ABS(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Water_Content(i_layer)) < TINY(ONE) ) THEN
+                    Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Water_Content(i_layer) = ZERO
+                  END IF
+                END DO
+              END IF
+              IF ( ALLOCATED(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Water_Density) ) THEN
+                i0 = LBOUND(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Water_Density, 1)
+                i1 = UBOUND(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Water_Density, 1)
+                DO i_layer = i0, i1
+                  IF ( ABS(Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Water_Density(i_layer)) < TINY(ONE) ) THEN
+                    Atm_K(i_channel,i_profile)%Cloud(i_cloud)%Water_Density(i_layer) = ZERO
+                  END IF
+                END DO
+              END IF
+            END DO
+          END IF
+          IF ( Atm_K(i_channel,i_profile)%n_Aerosols > 0 .AND. ALLOCATED(Atm_K(i_channel,i_profile)%Aerosol) ) THEN
+            DO i_aero = 1, Atm_K(i_channel,i_profile)%n_Aerosols
+              IF ( ALLOCATED(Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Effective_Radius) ) THEN
+                i0 = LBOUND(Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Effective_Radius, 1)
+                i1 = UBOUND(Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Effective_Radius, 1)
+                DO i_layer = i0, i1
+                  IF ( ABS(Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Effective_Radius(i_layer)) < TINY(ONE) ) THEN
+                    Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Effective_Radius(i_layer) = ZERO
+                  END IF
+                END DO
+              END IF
+              IF ( ALLOCATED(Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Effective_Variance) ) THEN
+                i0 = LBOUND(Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Effective_Variance, 1)
+                i1 = UBOUND(Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Effective_Variance, 1)
+                DO i_layer = i0, i1
+                  IF ( ABS(Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Effective_Variance(i_layer)) < TINY(ONE) ) THEN
+                    Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Effective_Variance(i_layer) = ZERO
+                  END IF
+                END DO
+              END IF
+              IF ( ALLOCATED(Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Concentration) ) THEN
+                i0 = LBOUND(Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Concentration, 1)
+                i1 = UBOUND(Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Concentration, 1)
+                DO i_layer = i0, i1
+                  IF ( ABS(Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Concentration(i_layer)) < TINY(ONE) ) THEN
+                    Atm_K(i_channel,i_profile)%Aerosol(i_aero)%Concentration(i_layer) = ZERO
+                  END IF
+                END DO
+              END IF
+            END DO
+          END IF
+        END DO
+      END DO
+    END SUBROUTINE Zero_Subnormal_Atmosphere_K
+
+
+    SUBROUTINE Zero_Subnormal_Surface_K(Sfc_K)
+      TYPE(CRTM_Surface_type), INTENT(IN OUT) :: Sfc_K(:,:)
+      INTEGER :: i_channel, i_profile, i_tb
+
+      DO i_profile = 1, SIZE(Sfc_K, DIM=2)
+        DO i_channel = 1, SIZE(Sfc_K, DIM=1)
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Land_Coverage) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Land_Coverage = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Water_Coverage) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Water_Coverage = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Snow_Coverage) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Snow_Coverage = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Ice_Coverage) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Ice_Coverage = ZERO
+
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Land_Temperature) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Land_Temperature = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Soil_Moisture_Content) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Soil_Moisture_Content = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Canopy_Water_Content) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Canopy_Water_Content = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Vegetation_Fraction) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Vegetation_Fraction = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Soil_Temperature) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Soil_Temperature = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%LAI) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%LAI = ZERO
+
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Water_Temperature) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Water_Temperature = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Wind_Speed) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Wind_Speed = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Wind_Direction) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Wind_Direction = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Salinity) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Salinity = ZERO
+
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Snow_Temperature) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Snow_Temperature = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Snow_Depth) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Snow_Depth = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Snow_Density) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Snow_Density = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Snow_Grain_Size) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Snow_Grain_Size = ZERO
+
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Ice_Temperature) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Ice_Temperature = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Ice_Thickness) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Ice_Thickness = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Ice_Density) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Ice_Density = ZERO
+          IF ( ABS(Sfc_K(i_channel,i_profile)%Ice_Roughness) < TINY(ONE) ) Sfc_K(i_channel,i_profile)%Ice_Roughness = ZERO
+
+          IF ( ALLOCATED(Sfc_K(i_channel,i_profile)%SensorData%Tb) ) THEN
+            DO i_tb = LBOUND(Sfc_K(i_channel,i_profile)%SensorData%Tb, 1), &
+                      UBOUND(Sfc_K(i_channel,i_profile)%SensorData%Tb, 1)
+              IF ( ABS(Sfc_K(i_channel,i_profile)%SensorData%Tb(i_tb)) < TINY(ONE) ) THEN
+                Sfc_K(i_channel,i_profile)%SensorData%Tb(i_tb) = ZERO
+              END IF
+            END DO
+          END IF
+        END DO
+      END DO
+    END SUBROUTINE Zero_Subnormal_Surface_K
+
+
+    SUBROUTINE Zero_Subnormal_RTSolution_K(RTS_K)
+      TYPE(CRTM_RTSolution_type), INTENT(IN OUT) :: RTS_K(:,:)
+      INTEGER :: i_channel, i_profile, i_layer, i_stokes
+
+      DO i_profile = 1, SIZE(RTS_K, DIM=2)
+        DO i_channel = 1, SIZE(RTS_K, DIM=1)
+          IF ( ABS(RTS_K(i_channel,i_profile)%SSA_Max) < TINY(ONE) ) RTS_K(i_channel,i_profile)%SSA_Max = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%SOD) < TINY(ONE) ) RTS_K(i_channel,i_profile)%SOD = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%Surface_Emissivity) < TINY(ONE) ) RTS_K(i_channel,i_profile)%Surface_Emissivity = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%Surface_Reflectivity) < TINY(ONE) ) RTS_K(i_channel,i_profile)%Surface_Reflectivity = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%Up_Radiance) < TINY(ONE) ) RTS_K(i_channel,i_profile)%Up_Radiance = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%Down_Radiance) < TINY(ONE) ) RTS_K(i_channel,i_profile)%Down_Radiance = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%Down_Solar_Radiance) < TINY(ONE) ) RTS_K(i_channel,i_profile)%Down_Solar_Radiance = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%Surface_Planck_Radiance) < TINY(ONE) ) RTS_K(i_channel,i_profile)%Surface_Planck_Radiance = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%Total_Cloud_Cover) < TINY(ONE) ) RTS_K(i_channel,i_profile)%Total_Cloud_Cover = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%R_clear) < TINY(ONE) ) RTS_K(i_channel,i_profile)%R_clear = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%Tb_clear) < TINY(ONE) ) RTS_K(i_channel,i_profile)%Tb_clear = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%Reflectance_clear) < TINY(ONE) ) RTS_K(i_channel,i_profile)%Reflectance_clear = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%Radiance) < TINY(ONE) ) RTS_K(i_channel,i_profile)%Radiance = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%Brightness_Temperature) < TINY(ONE) ) RTS_K(i_channel,i_profile)%Brightness_Temperature = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%Solar_Irradiance) < TINY(ONE) ) RTS_K(i_channel,i_profile)%Solar_Irradiance = ZERO
+          IF ( ABS(RTS_K(i_channel,i_profile)%Reflectance) < TINY(ONE) ) RTS_K(i_channel,i_profile)%Reflectance = ZERO
+
+          DO i_stokes = 1, SIZE(RTS_K(i_channel,i_profile)%Stokes)
+            IF ( ABS(RTS_K(i_channel,i_profile)%Stokes(i_stokes)) < TINY(ONE) ) THEN
+              RTS_K(i_channel,i_profile)%Stokes(i_stokes) = ZERO
+            END IF
+          END DO
+
+          IF ( ALLOCATED(RTS_K(i_channel,i_profile)%Upwelling_Overcast_Radiance) ) THEN
+            DO i_layer = LBOUND(RTS_K(i_channel,i_profile)%Upwelling_Overcast_Radiance, 1), &
+                        UBOUND(RTS_K(i_channel,i_profile)%Upwelling_Overcast_Radiance, 1)
+              IF ( ABS(RTS_K(i_channel,i_profile)%Upwelling_Overcast_Radiance(i_layer)) < TINY(ONE) ) THEN
+                RTS_K(i_channel,i_profile)%Upwelling_Overcast_Radiance(i_layer) = ZERO
+              END IF
+            END DO
+          END IF
+          IF ( ALLOCATED(RTS_K(i_channel,i_profile)%Upwelling_Radiance) ) THEN
+            DO i_layer = LBOUND(RTS_K(i_channel,i_profile)%Upwelling_Radiance, 1), &
+                        UBOUND(RTS_K(i_channel,i_profile)%Upwelling_Radiance, 1)
+              IF ( ABS(RTS_K(i_channel,i_profile)%Upwelling_Radiance(i_layer)) < TINY(ONE) ) THEN
+                RTS_K(i_channel,i_profile)%Upwelling_Radiance(i_layer) = ZERO
+              END IF
+            END DO
+          END IF
+          IF ( ALLOCATED(RTS_K(i_channel,i_profile)%Layer_Optical_Depth) ) THEN
+            DO i_layer = LBOUND(RTS_K(i_channel,i_profile)%Layer_Optical_Depth, 1), &
+                        UBOUND(RTS_K(i_channel,i_profile)%Layer_Optical_Depth, 1)
+              IF ( ABS(RTS_K(i_channel,i_profile)%Layer_Optical_Depth(i_layer)) < TINY(ONE) ) THEN
+                RTS_K(i_channel,i_profile)%Layer_Optical_Depth(i_layer) = ZERO
+              END IF
+            END DO
+          END IF
+          IF ( ALLOCATED(RTS_K(i_channel,i_profile)%Single_Scatter_Albedo) ) THEN
+            DO i_layer = LBOUND(RTS_K(i_channel,i_profile)%Single_Scatter_Albedo, 1), &
+                        UBOUND(RTS_K(i_channel,i_profile)%Single_Scatter_Albedo, 1)
+              IF ( ABS(RTS_K(i_channel,i_profile)%Single_Scatter_Albedo(i_layer)) < TINY(ONE) ) THEN
+                RTS_K(i_channel,i_profile)%Single_Scatter_Albedo(i_layer) = ZERO
+              END IF
+            END DO
+          END IF
+          IF ( ALLOCATED(RTS_K(i_channel,i_profile)%Reflectivity) ) THEN
+            DO i_layer = LBOUND(RTS_K(i_channel,i_profile)%Reflectivity, 1), &
+                        UBOUND(RTS_K(i_channel,i_profile)%Reflectivity, 1)
+              IF ( ABS(RTS_K(i_channel,i_profile)%Reflectivity(i_layer)) < TINY(ONE) ) THEN
+                RTS_K(i_channel,i_profile)%Reflectivity(i_layer) = ZERO
+              END IF
+            END DO
+          END IF
+          IF ( ALLOCATED(RTS_K(i_channel,i_profile)%Reflectivity_Attenuated) ) THEN
+            DO i_layer = LBOUND(RTS_K(i_channel,i_profile)%Reflectivity_Attenuated, 1), &
+                        UBOUND(RTS_K(i_channel,i_profile)%Reflectivity_Attenuated, 1)
+              IF ( ABS(RTS_K(i_channel,i_profile)%Reflectivity_Attenuated(i_layer)) < TINY(ONE) ) THEN
+                RTS_K(i_channel,i_profile)%Reflectivity_Attenuated(i_layer) = ZERO
+              END IF
+            END DO
+          END IF
+        END DO
+      END DO
+    END SUBROUTINE Zero_Subnormal_RTSolution_K
 
     ! Function profile_solution contains all the computational code inside of CRTM_K_Matrix that
     ! is contained inside an OMP loop. It is "contain"ed inside the function mainly so it can
