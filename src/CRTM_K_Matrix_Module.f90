@@ -349,6 +349,8 @@ CONTAINS
 
     INTEGER :: n_profile_threads
     INTEGER :: n_channel_threads
+    INTEGER :: omp_env_status, omp_env_len
+    CHARACTER(32) :: omp_env
 
     ! ------
     ! SET UP
@@ -414,6 +416,11 @@ CONTAINS
     ! -------
     ! OpenMP
     ! -------
+    CALL GET_ENVIRONMENT_VARIABLE("OMP_NUM_THREADS", omp_env, &
+                                  LENGTH=omp_env_len, STATUS=omp_env_status)
+    IF ( omp_env_status /= 0 .OR. omp_env_len == 0 ) THEN
+      CALL OMP_SET_NUM_THREADS(1)
+    END IF
 !$OMP PARALLEL
 !$OMP SINGLE
     n_channel_threads = OMP_GET_NUM_THREADS()
