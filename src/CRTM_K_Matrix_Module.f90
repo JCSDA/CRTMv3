@@ -82,6 +82,8 @@ MODULE CRTM_K_Matrix_Module
   USE CRTM_AtmAbsorption,         ONLY: CRTM_AAvar_type => iVar_type , &
                                         CRTM_Compute_AtmAbsorption   , &
                                         CRTM_Compute_AtmAbsorption_AD
+  USE ODPS_Predictor_Define,      ONLY: ODPS_Predictor_Associated, &
+                                        ODPS_Predictor_Zero
   USE CRTM_AtmOptics_Define,      ONLY: CRTM_AtmOptics_type      , &
                                         CRTM_AtmOptics_Associated, &
                                         CRTM_AtmOptics_Create    , &
@@ -1108,6 +1110,9 @@ CONTAINS
               NLTE_Predictor_K(nt) = NLTE_Predictor
               NLTE_Predictor_K(nt)%Tm = ZERO
               NLTE_Predictor_K(nt)%Predictor = ZERO
+            END IF
+            IF ( ODPS_Predictor_Associated(Predictor_K(nt)%ODZeeman) ) THEN
+              CALL ODPS_Predictor_Zero(Predictor_K(nt)%ODZeeman)
             END IF
 
 
