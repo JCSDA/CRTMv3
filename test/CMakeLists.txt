@@ -119,10 +119,9 @@ endif()
 # Create list of sensor ids for testing
 list( APPEND Simple_Sensor_Ids
         atms_n21
-        iasi-ng_metop-sg-a1
         v.abi_g18
         atms_npp
-        cris399_npp
+        cris-fsr_npp
         v.abi_gr
         abi_g18
         modis_aqua
@@ -131,10 +130,9 @@ list( APPEND Simple_Sensor_Ids
 
 list( APPEND ScatteringSwitch_Sensor_Ids
         atms_n21
-        iasi-ng_metop-sg-a1
         v.abi_g18
         atms_npp
-        cris399_npp
+        cris-fsr_npp
         v.abi_gr
         abi_g18
         modis_aqua
@@ -142,10 +140,9 @@ list( APPEND ScatteringSwitch_Sensor_Ids
 
 list( APPEND User_Emissivity_Sensor_Ids
         atms_n21
-        iasi-ng_metop-sg-a1
         v.abi_g18
         atms_npp
-        cris399_npp
+        cris-fsr_npp
         v.abi_gr
         abi_g18
         modis_aqua
@@ -153,10 +150,9 @@ list( APPEND User_Emissivity_Sensor_Ids
 
 list( APPEND SOI_Sensor_Ids
         atms_n21
-        iasi-ng_metop-sg-a1
         v.abi_g18 
         atms_npp
-        cris399_npp
+        cris-fsr_npp
         v.abi_gr
         abi_g18
         modis_aqua
@@ -164,10 +160,9 @@ list( APPEND SOI_Sensor_Ids
 
 list( APPEND VerticalCoordinates_Sensor_Ids
         atms_n21
-        iasi-ng_metop-sg-a1
         v.abi_g18 
         atms_npp
-        cris399_npp
+        cris-fsr_npp
         v.abi_gr
         abi_g18
         modis_aqua
@@ -183,7 +178,7 @@ list( APPEND ClearSky_Sensor_Ids
         iasi-ng_metop-sg-a1
         v.abi_g18
         atms_npp
-        cris399_npp
+        cris-fsr_npp
         v.abi_gr
         abi_g18
         modis_aqua
@@ -191,9 +186,8 @@ list( APPEND ClearSky_Sensor_Ids
 
 # Create list of sensor ids for testing
 list( APPEND AOD_Sensor_Ids
-        iasi-ng_metop-sg-a1
         v.abi_g18
-        cris399_npp
+        cris-fsr_npp
         v.abi_gr
         abi_g18
         airs_aqua
@@ -221,12 +215,12 @@ list( APPEND Aircraft_Sensor_Ids
 list( APPEND Downwelling_Radiance_Sensor_Ids
         atms_n21
 #        iasi-ng_metop-sg-a1
-#        v.abi_g18
-#        atms_npp
-#        cris399_npp
-#        v.abi_gr
-#        abi_g18
-#        modis_aqua
+        v.abi_g18
+        atms_npp
+        cris-fsr_npp
+        v.abi_gr
+        abi_g18
+        modis_aqua
 )
 
 
