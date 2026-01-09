@@ -423,7 +423,6 @@ CONTAINS
     n_channel_threads = MIN(n_Channels, MAX(1, n_channel_threads))
     CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
 
-
 !    WRITE(6,*)
 !    WRITE(6,'("   Using",i3," OpenMP threads =",i3," for profiles and",i3," for channels.")') &
 !         1, n_profile_threads, n_channel_threads
@@ -1105,6 +1104,11 @@ CONTAINS
             transmittance_K = ZERO
             CALL CRTM_RTSolution_Zero( RTSolution_Clear(nt) )
             CALL CRTM_RTSolution_Zero( RTSolution_Clear_K(nt) )
+            IF ( Opt%Apply_NLTE_Correction .AND. NLTE_Predictor_IsActive(NLTE_Predictor) ) THEN
+              NLTE_Predictor_K(nt) = NLTE_Predictor
+              NLTE_Predictor_K(nt)%Tm = ZERO
+              NLTE_Predictor_K(nt)%Predictor = ZERO
+            END IF
 
 
             ! Copy the input K-matrix atmosphere with extra layers if necessary
