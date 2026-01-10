@@ -357,6 +357,8 @@ CONTAINS
     INTEGER :: i
     REAL(fp) :: lai_eff
     REAL(fp) :: lai_eff_tl
+    REAL(fp) :: emiss_h_0
+    REAL(fp) :: emiss_v_0
     REAL(fp) :: emiss_h_p
     REAL(fp) :: emiss_v_p
     REAL(fp) :: d_emiss_h
@@ -385,14 +387,26 @@ CONTAINS
                          Surface%Vegetation_Fraction,   & ! Input
                          Surface%Soil_Temperature,      & ! Input, K
                          Surface%Land_Temperature,      & ! Input, K
+                         lai_eff,                       & ! Input, Leaf Area Index + canopy
+                         Surface%Soil_Type,             & ! Input, Soil Type (1 -  9)
+                         Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
+                         ZERO,                          & ! Input, Snow depth, mm
+                         emiss_h_0,                     & ! Output, H component
+                         emiss_v_0                      ) ! Output, V component
+      CALL NESDIS_LandEM(SfcOptics%Angle(i),            & ! Input, Degree
+                         frequency,                    & ! Input, GHz
+                         Surface%Soil_Moisture_Content, & ! Input, g.cm^-3
+                         Surface%Vegetation_Fraction,   & ! Input
+                         Surface%Soil_Temperature,      & ! Input, K
+                         Surface%Land_Temperature,      & ! Input, K
                          lai_eff + LAI_FD_DELTA,        & ! Input, Leaf Area Index + canopy
                          Surface%Soil_Type,             & ! Input, Soil Type (1 -  9)
                          Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
                          ZERO,                          & ! Input, Snow depth, mm
                          emiss_h_p,                     & ! Output, H component
                          emiss_v_p                      ) ! Output, V component
-      d_emiss_h = (emiss_h_p - SfcOptics%Emissivity(i,2)) / LAI_FD_DELTA
-      d_emiss_v = (emiss_v_p - SfcOptics%Emissivity(i,1)) / LAI_FD_DELTA
+      d_emiss_h = (emiss_h_p - emiss_h_0) / LAI_FD_DELTA
+      d_emiss_v = (emiss_v_p - emiss_v_0) / LAI_FD_DELTA
 
       SfcOptics_TL%Emissivity(i,2) = d_emiss_h * lai_eff_tl
       SfcOptics_TL%Emissivity(i,1) = d_emiss_v * lai_eff_tl
@@ -503,6 +517,8 @@ CONTAINS
     ! Local variables
     INTEGER :: i
     REAL(fp) :: lai_eff
+    REAL(fp) :: emiss_h_0
+    REAL(fp) :: emiss_v_0
     REAL(fp) :: emiss_h_p
     REAL(fp) :: emiss_v_p
     REAL(fp) :: d_emiss_h
@@ -532,14 +548,26 @@ CONTAINS
                          Surface%Vegetation_Fraction,   & ! Input
                          Surface%Soil_Temperature,      & ! Input, K
                          Surface%Land_Temperature,      & ! Input, K
+                         lai_eff,                       & ! Input, Leaf Area Index + canopy
+                         Surface%Soil_Type,             & ! Input, Soil Type (1 -  9)
+                         Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
+                         ZERO,                          & ! Input, Snow depth, mm
+                         emiss_h_0,                     & ! Output, H component
+                         emiss_v_0                      ) ! Output, V component
+      CALL NESDIS_LandEM(SfcOptics%Angle(i),            & ! Input, Degree
+                         frequency,                    & ! Input, GHz
+                         Surface%Soil_Moisture_Content, & ! Input, g.cm^-3
+                         Surface%Vegetation_Fraction,   & ! Input
+                         Surface%Soil_Temperature,      & ! Input, K
+                         Surface%Land_Temperature,      & ! Input, K
                          lai_eff + LAI_FD_DELTA,        & ! Input, Leaf Area Index + canopy
                          Surface%Soil_Type,             & ! Input, Soil Type (1 -  9)
                          Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
                          ZERO,                          & ! Input, Snow depth, mm
                          emiss_h_p,                     & ! Output, H component
                          emiss_v_p                      ) ! Output, V component
-      d_emiss_h = (emiss_h_p - SfcOptics%Emissivity(i,2)) / LAI_FD_DELTA
-      d_emiss_v = (emiss_v_p - SfcOptics%Emissivity(i,1)) / LAI_FD_DELTA
+      d_emiss_h = (emiss_h_p - emiss_h_0) / LAI_FD_DELTA
+      d_emiss_v = (emiss_v_p - emiss_v_0) / LAI_FD_DELTA
 
       emiss_h_ad = SfcOptics_AD%Emissivity(i,2) - SfcOptics_AD%Reflectivity(i,2,i,2)
       emiss_v_ad = SfcOptics_AD%Emissivity(i,1) - SfcOptics_AD%Reflectivity(i,1,i,1)
