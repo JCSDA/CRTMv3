@@ -62,6 +62,7 @@ endif()
 IF(EXISTS  ${FIX_FILE_PATH})
   get_filename_component(CRTM_COEFFS_PATH "${FIX_FILE_PATH}/.." ABSOLUTE)
   message(STATUS "Using existing fix files: ${CRTM_COEFFS_PATH}/fix")
+  set(CRTM_COEFFS_BRANCH_PREFIX "")
   set( CRTM_COEFFS_BRANCH "" )
 
 else() # Download CRTM coefficients
@@ -113,6 +114,8 @@ else() # Download CRTM coefficients
     message(STATUS "Files have already been untarred. Skipping.")
   endif()
 endif()
+
+set(CRTM_COEFFS_FIX_PATH ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix)
 
 
 
@@ -556,6 +559,32 @@ target_link_libraries(test_TL_convergence_active_sensor crtm)
 # Add test for test_TL_convergence_active_sensor
 add_test(NAME test_TL_convergence_active_sensor COMMAND test_TL_convergence_active_sensor)
 set_tests_properties(test_TL_convergence_active_sensor PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
+
+# Add test_FD_consistency executable
+add_executable(test_FD_consistency mains/unit/Unit_Test/test_FD_consistency.f90)
+target_link_libraries(test_FD_consistency crtm)
+
+# Add tests for test_FD_consistency
+add_test(NAME test_FD_consistency_atms_n21 COMMAND test_FD_consistency atms_n21 fd)
+set_tests_properties(test_FD_consistency_atms_n21 PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
+add_test(NAME test_AD_consistency_atms_n21 COMMAND test_FD_consistency atms_n21 ad)
+set_tests_properties(test_AD_consistency_atms_n21 PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
+add_test(NAME test_FD_consistency_cris-fsr_n21 COMMAND test_FD_consistency cris-fsr_n21 fd)
+set_tests_properties(test_FD_consistency_cris-fsr_n21 PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
+add_test(NAME test_AD_consistency_cris-fsr_n21 COMMAND test_FD_consistency cris-fsr_n21 ad)
+set_tests_properties(test_AD_consistency_cris-fsr_n21 PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
+
+set(V_ABI_G19_SPC SpcCoeff/Little_Endian/v.abi_g19.SpcCoeff.bin)
+set(V_ABI_G19_TAU TauCoeff/ODAS/Little_Endian/v.abi_g19.TauCoeff.bin)
+if ( EXISTS ${CRTM_COEFFS_FIX_PATH}/${V_ABI_G19_SPC} AND EXISTS ${CRTM_COEFFS_FIX_PATH}/${V_ABI_G19_TAU} )
+  list(APPEND crtm_test_input ${V_ABI_G19_SPC} ${V_ABI_G19_TAU})
+  add_test(NAME test_FD_consistency_v.abi_g19 COMMAND test_FD_consistency v.abi_g19 fd)
+  set_tests_properties(test_FD_consistency_v.abi_g19 PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
+  add_test(NAME test_AD_consistency_v.abi_g19 COMMAND test_FD_consistency v.abi_g19 ad)
+  set_tests_properties(test_AD_consistency_v.abi_g19 PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
+else()
+  message(STATUS "v.abi_g19 coeffs not found; skipping FD/AD consistency tests for v.abi_g19")
+endif()
 
 
 #####################################################################
