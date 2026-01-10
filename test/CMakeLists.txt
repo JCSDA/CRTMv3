@@ -293,6 +293,16 @@ target_link_libraries(Unit_TL_TEST PRIVATE crtm)
 add_test(NAME test_Unit_TL_TEST
          COMMAND $<TARGET_FILE:Unit_TL_TEST>)
 set_tests_properties(test_Unit_TL_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+add_executable(Unit_TL_Canopy_Water_TEST mains/unit/Unit_Test/test_TL_canopy_water.f90)
+target_link_libraries(Unit_TL_Canopy_Water_TEST PRIVATE crtm)
+add_test(NAME test_Unit_TL_Canopy_Water_TEST
+         COMMAND $<TARGET_FILE:Unit_TL_Canopy_Water_TEST>)
+set_tests_properties(test_Unit_TL_Canopy_Water_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+add_executable(Unit_K_Matrix_Canopy_Water_TEST mains/unit/Unit_Test/test_k_matrix_canopy_water.f90)
+target_link_libraries(Unit_K_Matrix_Canopy_Water_TEST PRIVATE crtm)
+add_test(NAME test_Unit_K_Matrix_Canopy_Water_TEST
+         COMMAND $<TARGET_FILE:Unit_K_Matrix_Canopy_Water_TEST>)
+set_tests_properties(test_Unit_K_Matrix_Canopy_Water_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_Aerosol_Bypass mains/unit/Unit_Test/test_Aerosol_Bypass.f90)
 target_link_libraries(Unit_Aerosol_Bypass PRIVATE crtm)

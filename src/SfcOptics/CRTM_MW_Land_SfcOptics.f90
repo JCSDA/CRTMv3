@@ -78,6 +78,9 @@ MODULE CRTM_MW_Land_SfcOptics
   INTEGER, PARAMETER :: DWARF_TREES_SHRUBS_GROUNDCOVER = 10
   INTEGER, PARAMETER :: BARE_SOIL                      = 11
   INTEGER, PARAMETER :: CULTIVATIONS                   = 12
+  REAL(fp), PARAMETER :: FREQUENCY_CUTOFF = 80.0_fp  ! GHz
+  REAL(fp), PARAMETER :: DEFAULT_EMISSIVITY = 0.95_fp
+  REAL(fp), PARAMETER :: LAI_FD_DELTA = 1.0e-2_fp
 
 
   ! --------------------------------------
@@ -188,11 +191,10 @@ CONTAINS
     INTEGER :: err_stat
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_MW_Land_SfcOptics'
-    REAL(fp),     PARAMETER :: FREQUENCY_CUTOFF   = 80.0_fp  ! GHz
-    REAL(fp),     PARAMETER :: DEFAULT_EMISSIVITY = 0.95_fp
     ! Local variables
     CHARACTER(ML) :: msg
     INTEGER :: i
+    REAL(fp) :: lai_eff
 
 
     ! Set up
@@ -219,6 +221,7 @@ CONTAINS
 
     ! Compute the surface optical parameters
     IF ( SC(SensorIndex)%Frequency(ChannelIndex) < FREQUENCY_CUTOFF ) THEN
+      lai_eff = MAX(Surface%Lai + Surface%Canopy_Water_Content, ZERO)
       ! Frequency is low enough for the model
       DO i = 1, SfcOptics%n_Angles
         CALL NESDIS_LandEM(SfcOptics%Angle(i),            & ! Input, Degree
@@ -227,7 +230,7 @@ CONTAINS
                            Surface%Vegetation_Fraction,   & ! Input
                            Surface%Soil_Temperature,      & ! Input, K
                            Surface%Land_Temperature,      & ! Input, K
-                           Surface%Lai,                   & ! Input, Leaf Area Index
+                           lai_eff,                       & ! Input, Leaf Area Index + canopy water
                            Surface%Soil_Type,             & ! Input, Soil Type (1 -  9)
                            Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
                            ZERO,                          & ! Input, Snow depth, mm
@@ -260,11 +263,50 @@ CONTAINS
 !
 !       This function is a wrapper for third party code.
 !
-!       NB: CURRENTLY THIS IS A STUB FUNCTION AS THERE ARE NO TL
-!           COMPONENTS IN THE MW LAND SFCOPTICS COMPUTATIONS.
+!       This implementation includes a finite-difference derivative with
+!       respect to the canopy water content contribution to the effective LAI.
 !
 ! CALLING SEQUENCE:
-!       Error_Status = Compute_MW_Land_SfcOptics_TL( SfcOptics_TL )
+!       Error_Status = Compute_MW_Land_SfcOptics_TL( Surface     , &
+!                                                    SfcOptics   , &
+!                                                    Surface_TL  , &
+!                                                    SensorIndex , &
+!                                                    ChannelIndex, &
+!                                                    SfcOptics_TL )
+!
+! INPUTS:
+!       Surface:         CRTM_Surface structure containing the surface state
+!                        data.
+!                        UNITS:      N/A
+!                        TYPE:       CRTM_Surface_type
+!                        DIMENSION:  Scalar
+!                        ATTRIBUTES: INTENT(IN)
+!
+!       SfcOptics:       CRTM_SfcOptics structure containing the forward surface
+!                        optical properties.
+!                        UNITS:      N/A
+!                        TYPE:       CRTM_SfcOptics_type
+!                        DIMENSION:  Scalar
+!                        ATTRIBUTES: INTENT(IN)
+!
+!       Surface_TL:      CRTM_Surface structure containing the tangent-linear
+!                        surface state data.
+!                        UNITS:      N/A
+!                        TYPE:       CRTM_Surface_type
+!                        DIMENSION:  Scalar
+!                        ATTRIBUTES: INTENT(IN)
+!
+!       SensorIndex:     Sensor index id.
+!                        UNITS:      N/A
+!                        TYPE:       INTEGER
+!                        DIMENSION:  Scalar
+!                        ATTRIBUTES: INTENT(IN)
+!
+!       ChannelIndex:    Channel index id.
+!                        UNITS:      N/A
+!                        TYPE:       INTEGER
+!                        DIMENSION:  Scalar
+!                        ATTRIBUTES: INTENT(IN)
 !
 ! OUTPUTS:
 !       SfcOptics_TL:    Structure containing the tangent-linear surface
@@ -293,15 +335,33 @@ CONTAINS
 !----------------------------------------------------------------------------------
 
   FUNCTION Compute_MW_Land_SfcOptics_TL( &
+    Surface     , &  ! Input
+    SfcOptics   , &  ! Input
+    Surface_TL  , &  ! Input
+    SensorIndex , &  ! Input
+    ChannelIndex, &  ! Input
     SfcOptics_TL) &  ! TL  Output
   RESULT ( err_stat )
     ! Arguments
+    TYPE(CRTM_Surface_type),   INTENT(IN)     :: Surface
+    TYPE(CRTM_SfcOptics_type), INTENT(IN)     :: SfcOptics
+    TYPE(CRTM_Surface_type),   INTENT(IN)     :: Surface_TL
+    INTEGER,                   INTENT(IN)     :: SensorIndex
+    INTEGER,                   INTENT(IN)     :: ChannelIndex
     TYPE(CRTM_SfcOptics_type), INTENT(IN OUT) :: SfcOptics_TL
     ! Function result
     INTEGER :: err_stat
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_MW_Land_SfcOptics_TL'
     ! Local variables
+    INTEGER :: i
+    REAL(fp) :: lai_eff
+    REAL(fp) :: lai_eff_tl
+    REAL(fp) :: emiss_h_p
+    REAL(fp) :: emiss_v_p
+    REAL(fp) :: d_emiss_h
+    REAL(fp) :: d_emiss_v
+    REAL(fp) :: frequency
 
 
     ! Set up
@@ -309,9 +369,36 @@ CONTAINS
 
 
     ! Compute the tangent-linear surface optical parameters
-    ! ***No TL models yet, so default TL output is zero***
     SfcOptics_TL%Reflectivity = ZERO
     SfcOptics_TL%Emissivity   = ZERO
+    frequency = SC(SensorIndex)%Frequency(ChannelIndex)
+    IF ( frequency >= FREQUENCY_CUTOFF ) RETURN
+
+    lai_eff = MAX(Surface%Lai + Surface%Canopy_Water_Content, ZERO)
+    lai_eff_tl = Surface_TL%Canopy_Water_Content
+    IF ( lai_eff_tl == ZERO ) RETURN
+
+    DO i = 1, SfcOptics%n_Angles
+      CALL NESDIS_LandEM(SfcOptics%Angle(i),            & ! Input, Degree
+                         frequency,                    & ! Input, GHz
+                         Surface%Soil_Moisture_Content, & ! Input, g.cm^-3
+                         Surface%Vegetation_Fraction,   & ! Input
+                         Surface%Soil_Temperature,      & ! Input, K
+                         Surface%Land_Temperature,      & ! Input, K
+                         lai_eff + LAI_FD_DELTA,        & ! Input, Leaf Area Index + canopy
+                         Surface%Soil_Type,             & ! Input, Soil Type (1 -  9)
+                         Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
+                         ZERO,                          & ! Input, Snow depth, mm
+                         emiss_h_p,                     & ! Output, H component
+                         emiss_v_p                      ) ! Output, V component
+      d_emiss_h = (emiss_h_p - SfcOptics%Emissivity(i,2)) / LAI_FD_DELTA
+      d_emiss_v = (emiss_v_p - SfcOptics%Emissivity(i,1)) / LAI_FD_DELTA
+
+      SfcOptics_TL%Emissivity(i,2) = d_emiss_h * lai_eff_tl
+      SfcOptics_TL%Emissivity(i,1) = d_emiss_v * lai_eff_tl
+      SfcOptics_TL%Reflectivity(i,2,i,2) = -SfcOptics_TL%Emissivity(i,2)
+      SfcOptics_TL%Reflectivity(i,1,i,1) = -SfcOptics_TL%Emissivity(i,1)
+    END DO
 
   END FUNCTION Compute_MW_Land_SfcOptics_TL
 
@@ -329,13 +416,32 @@ CONTAINS
 !
 !       This function is a wrapper for third party code.
 !
-!       NB: CURRENTLY THIS IS A STUB FUNCTION AS THERE ARE NO AD
-!           COMPONENTS IN THE MW LAND SFCOPTICS COMPUTATIONS.
+!       This implementation includes a finite-difference derivative with
+!       respect to the canopy water content contribution to the effective LAI.
 !
 ! CALLING SEQUENCE:
-!       Error_Status = Compute_MW_Land_SfcOptics_AD( SfcOptics_AD )
+!       Error_Status = Compute_MW_Land_SfcOptics_AD( Surface     , &
+!                                                    SfcOptics   , &
+!                                                    SfcOptics_AD, &
+!                                                    SensorIndex , &
+!                                                    ChannelIndex, &
+!                                                    Surface_AD  )
 !
 ! INPUTS:
+!       Surface:         CRTM_Surface structure containing the surface state
+!                        data.
+!                        UNITS:      N/A
+!                        TYPE:       CRTM_Surface_type
+!                        DIMENSION:  Scalar
+!                        ATTRIBUTES: INTENT(IN)
+!
+!       SfcOptics:       CRTM_SfcOptics structure containing the forward surface
+!                        optical properties.
+!                        UNITS:      N/A
+!                        TYPE:       CRTM_SfcOptics_type
+!                        DIMENSION:  Scalar
+!                        ATTRIBUTES: INTENT(IN)
+!
 !       SfcOptics_AD:    Structure containing the adjoint surface optical
 !                        properties required for the adjoint radiative
 !                        transfer calculation.
@@ -344,6 +450,18 @@ CONTAINS
 !                        TYPE:       CRTM_SfcOptics_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN OUT)
+!
+!       SensorIndex:     Sensor index id.
+!                        UNITS:      N/A
+!                        TYPE:       INTEGER
+!                        DIMENSION:  Scalar
+!                        ATTRIBUTES: INTENT(IN)
+!
+!       ChannelIndex:    Channel index id.
+!                        UNITS:      N/A
+!                        TYPE:       INTEGER
+!                        DIMENSION:  Scalar
+!                        ATTRIBUTES: INTENT(IN)
 !
 ! FUNCTION RESULT:
 !       Error_Status:    The return value is an integer defining the error status.
@@ -364,15 +482,34 @@ CONTAINS
 !----------------------------------------------------------------------------------
 
   FUNCTION Compute_MW_Land_SfcOptics_AD( &
-    SfcOptics_AD) &  ! AD  Input
+    Surface     , &  ! Input
+    SfcOptics   , &  ! Input
+    SfcOptics_AD, &  ! AD  Input
+    SensorIndex , &  ! Input
+    ChannelIndex, &  ! Input
+    Surface_AD  ) &  ! AD  Output
   RESULT( err_stat )
     ! Arguments
+    TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface
+    TYPE(CRTM_SfcOptics_type),    INTENT(IN)     :: SfcOptics
     TYPE(CRTM_SfcOptics_type),    INTENT(IN OUT) :: SfcOptics_AD
+    INTEGER,                      INTENT(IN)     :: SensorIndex
+    INTEGER,                      INTENT(IN)     :: ChannelIndex
+    TYPE(CRTM_Surface_type),      INTENT(IN OUT) :: Surface_AD
     ! Function result
     INTEGER :: err_stat
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_MW_Land_SfcOptics_AD'
     ! Local variables
+    INTEGER :: i
+    REAL(fp) :: lai_eff
+    REAL(fp) :: emiss_h_p
+    REAL(fp) :: emiss_v_p
+    REAL(fp) :: d_emiss_h
+    REAL(fp) :: d_emiss_v
+    REAL(fp) :: emiss_h_ad
+    REAL(fp) :: emiss_v_ad
+    REAL(fp) :: frequency
 
 
     ! Set up
@@ -380,9 +517,41 @@ CONTAINS
 
 
     ! Compute the adjoint surface optical parameters
-    ! ***No AD models yet, so there is no impact on AD result***
+    frequency = SC(SensorIndex)%Frequency(ChannelIndex)
+    IF ( frequency >= FREQUENCY_CUTOFF ) THEN
+      SfcOptics_AD%Reflectivity = ZERO
+      SfcOptics_AD%Emissivity   = ZERO
+      RETURN
+    END IF
+
+    lai_eff = MAX(Surface%Lai + Surface%Canopy_Water_Content, ZERO)
+    DO i = 1, SfcOptics%n_Angles
+      CALL NESDIS_LandEM(SfcOptics%Angle(i),            & ! Input, Degree
+                         frequency,                    & ! Input, GHz
+                         Surface%Soil_Moisture_Content, & ! Input, g.cm^-3
+                         Surface%Vegetation_Fraction,   & ! Input
+                         Surface%Soil_Temperature,      & ! Input, K
+                         Surface%Land_Temperature,      & ! Input, K
+                         lai_eff + LAI_FD_DELTA,        & ! Input, Leaf Area Index + canopy
+                         Surface%Soil_Type,             & ! Input, Soil Type (1 -  9)
+                         Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
+                         ZERO,                          & ! Input, Snow depth, mm
+                         emiss_h_p,                     & ! Output, H component
+                         emiss_v_p                      ) ! Output, V component
+      d_emiss_h = (emiss_h_p - SfcOptics%Emissivity(i,2)) / LAI_FD_DELTA
+      d_emiss_v = (emiss_v_p - SfcOptics%Emissivity(i,1)) / LAI_FD_DELTA
+
+      emiss_h_ad = SfcOptics_AD%Emissivity(i,2) - SfcOptics_AD%Reflectivity(i,2,i,2)
+      emiss_v_ad = SfcOptics_AD%Emissivity(i,1) - SfcOptics_AD%Reflectivity(i,1,i,1)
+      Surface_AD%Canopy_Water_Content = Surface_AD%Canopy_Water_Content + &
+                                        (emiss_h_ad * d_emiss_h) + (emiss_v_ad * d_emiss_v)
+      SfcOptics_AD%Emissivity(i,2) = ZERO
+      SfcOptics_AD%Emissivity(i,1) = ZERO
+      SfcOptics_AD%Reflectivity(i,2,i,2) = ZERO
+      SfcOptics_AD%Reflectivity(i,1,i,1) = ZERO
+    END DO
+
     SfcOptics_AD%Reflectivity = ZERO
-    SfcOptics_AD%Emissivity   = ZERO
 
   END FUNCTION Compute_MW_Land_SfcOptics_AD
 
