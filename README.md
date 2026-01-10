@@ -20,7 +20,7 @@ This is a v3.x release of CRTM, some features may not be fully functional. Conta
 v3.x features will be rolled out in incremental updates. 
 
 Basic requirements:  
-(1) A Fortran 2008 compatible compiler
+(1) A Fortran 2008 compatible compiler (gcc, ifort, ifx (only for oneAPI 2025.3 and newer), flang (minimally tested)). 
 (2) A netCDF4 / HDF5 library that has been built with the compiler you're going to use (module environments are helpful here)
 (3) A linux, macOS, or unix-style environment.  This has not been tested under any Windows Fortran environments.
 (4) Bash shell is preferred. 
@@ -67,15 +67,11 @@ The CRTM repository directory structure looks (something) like:
   ├── LICENSE  (Public Domain)
   ├── COPYING  (Public Domain)
   ├── NOTES
-  ├── README.md 
-  ├── Get_CRTM_Binary_Files.sh  
+  ├── README.md
+  ├── README_JEDI.md
+  ├── Get_CRTM_Binary_Files.sh
+  ├── Set_CRTM_Environment.sh
   ├── <b>cmake/</b>
-  ├── <b>scripts/</b>
-  │   ├── AerosolCoeff/
-  │   ├── CloudCoeff/
-  │   ├── EmisCoeff/
-  │   ├── SpcCoeff/
-  │   └── TauCoeff/
   |── <b>src/</b>
   │   ├── Ancillary/
   │   ├── AntennaCorrection/
@@ -122,7 +118,11 @@ The path to an existing fix file installation can be specified using the `FIX_FI
 
 The fix/ directory (as of v3.1.2) contains most of the netCDF SpcCoeff and TauCoeff files, as part of our ongoing effort to transition toward netCDF-only CRTM.  We expect to deprecate the binary formats in v3.2.x, but code to read / convert binary format will continue.  
 
-As of CRTM v3.0.0, we no longer support legacy build system using autotools. (i.e., configure/make).  Only cmake / ecbuild (a cmake wrapper, but not required) is supported.   Many standalone Makefiles, make.dependencies, etc. have been removed, but not entirely.  Cleanup occurs as we work our way through the repository updating other things.  
+Deprecations
+------------
+The legacy autotools build system (configure/make) is deprecated and no longer supported. Use cmake or ecbuild instead.
+Some standalone Makefiles and make.dependencies files may remain in the tree, but they are not maintained and should be treated as deprecated.
+These will be removed in later 3.2.x releases.  
 
 **Build Step 1**
 From the top level of the CRTM directory, e.g., `CRTMv3/` 
@@ -138,6 +138,8 @@ ctest -j8
 
 `-j8` runs 8 processes in parallel, adjust to your system. 
 Now we have compiled the linked source codes that reside in the `src/` directory, and the ctests are built as well.
+OpenMP threads are controlled via `OMP_NUM_THREADS`. If unset, CRTM defaults to 1 thread (forward/TL/K).
+To run tests with more threads, set it in your environment (e.g., `export OMP_NUM_THREADS=4` before `ctest`).
 
 The CMake variables of interest are:
 `-DCMAKE_BUILD_TYPE = RELEASE / DEBUG / RELWITHDEBINFO`  (default is `RELEASE` if not specified)
@@ -162,7 +164,7 @@ Let's assume the above install was moved into "/home/username/CRTMv3/", to use t
 
 <pre>
 libroot="/home/username/CRTMv3/"
-FCFLAGS="-I${libroot}/build/module/crtm/GNU/13.1.0 ${FCFLAGS}"  (as appropriate for your build environment)
+FCFLAGS="-I${libroot}/build/module/crtm/GNU/13.3.0 ${FCFLAGS}"  (as appropriate for your build environment)
 LDFLAGS="-L${libroot}/src ${LDFLAGS}"
 LIBS="-lcrtm ${LIBS}"
 </pre>
@@ -181,19 +183,21 @@ WSL / Ubuntu installation:
   sudo apt install gfortran
   sudo apt install libnetcdff-dev
   
-Then continue with the build steps per above.  You can find your number of processors by 'cat /proc/cpuinfo' and then the -j ## values for make and ctest should be: number_processors-1  e.g., make -j31 if you have 32 processors.
-
-nvfortran also works on WSL, but has a more involved install process -- if you're using nvfortran, please visit https://github.com/JCSDA/CRTMv3 and create an issue. 
+Then continue with the build steps per above.  You can find your number of processors by 'cat /proc/cpuinfo' and then the -j ## values for make and ctest should be: number_processors-1  e.g., make -j31 if you have 32 processors/cores. 
 
 
 Known Issues
 ------------
 
 (1) Any "Transmittance Coefficient" generation codes included in src/ are not functional.  Contact CRTM support above for details.
-(2) No testing was done on PGI, XLF, or other less common compilers.  Feedback from users suggest that there's no major concerns though.  Please contact us with specifics.  Tested on GCC v5 and higher, and ifort v18 and higher.  Some specific compiler versions have issues, contact support if you run into problems.
+(2)  Compiler specific information:
+   No testing was done on PGI, XLF, or other less common compilers.  Feedback from users suggest that there's no major concerns though.  Please contact us with specifics.  Tested on GCC v5 and higher, and ifort v18 and higher.  Some specific compiler versions have issues, contact support if you run into problems.
+
+    `nvfortran` also works on WSL, but has a more involved install process -- if you're using `nvfortran`, please visit https://github.com/JCSDA/CRTMv3 and create an issue. 
+    `flang` hasn't been thoroughly tested yet, but appears to work in current limited testing.
+    `ifx` 2025.3 and newer supported.
+    `ifort` most versions supported, although there have been weird issues with specific versions in the past.  Visit the github issues page above with any questions. 
 
   
-
-
 
 
