@@ -645,6 +645,9 @@ CONTAINS
     END DO
     ! ...Temperature data
     Atm_In_AD%Temperature(1:no) = Atm_In_AD%Temperature(1:no) + Atm_Out_AD%Temperature(n+1:nt)
+    ! ...Relative humidity data
+    Atm_In_AD%Relative_Humidity(1:no) = Atm_In_AD%Relative_Humidity(1:no) + &
+                                        Atm_Out_AD%Relative_Humidity(n+1:nt)
     ! ...Pressure data
     Atm_In_AD%Pressure(1:no)       = Atm_In_AD%Pressure(1:no) + Atm_Out_AD%Pressure(n+1:nt)
     Atm_In_AD%Level_Pressure(0:no) = Atm_In_AD%Level_Pressure(0:no) + Atm_Out_AD%Level_Pressure(n:nt)
@@ -748,6 +751,7 @@ CONTAINS
     atm_clear%Level_Pressure = atm%Level_Pressure(0:k)
     atm_clear%Pressure       = atm%Pressure(1:k)
     atm_clear%Temperature    = atm%Temperature(1:k)
+    atm_clear%Relative_Humidity = atm%Relative_Humidity(1:k)
     atm_clear%Absorber       = atm%Absorber(1:k,:)
     atm_clear%Cloud_Fraction = atm%Cloud_Fraction(1:k)
     ! ...Aerosol components
@@ -884,6 +888,7 @@ CONTAINS
     atm_clear_TL%Level_Pressure = atm_TL%Level_Pressure(0:k)
     atm_clear_TL%Pressure       = atm_TL%Pressure(1:k)
     atm_clear_TL%Temperature    = atm_TL%Temperature(1:k)
+    atm_clear_TL%Relative_Humidity = atm_TL%Relative_Humidity(1:k)
     atm_clear_TL%Absorber       = atm_TL%Absorber(1:k,:)
     atm_clear_TL%Cloud_Fraction = atm_TL%Cloud_Fraction(1:k)
     ! ...Aerosol components
@@ -1019,6 +1024,7 @@ CONTAINS
     atm_AD%Level_Pressure(0:k) = atm_AD%Level_Pressure(0:k) + atm_clear_AD%Level_Pressure(0:k)
     atm_AD%Pressure(1:k)       = atm_AD%Pressure(1:k)       + atm_clear_AD%Pressure(1:k)      
     atm_AD%Temperature(1:k)    = atm_AD%Temperature(1:k)    + atm_clear_AD%Temperature(1:k)   
+    atm_AD%Relative_Humidity(1:k) = atm_AD%Relative_Humidity(1:k) + atm_clear_AD%Relative_Humidity(1:k)
     atm_AD%Absorber(1:k,:)     = atm_AD%Absorber(1:k,:)     + atm_clear_AD%Absorber(1:k,:)      
     atm_AD%Cloud_Fraction(1:k) = atm_AD%Cloud_Fraction(1:k) + atm_clear_AD%Cloud_Fraction(1:k)
 
