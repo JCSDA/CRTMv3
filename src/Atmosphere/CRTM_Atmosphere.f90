@@ -389,6 +389,7 @@ CONTAINS
     IF ( Atm_In%n_Aerosols > 0 ) THEN
       DO i = 1, Atm_In%n_Aerosols
         Atm_Out%Aerosol(i)%Effective_Radius(1:n) = ZERO
+        Atm_Out%Aerosol(i)%Effective_Variance(1:n) = ZERO
         Atm_Out%Aerosol(i)%Concentration(1:n)    = ZERO
       END DO
     END IF
@@ -622,6 +623,8 @@ CONTAINS
                                                    Atm_Out_AD%Aerosol(i)%Concentration(n+1:nt)
         Atm_In_AD%Aerosol(i)%Effective_Radius(1:no) = Atm_In_AD%Aerosol(i)%Effective_Radius(1:no) + &
                                                       Atm_Out_AD%Aerosol(i)%Effective_Radius(n+1:nt)
+        Atm_In_AD%Aerosol(i)%Effective_Variance(1:no) = Atm_In_AD%Aerosol(i)%Effective_Variance(1:no) + &
+                                                        Atm_Out_AD%Aerosol(i)%Effective_Variance(n+1:nt)
         Atm_In_AD%Aerosol(i)%Type = Atm_Out_AD%Aerosol(i)%Type
       END DO
     END IF
