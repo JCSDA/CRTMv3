@@ -63,7 +63,8 @@ PROGRAM test_k_matrix_canopy_water
     'Program to test canopy water content K-matrix response.', &
     'CRTM Version: '//TRIM(Version) )
 
-  Sensor_Id = 'atms_n21'
+  CALL GET_COMMAND_ARGUMENT(1, Sensor_Id)
+  IF ( LEN_TRIM(Sensor_Id) == 0 ) Sensor_Id = 'atms_n21'
   Sensor_Id = ADJUSTL(Sensor_Id)
   WRITE( *,'(//5x,"Running CRTM for ",a," sensor...")' ) TRIM(Sensor_Id)
 
@@ -116,6 +117,7 @@ PROGRAM test_k_matrix_canopy_water
   Sfc(:)%Snow_Coverage  = 0.0_fp
   Sfc(:)%Ice_Coverage   = 0.0_fp
   Sfc(:)%Canopy_Water_Content = 0.15_fp
+  Sfc(:)%Lai = 2.0_fp
 
   Error_Status = CRTM_Forward( Atm         , &
                                Sfc         , &

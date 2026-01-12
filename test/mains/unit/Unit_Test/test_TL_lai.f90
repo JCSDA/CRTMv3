@@ -1,9 +1,9 @@
 !
-! test_TL_canopy_water.f90
+! test_TL_lai.f90
 !
-! Program to test the CRTM tangent-linear response to canopy water content.
+! Program to test the CRTM tangent-linear response to LAI.
 !
-PROGRAM test_TL_canopy_water
+PROGRAM test_TL_lai
 
   ! ============================================================================
   ! **** ENVIRONMENT SETUP FOR RTM USAGE ****
@@ -17,7 +17,7 @@ PROGRAM test_TL_canopy_water
   ! ----------
   ! Parameters
   ! ----------
-  CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'test_TL_canopy_water'
+  CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'test_TL_lai'
   CHARACTER(*), PARAMETER :: COEFFICIENTS_PATH = './testinput/'
   INTEGER, PARAMETER :: N_PROFILES  = 2
   INTEGER, PARAMETER :: N_LAYERS    = 92
@@ -57,7 +57,7 @@ PROGRAM test_TL_canopy_water
 
   CALL CRTM_Version( Version )
   CALL Program_Message( PROGRAM_NAME, &
-    'Program to test canopy water content TL response.', &
+    'Program to test LAI TL response.', &
     'CRTM Version: '//TRIM(Version) )
 
   CALL GET_COMMAND_ARGUMENT(1, Sensor_Id)
@@ -111,13 +111,13 @@ PROGRAM test_TL_canopy_water
   Sfc(:)%Water_Coverage = 0.0_fp
   Sfc(:)%Snow_Coverage  = 0.0_fp
   Sfc(:)%Ice_Coverage   = 0.0_fp
-  Sfc(:)%Canopy_Water_Content = 0.15_fp
+  Sfc(:)%Canopy_Water_Content = 0.0_fp
   Sfc(:)%Lai = 2.0_fp
 
   CALL CRTM_Atmosphere_Zero( Atmosphere_TL )
   CALL CRTM_Surface_Zero( Surface_TL )
   Perturbation = 0.01_fp
-  Surface_TL(TEST_PROFILE)%Canopy_Water_Content = Perturbation
+  Surface_TL(TEST_PROFILE)%Lai = Perturbation
 
   Error_Status = CRTM_Tangent_Linear( Atm , &
                                       Sfc , &
@@ -144,7 +144,7 @@ PROGRAM test_TL_canopy_water
     STOP 1
   END IF
 
-  Sfc(TEST_PROFILE)%Canopy_Water_Content = Sfc(TEST_PROFILE)%Canopy_Water_Content + Perturbation
+  Sfc(TEST_PROFILE)%Lai = Sfc(TEST_PROFILE)%Lai + Perturbation
   Error_Status = CRTM_Forward( Atm         , &
                                Sfc         , &
                                Geometry    , &
@@ -158,7 +158,7 @@ PROGRAM test_TL_canopy_water
 
   IF ( ABS(RTSolution_TL(TEST_CHANNEL,TEST_PROFILE)%Radiance) <= 0.0_fp ) THEN
     WRITE(*,*) 'TL radiance:', RTSolution_TL(TEST_CHANNEL,TEST_PROFILE)%Radiance
-    Message = 'TL radiance is zero for canopy water perturbation'
+    Message = 'TL radiance is zero for LAI perturbation'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
@@ -196,4 +196,4 @@ CONTAINS
   INCLUDE 'Load_Atm_Data.inc'
   INCLUDE 'Load_Sfc_Data.inc'
 
-END PROGRAM test_TL_canopy_water
+END PROGRAM test_TL_lai

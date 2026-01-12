@@ -1,9 +1,9 @@
 !
-! test_TL_canopy_water.f90
+! test_AD_lai_canopy_water.f90
 !
-! Program to test the CRTM tangent-linear response to canopy water content.
+! Program to test the CRTM adjoint response for LAI and canopy water content.
 !
-PROGRAM test_TL_canopy_water
+PROGRAM test_AD_lai_canopy_water
 
   ! ============================================================================
   ! **** ENVIRONMENT SETUP FOR RTM USAGE ****
@@ -17,7 +17,7 @@ PROGRAM test_TL_canopy_water
   ! ----------
   ! Parameters
   ! ----------
-  CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'test_TL_canopy_water'
+  CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'test_AD_lai_canopy_water'
   CHARACTER(*), PARAMETER :: COEFFICIENTS_PATH = './testinput/'
   INTEGER, PARAMETER :: N_PROFILES  = 2
   INTEGER, PARAMETER :: N_LAYERS    = 92
@@ -29,7 +29,7 @@ PROGRAM test_TL_canopy_water
   INTEGER, PARAMETER :: TEST_PROFILE = 2
   REAL(fp), PARAMETER :: ZENITH_ANGLE = 30.0_fp
   REAL(fp), PARAMETER :: SCAN_ANGLE   = 26.37293341421_fp
-  REAL(fp), PARAMETER :: TOLERANCE = 0.2_fp
+  REAL(fp), PARAMETER :: TOLERANCE = 1.0e-5_fp
 
 
   ! ---------
@@ -41,23 +41,29 @@ PROGRAM test_TL_canopy_water
   INTEGER :: Error_Status
   INTEGER :: Allocate_Status
   INTEGER :: n_Channels
-  REAL(fp) :: Perturbation
-  REAL(fp) :: Ratio
+  REAL(fp) :: Perturb_Lai
+  REAL(fp) :: Perturb_Canopy
+  REAL(fp) :: Dot_TL
+  REAL(fp) :: Dot_AD
+  REAL(fp) :: Dot_Diff
+  REAL(fp) :: Dot_Norm
 
   TYPE(CRTM_ChannelInfo_type)             :: ChannelInfo(N_SENSORS)
   TYPE(CRTM_Geometry_type)                :: Geometry(N_PROFILES)
   TYPE(CRTM_Atmosphere_type)              :: Atm(N_PROFILES)
   TYPE(CRTM_Surface_type)                 :: Sfc(N_PROFILES)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution(:,:)
-  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution_Perturb(:,:)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution_TL(:,:)
+  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution_AD(:,:)
   TYPE(CRTM_Atmosphere_type)              :: Atmosphere_TL(N_PROFILES)
   TYPE(CRTM_Surface_type)                 :: Surface_TL(N_PROFILES)
+  TYPE(CRTM_Atmosphere_type)              :: Atmosphere_AD(N_PROFILES)
+  TYPE(CRTM_Surface_type)                 :: Surface_AD(N_PROFILES)
 
 
   CALL CRTM_Version( Version )
   CALL Program_Message( PROGRAM_NAME, &
-    'Program to test canopy water content TL response.', &
+    'Program to test LAI and canopy water AD response.', &
     'CRTM Version: '//TRIM(Version) )
 
   CALL GET_COMMAND_ARGUMENT(1, Sensor_Id)
@@ -77,8 +83,8 @@ PROGRAM test_TL_canopy_water
   n_Channels = SUM(CRTM_ChannelInfo_n_Channels(ChannelInfo))
 
   ALLOCATE( RTSolution( n_Channels, N_PROFILES ), &
-            RTSolution_Perturb( n_Channels, N_PROFILES ), &
             RTSolution_TL( n_Channels, N_PROFILES ), &
+            RTSolution_AD( n_Channels, N_PROFILES ), &
             STAT = Allocate_Status )
   IF ( Allocate_Status /= 0 ) THEN
     Message = 'Error allocating structure arrays'
@@ -100,6 +106,13 @@ PROGRAM test_TL_canopy_water
     STOP 1
   END IF
 
+  CALL CRTM_Atmosphere_Create( Atmosphere_AD, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
+  IF ( ANY(.NOT. CRTM_Atmosphere_Associated(Atmosphere_AD)) ) THEN
+    Message = 'Error allocating CRTM Atmosphere_AD structure'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    STOP 1
+  END IF
+
   CALL Load_Atm_Data()
   CALL Load_Sfc_Data()
 
@@ -116,8 +129,10 @@ PROGRAM test_TL_canopy_water
 
   CALL CRTM_Atmosphere_Zero( Atmosphere_TL )
   CALL CRTM_Surface_Zero( Surface_TL )
-  Perturbation = 0.01_fp
-  Surface_TL(TEST_PROFILE)%Canopy_Water_Content = Perturbation
+  Perturb_Lai = 0.01_fp
+  Perturb_Canopy = -0.02_fp
+  Surface_TL(TEST_PROFILE)%Lai = Perturb_Lai
+  Surface_TL(TEST_PROFILE)%Canopy_Water_Content = Perturb_Canopy
 
   Error_Status = CRTM_Tangent_Linear( Atm , &
                                       Sfc , &
@@ -144,32 +159,35 @@ PROGRAM test_TL_canopy_water
     STOP 1
   END IF
 
-  Sfc(TEST_PROFILE)%Canopy_Water_Content = Sfc(TEST_PROFILE)%Canopy_Water_Content + Perturbation
-  Error_Status = CRTM_Forward( Atm         , &
-                               Sfc         , &
-                               Geometry    , &
-                               ChannelInfo , &
-                               RTSolution_Perturb )
+  CALL CRTM_Atmosphere_Zero( Atmosphere_AD )
+  CALL CRTM_Surface_Zero( Surface_AD )
+  RTSolution_AD%Radiance = ZERO
+  RTSolution_AD%Brightness_Temperature = ZERO
+  RTSolution_AD(TEST_CHANNEL,TEST_PROFILE)%Radiance = ONE
+
+  Error_Status = CRTM_Adjoint( Atm , &
+                               Sfc , &
+                               RTSolution_AD, &
+                               Geometry, &
+                               ChannelInfo, &
+                               Atmosphere_AD, &
+                               Surface_AD, &
+                               RTSolution  )
   IF ( Error_Status /= SUCCESS ) THEN
-    Message = 'Error in perturbed CRTM Forward Model'
+    Message = 'Error in CRTM Adjoint Model'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
 
-  IF ( ABS(RTSolution_TL(TEST_CHANNEL,TEST_PROFILE)%Radiance) <= 0.0_fp ) THEN
-    WRITE(*,*) 'TL radiance:', RTSolution_TL(TEST_CHANNEL,TEST_PROFILE)%Radiance
-    Message = 'TL radiance is zero for canopy water perturbation'
-    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-    STOP 1
-  END IF
+  Dot_TL = RTSolution_TL(TEST_CHANNEL,TEST_PROFILE)%Radiance
+  Dot_AD = (Surface_AD(TEST_PROFILE)%Lai * Surface_TL(TEST_PROFILE)%Lai) + &
+           (Surface_AD(TEST_PROFILE)%Canopy_Water_Content * Surface_TL(TEST_PROFILE)%Canopy_Water_Content)
+  Dot_Diff = ABS(Dot_TL - Dot_AD)
+  Dot_Norm = MAX(ABS(Dot_TL), ONE)
 
-  Ratio = ( RTSolution_Perturb(TEST_CHANNEL,TEST_PROFILE)%Radiance - &
-            RTSolution(TEST_CHANNEL,TEST_PROFILE)%Radiance ) / &
-            RTSolution_TL(TEST_CHANNEL,TEST_PROFILE)%Radiance
-  WRITE(*,*) 'Base radiance:', RTSolution(TEST_CHANNEL,TEST_PROFILE)%Radiance
-  WRITE(*,*) 'Perturb radiance:', RTSolution_Perturb(TEST_CHANNEL,TEST_PROFILE)%Radiance
-  WRITE(*,*) 'TL radiance:', RTSolution_TL(TEST_CHANNEL,TEST_PROFILE)%Radiance
-  WRITE(*,*) 'Ratio: ', Ratio
+  WRITE(*,*) 'TL dot:', Dot_TL
+  WRITE(*,*) 'AD dot:', Dot_AD
+  WRITE(*,*) 'Diff:', Dot_Diff
 
   Error_Status = CRTM_Destroy( ChannelInfo )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -178,17 +196,24 @@ PROGRAM test_TL_canopy_water
     STOP 1
   END IF
 
+  CALL CRTM_Atmosphere_Destroy(Atmosphere_AD)
   CALL CRTM_Atmosphere_Destroy(Atmosphere_TL)
   CALL CRTM_Atmosphere_Destroy(Atm)
 
-  DEALLOCATE( RTSolution, RTSolution_TL, RTSolution_Perturb, &
+  DEALLOCATE( RTSolution, RTSolution_TL, RTSolution_AD, &
               STAT = Allocate_Status )
 
-  IF ( ABS(1.0_fp - Ratio) < TOLERANCE ) THEN
+  IF ( ABS(Dot_TL) <= 0.0_fp ) THEN
+    Message = 'TL dot product is zero for LAI/canopy perturbations'
+    CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    STOP 1
+  END IF
+
+  IF ( (Dot_Diff / Dot_Norm) < TOLERANCE ) THEN
     STOP 0
   END IF
 
-  WRITE(*,*) 'FAIL abs(1 - Ratio)=', ABS(1.0_fp - Ratio), ' TOL=', TOLERANCE
+  WRITE(*,*) 'FAIL diff/norm=', Dot_Diff / Dot_Norm, ' TOL=', TOLERANCE
   STOP 1
 
 CONTAINS
@@ -196,4 +221,4 @@ CONTAINS
   INCLUDE 'Load_Atm_Data.inc'
   INCLUDE 'Load_Sfc_Data.inc'
 
-END PROGRAM test_TL_canopy_water
+END PROGRAM test_AD_lai_canopy_water

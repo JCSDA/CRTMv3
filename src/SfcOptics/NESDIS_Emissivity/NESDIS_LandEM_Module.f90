@@ -17,6 +17,7 @@ MODULE NESDIS_LandEM_Module
   PRIVATE
   ! Procedures
   PUBLIC  :: NESDIS_LandEM
+  PUBLIC  :: NESDIS_LandEM_LAI_Derivative
   ! Parameters
   PUBLIC :: ZERO
   PUBLIC :: POINT1
@@ -233,6 +234,168 @@ CONTAINS
 
 
 
+  SUBROUTINE NESDIS_LandEM_LAI_Derivative(Angle,                 &   ! Input
+                                         Frequency,             &   ! Input
+                                         Soil_Moisture_Content, &   ! Input
+                                         Vegetation_Fraction,   &   ! Input
+                                         Soil_Temperature,      &   ! Input
+                                         t_skin,                &   ! Input
+                                         Lai,                   &   ! Input
+                                         Soil_Type,             &   ! Input
+                                         Vegetation_Type,       &   ! Input
+                                         Snow_Depth,            &   ! Input
+                                         dEmissivity_H,         &   ! Output
+                                         dEmissivity_V)             ! Output
+    ! Arguments
+    REAL(fp), intent(in)  :: Angle
+    REAL(fp), intent(in)  :: Frequency
+    REAL(fp), intent(in)  :: Soil_Moisture_Content
+    REAL(fp), intent(in)  :: Vegetation_Fraction
+    REAL(fp), intent(in)  :: Soil_Temperature
+    REAL(fp), intent(in)  :: t_skin
+    REAL(fp), intent(in)  :: Lai
+    INTEGER,  intent(in)  :: Soil_Type
+    INTEGER,  intent(in)  :: Vegetation_Type
+    REAL(fp), intent(in)  :: Snow_Depth
+    REAL(fp), intent(out) :: dEmissivity_H
+    REAL(fp), intent(out) :: dEmissivity_V
+    ! Local parameters
+    REAL(fp), PARAMETER :: rhos = 2.65_fp
+    REAL(fp), PARAMETER, dimension(0:9) :: frac_sand = (/ 0.80_fp,     &
+                          0.92_fp, 0.10_fp, 0.20_fp, 0.51_fp, 0.50_fp, &
+                          0.35_fp, 0.60_fp, 0.42_fp,  0.92_fp  /)
+    REAL(fp), PARAMETER, dimension(0:9) :: frac_clay = (/ 0.20_fp,     &
+                          0.06_fp, 0.34_fp, 0.63_fp, 0.14_fp, 0.43_fp, &
+                          0.34_fp, 0.28_fp, 0.085_fp, 0.06_fp /)
+    REAL(fp), PARAMETER, dimension(0:9) :: rhob_soil = (/ 1.48_fp,     &
+                          1.68_fp, 1.27_fp, 1.21_fp, 1.48_fp, 1.31_fp, &
+                          1.32_fp, 1.40_fp, 1.54_fp, 1.68_fp /)
+    REAL(fp), PARAMETER, dimension(0:13) :: veg_rho  = (/ 0.33_fp,     &
+                          0.40_fp, 0.40_fp, 0.40_fp, 0.40_fp, 0.40_fp, &
+                          0.25_fp, 0.25_fp, 0.40_fp, 0.40_fp, 0.40_fp, &
+                          0.40_fp, 0.33_fp, 0.33_fp            /)
+    REAL(fp), PARAMETER, dimension(0:13) :: veg_mge  = (/ 0.50_fp,     &
+                          0.45_fp, 0.45_fp, 0.45_fp, 0.40_fp, 0.40_fp, &
+                          0.30_fp, 0.35_fp, 0.30_fp, 0.30_fp, 0.40_fp, &
+                          0.30_fp, 0.50_fp, 0.40_fp            /)
+    REAL(fp), PARAMETER, dimension(0:13) :: leaf_th  = (/ 0.07_fp,     &
+                          0.18_fp, 0.18_fp, 0.18_fp, 0.18_fp, 0.18_fp, &
+                          0.12_fp, 0.12_fp, 0.12_fp, 0.12_fp, 0.12_fp, &
+                          0.12_fp, 0.15_fp, 0.12_fp            /)
+    ! Local variables
+    REAL(fp) :: mv, veg_frac, theta, theta_t, mu, sigma, vlai, mge, rhoveg
+    REAL(fp) :: leaf_thick, t_soil, sand, clay, rhob, local_snow_depth
+    REAL(fp) :: gv, gh, ssalb_h, ssalb_v, tau_h, tau_v, tau_coeff, tv, th
+    REAL(fp) :: r21_h, r21_v, r23_h, r23_v, t21_h, t21_v
+    REAL(fp) :: alfa_v, alfa_h, kk_h, kk_v, gamma_h, gamma_v, beta_v, beta_h
+    REAL(fp) :: fact1, fact2, gsect0, gsect1_h, gsect1_v, gsect2_h, gsect2_v
+    REAL(fp) :: d_fact1, d_fact2, d_gsect2_h, d_gsect2_v
+    REAL(fp) :: a_h, b_h, a_v, b_v
+    REAL(fp) :: d_a_h, d_b_h, d_a_v, d_b_v
+    REAL(fp) :: d_esh_dtau, d_esv_dtau
+    REAL(fp) :: esh, esv
+    COMPLEX(fp) :: esoil, eveg, eair
+
+    dEmissivity_H = ZERO
+    dEmissivity_V = ZERO
+
+    eair = CMPLX(ONE,-ZERO,fp)
+    theta = Angle*PI/180.0_fp
+
+    mv               = Soil_Moisture_Content
+    veg_frac         = Vegetation_Fraction
+    t_soil           = Soil_Temperature
+    sand             = frac_sand(Soil_Type)
+    clay             = frac_clay(Soil_Type)
+    rhob             = rhob_soil(Soil_Type)
+    local_snow_depth = Snow_Depth
+
+    if ( (t_soil <= 100.0_fp .OR.  t_soil >= 350.0_fp) .AND. &
+         (t_skin >= 100.0_fp .AND. t_skin <= 350.0_fp) ) t_soil = t_skin
+
+    mv = MAX(MIN(mv,ONE),ZERO)
+
+    IF (local_snow_depth > POINT1) RETURN
+
+    veg_frac = MAX(MIN(veg_frac,ONE),ZERO)
+    mu  = COS(theta)
+    sigma = POINT5
+
+    vlai = Lai*veg_frac
+    mge = veg_mge(Vegetation_Type)
+    rhoveg = veg_rho(Vegetation_Type)
+    leaf_thick = leaf_th(Vegetation_Type)
+
+    r21_h    = ZERO
+    r21_v    = ZERO
+    t21_h    = ONE
+    t21_v    = ONE
+
+    CALL Soil_Diel(Frequency, t_soil, mv, rhob, rhos, sand, clay, esoil)
+    theta_t = ASIN(REAL(SIN(theta)*SQRT(eair)/SQRT(esoil),fp))
+    CALL Reflectance(eair, esoil, theta, theta_t, r23_v, r23_h)
+    CALL Roughness_Reflectance(Frequency, sigma, r23_v, r23_h)
+    CALL Canopy_Diel(Frequency, mge, eveg, rhoveg)
+    CALL Canopy_Optic(vlai,Frequency,theta,eveg,leaf_thick,gv,gh,ssalb_v,ssalb_h,tau_v,tau_h, &
+                      tv, th)
+
+    ! Sensitivity to LAI enters through canopy optical depth (tau).
+    tau_coeff = POINT5*(TWO-tv-th)
+
+    alfa_h  = SQRT((ONE - ssalb_h)/(ONE - gh*ssalb_h))
+    kk_h    = SQRT((ONE - ssalb_h)*(ONE -  gh*ssalb_h))/mu
+    beta_h  = (ONE - alfa_h)/(ONE + alfa_h)
+    gamma_h = (beta_h - r23_h)/(ONE-beta_h*r23_h)
+
+    alfa_v  = SQRT((ONE-ssalb_v)/(ONE - gv*ssalb_v))
+    kk_v    = SQRT((ONE-ssalb_v)*(ONE - gv*ssalb_v))/mu
+    beta_v  = (ONE - alfa_v)/(ONE + alfa_v)
+    gamma_v = (beta_v -r23_v)/(ONE-beta_v*r23_v)
+
+    fact1=gamma_h*EXP(-TWO*kk_h*tau_h)
+    fact2=gamma_v*EXP(-TWO*kk_v*tau_v)
+
+    gsect0  =(EXP(C_2*frequency/t_skin) -ONE)/(EXP(C_2*frequency/t_soil) -ONE)
+
+    gsect1_h=(ONE-r23_h)*(gsect0-ONE)
+    gsect2_h=((ONE-beta_h*beta_h)/(ONE-beta_h*r23_h))*EXP(-kk_h*tau_h)
+
+    gsect1_v=(ONE-r23_v)*(gsect0-ONE)
+    gsect2_v=((ONE-beta_v*beta_v)/(ONE-beta_v*r23_v))*EXP(-kk_h*tau_v)
+
+    a_h = (ONE - beta_h)*(ONE + fact1)+gsect1_h*gsect2_h
+    b_h = ONE-beta_h*r21_h-(beta_h-r21_h)*fact1
+
+    a_v = (ONE - beta_v)*(ONE + fact2)+gsect1_v*gsect2_v
+    b_v = ONE-beta_v*r21_v-(beta_v-r21_v)*fact2
+
+    esh  = t21_h*a_h/b_h
+    esv  = t21_v*a_v/b_v
+
+    d_fact1 = -TWO*kk_h*fact1
+    d_fact2 = -TWO*kk_v*fact2
+    d_gsect2_h = -kk_h*gsect2_h
+    d_gsect2_v = -kk_h*gsect2_v
+
+    d_a_h = (ONE - beta_h)*d_fact1 + gsect1_h*d_gsect2_h
+    d_b_h = -(beta_h - r21_h)*d_fact1
+    d_esh_dtau = t21_h*(d_a_h*b_h - a_h*d_b_h)/(b_h*b_h)
+
+    d_a_v = (ONE - beta_v)*d_fact2 + gsect1_v*d_gsect2_v
+    d_b_v = -(beta_v - r21_v)*d_fact2
+    d_esv_dtau = t21_v*(d_a_v*b_v - a_v*d_b_v)/(b_v*b_v)
+
+    dEmissivity_H = d_esh_dtau * tau_coeff * veg_frac
+    dEmissivity_V = d_esv_dtau * tau_coeff * veg_frac
+
+    if (esh < EMISSH_DEFAULT .OR. esh > ONE) dEmissivity_H = ZERO
+    if (esv < EMISSV_DEFAULT .OR. esv > ONE) dEmissivity_V = ZERO
+
+  END SUBROUTINE NESDIS_LandEM_LAI_Derivative
+
+
+
+
 
 
 subroutine SnowEM_Default(frequency,ts, depth,Emissivity_V,Emissivity_H)
@@ -314,10 +477,11 @@ end subroutine SnowEM_Default
 
 
 subroutine Canopy_Optic(vlai,frequency,theta,esv,d,gv,gh,&
-                        ssalb_v,ssalb_h,tau_v, tau_h)
+                        ssalb_v,ssalb_h,tau_v, tau_h, tv_out, th_out)
 
 
   REAL(fp) :: frequency,theta,d,vlai,ssalb_v,ssalb_h,tau_v,tau_h,gv, gh, mu
+  REAL(fp), OPTIONAL, INTENT(OUT) :: tv_out, th_out
   COMPLEX(fp) :: ix,k0,kz0,kz1,rhc,rvc,esv,expval1,factt,factrvc,factrhc
   REAL(fp) :: rh,rv,th,tv
   REAL(fp), PARAMETER :: threshold = 0.999_fp
@@ -351,6 +515,9 @@ subroutine Canopy_Optic(vlai,frequency,theta,esv,d,gv,gh,&
 
   ssalb_v = MIN((rv+rh)/(TWO-tv-th),threshold)
   ssalb_h = ssalb_v
+
+  IF (PRESENT(tv_out)) tv_out = tv
+  IF (PRESENT(th_out)) th_out = th
 
 end subroutine Canopy_Optic
 

@@ -28,7 +28,8 @@ MODULE CRTM_MW_Land_SfcOptics
   USE CRTM_Surface_Define,      ONLY: CRTM_Surface_type
   USE CRTM_GeometryInfo_Define, ONLY: CRTM_GeometryInfo_type
   USE CRTM_SfcOptics_Define,    ONLY: CRTM_SfcOptics_type
-  USE NESDIS_LandEM_Module,     ONLY: NESDIS_LandEM
+  USE NESDIS_LandEM_Module,     ONLY: NESDIS_LandEM, &
+                                      NESDIS_LandEM_LAI_Derivative
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -80,7 +81,6 @@ MODULE CRTM_MW_Land_SfcOptics
   INTEGER, PARAMETER :: CULTIVATIONS                   = 12
   REAL(fp), PARAMETER :: FREQUENCY_CUTOFF = 80.0_fp  ! GHz
   REAL(fp), PARAMETER :: DEFAULT_EMISSIVITY = 0.95_fp
-  REAL(fp), PARAMETER :: LAI_FD_DELTA = 1.0e-2_fp
 
 
   ! --------------------------------------
@@ -263,8 +263,8 @@ CONTAINS
 !
 !       This function is a wrapper for third party code.
 !
-!       This implementation includes a finite-difference derivative with
-!       respect to the canopy water content contribution to the effective LAI.
+!       This implementation includes analytic derivatives with respect to the
+!       effective LAI (LAI + canopy water content).
 !
 ! CALLING SEQUENCE:
 !       Error_Status = Compute_MW_Land_SfcOptics_TL( Surface     , &
@@ -355,12 +355,9 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_MW_Land_SfcOptics_TL'
     ! Local variables
     INTEGER :: i
+    REAL(fp) :: lai_sum
     REAL(fp) :: lai_eff
     REAL(fp) :: lai_eff_tl
-    REAL(fp) :: emiss_h_0
-    REAL(fp) :: emiss_v_0
-    REAL(fp) :: emiss_h_p
-    REAL(fp) :: emiss_v_p
     REAL(fp) :: d_emiss_h
     REAL(fp) :: d_emiss_v
     REAL(fp) :: frequency
@@ -376,37 +373,25 @@ CONTAINS
     frequency = SC(SensorIndex)%Frequency(ChannelIndex)
     IF ( frequency >= FREQUENCY_CUTOFF ) RETURN
 
-    lai_eff = MAX(Surface%Lai + Surface%Canopy_Water_Content, ZERO)
-    lai_eff_tl = Surface_TL%Canopy_Water_Content
+    lai_sum = Surface%Lai + Surface%Canopy_Water_Content
+    IF ( lai_sum <= ZERO ) RETURN
+    lai_eff = MAX(lai_sum, ZERO)
+    lai_eff_tl = Surface_TL%Lai + Surface_TL%Canopy_Water_Content
     IF ( lai_eff_tl == ZERO ) RETURN
 
     DO i = 1, SfcOptics%n_Angles
-      CALL NESDIS_LandEM(SfcOptics%Angle(i),            & ! Input, Degree
-                         frequency,                    & ! Input, GHz
-                         Surface%Soil_Moisture_Content, & ! Input, g.cm^-3
-                         Surface%Vegetation_Fraction,   & ! Input
-                         Surface%Soil_Temperature,      & ! Input, K
-                         Surface%Land_Temperature,      & ! Input, K
-                         lai_eff,                       & ! Input, Leaf Area Index + canopy
-                         Surface%Soil_Type,             & ! Input, Soil Type (1 -  9)
-                         Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
-                         ZERO,                          & ! Input, Snow depth, mm
-                         emiss_h_0,                     & ! Output, H component
-                         emiss_v_0                      ) ! Output, V component
-      CALL NESDIS_LandEM(SfcOptics%Angle(i),            & ! Input, Degree
-                         frequency,                    & ! Input, GHz
-                         Surface%Soil_Moisture_Content, & ! Input, g.cm^-3
-                         Surface%Vegetation_Fraction,   & ! Input
-                         Surface%Soil_Temperature,      & ! Input, K
-                         Surface%Land_Temperature,      & ! Input, K
-                         lai_eff + LAI_FD_DELTA,        & ! Input, Leaf Area Index + canopy
-                         Surface%Soil_Type,             & ! Input, Soil Type (1 -  9)
-                         Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
-                         ZERO,                          & ! Input, Snow depth, mm
-                         emiss_h_p,                     & ! Output, H component
-                         emiss_v_p                      ) ! Output, V component
-      d_emiss_h = (emiss_h_p - emiss_h_0) / LAI_FD_DELTA
-      d_emiss_v = (emiss_v_p - emiss_v_0) / LAI_FD_DELTA
+      CALL NESDIS_LandEM_LAI_Derivative(SfcOptics%Angle(i),            & ! Input, Degree
+                                        frequency,                    & ! Input, GHz
+                                        Surface%Soil_Moisture_Content, & ! Input, g.cm^-3
+                                        Surface%Vegetation_Fraction,   & ! Input
+                                        Surface%Soil_Temperature,      & ! Input, K
+                                        Surface%Land_Temperature,      & ! Input, K
+                                        lai_eff,                       & ! Input, Effective LAI
+                                        Surface%Soil_Type,             & ! Input, Soil Type (1 -  9)
+                                        Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
+                                        ZERO,                          & ! Input, Snow depth, mm
+                                        d_emiss_h,                     & ! Output, H component
+                                        d_emiss_v                      ) ! Output, V component
 
       SfcOptics_TL%Emissivity(i,2) = d_emiss_h * lai_eff_tl
       SfcOptics_TL%Emissivity(i,1) = d_emiss_v * lai_eff_tl
@@ -430,8 +415,8 @@ CONTAINS
 !
 !       This function is a wrapper for third party code.
 !
-!       This implementation includes a finite-difference derivative with
-!       respect to the canopy water content contribution to the effective LAI.
+!       This implementation includes analytic derivatives with respect to the
+!       effective LAI (LAI + canopy water content).
 !
 ! CALLING SEQUENCE:
 !       Error_Status = Compute_MW_Land_SfcOptics_AD( Surface     , &
@@ -516,15 +501,13 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_MW_Land_SfcOptics_AD'
     ! Local variables
     INTEGER :: i
+    REAL(fp) :: lai_sum
     REAL(fp) :: lai_eff
-    REAL(fp) :: emiss_h_0
-    REAL(fp) :: emiss_v_0
-    REAL(fp) :: emiss_h_p
-    REAL(fp) :: emiss_v_p
     REAL(fp) :: d_emiss_h
     REAL(fp) :: d_emiss_v
     REAL(fp) :: emiss_h_ad
     REAL(fp) :: emiss_v_ad
+    REAL(fp) :: lai_ad
     REAL(fp) :: frequency
 
 
@@ -540,39 +523,32 @@ CONTAINS
       RETURN
     END IF
 
-    lai_eff = MAX(Surface%Lai + Surface%Canopy_Water_Content, ZERO)
+    lai_sum = Surface%Lai + Surface%Canopy_Water_Content
+    IF ( lai_sum <= ZERO ) THEN
+      SfcOptics_AD%Reflectivity = ZERO
+      SfcOptics_AD%Emissivity   = ZERO
+      RETURN
+    END IF
+    lai_eff = MAX(lai_sum, ZERO)
     DO i = 1, SfcOptics%n_Angles
-      CALL NESDIS_LandEM(SfcOptics%Angle(i),            & ! Input, Degree
-                         frequency,                    & ! Input, GHz
-                         Surface%Soil_Moisture_Content, & ! Input, g.cm^-3
-                         Surface%Vegetation_Fraction,   & ! Input
-                         Surface%Soil_Temperature,      & ! Input, K
-                         Surface%Land_Temperature,      & ! Input, K
-                         lai_eff,                       & ! Input, Leaf Area Index + canopy
-                         Surface%Soil_Type,             & ! Input, Soil Type (1 -  9)
-                         Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
-                         ZERO,                          & ! Input, Snow depth, mm
-                         emiss_h_0,                     & ! Output, H component
-                         emiss_v_0                      ) ! Output, V component
-      CALL NESDIS_LandEM(SfcOptics%Angle(i),            & ! Input, Degree
-                         frequency,                    & ! Input, GHz
-                         Surface%Soil_Moisture_Content, & ! Input, g.cm^-3
-                         Surface%Vegetation_Fraction,   & ! Input
-                         Surface%Soil_Temperature,      & ! Input, K
-                         Surface%Land_Temperature,      & ! Input, K
-                         lai_eff + LAI_FD_DELTA,        & ! Input, Leaf Area Index + canopy
-                         Surface%Soil_Type,             & ! Input, Soil Type (1 -  9)
-                         Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
-                         ZERO,                          & ! Input, Snow depth, mm
-                         emiss_h_p,                     & ! Output, H component
-                         emiss_v_p                      ) ! Output, V component
-      d_emiss_h = (emiss_h_p - emiss_h_0) / LAI_FD_DELTA
-      d_emiss_v = (emiss_v_p - emiss_v_0) / LAI_FD_DELTA
+      CALL NESDIS_LandEM_LAI_Derivative(SfcOptics%Angle(i),            & ! Input, Degree
+                                        frequency,                    & ! Input, GHz
+                                        Surface%Soil_Moisture_Content, & ! Input, g.cm^-3
+                                        Surface%Vegetation_Fraction,   & ! Input
+                                        Surface%Soil_Temperature,      & ! Input, K
+                                        Surface%Land_Temperature,      & ! Input, K
+                                        lai_eff,                       & ! Input, Effective LAI
+                                        Surface%Soil_Type,             & ! Input, Soil Type (1 -  9)
+                                        Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
+                                        ZERO,                          & ! Input, Snow depth, mm
+                                        d_emiss_h,                     & ! Output, H component
+                                        d_emiss_v                      ) ! Output, V component
 
       emiss_h_ad = SfcOptics_AD%Emissivity(i,2) - SfcOptics_AD%Reflectivity(i,2,i,2)
       emiss_v_ad = SfcOptics_AD%Emissivity(i,1) - SfcOptics_AD%Reflectivity(i,1,i,1)
-      Surface_AD%Canopy_Water_Content = Surface_AD%Canopy_Water_Content + &
-                                        (emiss_h_ad * d_emiss_h) + (emiss_v_ad * d_emiss_v)
+      lai_ad = (emiss_h_ad * d_emiss_h) + (emiss_v_ad * d_emiss_v)
+      Surface_AD%Lai = Surface_AD%Lai + lai_ad
+      Surface_AD%Canopy_Water_Content = Surface_AD%Canopy_Water_Content + lai_ad
       SfcOptics_AD%Emissivity(i,2) = ZERO
       SfcOptics_AD%Emissivity(i,1) = ZERO
       SfcOptics_AD%Reflectivity(i,2,i,2) = ZERO

@@ -234,6 +234,24 @@ list( APPEND OMPoverChannels_Sensor_Ids
         atms_n21
 )
 
+list( APPEND Land_Surface_Sensor_Ids
+        atms_n21
+)
+
+list( APPEND Land_Surface_TL_Tests
+        Canopy_Water
+        LAI
+)
+
+list( APPEND Land_Surface_K_Tests
+        Canopy_Water
+        LAI
+)
+
+list( APPEND Land_Surface_AD_Tests
+        LAI_Canopy_Water
+)
+
 list (APPEND common_tests
      Simple
      AOD
@@ -293,16 +311,39 @@ target_link_libraries(Unit_TL_TEST PRIVATE crtm)
 add_test(NAME test_Unit_TL_TEST
          COMMAND $<TARGET_FILE:Unit_TL_TEST>)
 set_tests_properties(test_Unit_TL_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-add_executable(Unit_TL_Canopy_Water_TEST mains/unit/Unit_Test/test_TL_canopy_water.f90)
-target_link_libraries(Unit_TL_Canopy_Water_TEST PRIVATE crtm)
-add_test(NAME test_Unit_TL_Canopy_Water_TEST
-         COMMAND $<TARGET_FILE:Unit_TL_Canopy_Water_TEST>)
-set_tests_properties(test_Unit_TL_Canopy_Water_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-add_executable(Unit_K_Matrix_Canopy_Water_TEST mains/unit/Unit_Test/test_k_matrix_canopy_water.f90)
-target_link_libraries(Unit_K_Matrix_Canopy_Water_TEST PRIVATE crtm)
-add_test(NAME test_Unit_K_Matrix_Canopy_Water_TEST
-         COMMAND $<TARGET_FILE:Unit_K_Matrix_Canopy_Water_TEST>)
-set_tests_properties(test_Unit_K_Matrix_Canopy_Water_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+foreach(testtype IN LISTS Land_Surface_TL_Tests)
+  string(TOLOWER ${testtype} testtype_lower)
+  add_executable(Unit_TL_${testtype}_TEST mains/unit/Unit_Test/test_TL_${testtype_lower}.f90)
+  target_link_libraries(Unit_TL_${testtype}_TEST PRIVATE crtm)
+  foreach(sensor_id IN LISTS Land_Surface_Sensor_Ids)
+    add_test(NAME test_Unit_TL_${testtype}_${sensor_id}
+             COMMAND $<TARGET_FILE:Unit_TL_${testtype}_TEST> "${sensor_id}")
+    set_tests_properties(test_Unit_TL_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+  endforeach()
+endforeach()
+
+foreach(testtype IN LISTS Land_Surface_K_Tests)
+  string(TOLOWER ${testtype} testtype_lower)
+  add_executable(Unit_K_Matrix_${testtype}_TEST mains/unit/Unit_Test/test_k_matrix_${testtype_lower}.f90)
+  target_link_libraries(Unit_K_Matrix_${testtype}_TEST PRIVATE crtm)
+  foreach(sensor_id IN LISTS Land_Surface_Sensor_Ids)
+    add_test(NAME test_Unit_K_Matrix_${testtype}_${sensor_id}
+             COMMAND $<TARGET_FILE:Unit_K_Matrix_${testtype}_TEST> "${sensor_id}")
+    set_tests_properties(test_Unit_K_Matrix_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+  endforeach()
+endforeach()
+
+foreach(testtype IN LISTS Land_Surface_AD_Tests)
+  string(TOLOWER ${testtype} testtype_lower)
+  add_executable(Unit_AD_${testtype}_TEST mains/unit/Unit_Test/test_AD_${testtype_lower}.f90)
+  target_link_libraries(Unit_AD_${testtype}_TEST PRIVATE crtm)
+  foreach(sensor_id IN LISTS Land_Surface_Sensor_Ids)
+    add_test(NAME test_Unit_AD_${testtype}_${sensor_id}
+             COMMAND $<TARGET_FILE:Unit_AD_${testtype}_TEST> "${sensor_id}")
+    set_tests_properties(test_Unit_AD_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+  endforeach()
+endforeach()
 
 add_executable(Unit_Aerosol_Bypass mains/unit/Unit_Test/test_Aerosol_Bypass.f90)
 target_link_libraries(Unit_Aerosol_Bypass PRIVATE crtm)
