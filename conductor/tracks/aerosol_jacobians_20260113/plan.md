@@ -1,7 +1,7 @@
 # Plan - Aerosol Scattering Jacobians
 
 ## Phase 1: Analysis and Infrastructure
-- [ ] Task: Audit `src/AtmScatter/AerosolScatter` to identify specific missing Jacobian code blocks.
+- [x] Task: Audit `src/AtmScatter/AerosolScatter` to identify specific missing Jacobian code blocks. [a33998c]
 - [ ] Task: Set up a baseline unit test environment for Aerosol Forward model outputs.
 - [ ] Task: Conductor - User Manual Verification 'Phase 1: Analysis and Infrastructure' (Protocol in workflow.md)
 
