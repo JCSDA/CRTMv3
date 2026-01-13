@@ -29,7 +29,7 @@ PROGRAM test_AerosolScatter_TL
 
   CHARACTER(*), PARAMETER :: PROGRAM_NAME = 'test_AerosolScatter_TL'
   INTEGER :: Error_Status
-  CHARACTER(256) :: Sensor_Id = 'atms_npp'
+  CHARACTER(256) :: Sensor_Id = 'modis_aqua'
   CHARACTER(256) :: File_Path = './testinput/'
 
   TYPE(CRTM_Atmosphere_type) :: Atm, Atm_TL
@@ -61,7 +61,7 @@ PROGRAM test_AerosolScatter_TL
 
   ! Populate Input
   Atm%Absorber_ID(1) = 1
-  Atm%Aerosol(1)%Type = 1
+  Atm%Aerosol(1)%Type = 6
   Atm%Aerosol(1)%Concentration(1) = 1.0e-4_fp
   Atm%Aerosol(1)%Effective_Radius(1) = 1.0_fp
   Atm%Relative_Humidity(1) = 0.5_fp
