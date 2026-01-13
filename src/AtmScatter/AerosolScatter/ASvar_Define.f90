@@ -131,6 +131,7 @@ MODULE ASvar_Define
     REAL(fp), ALLOCATABLE :: ke(:,:)          ! I3 x I4  Mass extinction coefficient
     REAL(fp), ALLOCATABLE :: w(:,:)           ! I3 x I4  Single Scatter Albedo
     REAL(fp), ALLOCATABLE :: g(:,:)           ! I3 x I4  Asymmetry factor
+    REAL(fp), ALLOCATABLE :: kb(:,:)          ! I3 x I4  Backscatter coefficient
     REAL(fp), ALLOCATABLE :: pcoeff(:,:,:,:)  ! 0:I1 x I2 x I3 x I4  Phase coefficients
     ! The accumulated scattering coefficient
     REAL(fp), ALLOCATABLE :: total_bs(:)      ! I3  Volume scattering coefficient
@@ -191,6 +192,7 @@ CONTAINS
               self%ke(n_Layers, n_Aerosols), &
               self%w(n_Layers, n_Aerosols), &
               self%g(n_Layers, n_Aerosols), &
+              self%kb(n_Layers, n_Aerosols), &
               self%pcoeff(0:n_Legendre_Terms,n_Phase_Elements,n_Layers, n_Aerosols), &
               self%total_bs(n_Layers), &
               STAT = alloc_stat )
@@ -238,6 +240,11 @@ CONTAINS
     DO i4 = 1, self%n_Aerosols
       WRITE(*,'(5x,"g Aerosol index #",i0)') i4
       WRITE(*,'(5(1x,es22.15,:))') self%g(:,i4)
+    END DO
+    WRITE(*,'(3x,"Backscatter coefficient (kb) :")')
+    DO i4 = 1, self%n_Aerosols
+      WRITE(*,'(5x,"kb Aerosol index #",i0)') i4
+      WRITE(*,'(5(1x,es22.15,:))') self%kb(:,i4)
     END DO
     WRITE(*,'(3x,"Phase coefficients (pcoeff) :")')
     DO i4 = 1, self%n_Aerosols
@@ -586,6 +593,13 @@ CONTAINS
       msg = 'Error reading asymmetry factor - '//TRIM(io_msg)
       CALL Read_Cleanup(); RETURN
     END IF
+    ! ...Backscatter coefficient
+    READ( fid, IOSTAT=io_stat, IOMSG=io_msg ) &
+      ASvar%kb
+    IF ( io_stat /= 0 ) THEN
+      msg = 'Error reading backscatter coefficient - '//TRIM(io_msg)
+      CALL Read_Cleanup(); RETURN
+    END IF
     ! ...Phase coefficients
     READ( fid, IOSTAT=io_stat, IOMSG=io_msg ) &
       ASvar%pcoeff
@@ -761,6 +775,13 @@ CONTAINS
       msg = 'Error writing asymmetry factor - '//TRIM(io_msg)
       CALL Write_Cleanup(); RETURN
     END IF
+    ! ...Backscatter coefficient
+    WRITE( fid, IOSTAT=io_stat, IOMSG=io_msg ) &
+      ASvar%kb
+    IF ( io_stat /= 0 ) THEN
+      msg = 'Error writing backscatter coefficient - '//TRIM(io_msg)
+      CALL Write_Cleanup(); RETURN
+    END IF
     ! ...Phase coefficients
     WRITE( fid, IOSTAT=io_stat, IOMSG=io_msg ) &
       ASvar%pcoeff
@@ -840,6 +861,7 @@ CONTAINS
     IF ( ALL(x%ke       .EqualTo. y%ke       ) .AND. &
          ALL(x%w        .EqualTo. y%w        ) .AND. &
          ALL(x%g        .EqualTo. y%g        ) .AND. &
+         ALL(x%kb       .EqualTo. y%kb       ) .AND. &
          ALL(x%pcoeff   .EqualTo. y%pcoeff   ) .AND. &
          ALL(x%total_bs .EqualTo. y%total_bs ) ) &
       is_equal = .TRUE.
