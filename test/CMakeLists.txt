@@ -358,6 +358,15 @@ foreach(testtype IN LISTS ODPS_Utils)
 	target_link_libraries(${testtype} PRIVATE crtm)
 endforeach()
 
+#TauCoeff general utilities
+list (APPEND TCoeff_Utils
+  TauCoeff_Inspect
+)
+foreach(testtype IN LISTS TCoeff_Utils)
+	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/TauCoeff/${testtype}/${testtype}.f90)
+	target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
 #CloudCoeff utilities 
 list (APPEND CCoef_Utils
   CloudCoeff_NC2BIN
