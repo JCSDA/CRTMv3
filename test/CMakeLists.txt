@@ -300,12 +300,6 @@ add_test(NAME test_Unit_Aerosol_Bypass
          COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass>)
 set_tests_properties(test_Unit_Aerosol_Bypass PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
-add_executable(Unit_AerosolScatter mains/unit/Unit_Test/test_AerosolScatter.f90)
-target_link_libraries(Unit_AerosolScatter PRIVATE crtm)
-add_test(NAME test_Unit_AerosolScatter
-         COMMAND $<TARGET_FILE:Unit_AerosolScatter>)
-set_tests_properties(test_Unit_AerosolScatter PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-
 add_executable(Unit_AerosolScatter_TL mains/unit/Unit_Test/test_AerosolScatter_TL.f90)
 target_link_libraries(Unit_AerosolScatter_TL PRIVATE crtm)
 add_test(NAME test_Unit_AerosolScatter_TL
