@@ -15,10 +15,12 @@ PROGRAM test_AerosolScatter_TL
   USE CRTM_AerosolCoeff,      ONLY: AeroC, CRTM_AerosolCoeff_Load, CRTM_AerosolCoeff_Destroy
   USE CRTM_Atmosphere_Define, ONLY: CRTM_Atmosphere_type, &
                                     CRTM_Atmosphere_Create, &
-                                    CRTM_Atmosphere_Destroy
+                                    CRTM_Atmosphere_Destroy, &
+                                    CRTM_Atmosphere_Zero
   USE CRTM_AtmOptics_Define,  ONLY: CRTM_AtmOptics_type, &
                                     CRTM_AtmOptics_Create, &
-                                    CRTM_AtmOptics_Destroy
+                                    CRTM_AtmOptics_Destroy, &
+                                    CRTM_AtmOptics_Zero
   USE CRTM_AerosolScatter,    ONLY: CRTM_Compute_AerosolScatter, &
                                     CRTM_Compute_AerosolScatter_TL
   USE ASvar_Define,           ONLY: ASvar_type, &
@@ -67,6 +69,7 @@ PROGRAM test_AerosolScatter_TL
   Atm%Relative_Humidity(1) = 0.5_fp
 
   ! Populate TL Input: Perturb Relative Humidity
+  CALL CRTM_Atmosphere_Zero( Atm_TL )
   Atm_TL%Relative_Humidity(1) = 1.0_fp 
 
   AScat%Include_Scattering = .TRUE.
@@ -76,19 +79,38 @@ PROGRAM test_AerosolScatter_TL
   Error_Status = CRTM_Compute_AerosolScatter( Atm, SensorIndex, ChannelIndex, AScat, ASvar )
   IF ( Error_Status /= SUCCESS ) STOP 1
 
-  ! TL Call
+  ! TL Call for RH
+  CALL CRTM_AtmOptics_Zero( AScat_TL )
   Error_Status = CRTM_Compute_AerosolScatter_TL( Atm, AScat, Atm_TL, SensorIndex, ChannelIndex, AScat_TL, ASvar )
   IF ( Error_Status /= SUCCESS ) STOP 1
-
   PRINT *, 'AScat_TL%Optical_Depth(1) for RH perturbation: ', AScat_TL%Optical_Depth(1)
-
-  ! Expected behavior: If RH is ignored, sensitivity should be exactly ZERO.
-  ! We want this to be NON-ZERO eventually if the Jacobian is implemented.
   IF ( ABS(AScat_TL%Optical_Depth(1)) < 1.0e-12_fp ) THEN
-     PRINT *, 'FAIL: Sensitivity to RH is ZERO (Missing Jacobian confirmed)'
-     ! In TDD, we proceed once we have a failing test.
+     PRINT *, 'FAIL: Sensitivity to RH is ZERO'
   ELSE
      PRINT *, 'SUCCESS: Sensitivity to RH is NON-ZERO'
+  END IF
+
+  ! TL Call for Effective Radius (Use a scheme that supports it, e.g., CRTM or CMAQ)
+  ! We'll stay with GOCART for now but just check if it's zero or non-zero as expected.
+  ! GOCART-GEOS5 usually has N_RADII=1, so it might be zero.
+  CALL CRTM_Atmosphere_Zero( Atm_TL )
+  Atm_TL%Aerosol(1)%Effective_Radius(1) = 1.0_fp
+  CALL CRTM_AtmOptics_Zero( AScat_TL )
+  Error_Status = CRTM_Compute_AerosolScatter_TL( Atm, AScat, Atm_TL, SensorIndex, ChannelIndex, AScat_TL, ASvar )
+  IF ( Error_Status /= SUCCESS ) STOP 1
+  PRINT *, 'AScat_TL%Optical_Depth(1) for Reff perturbation: ', AScat_TL%Optical_Depth(1)
+
+  ! TL Call for Concentration
+  CALL CRTM_Atmosphere_Zero( Atm_TL )
+  Atm_TL%Aerosol(1)%Concentration(1) = 1.0_fp
+  CALL CRTM_AtmOptics_Zero( AScat_TL )
+  Error_Status = CRTM_Compute_AerosolScatter_TL( Atm, AScat, Atm_TL, SensorIndex, ChannelIndex, AScat_TL, ASvar )
+  IF ( Error_Status /= SUCCESS ) STOP 1
+  PRINT *, 'AScat_TL%Optical_Depth(1) for Concentration perturbation: ', AScat_TL%Optical_Depth(1)
+  IF ( ABS(AScat_TL%Optical_Depth(1)) < 1.0e-12_fp ) THEN
+     PRINT *, 'FAIL: Sensitivity to Concentration is ZERO'
+  ELSE
+     PRINT *, 'SUCCESS: Sensitivity to Concentration is NON-ZERO'
   END IF
 
   ! Clean up
