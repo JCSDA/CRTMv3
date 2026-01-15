@@ -99,7 +99,7 @@ PROGRAM test_AOD
                             ChannelInfo, &
                             Aerosol_Model = 'GOCART-GEOS5', &
                             AerosolCoeff_Format = 'netCDF', &
-                            AerosolCoeff_File = 'AerosolCoeff.GOCART-GEOS5.nc', &
+                            AerosolCoeff_File = 'AerosolCoeff.GOCART-GEOS5.nc4', &
                             File_Path=COEFFICIENTS_PATH)
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error initializing CRTM'
