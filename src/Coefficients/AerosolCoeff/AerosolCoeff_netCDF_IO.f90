@@ -1152,16 +1152,21 @@ CONTAINS
     ! ...kb variable, only for GOCART-GEOS5 scheme
     IF ( Aerosol_Model == 'GOCART-GEOS5' ) THEN
       NF90_Status = NF90_INQ_VARID( FileId,KB_VARNAME,VarId )
-      IF ( NF90_Status /= NF90_NOERR ) THEN
-        msg = 'Error inquiring '//TRIM(Filename)//' for '//KB_VARNAME//&
-              ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
-        CALL Read_Cleanup(); RETURN
-      END IF
-      NF90_Status = NF90_GET_VAR( FileId,VarID,AerosolCoeff%kb )
-      IF ( NF90_Status /= NF90_NOERR ) THEN
-        msg = 'Error reading '//KB_VARNAME//' from '//TRIM(Filename)//&
-              ' - '//TRIM(NF90_STRERROR( NF90_Status ))
-        CALL Read_Cleanup(); RETURN
+      ! Older GOCART-GEOS5 files may not include kb, so treat it as optional.
+      IF ( NF90_Status .EQ. NF90_ENOTVAR ) THEN
+        AerosolCoeff%kb = 0.0_fp
+      ELSE
+        IF ( NF90_Status /= NF90_NOERR ) THEN
+          msg = 'Error inquiring '//TRIM(Filename)//' for '//KB_VARNAME//&
+                ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+          CALL Read_Cleanup(); RETURN
+        END IF
+        NF90_Status = NF90_GET_VAR( FileId,VarID,AerosolCoeff%kb )
+        IF ( NF90_Status /= NF90_NOERR ) THEN
+          msg = 'Error reading '//KB_VARNAME//' from '//TRIM(Filename)//&
+                ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+          CALL Read_Cleanup(); RETURN
+        END IF
       END IF
     END IF
     ! ...ke variable
