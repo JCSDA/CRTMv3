@@ -58,6 +58,7 @@ PROGRAM test_spc_io
   err_stat = CRTM_SpcCoeff_Load( &
                 Sensor_ID         = Sensor_ID        , &
                 File_Path         = File_Path        , &
+                netCDF            = .FALSE.          , &
                 Quiet             = Quiet          )
   CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
   testPassed = UnitTest_Passed(ioTest)

@@ -35,6 +35,7 @@ MODULE CRTM_LifeCycle
   ! -----------------
   ! Module usage
   USE Message_Handler
+  USE File_Utility, ONLY: File_Exists
   USE CRTM_ChannelInfo_Define, ONLY: CRTM_ChannelInfo_type, &
                                      CRTM_ChannelInfo_Associated, &
                                      CRTM_ChannelInfo_Destroy, &
@@ -630,6 +631,7 @@ CONTAINS
     CHARACTER(SL) :: Default_VISsnowCoeff_Format
     CHARACTER(SL) :: Default_VISiceCoeff_Format
     CHARACTER(SL) :: Default_File_Path
+    CHARACTER(SL) :: fname_nc, fname_bin
 
 
     INTEGER :: l, n, n_Sensors
@@ -680,33 +682,33 @@ CONTAINS
     Default_File_Path = ''
     ! ...Default filenames
     Default_Aerosol_Model       = 'CRTM'
-    Default_AerosolCoeff_File   = 'AerosolCoeff.bin'
+    Default_AerosolCoeff_File   = 'AerosolCoeff.nc4'
     Default_Cloud_Model         = 'CRTM'
-    Default_CloudCoeff_File     = 'CloudCoeff.bin'
-    Default_IRwaterCoeff_File   = 'Nalli.IRwater.EmisCoeff.bin'
-    Default_IRlandCoeff_File    = 'NPOESS.IRland.EmisCoeff.bin'
+    Default_CloudCoeff_File     = 'CloudCoeff.nc4'
+    Default_IRwaterCoeff_File   = 'Nalli.IRwater.EmisCoeff.nc4'
+    Default_IRlandCoeff_File    = 'NPOESS.IRland.EmisCoeff.nc4'
     Default_IRsnow_Model        = 'SEcategory'
-    Default_IRsnowCoeff_File    = 'NPOESS.IRsnow.EmisCoeff.bin'
-    Default_IRiceCoeff_File     = 'NPOESS.IRice.EmisCoeff.bin'
-    Default_VISwaterCoeff_File  = 'NPOESS.VISwater.EmisCoeff.bin'
-    Default_VISlandCoeff_File   = 'NPOESS.VISland.EmisCoeff.bin'
-    Default_VISsnowCoeff_File   = 'NPOESS.VISsnow.EmisCoeff.bin'
-    Default_VISiceCoeff_File    = 'NPOESS.VISice.EmisCoeff.bin'
+    Default_IRsnowCoeff_File    = 'NPOESS.IRsnow.EmisCoeff.nc4'
+    Default_IRiceCoeff_File     = 'NPOESS.IRice.EmisCoeff.nc4'
+    Default_VISwaterCoeff_File  = 'NPOESS.VISwater.EmisCoeff.nc4'
+    Default_VISlandCoeff_File   = 'NPOESS.VISland.EmisCoeff.nc4'
+    Default_VISsnowCoeff_File   = 'NPOESS.VISsnow.EmisCoeff.nc4'
+    Default_VISiceCoeff_File    = 'NPOESS.VISice.EmisCoeff.nc4'
     Default_MWwaterCoeff_File   = 'FASTEM6.MWwater.EmisCoeff.bin'
     Default_MWwaterCoeff_Scheme = 'FASTEM6'
     ! ... Default file formats
-    Default_AerosolCoeff_Format = 'Binary'
-    Default_CloudCoeff_Format   = 'Binary'
-    Default_SpcCoeff_Format     = 'Binary'
-    Default_TauCoeff_Format     = 'Binary'
-    Default_IRwaterCoeff_Format = 'Binary'
-    Default_IRlandCoeff_Format  = 'Binary'
-    Default_IRsnowCoeff_Format  = 'Binary'
-    Default_IRiceCoeff_Format   = 'Binary'
-    Default_VISwaterCoeff_Format= 'Binary'
-    Default_VISlandCoeff_Format = 'Binary'
-    Default_VISsnowCoeff_Format = 'Binary'
-    Default_VISiceCoeff_Format  = 'Binary'
+    Default_AerosolCoeff_Format = 'netCDF'
+    Default_CloudCoeff_Format   = 'netCDF'
+    Default_SpcCoeff_Format     = 'netCDF'
+    Default_TauCoeff_Format     = 'netCDF'
+    Default_IRwaterCoeff_Format = 'netCDF'
+    Default_IRlandCoeff_Format  = 'netCDF'
+    Default_IRsnowCoeff_Format  = 'netCDF'
+    Default_IRiceCoeff_Format   = 'netCDF'
+    Default_VISwaterCoeff_Format= 'netCDF'
+    Default_VISlandCoeff_Format = 'netCDF'
+    Default_VISsnowCoeff_Format = 'netCDF'
+    Default_VISiceCoeff_Format  = 'netCDF'
     ! ...Were coefficient models specified?
     IF ( PRESENT(Aerosol_Model       ) ) Default_Aerosol_Model       = TRIM(ADJUSTL(Aerosol_Model))
     IF ( PRESENT(Cloud_Model         ) ) Default_Cloud_Model         = TRIM(ADJUSTL(Cloud_Model))
@@ -742,6 +744,40 @@ CONTAINS
     ! ...Was a path specified?
     IF ( PRESENT(File_Path) ) THEN
       Default_MWwaterCoeff_File  = TRIM(ADJUSTL(File_Path)) // TRIM(Default_MWwaterCoeff_File)
+    END IF
+
+    ! Smart detect SpcCoeff format if not specified
+    IF ( .NOT. PRESENT(SpcCoeff_Format) .AND. SIZE(Sensor_ID) > 0 ) THEN
+       fname_nc  = TRIM(ADJUSTL(Sensor_ID(1))) // '.SpcCoeff.nc'
+       fname_bin = TRIM(ADJUSTL(Sensor_ID(1))) // '.SpcCoeff.bin'
+       IF ( PRESENT(File_Path) ) THEN
+          IF ( LEN_TRIM(File_Path) > 0 ) THEN
+             fname_nc  = TRIM(File_Path) // fname_nc
+             fname_bin = TRIM(File_Path) // fname_bin
+          END IF
+       END IF
+       IF ( File_Exists(fname_nc) ) THEN
+          Default_SpcCoeff_Format = 'netCDF'
+       ELSE IF ( File_Exists(fname_bin) ) THEN
+          Default_SpcCoeff_Format = 'Binary'
+       END IF
+    END IF
+
+    ! Smart detect TauCoeff format if not specified
+    IF ( .NOT. PRESENT(TauCoeff_Format) .AND. SIZE(Sensor_ID) > 0 ) THEN
+       fname_nc  = TRIM(ADJUSTL(Sensor_ID(1))) // '.TauCoeff.nc'
+       fname_bin = TRIM(ADJUSTL(Sensor_ID(1))) // '.TauCoeff.bin'
+       IF ( PRESENT(File_Path) ) THEN
+          IF ( LEN_TRIM(File_Path) > 0 ) THEN
+             fname_nc  = TRIM(File_Path) // fname_nc
+             fname_bin = TRIM(File_Path) // fname_bin
+          END IF
+       END IF
+       IF ( File_Exists(fname_nc) ) THEN
+          Default_TauCoeff_Format = 'netCDF'
+       ELSE IF ( File_Exists(fname_bin) ) THEN
+          Default_TauCoeff_Format = 'Binary'
+       END IF
     END IF
 
     ! Load the spectral coefficients
@@ -790,7 +826,11 @@ CONTAINS
     IF ( Local_Load_CloudCoeff ) THEN
       IF ( Default_CloudCoeff_Format == 'netCDF' ) THEN
         netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
+        IF ( PRESENT(NC_File_Path) ) THEN
+           Default_File_Path = NC_File_Path
+        ELSEIF ( PRESENT(File_Path) ) THEN
+           Default_File_Path = File_Path
+        END IF
       ELSE
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
@@ -819,7 +859,11 @@ CONTAINS
     IF ( Local_Load_AerosolCoeff ) THEN
       IF ( Default_AerosolCoeff_Format == 'netCDF' ) THEN
         netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
+        IF ( PRESENT(NC_File_Path) ) THEN
+           Default_File_Path = NC_File_Path
+        ELSEIF ( PRESENT(File_Path) ) THEN
+           Default_File_Path = File_Path
+        END IF
       ELSE
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
@@ -849,7 +893,11 @@ CONTAINS
       ! ...IR land
       IF ( Default_IRlandCoeff_Format == 'netCDF' ) THEN
         netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
+        IF ( PRESENT(NC_File_Path) ) THEN
+           Default_File_Path = NC_File_Path
+        ELSEIF ( PRESENT(File_Path) ) THEN
+           Default_File_Path = File_Path
+        END IF
       ELSE
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
@@ -872,7 +920,11 @@ CONTAINS
       ! ...IR Water
       IF ( Default_IRwaterCoeff_Format == 'netCDF' ) THEN
         netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
+        IF ( PRESENT(NC_File_Path) ) THEN
+           Default_File_Path = NC_File_Path
+        ELSEIF ( PRESENT(File_Path) ) THEN
+           Default_File_Path = File_Path
+        END IF
       ELSE
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
@@ -895,7 +947,11 @@ CONTAINS
       ! ...IR snow
       IF ( Default_IRsnowCoeff_Format == 'netCDF' ) THEN
         netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
+        IF ( PRESENT(NC_File_Path) ) THEN
+           Default_File_Path = NC_File_Path
+        ELSEIF ( PRESENT(File_Path) ) THEN
+           Default_File_Path = File_Path
+        END IF
       ELSE
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
@@ -924,7 +980,11 @@ CONTAINS
       ! ...IR ice
       IF ( Default_IRiceCoeff_Format == 'netCDF' ) THEN
         netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
+        IF ( PRESENT(NC_File_Path) ) THEN
+           Default_File_Path = NC_File_Path
+        ELSEIF ( PRESENT(File_Path) ) THEN
+           Default_File_Path = File_Path
+        END IF
       ELSE
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
@@ -951,7 +1011,11 @@ CONTAINS
       ! ...VIS land
       IF ( Default_VISlandCoeff_Format == 'netCDF' ) THEN
         netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
+        IF ( PRESENT(NC_File_Path) ) THEN
+           Default_File_Path = NC_File_Path
+        ELSEIF ( PRESENT(File_Path) ) THEN
+           Default_File_Path = File_Path
+        END IF
       ELSE
         netCDF = .FALSE.
         IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
