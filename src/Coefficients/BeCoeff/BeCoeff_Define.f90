@@ -61,7 +61,7 @@ MODULE BeCoeff_Define
   ! Module parameters
   ! -----------------
   ! Version Id for the module
-  CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
+  CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = ''
   ! Current valid release and version numbers
   INTEGER, PARAMETER :: BeCOEFF_RELEASE = 1  ! This determines object and file formats.
   INTEGER, PARAMETER :: BeCOEFF_VERSION = 1  ! This is just the data version for the release.
