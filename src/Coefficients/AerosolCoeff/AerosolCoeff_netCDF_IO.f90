@@ -90,6 +90,7 @@ MODULE AerosolCoeff_netCDF_IO
   CHARACTER(*), PARAMETER :: RSIG_VARNAME       = 'Rsig'
   CHARACTER(*), PARAMETER :: RH_VARNAME         = 'RH'
   CHARACTER(*), PARAMETER :: KE_VARNAME         = 'ke'
+  CHARACTER(*), PARAMETER :: KB_VARNAME         = 'kb'
   CHARACTER(*), PARAMETER :: W_VARNAME          = 'w'
   CHARACTER(*), PARAMETER :: G_VARNAME          = 'g'
   CHARACTER(*), PARAMETER :: PCOEFF_VARNAME     = 'pcoeff'
@@ -104,6 +105,7 @@ MODULE AerosolCoeff_netCDF_IO
   CHARACTER(*), PARAMETER :: RSIG_LONGNAME       = 'Mode radius deviation'
   CHARACTER(*), PARAMETER :: RH_LONGNAME         = 'Relative humidity'
   CHARACTER(*), PARAMETER :: KE_LONGNAME         = 'ke'
+  CHARACTER(*), PARAMETER :: KB_LONGNAME         = 'kb'
   CHARACTER(*), PARAMETER :: W_LONGNAME          = 'w'
   CHARACTER(*), PARAMETER :: G_LONGNAME          = 'g'
   CHARACTER(*), PARAMETER :: PCOEFF_LONGNAME     = 'pcoeff'
@@ -117,6 +119,7 @@ MODULE AerosolCoeff_netCDF_IO
   CHARACTER(*), PARAMETER :: RSIG_DESCRIPTION       = 'Mode radius standard deviation LUT dimension vector'
   CHARACTER(*), PARAMETER :: RH_DESCRIPTION         = 'Relative humidity LUT dimension vector'
   CHARACTER(*), PARAMETER :: KE_DESCRIPTION         = 'Mass extinction coefficient for aerosol scatterers'
+  CHARACTER(*), PARAMETER :: KB_DESCRIPTION         = 'Mass backscatter coefficient for aerosol scatterers'
   CHARACTER(*), PARAMETER :: W_DESCRIPTION          = 'Single scatter albedo for aerosol scatterers'
   CHARACTER(*), PARAMETER :: G_DESCRIPTION          = 'Asymmetry parameter for aerosol scatterers'
   CHARACTER(*), PARAMETER :: PCOEFF_DESCRIPTION     = 'Phase coefficients for aerosol scatterers'
@@ -130,6 +133,7 @@ MODULE AerosolCoeff_netCDF_IO
   CHARACTER(*), PARAMETER :: RSIG_UNITS       = 'N/A'
   CHARACTER(*), PARAMETER :: RH_UNITS         = 'fraction (0->1)'
   CHARACTER(*), PARAMETER :: KE_UNITS         = 'Metres squared per kilogram (m^2.kg^-1)'
+  CHARACTER(*), PARAMETER :: KB_UNITS         = 'Metres squared per kilogram (m^2.kg^-1)'
   CHARACTER(*), PARAMETER :: W_UNITS          = 'N/A'
   CHARACTER(*), PARAMETER :: G_UNITS          = 'N/A'
   CHARACTER(*), PARAMETER :: PCOEFF_UNITS     = 'N/A'
@@ -144,6 +148,7 @@ MODULE AerosolCoeff_netCDF_IO
   REAL(Double) , PARAMETER :: RSIG_FILLVALUE       = FILL_FLOAT
   REAL(Double) , PARAMETER :: RH_FILLVALUE         = FILL_FLOAT
   REAL(Double) , PARAMETER :: KE_FILLVALUE         = FILL_FLOAT
+  REAL(Double) , PARAMETER :: KB_FILLVALUE         = FILL_FLOAT
   REAL(Double) , PARAMETER :: W_FILLVALUE          = FILL_FLOAT
   REAL(Double) , PARAMETER :: G_FILLVALUE          = FILL_FLOAT
   REAL(Double) , PARAMETER :: PCOEFF_FILLVALUE     = FILL_FLOAT
@@ -157,6 +162,7 @@ MODULE AerosolCoeff_netCDF_IO
   INTEGER, PARAMETER :: RSIG_TYPE       = NF90_DOUBLE
   INTEGER, PARAMETER :: RH_TYPE         = NF90_DOUBLE
   INTEGER, PARAMETER :: KE_TYPE         = NF90_DOUBLE
+  INTEGER, PARAMETER :: KB_TYPE         = NF90_DOUBLE
   INTEGER, PARAMETER :: W_TYPE          = NF90_DOUBLE
   INTEGER, PARAMETER :: G_TYPE          = NF90_DOUBLE
   INTEGER, PARAMETER :: PCOEFF_TYPE     = NF90_DOUBLE
@@ -1142,6 +1148,21 @@ CONTAINS
       msg = 'Error reading '//RH_VARNAME//' from '//TRIM(Filename)//&
             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Read_Cleanup(); RETURN
+    END IF
+    ! ...kb variable, only for GOCART-GEOS5 scheme
+    IF ( Aerosol_Model == 'GOCART-GEOS5' ) THEN
+      NF90_Status = NF90_INQ_VARID( FileId,KB_VARNAME,VarId )
+      IF ( NF90_Status /= NF90_NOERR ) THEN
+        msg = 'Error inquiring '//TRIM(Filename)//' for '//KB_VARNAME//&
+              ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+        CALL Read_Cleanup(); RETURN
+      END IF
+      NF90_Status = NF90_GET_VAR( FileId,VarID,AerosolCoeff%kb )
+      IF ( NF90_Status /= NF90_NOERR ) THEN
+        msg = 'Error reading '//KB_VARNAME//' from '//TRIM(Filename)//&
+              ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+        CALL Read_Cleanup(); RETURN
+      END IF
     END IF
     ! ...ke variable
     NF90_Status = NF90_INQ_VARID( FileId,KE_VARNAME,VarId )

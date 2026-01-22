@@ -131,6 +131,7 @@ MODULE ASvar_Define
     REAL(fp), ALLOCATABLE :: ke(:,:)          ! I3 x I4  Mass extinction coefficient
     REAL(fp), ALLOCATABLE :: w(:,:)           ! I3 x I4  Single Scatter Albedo
     REAL(fp), ALLOCATABLE :: g(:,:)           ! I3 x I4  Asymmetry factor
+    REAL(fp), ALLOCATABLE :: kb(:,:)          ! I3 x I4  Mass backscatter coefficient
     REAL(fp), ALLOCATABLE :: pcoeff(:,:,:,:)  ! 0:I1 x I2 x I3 x I4  Phase coefficients
     ! The accumulated scattering coefficient
     REAL(fp), ALLOCATABLE :: total_bs(:)      ! I3  Volume scattering coefficient
@@ -191,6 +192,7 @@ CONTAINS
               self%ke(n_Layers, n_Aerosols), &
               self%w(n_Layers, n_Aerosols), &
               self%g(n_Layers, n_Aerosols), &
+              self%kb(n_Layers, n_Aerosols), &
               self%pcoeff(0:n_Legendre_Terms,n_Phase_Elements,n_Layers, n_Aerosols), &
               self%total_bs(n_Layers), &
               STAT = alloc_stat )
