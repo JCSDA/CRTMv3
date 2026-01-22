@@ -155,6 +155,7 @@ MODULE CRTM_RTSolution_Define
   CHARACTER(*), PARAMETER :: SSA_VARNAME        = 'Single_Scatter_Albedo'
   CHARACTER(*), PARAMETER :: ACREFL_VARNAME     = 'Reflectivity'             ! Active sensor
   CHARACTER(*), PARAMETER :: ACRATT_VARNAME     = 'Reflectivity_Attenuated'  ! Active sensor
+  CHARACTER(*), PARAMETER :: BS_VARNAME         = 'Backscat_Coefficient'     
 
   ! Variable units attribute.
   CHARACTER(*), PARAMETER :: UNITS_ATTNAME = 'units'
@@ -181,7 +182,9 @@ MODULE CRTM_RTSolution_Define
   ! ...Brightness_Temperature, Tb_clear
   CHARACTER(*), PARAMETER :: BT_UNITS = 'Kelvin'
   ! ...Visible (or UV) reflectance
-  CHARACTER(*), PARAMETER :: RF_UNITS      = 'fraction (0->1)'
+  CHARACTER(*), PARAMETER :: RF_UNITS = 'fraction (0->1)'
+  ! ...Backscat_Coefficient
+  CHARACTER(*), PARAMETER :: BS_UNITS = 'per Rad (m^-1 rad^-1)'
 
   ! Variable _FillValue attribute.
   CHARACTER(*),  PARAMETER :: FILLVALUE_ATTNAME = '_FillValue'
@@ -234,6 +237,7 @@ MODULE CRTM_RTSolution_Define
     REAL(fp), ALLOCATABLE :: Upwelling_Radiance(:)            ! K
     REAL(fp), ALLOCATABLE :: Layer_Optical_Depth(:)           ! K
     REAL(fp), ALLOCATABLE :: Single_Scatter_Albedo(:)         ! K
+    REAL(fp), ALLOCATABLE :: Backscat_Coefficient(:)         ! K
     ! Radiative transfer results for a single channel
     REAL(fp) :: Radiance               = ZERO
     REAL(fp) :: Brightness_Temperature = ZERO
@@ -373,6 +377,7 @@ CONTAINS
               RTSolution%Single_Scatter_Albedo(n_Layers), &
               RTSolution%Reflectivity(n_Layers), &
               RTSolution%Reflectivity_Attenuated(n_Layers), &
+              RTSolution%Backscat_Coefficient(n_Layers), &
               STAT = alloc_stat )
     IF ( alloc_stat /= 0 ) RETURN
 
@@ -386,6 +391,7 @@ CONTAINS
     RTSolution%Single_Scatter_Albedo = ZERO
     RTSolution%Reflectivity = ZERO
     RTSolution%Reflectivity_Attenuated = ZERO
+    RTSolution%Backscat_Coefficient = ZERO
 
     ! Set allocation indicator
     RTSolution%Is_Allocated = .TRUE.
@@ -451,6 +457,7 @@ CONTAINS
       RTSolution%Single_Scatter_Albedo = ZERO
       RTSolution%Reflectivity = ZERO
       RTSolution%Reflectivity_Attenuated = ZERO
+      RTSolution%Backscat_Coefficient = ZERO
     END IF
 
   END SUBROUTINE CRTM_RTSolution_Zero
@@ -540,6 +547,8 @@ CONTAINS
       WRITE(fid,'(5(1x,es22.15,:))') RTSolution%Reflectivity
       WRITE(fid,'(3x,"Reflectivity_Attenuated      :")')
       WRITE(fid,'(5(1x,es22.15,:))') RTSolution%Reflectivity_Attenuated
+      WRITE(fid,'(3x,"Backscat_Coefficient      :")')
+      WRITE(fid,'(5(1x,es22.15,:))') RTSolution%Backscat_Coefficient
     END IF
     FLUSH(fid)
   END SUBROUTINE Scalar_Inspect
@@ -690,7 +699,8 @@ CONTAINS
            (.NOT. ALL(Compares_Within_Tolerance(x%Upwelling_Radiance         , y%Upwelling_Radiance         , n))) .OR. &
            (.NOT. ALL(Compares_Within_Tolerance(x%Layer_Optical_Depth        , y%Layer_Optical_Depth        , n))) .OR. &
            (.NOT. ALL(Compares_Within_Tolerance(x%Reflectivity               , y%Reflectivity               , n))) .OR. &
-           (.NOT. ALL(Compares_Within_Tolerance(x%Reflectivity_Attenuated    , y%Reflectivity_Attenuated    , n)))) RETURN
+           (.NOT. ALL(Compares_Within_Tolerance(x%Reflectivity_Attenuated    , y%Reflectivity_Attenuated    , n))) .OR. &
+           (.NOT. ALL(Compares_Within_Tolerance(x%Backscat_Coefficient       , y%Backscat_Coefficient       , n)))) RETURN
     END IF
 
     ! If we get here, the structures are comparable
@@ -1624,6 +1634,7 @@ CONTAINS
     REAL(fp), ALLOCATABLE :: Single_Scatter_Albedo(:,:,:)
     REAL(fp), ALLOCATABLE :: Reflectivity(:,:,:)
     REAL(fp), ALLOCATABLE :: Reflectivity_Attenuated(:,:,:)
+    REAL(fp), ALLOCATABLE :: Backscat_Coefficient(:,:,:)
 
 
     ! Set up
@@ -1671,6 +1682,7 @@ CONTAINS
               Single_Scatter_Albedo( n_Channels, n_Layers, n_Profiles ), &
               Reflectivity( n_Channels, n_Layers, n_Profiles ), &
               Reflectivity_Attenuated( n_Channels, n_Layers, n_Profiles ), &
+              Backscat_Coefficient( n_Channels, n_Layers, n_Profiles ), &
               STAT = alloc_stat )
     IF ( alloc_stat /= 0 ) THEN
       msg = 'Error allocating RTSolution output arrays'
@@ -2011,6 +2023,19 @@ CONTAINS
             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Read_Cleanup(); RETURN
     END IF
+    ! ... Backscat_Coefficient variable
+    NF90_Status = NF90_INQ_VARID( FileId,BS_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//BS_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_GET_VAR( FileId,VarID,Backscat_Coefficient)
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error reading '//BS_VARNAME//' from '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
 
     ! Close the file
     NF90_Status = NF90_CLOSE( FileId ); Close_File = .FALSE.
@@ -2073,6 +2098,7 @@ CONTAINS
           RTSolution(l,m)%Single_Scatter_Albedo(c)       = Single_Scatter_Albedo(l,c,m)
           RTSolution(l,m)%Reflectivity(c)                = Reflectivity(l,c,m)
           RTSolution(l,m)%Reflectivity_Attenuated(c)     = Reflectivity_Attenuated(l,c,m)
+          RTSolution(l,m)%Backscat_Coefficient(c)        = Backscat_Coefficient(l,c,m)
         END DO
       END DO Channel_Loop
     END DO Profile_Loop
@@ -2465,7 +2491,8 @@ CONTAINS
     REAL(fp), ALLOCATABLE :: Single_Scatter_Albedo(:,:,:)
     REAL(fp), ALLOCATABLE :: Reflectivity(:,:,:)
     REAL(fp), ALLOCATABLE :: Reflectivity_Attenuated(:,:,:)
-
+    REAL(fp), ALLOCATABLE :: Backscat_Coefficient(:,:,:)
+    
     ! Set up
     err_stat = SUCCESS
 
@@ -2509,6 +2536,7 @@ CONTAINS
               Single_Scatter_Albedo( n_Channels, n_Layers, n_Profiles ), &
               Reflectivity( n_Channels, n_Layers, n_Profiles ), &
               Reflectivity_Attenuated( n_Channels, n_Layers, n_Profiles ), &
+              Backscat_Coefficient( n_Channels, n_Layers, n_Profiles ), &
               STAT = alloc_stat )
       IF ( alloc_stat /= 0 ) THEN
         msg = 'Error allocating RTSolution output arrays'
@@ -2548,10 +2576,10 @@ CONTAINS
             Single_Scatter_Albedo(l,c,m)       = RTSolution(l,m)%Single_Scatter_Albedo(c)
             Reflectivity(l,c,m)                = RTSolution(l,m)%Reflectivity(c)
             Reflectivity_Attenuated(l,c,m)     = RTSolution(l,m)%Reflectivity_Attenuated(c)
+            Backscat_Coefficient(l,c,m)        = RTSolution(l,m)%Backscat_Coefficient(c)
           END DO
         END DO Channel_Loop
       END DO Profile_Loop
-
 
       ! Write to output file
       ! ...Create output netCDF file
@@ -2902,8 +2930,19 @@ CONTAINS
              ' - '//TRIM(NF90_STRERROR( NF90_Status ))
        CALL Write_Cleanup(); RETURN
      END IF
-
-
+     ! ... Backscat_Coefficient variable
+     NF90_Status = NF90_INQ_VARID( FileId,BS_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//BS_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Backscat_Coefficient)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//BS_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
 
      ! Close the file
      NF90_Status = NF90_CLOSE( FileId )
@@ -2946,6 +2985,7 @@ CONTAINS
                  Single_Scatter_Albedo, &
                  Reflectivity, &
                  Reflectivity_Attenuated, &
+                 Backscat_Coefficient, &
                  STAT = alloc_stat )
      IF ( alloc_stat /= 0 ) THEN
        msg = 'Error deallocating RTSolution output arrays'
@@ -3052,8 +3092,10 @@ CONTAINS
                  ALL(x%Upwelling_Overcast_Radiance .EqualTo. y%Upwelling_Overcast_Radiance ) .AND. &
                  ALL(x%Upwelling_Radiance          .EqualTo. y%Upwelling_Radiance          ) .AND. &
                  ALL(x%Layer_Optical_Depth         .EqualTo. y%Layer_Optical_Depth         ) .AND. &
+                 ALL(x%Single_Scatter_Albedo       .EqualTo. y%Single_Scatter_Albedo       ) .AND. & 
                  ALL(x%Reflectivity                .EqualTo. y%Reflectivity                ) .AND. &
-                 ALL(x%Reflectivity_Attenuated     .EqualTo. y%Reflectivity_Attenuated     )
+                 ALL(x%Reflectivity_Attenuated     .EqualTo. y%Reflectivity_Attenuated     ) .AND. &
+                 ALL(x%Backscat_Coefficient        .EqualTo. y%Backscat_Coefficient        )
     END IF
 
   END FUNCTION CRTM_RTSolution_Equal
@@ -3563,7 +3605,8 @@ CONTAINS
         rts%Upwelling_Radiance, &
         rts%Layer_Optical_Depth, &
         rts%Reflectivity, &
-        rts%Reflectivity_Attenuated
+        rts%Reflectivity_Attenuated, &
+        rts%Backscat_Coefficient
       IF ( io_stat /= 0 ) THEN
         msg = 'Error reading array intermediate results - '//TRIM(io_msg)
         CALL Read_Record_Cleanup(); RETURN
@@ -3677,7 +3720,8 @@ CONTAINS
         rts%Upwelling_Radiance, &
         rts%Layer_Optical_Depth, &
         rts%Reflectivity, &
-        rts%Reflectivity_Attenuated
+        rts%Reflectivity_Attenuated, &
+        rts%Backscat_Coefficient
       IF ( io_stat /= 0 ) THEN
         msg = 'Error writing array intermediate results - '//TRIM(io_msg)
         CALL Write_Record_Cleanup(); RETURN
@@ -4265,6 +4309,24 @@ CONTAINS
     Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT  )
     IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
       msg = 'Error writing '//ACRATT_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ... Backscat_Coefficient variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      BS_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Layers_DimID, n_Profiles_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//BS_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,BS_UNITS   )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//BS_VARNAME//' variable attributes to '//TRIM(Filename)
       CALL Create_Cleanup(); RETURN
     END IF
 

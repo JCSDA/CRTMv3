@@ -260,6 +260,7 @@ CONTAINS
         IF( ASV%ke(ka,n) <= ZERO ) THEN
           ASV%ke(ka,n) = ZERO
           ASV%w(ka,n)  = ZERO
+          ASV%kb(ka,n)  = ZERO
         END IF
         IF( ASV%w(ka,n) <= ZERO ) THEN
           ASV%w(ka,n) = ZERO
@@ -307,6 +308,7 @@ CONTAINS
         AScat%Asymmetry_Factor(ka) = AScat%Asymmetry_Factor(ka) + (ASV%g(ka,n) * bs)
         AScat%Backscat_Coefficient(ka) = AScat%Backscat_Coefficient(ka) + &
                                          (ASV%kb(ka,n) * Atm%Aerosol(n)%Concentration(ka))
+
 
           DO m = 1, AScat%n_Phase_Elements
             DO l = 0, AScat%n_Legendre_Terms
@@ -478,6 +480,7 @@ CONTAINS
                                 Atm%Aerosol(n)%Type                     , & ! Input
                                 ASV%ke(ka,n)                            , & ! Input
                                 ASV%w(ka,n)                             , & ! Input
+                                ASV%kb(ka,n)                            , & ! Input
                                 Atm_TL%Aerosol(n)%Effective_Radius(ka)  , & ! TL  Input
                                 Atm_TL%Aerosol(n)%Effective_Variance(ka), & ! TL  Input
                                 Atm_TL%Relative_Humidity(ka)            , & ! TL  Input
@@ -492,6 +495,7 @@ CONTAINS
         IF( ASV%ke(ka,n) <= ZERO ) THEN
           ke_TL = ZERO
           w_TL = ZERO
+          kb_TL = ZERO
         END IF
         IF( ASV%w(ka,n) <= ZERO ) THEN
           w_TL  = ZERO
@@ -505,6 +509,10 @@ CONTAINS
         AScat_TL%Optical_Depth(ka) = AScat_TL%Optical_Depth(ka) + &
                                      (ke_TL        * Atm%Aerosol(n)%Concentration(ka)) + &
                                      (ASV%ke(ka,n) * Atm_TL%Aerosol(n)%Concentration(ka))
+        ! Compute the back scatter coefficient
+        AScat_TL%Backscat_Coefficient(ka) = AScat_TL%Backscat_Coefficient(ka) + &
+                                            (kb_TL        * Atm%Aerosol(n)%Concentration(ka)) + &
+                                            (ASV%kb(ka,n) * Atm_TL%Aerosol(n)%Concentration(ka))
 
         ! Compute the phase matrix coefficients
         IF( n_Phase_Elements > 0 .and. AScat%Include_Scattering ) THEN
@@ -695,7 +703,7 @@ CONTAINS
 
         ! Initialize the individual
         ! Aerosol adjoint variables
-        bs_AD = ZERO
+        bs_AD     = ZERO
         pcoeff_AD = ZERO
         ke_AD     = ZERO
         w_AD      = ZERO
@@ -738,28 +746,33 @@ CONTAINS
 
         ! Compute the adjoint of the volume
         ! scattering coefficient.
-
         ke_AD = ke_AD + (Atm%Aerosol(n)%Concentration(ka) * bs_AD * ASV%w(ka,n) )
         Atm_AD%Aerosol(n)%Concentration(ka) = Atm_AD%Aerosol(n)%Concentration(ka) + &
                                               ( bs_AD * ASV%ke(ka,n) * ASV%w(ka,n) )
 
+        ! ! Compute the adjoint of the backscattering coefficient
+        ! CD: to be implemented
+
+  
         ! interpolation quality control
         IF( ASV%w(ka,n) >= ONE ) THEN
-          w_AD = ZERO
-        END IF
-        IF( ASV%ke(ka,n) <= ZERO ) THEN
-          ke_AD = ZERO
           w_AD = ZERO
         END IF
         IF( ASV%w(ka,n) <= ZERO ) THEN
           w_AD = ZERO
           pcoeff_AD = ZERO
         END IF
+        IF( ASV%ke(ka,n) <= ZERO ) THEN
+          ke_AD = ZERO
+          w_AD = ZERO
+          kb_AD = ZERO
+        END IF
 
         CALL Get_Aerosol_Opt_AD(AScat_AD                                , & ! Input
                                 Atm%Aerosol(n)%Type                     , & ! Input
                                 ASV%ke(ka,n)                            , & ! input
                                 ASV%w(ka,n)                             , & ! input
+                                ASV%kb(ka,n)                            , & ! input
                                 ke_AD                                   , & ! AD Input
                                 w_AD                                    , & ! AD Input
                                 g_AD                                    , & ! AD Input
@@ -854,6 +867,8 @@ CONTAINS
       ! Fixed indices
       fix_rh  = 1
       fix_sig = 1
+      ! kb is not used in CRTM scheme
+      kb = ZERO
 
       ! Find effective radius indices for Interpolation
       asi%r_int = MAX(MIN(AeroC%Reff(AeroC%n_Radii,k),Reff),AeroC%Reff(1,k))
@@ -884,6 +899,8 @@ CONTAINS
     ELSE IF ( AeroC%Scheme == 'CMAQ' ) THEN
       ! Fixed indices
       fix_rh  = 1
+      ! kb is not used in CMAQ scheme
+      kb = ZERO
 
       ! Find effective radius indices for Interpolation
       asi%r_int = MAX(MIN(AeroC%Reff(AeroC%n_Radii,k),Reff),AeroC%Reff(1,k))
@@ -919,7 +936,7 @@ CONTAINS
          ! Absorption coefficient
          ke = ke * (ONE- w)
       END IF
-
+    
     ELSE IF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'NAAPS' ) THEN
       ! Fixed indices
       fix_sig = 1
@@ -951,7 +968,6 @@ CONTAINS
          ke = ke * (ONE- w)
       END IF
 
-
    END IF !IF ( AeroC%Scheme == 'CRTM') THEN
 
   END SUBROUTINE Get_Aerosol_Opt
@@ -970,6 +986,7 @@ CONTAINS
                                 Aerosol_Type     , &  ! Input  see CRTM_Aerosol_Define.f90
                                 ke               , &  ! Input
                                 w                , &  ! Input
+                                kb               , &  ! Input
                                 Reff_TL          , &  ! Input  TL effective radius (mm)
                                 Rsig_TL          , &  ! Input  TL effective radius (mm)
                                 RH_TL            , &  ! Input  TL effective radius (mm)
@@ -983,7 +1000,7 @@ CONTAINS
     ! Arguments
     TYPE(CRTM_AtmOptics_type),  INTENT(IN)     :: AerosolScatter_TL
     INTEGER ,                   INTENT(IN)     :: Aerosol_Type
-    REAL(fp),                   INTENT(IN)     :: ke, w
+    REAL(fp),                   INTENT(IN)     :: ke, w, kb
     REAL(fp),                   INTENT(IN)     :: Reff_TL, Rsig_TL, RH_TL
     REAL(fp),                   INTENT(OUT)    :: ke_TL, w_TL, g_TL, kb_TL
     REAL(fp),                   INTENT(IN OUT) :: pcoeff_TL(0:,:)
@@ -1060,6 +1077,8 @@ CONTAINS
       ! Fixed indices
       fix_rh  = 1
       fix_sig = 1
+      ! kb is not used in CRTM scheme
+      kb_TL     = ZERO
 
       ! Effective radius term
       CALL LPoly_TL( asi%r, asi%r_int, & ! FWD Input
@@ -1111,6 +1130,8 @@ CONTAINS
     ELSE IF ( AeroC%Scheme == 'CMAQ' ) THEN
       ! Fixed indices
       fix_rh  = 1
+      ! kb is not used in CMAQ scheme
+      kb_TL     = ZERO
 
       ! Effective radius term
       CALL LPoly_TL( asi%r, asi%r_int, & ! FWD Input
@@ -1196,6 +1217,11 @@ CONTAINS
      CALL interp_2D_TL( zg   , asi%wlp, asi%hlp, &  ! FWD Input
                         zg_TL, wlp_TL , hlp_TL , &  ! TL  Input
                         kb_TL                    )  ! TL  Output
+     ! Backscattering coefficient
+     zg => AeroC%kb( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k)
+     CALL interp_2D_TL( zg   , asi%wlp, asi%hlp, &  ! FWD Input
+                        zg_TL, wlp_TL , hlp_TL , &  ! TL  Input
+                        kb_TL                    )  ! TL  Output
      ! Phase matrix coefficients
      IF (AerosolScatter_TL%n_Phase_Elements > 0 .and. AerosolScatter_TL%Include_Scattering ) THEN
         pcoeff_TL(0,1) = ZERO
@@ -1234,6 +1260,7 @@ CONTAINS
                                  Aerosol_Type     , & ! Input see CRTM_Aerosol_Define.f90
                                  ke               , & ! Input
                                  w                , & ! Input
+                                 kb               , & ! Input
                                  ke_AD            , & ! AD Input extinction cross section
                                  w_AD             , & ! AD Input single scatter albedo
                                  g_AD             , & ! AD Input asymmetry factor
@@ -1246,7 +1273,7 @@ CONTAINS
     ! Arguments
     TYPE(CRTM_AtmOptics_type),  INTENT(IN)     :: AerosolScatter_AD
     INTEGER ,                   INTENT(IN)     :: Aerosol_Type
-    REAL(fp),                   INTENT(IN)     :: ke, w
+    REAL(fp),                   INTENT(IN)     :: ke, w, kb
     REAL(fp),                   INTENT(IN OUT) :: ke_AD            ! AD Input
     REAL(fp),                   INTENT(IN OUT) :: w_AD             ! AD Input
     REAL(fp),                   INTENT(IN OUT) :: g_AD             ! AD Input
@@ -1327,6 +1354,8 @@ CONTAINS
       ! Fixed indices
       fix_rh = 1
       fix_sig = 1
+      ! kb is not used in CRTM scheme
+      kb_AD = ZERO
 
       ! Phase matrix coefficients
       IF (AerosolScatter_AD%n_Phase_Elements > 0 .and. AerosolScatter_AD%Include_Scattering ) THEN
@@ -1391,6 +1420,8 @@ CONTAINS
    ELSE IF ( AeroC%Scheme == 'CMAQ' ) THEN
       ! Fixed indices
       fix_rh = 1
+      ! kb is not used in CMAQ scheme
+      kb_AD = ZERO
 
       ! Phase matrix coefficients
       IF (AerosolScatter_AD%n_Phase_Elements > 0 .and. AerosolScatter_AD%Include_Scattering ) THEN
@@ -1434,6 +1465,7 @@ CONTAINS
       CALL interp_3D_AD( zc   , asi%wlp, asi%xlp, asi%vlp, &  ! FWD Input
                          ke_AD                           , &  ! AD  Input
                          zc_AD, wlp_AD,  xlp_AD,  vlp_AD   )  ! AD  Output
+                         
       NULLIFY(zc)
 
       ! Compute the AD of the interpolating polynomials
@@ -1496,16 +1528,25 @@ CONTAINS
                         g_AD                   , &  ! AD  Input
                         zg_AD, wlp_AD , hlp_AD   )  ! AD  Output
      ! Single scatter albedo
-     zg => AeroC%w( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k)
+     zg => AeroC%w( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k )
      CALL interp_2D_AD( zg   , asi%wlp, asi%hlp, &  ! FWD Input
                         w_AD                   , &  ! AD  Input
                         zg_AD, wlp_AD , hlp_AD   )  ! AD  Output
 
      ! Extinction coefficient
-     zg => AeroC%ke( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k)
+     zg => AeroC%ke( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k )
      CALL interp_2D_AD( zg   , asi%wlp, asi%hlp, &  ! FWD Input
                         ke_AD                  , &  ! AD  Input
                         zg_AD, wlp_AD,  hlp_AD   )  ! AD  Output
+     ! Backscattering coefficient
+     IF (AeroC%Scheme == 'GOCART-GEOS5') THEN
+        zg => AeroC%kb( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k)
+        CALL interp_2D_AD( zg   , asi%wlp, asi%hlp, &  ! FWD Input
+                           kb_AD                  , &  ! AD  Input
+                           zg_AD, wlp_AD,  hlp_AD   )  ! AD  Output
+     ELSE
+       kb_AD = ZERO
+     END IF
      NULLIFY(zg)
 
      ! Compute the AD of the interpolating polynomials

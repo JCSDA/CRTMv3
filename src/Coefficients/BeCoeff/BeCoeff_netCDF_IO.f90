@@ -49,7 +49,7 @@ MODULE BeCoeff_netCDF_IO
   ! Module parameters
   ! -----------------
   ! Module version
-  CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
+  CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = ''
   ! Default msg string length
   INTEGER, PARAMETER :: ML = 1024
   
