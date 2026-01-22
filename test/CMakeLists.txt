@@ -575,6 +575,7 @@ list( APPEND crtm_test_input
 AerosolCoeff/Little_Endian/AerosolCoeff.bin
 AerosolCoeff/Little_Endian/AerosolCoeff.GOCART-GEOS5.bin
 AerosolCoeff/Little_Endian/AerosolCoeff.CMAQ.bin
+AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.nc4
 AerosolCoeff/netCDF/AerosolCoeff.nc4
 CloudCoeff/Little_Endian/CloudCoeff.bin
 CloudCoeff/netCDF/CloudCoeff.nc4
