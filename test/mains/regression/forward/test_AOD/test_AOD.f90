@@ -12,6 +12,7 @@ PROGRAM test_AOD
   !
   ! Module usage
   USE CRTM_Module
+  USE File_Utility, ONLY: File_Exists
   ! Disable all implicit typing
   IMPLICIT NONE
   ! ============================================================================
@@ -45,10 +46,13 @@ PROGRAM test_AOD
   CHARACTER(256) :: Message
   CHARACTER(256) :: Version
   CHARACTER(256) :: Sensor_Id
+  CHARACTER(256) :: AerosolCoeff_File
   INTEGER :: Error_Status
   INTEGER :: Allocate_Status
   INTEGER :: n_Channels
   INTEGER :: l, m
+  LOGICAL :: has_new_coeff
+  LOGICAL :: has_old_coeff
   ! Declarations for RTSolution comparison
   INTEGER :: n_l, n_m
   CHARACTER(256) :: rts_File
@@ -92,12 +96,28 @@ PROGRAM test_AOD
   ! 2a. Initialise for the requested sensor
   ! ---------------------------------------
   WRITE( *,'(/5x,"Initializing the CRTM...")' )
+  has_new_coeff = File_Exists(COEFFICIENTS_PATH//'AerosolCoeff.GOCART-GEOS5.BRC.kb.v2.nc')
+  has_old_coeff = File_Exists(COEFFICIENTS_PATH//'AerosolCoeff.GOCART-GEOS5.nc4')
+  IF ( has_new_coeff ) THEN
+    AerosolCoeff_File = 'AerosolCoeff.GOCART-GEOS5.BRC.kb.v2.nc'
+  ELSE
+    AerosolCoeff_File = 'AerosolCoeff.GOCART-GEOS5.nc4'
+  END IF
   Error_Status = CRTM_Init( (/Sensor_Id/), &
                             ChannelInfo, &
                             Aerosol_Model = 'GOCART-GEOS5', &
                             AerosolCoeff_Format = 'netCDF', &
-                            AerosolCoeff_File = 'AerosolCoeff.GOCART-GEOS5.nc4', &
+                            AerosolCoeff_File = TRIM(AerosolCoeff_File), &
                             File_Path=COEFFICIENTS_PATH)
+  IF ( Error_Status /= SUCCESS .AND. has_old_coeff .AND. TRIM(AerosolCoeff_File) /= 'AerosolCoeff.GOCART-GEOS5.nc4' ) THEN
+    AerosolCoeff_File = 'AerosolCoeff.GOCART-GEOS5.nc4'
+    Error_Status = CRTM_Init( (/Sensor_Id/), &
+                              ChannelInfo, &
+                              Aerosol_Model = 'GOCART-GEOS5', &
+                              AerosolCoeff_Format = 'netCDF', &
+                              AerosolCoeff_File = TRIM(AerosolCoeff_File), &
+                              File_Path=COEFFICIENTS_PATH)
+  END IF
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error initializing CRTM'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
