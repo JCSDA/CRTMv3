@@ -308,6 +308,24 @@ add_test(NAME test_Unit_Aerosol_Bypass
          COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass>)
 set_tests_properties(test_Unit_Aerosol_Bypass PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
+add_executable(Unit_AerosolScatter_TL mains/unit/Unit_Test/test_AerosolScatter_TL.f90)
+target_link_libraries(Unit_AerosolScatter_TL PRIVATE crtm)
+add_test(NAME test_Unit_AerosolScatter_TL
+         COMMAND $<TARGET_FILE:Unit_AerosolScatter_TL>)
+set_tests_properties(test_Unit_AerosolScatter_TL PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(Unit_AerosolScatter_AD mains/unit/Unit_Test/test_AerosolScatter_AD.f90)
+target_link_libraries(Unit_AerosolScatter_AD PRIVATE crtm)
+add_test(NAME test_Unit_AerosolScatter_AD
+         COMMAND $<TARGET_FILE:Unit_AerosolScatter_AD>)
+set_tests_properties(test_Unit_AerosolScatter_AD PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(Unit_AerosolScatter_K mains/unit/Unit_Test/test_AerosolScatter_K.f90)
+target_link_libraries(Unit_AerosolScatter_K PRIVATE crtm)
+add_test(NAME test_Unit_AerosolScatter_K
+         COMMAND $<TARGET_FILE:Unit_AerosolScatter_K>)
+set_tests_properties(test_Unit_AerosolScatter_K PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
 add_executable(Unit_Aerosol_Bypass_TL mains/unit/Unit_Test/test_Aerosol_Bypass_TL.f90)
 target_link_libraries(Unit_Aerosol_Bypass_TL PRIVATE crtm)
 add_test(NAME test_Unit_Aerosol_Bypass_TL
@@ -375,6 +393,15 @@ list (APPEND CCoef_Utils
 )
 foreach(testtype IN LISTS CCoef_Utils)
 	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/CloudCoeff/${testtype}/${testtype}.f90)
+	target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+#AerosolCoeff utilities
+list (APPEND ACoeff_Utils
+  AerosolCoeff_Inspect
+)
+foreach(testtype IN LISTS ACoeff_Utils)
+	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/AerosolCoeff/${testtype}/${testtype}.f90)
 	target_link_libraries(${testtype} PRIVATE crtm)
 endforeach()
 
@@ -546,6 +573,10 @@ set_tests_properties(test_TL_convergence_active_sensor PROPERTIES ENVIRONMENT OM
 
 list( APPEND crtm_test_input
 AerosolCoeff/Little_Endian/AerosolCoeff.bin
+AerosolCoeff/Little_Endian/AerosolCoeff.GOCART-GEOS5.bin
+AerosolCoeff/Little_Endian/AerosolCoeff.CMAQ.bin
+AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.nc4
+AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.BRC.kb.v2.nc
 AerosolCoeff/netCDF/AerosolCoeff.nc4
 CloudCoeff/Little_Endian/CloudCoeff.bin
 CloudCoeff/netCDF/CloudCoeff.nc4

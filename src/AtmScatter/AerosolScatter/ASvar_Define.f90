@@ -241,6 +241,11 @@ CONTAINS
       WRITE(*,'(5x,"g Aerosol index #",i0)') i4
       WRITE(*,'(5(1x,es22.15,:))') self%g(:,i4)
     END DO
+    WRITE(*,'(3x,"Backscatter coefficient (kb) :")')
+    DO i4 = 1, self%n_Aerosols
+      WRITE(*,'(5x,"kb Aerosol index #",i0)') i4
+      WRITE(*,'(5(1x,es22.15,:))') self%kb(:,i4)
+    END DO
     WRITE(*,'(3x,"Phase coefficients (pcoeff) :")')
     DO i4 = 1, self%n_Aerosols
       WRITE(*,'(5x,"pcoeff Aerosol index #",i0)') i4
@@ -588,6 +593,13 @@ CONTAINS
       msg = 'Error reading asymmetry factor - '//TRIM(io_msg)
       CALL Read_Cleanup(); RETURN
     END IF
+    ! ...Backscatter coefficient
+    READ( fid, IOSTAT=io_stat, IOMSG=io_msg ) &
+      ASvar%kb
+    IF ( io_stat /= 0 ) THEN
+      msg = 'Error reading backscatter coefficient - '//TRIM(io_msg)
+      CALL Read_Cleanup(); RETURN
+    END IF
     ! ...Phase coefficients
     READ( fid, IOSTAT=io_stat, IOMSG=io_msg ) &
       ASvar%pcoeff
@@ -763,6 +775,13 @@ CONTAINS
       msg = 'Error writing asymmetry factor - '//TRIM(io_msg)
       CALL Write_Cleanup(); RETURN
     END IF
+    ! ...Backscatter coefficient
+    WRITE( fid, IOSTAT=io_stat, IOMSG=io_msg ) &
+      ASvar%kb
+    IF ( io_stat /= 0 ) THEN
+      msg = 'Error writing backscatter coefficient - '//TRIM(io_msg)
+      CALL Write_Cleanup(); RETURN
+    END IF
     ! ...Phase coefficients
     WRITE( fid, IOSTAT=io_stat, IOMSG=io_msg ) &
       ASvar%pcoeff
@@ -842,6 +861,7 @@ CONTAINS
     IF ( ALL(x%ke       .EqualTo. y%ke       ) .AND. &
          ALL(x%w        .EqualTo. y%w        ) .AND. &
          ALL(x%g        .EqualTo. y%g        ) .AND. &
+         ALL(x%kb       .EqualTo. y%kb       ) .AND. &
          ALL(x%pcoeff   .EqualTo. y%pcoeff   ) .AND. &
          ALL(x%total_bs .EqualTo. y%total_bs ) ) &
       is_equal = .TRUE.
