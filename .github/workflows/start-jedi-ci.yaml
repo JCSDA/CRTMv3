@@ -14,6 +14,12 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - name: Debug secret availability
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "actor=${{ github.actor }}"
+          echo "from_fork=${{ github.event.pull_request.head.repo.fork || 'n/a' }}"
+          echo "has_key=${{ secrets.CI_APP_PRIVATE_KEY != '' }}"
 
       - name: Generate CI App token
         id: generate-token
