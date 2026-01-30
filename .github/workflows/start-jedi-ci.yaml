@@ -13,10 +13,6 @@ jobs:
     permissions:
       id-token: write
       contents: read
-
-    # Checks in this environment must be approved by reviewers configured in "Settings" -> "Environments".
-    environment: fork_pull_secrets
-
     steps:
 
       - name: Generate CI App token
@@ -26,7 +22,7 @@ jobs:
           # Owner is specified to scope the token to the org install
           # otherwise the token will be scoped to the repository.
           app-id: 321361
-          private-key: ${{ secrets.CI_APP_PRIVATE_KEY_FORK }}
+          private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
           owner: JCSDA
 
       - name: checkout repository
