@@ -130,7 +130,7 @@ MODULE CRTM_K_Matrix_Module
   USE CRTM_Planck_Functions,      ONLY: CRTM_Planck_Temperature   , &
                                         CRTM_Planck_Temperature_AD
   USE CRTM_CloudCover_Define,     ONLY: CRTM_CloudCover_type
-  USE CRTM_Active_Sensor,         ONLY: CRTM_Compute_Reflectivity, &
+  USE CRTM_Active_Sensor,         ONLY: CRTM_Compute_Reflectivity   , &
                                         CRTM_Compute_Reflectivity_AD, &
                                         Calculate_Cloud_Water_Density
 
@@ -428,14 +428,22 @@ CONTAINS
       CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
     ELSE
       n_profile_threads = n_Profiles
+
+!** BTJ: temporary preprocessor directive for openMP over channels bypass, permitting modern ifort / ifx versions to run properly
+!** https://github.com/JCSDA/CRTMv3/issues/231
+
+#if 1
+      n_channel_threads = 1
+#else
       n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
-!      n_channel_threads = MIN(n_Channels, n_omp_threads )
-      if(n_channel_threads > 1) THEN
+#endif
+      IF(n_channel_threads > 1) THEN
         CALL OMP_SET_MAX_ACTIVE_LEVELS(2)
       ELSE
         CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
       END IF
     END IF
+
 
 !    WRITE(6,*)
 !    WRITE(6,'("   Using",i3," OpenMP threads =",i3," for profiles and",i3," for channels.")') &
@@ -449,26 +457,25 @@ CONTAINS
 !$OMP PARALLEL DO PRIVATE (nc,Message) NUM_THREADS(n_profile_threads)
     Profile_Loop1: DO m = 1, n_Profiles
       ! Check the cloud and aerosol coeff. data for cases with clouds and aerosol
-       IF ( Atmosphere(m)%n_Clouds > 0) THEN
-          !** clear clouds where cloud_fraction < threshold
-          DO nc = 1, Atmosphere(m)%n_clouds
-             WHERE (Atmosphere(m)%Cloud_Fraction(:) < MIN_COVERAGE_THRESHOLD)
-                Atmosphere(m)%Cloud_Fraction(:) = ZERO
-                Atmosphere(m)%Cloud(nc)%Water_Content(:)    = ZERO
-                Atmosphere(m)%Cloud(nc)%Effective_Radius(:) = ZERO
-             END WHERE
-          END DO
-
-
-          IF(.NOT. CRTM_CloudCoeff_IsLoaded() )THEN
-
-             Error_Status = FAILURE
-             WRITE( Message,'("The CloudCoeff data must be loaded (with CRTM_Init routine) ", &
-                  &"for the cloudy case profile #",i0)' ) m
-             CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-             CYCLE Profile_Loop1
-          END IF
-       END IF
+      ! ...cloud
+      IF ( Atmosphere(m)%n_Clouds > 0 ) THEN
+        !** clear clouds where cloud_fraction < threshold
+        DO nc = 1, Atmosphere(m)%n_clouds
+           WHERE (Atmosphere(m)%Cloud_Fraction(:) < MIN_COVERAGE_THRESHOLD)
+              Atmosphere(m)%Cloud_Fraction(:) = ZERO
+              Atmosphere(m)%Cloud(nc)%Water_Content(:)    = ZERO
+              Atmosphere(m)%Cloud(nc)%Effective_Radius(:) = ZERO
+           END WHERE
+        END DO
+        IF( .NOT. CRTM_CloudCoeff_IsLoaded() )THEN
+           Error_Status = FAILURE
+           WRITE( Message,'("The CloudCoeff data must be loaded (with CRTM_Init routine) ", &
+                &"for the cloudy case profile #",i0)' ) m
+           CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+           CYCLE Profile_Loop1
+        END IF
+      END IF
+      ! ...aerosol
       IF( Atmosphere(m)%n_Aerosols > 0 .AND. .NOT. CRTM_AerosolCoeff_IsLoaded() )THEN
          Error_Status = FAILURE
          WRITE( Message,'("The AerosolCoeff data must be loaded (with CRTM_Init routine) ", &
@@ -599,7 +606,7 @@ CONTAINS
       DO nt = 1, n_channel_threads
         CALL CRTM_SfcOptics_Create( SfcOptics(nt)  , MAX_N_ANGLES, MAX_N_STOKES )
         CALL CRTM_SfcOptics_Create( SfcOptics_K(nt), MAX_N_ANGLES, MAX_N_STOKES )
-        IF ( (.NOT. CRTM_SfcOptics_Associated(SfcOptics(nt)  )) .OR. &
+        IF ( (.NOT. CRTM_SfcOptics_Associated(SfcOptics(nt))  ) .OR. &
              (.NOT. CRTM_SfcOptics_Associated(SfcOptics_K(nt))) ) THEN
           Error_Status = FAILURE
           Message = 'Error allocating SfcOptics data structures'
@@ -610,7 +617,7 @@ CONTAINS
       SfcOptics_K(nt)%n_Stokes = RTV(nt)%n_Stokes
       END DO
 !$OMP END PARALLEL DO
-      IF ( Error_Status == FAILURE) RETURN
+      IF ( Error_Status == FAILURE ) RETURN
 
       ! Copy over forward "non-variable" inputs to K-matrix outputs
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
@@ -710,28 +717,28 @@ CONTAINS
       ! Check n_Stokes and number of phase elements
       IF ( CRTM_CloudCoeff_IsLoaded() .AND. &
            (RTV(1)%n_Stokes > 1 .AND. CloudC%N_PHASE_ELEMENTS < 6 )) THEN
-         Error_Status = FAILURE
-         WRITE( Message,'("N_PHASE_ELEMENTS OF CLOUD LUT NOT RIGHT ",i0)' ) CloudC%N_PHASE_ELEMENTS
-         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-         RETURN
+        Error_Status = FAILURE
+        WRITE( Message,'("N_PHASE_ELEMENTS OF CLOUD LUT NOT RIGHT ",i0)' ) CloudC%N_PHASE_ELEMENTS
+        CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+        RETURN
       END IF
 
       IF ( CRTM_AerosolCoeff_IsLoaded() .AND. &
            (RTV(1)%n_Stokes > 1 .AND. AeroC%N_PHASE_ELEMENTS < 6 )) THEN
-         Error_Status = FAILURE
-         WRITE( Message,'("N_PHASE_ELEMENTS OF AEROSOL LUT NOT RIGHT ",i0)' ) AeroC%N_PHASE_ELEMENTS
-         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-         RETURN
+        Error_Status = FAILURE
+        WRITE( Message,'("N_PHASE_ELEMENTS OF AEROSOL LUT NOT RIGHT ",i0)' ) AeroC%N_PHASE_ELEMENTS
+        CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+        RETURN
       END IF
 
       IF ( CRTM_CloudCoeff_IsLoaded() .AND. CRTM_AerosolCoeff_IsLoaded() .AND. &
            (CloudC%N_PHASE_ELEMENTS /= AeroC%N_PHASE_ELEMENTS) ) THEN
-         Error_Status = FAILURE
-         WRITE( Message,'("N_PHASE_ELEMENTS OF CLOUD AND AEROSOL LUTS DO NOT MATCH")' )
-         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-         RETURN
+        Error_Status = FAILURE
+        WRITE( Message,'("N_PHASE_ELEMENTS OF CLOUD AND AEROSOL LUTS DO NOT MATCH")' )
+        CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+        RETURN
       END IF
-      
+
       ! Calculate cloud water density
       CALL Calculate_Cloud_Water_Density(Atm)
 
@@ -739,24 +746,24 @@ CONTAINS
       ! ...Allocate the atmospheric optics structures based on Atm extension
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
       DO nt = 1, n_channel_threads
-        CALL CRTM_AtmOptics_Create( AtmOptics(nt), &
+        CALL CRTM_AtmOptics_Create( AtmOptics(nt)       , &
                                     Atm%n_Layers        , &
                                     MAX_N_LEGENDRE_TERMS, &
                                     CloudC%N_PHASE_ELEMENTS  )
-        CALL CRTM_AtmOptics_Create( AtmOptics_K(nt), &
+        CALL CRTM_AtmOptics_Create( AtmOptics_K(nt)     , &
                                     Atm%n_Layers        , &
                                     MAX_N_LEGENDRE_TERMS, &
                                     CloudC%N_PHASE_ELEMENTS  )
 
-      IF ( Options_Present ) THEN
-        AtmOptics(nt)%depolarization = Opt%depolarization
-        AtmOptics_K(nt)%depolarization = Opt%depolarization
-        IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
-        AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
-        AtmOptics_K(nt)%n_Stokes = RTV(nt)%n_Stokes
-      END IF
+        IF ( Options_Present ) THEN
+          AtmOptics(nt)%depolarization = Opt%depolarization
+          AtmOptics_K(nt)%depolarization = Opt%depolarization
+          IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
+          AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
+          AtmOptics_K(nt)%n_Stokes = RTV(nt)%n_Stokes
+        END IF
 
-        IF ( .NOT. CRTM_AtmOptics_Associated( Atmoptics(nt) ) .OR. &
+        IF ( .NOT. CRTM_AtmOptics_Associated( Atmoptics(nt)   ) .OR. &
              .NOT. CRTM_AtmOptics_Associated( Atmoptics_K(nt) ) ) THEN
           Error_Status = FAILURE
           WRITE( Message,'("Error allocating AtmOptics data structures for profile #",i0)' ) m
@@ -773,23 +780,23 @@ CONTAINS
         ! Allocate the scattering internal variables if necessary
         ! ...Cloud
         IF ( Atm%n_Clouds > 0 ) THEN
-          CALL CSvar_Create( CSvar(nt), &
-                             MAX_N_LEGENDRE_TERMS, &
+          CALL CSvar_Create( CSvar(nt)              , &
+                             MAX_N_LEGENDRE_TERMS   , &
                              CloudC%N_PHASE_ELEMENTS, &
-                             Atm%n_Layers        , &
-                             Atm%n_Clouds          )
+                             Atm%n_Layers           , &
+                             Atm%n_Clouds             )
         END IF
         ! ...Aerosol
         IF ( Atm%n_Aerosols > 0 ) THEN
-          CALL ASvar_Create( ASvar(nt), &
-                             MAX_N_LEGENDRE_TERMS, &
+          CALL ASvar_Create( ASvar(nt)             , &
+                             MAX_N_LEGENDRE_TERMS  , &
                              AeroC%N_PHASE_ELEMENTS, &
-                             Atm%n_Layers        , &
-                             Atm%n_Aerosols        )
+                             Atm%n_Layers          , &
+                             Atm%n_Aerosols          )
         END IF
-      END DO
+      END DO ! Channel threads
 !$OMP END PARALLEL DO
-      IF ( Error_Status == FAILURE) RETURN
+      IF ( Error_Status == FAILURE ) RETURN
 
       ! Determine the type of cloud coverage
       cloud_coverage_flag = CRTM_Atmosphere_Coverage( atm )
@@ -845,9 +852,9 @@ CONTAINS
           CALL CRTM_Compute_SurfaceT( Surface(m), SfcOptics_Clear(nt) )
         END DO
 !$OMP END PARALLEL DO
-        IF ( Error_Status == FAILURE) RETURN
+        IF ( Error_Status == FAILURE ) RETURN
 
-      END IF
+      END IF ! If ractional cloud coverage
 
 
       ! Average surface skin temperature for multi-surface types
@@ -904,14 +911,14 @@ CONTAINS
                                         Atm           , &  ! Input
                                         GeometryInfo  , &  ! Input
                                         AncillaryInput, &  ! Input
-                                        Predictor(nt)     , &  ! Output
-                                        PVar(nt)            )  ! Internal variable output
+                                        Predictor(nt) , &  ! Output
+                                        PVar(nt)        )  ! Internal variable output
 
 
 
           ! Allocate the AtmAbsorption predictor structures
           CALL CRTM_Predictor_Create( &
-                 Predictor_K(nt) , &
+                 Predictor_K(nt), &
                  atm%n_Layers, &
                  SensorIndex   )
           IF (  .NOT. CRTM_Predictor_Associated(Predictor_K(nt)) ) THEN
@@ -925,7 +932,7 @@ CONTAINS
           IF( ( Atm%n_Clouds   > 0 .OR. &
                 Atm%n_Aerosols > 0 .OR. &
                 SpcCoeff_IsVisibleSensor(SC(SensorIndex)).OR.SpcCoeff_IsUltravioletSensor(SC(SensorIndex)) ) .AND. &
-              AtmOptics(nt)%Include_Scattering ) THEN
+                AtmOptics(nt)%Include_Scattering ) THEN
             RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
             CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
             IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
@@ -938,9 +945,9 @@ CONTAINS
             ! Assign algorithm selector
           END IF
 
-        END DO
+        END DO ! n_channel_threads
 !$OMP END PARALLEL DO
-        IF ( Error_Status == FAILURE) RETURN
+        IF ( Error_Status == FAILURE ) RETURN
 
         ! Compute NLTE correction predictors
         IF ( Opt%Apply_NLTE_Correction ) THEN
@@ -979,16 +986,27 @@ CONTAINS
         ! ------------
         ! THREAD LOOP
         ! ------------
+!** BTJ preprocessor directive bypass of OMP directives causing issues when compiling with modern ifort/ifx
+!** https://github.com/JCSDA/CRTMv3/issues/231
+#if 1
+        IF (n_channel_threads > 1) THEN
+           WRITE( Message,'("ERROR: n_channel_threads > 1, this should not happen with the current preprocessor directives")')
+           
+           Error_status = FAILURE
+           CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+        END IF
+#else
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
 !$OMP    FIRSTPRIVATE(ln, r_cloudy)                                     &
-!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,    &
-!$OMP          start_ch, end_ch, Wavenumber, Status_FWD, Status_K,      &
-!$OMP          transmittance, transmittance_K, transmittance_clear,     &
-!$OMP          transmittance_clear_K, l, mth_Azi, ks)
+!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,          &
+!$OMP            start_ch, end_ch, Wavenumber, Status_FWD, Status_K,    &
+!$OMP            transmittance, transmittance_K, transmittance_clear,   &
+!$OMP            transmittance_clear_K, l, mth_Azi, ks)
+#endif
         Thread_Loop: DO nt = 1, n_channel_threads
 
           start_ch = (nt - 1) * chunk_ch + 1
-          IF ( nt == n_channel_threads) THEN
+          IF ( nt == n_channel_threads ) THEN
             end_ch = n_sensor_channels
           ELSE
             end_ch = start_ch + chunk_ch - 1
@@ -1080,20 +1098,22 @@ CONTAINS
             CALL CRTM_Compute_AtmAbsorption( SensorIndex   , &  ! Input
                                              ChannelIndex  , &  ! Input
                                              AncillaryInput, &  ! Input
-                                             Predictor(nt)     , &  ! Input
-                                             AtmOptics(nt)     , &  ! Output
-                                             AAvar(nt)           )  ! Internal variable output
+                                             Predictor(nt) , &  ! Input
+                                             AtmOptics(nt) , &  ! Output
+                                             AAvar(nt)       )  ! Internal variable output
 
 
             ! Compute the molecular scattering properties
             ! ...Solar radiation
             IF( SC(SensorIndex)%Solar_Irradiance(ChannelIndex) > ZERO .AND. &
-                Source_ZA < MAX_SOURCE_ZENITH_ANGLE) THEN
-               RTV(nt)%Solar_Flag_true = .TRUE.
+                Source_ZA < MAX_SOURCE_ZENITH_ANGLE ) THEN
+              RTV(nt)%Solar_Flag_true = .TRUE.
             END IF
+
             ! ...Visible channel with solar radiation
             IF( (SpcCoeff_IsVisibleSensor(SC(SensorIndex)).OR. &
-             SpcCoeff_IsUltravioletSensor(SC(SensorIndex))) .AND. RTV(nt)%Solar_Flag_true ) THEN
+                 SpcCoeff_IsUltravioletSensor(SC(SensorIndex))) .AND. &
+                 RTV(nt)%Solar_Flag_true ) THEN
               RTV(nt)%Visible_Flag_true = .TRUE.
               ! Two cases
               ! (1) If clear sky, AtmOptics(nt)%n_Legendre_Terms == 0, compute Rayleigh scattering
@@ -1132,6 +1152,8 @@ CONTAINS
             END IF
 
 
+
+
             ! Copy the clear-sky AtmOptics
             IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
               Status_FWD = CRTM_AtmOptics_NoScatterCopy( AtmOptics(nt), AtmOptics_Clear(nt) )
@@ -1151,12 +1173,12 @@ CONTAINS
 
             ! Compute the cloud particle absorption/scattering properties
             IF( Atm%n_Clouds > 0 ) THEN
-              Error_Status = CRTM_Compute_CloudScatter( Atm         , &  ! Input
-                                                        GeometryInfo, &  ! Input
-                                                        SensorIndex , &  ! Input
-                                                        ChannelIndex, &  ! Input
-                                                        AtmOptics(nt)   , &  ! Output
-                                                        CSvar(nt)         )  ! Internal variable output
+              Error_Status = CRTM_Compute_CloudScatter( Atm          , &  ! Input
+                                                        GeometryInfo , &  ! Input
+                                                        SensorIndex  , &  ! Input
+                                                        ChannelIndex , &  ! Input
+                                                        AtmOptics(nt), &  ! Output
+                                                        CSvar(nt)      )  ! Internal variable output
               IF (Error_Status /= SUCCESS) THEN
                 WRITE( Message,'("Error computing CloudScatter for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
@@ -1169,11 +1191,11 @@ CONTAINS
 
             ! Compute the aerosol absorption/scattering properties
             IF ( Atm%n_Aerosols > 0 ) THEN
-              Error_Status = CRTM_Compute_AerosolScatter( Atm         , &  ! Input
-                                                          SensorIndex , &  ! Input
-                                                          ChannelIndex, &  ! Input
-                                                          AtmOptics(nt)   , &  ! In/Output
-                                                          ASvar(nt)         )  ! Internal variable output
+              Error_Status = CRTM_Compute_AerosolScatter( Atm          , &  ! Input
+                                                          SensorIndex  , &  ! Input
+                                                          ChannelIndex , &  ! Input
+                                                          AtmOptics(nt), &  ! In/Output
+                                                          ASvar(nt)      )  ! Internal variable output
               IF ( Error_Status /= SUCCESS ) THEN
                 WRITE( Message,'("Error computing AerosolScatter for ",a,&
                        &", channel ",i0,", profile #",i0)' ) &
@@ -1232,248 +1254,244 @@ CONTAINS
             ! mth_Azi = 0 is for an azimuth-averaged value (IR, MW)
             ! ...Initialise radiance
             RTSolution(ln,m)%Radiance = ZERO
-
-      IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) .OR. &
-               SpcCoeff_IsUltravioletSensor( SC(SensorIndex) ) ) THEN
-        IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-              RTSolution(ln,m)%Total_Cloud_Cover = CloudCover%Total_Cloud_Cover
-         IF(RTV(nt)%n_Stokes == 1) THEN
-           RTSolution_Clear_K(nt)%Radiance = (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_K(ln,m)%Radiance
-           RTSolution_K(ln,m)%Radiance = CloudCover%Total_Cloud_Cover * RTSolution_K(ln,m)%Radiance
-         ELSE
-           DO ks = 1, RTV(nt)%n_Stokes
-!             RTSolution_Clear_K(nt)%Stokes(ks)=(ONE-CloudCover%Total_Cloud_Cover)*RTSolution_K(ln,m)%Stokes(ks)
-!  Clear_sky case uses Emission_Module.f90 without atmospheric scatterings right now.
-             IF( ks == 1 ) &
-             RTSolution_Clear_K(nt)%Radiance=(ONE-CloudCover%Total_Cloud_Cover)*RTSolution_K(ln,m)%Stokes(ks)
-             RTSolution_K(ln,m)%Stokes(ks) = CloudCover%Total_Cloud_Cover*RTSolution_K(ln,m)%Stokes(ks)
-           END DO
-         END IF
-        END IF
-      END IF
-
-              ! --------------
-              ! ...Fourier expansion over azimuth angle
-
-              Azimuth_Fourier_Loop: DO mth_Azi = 0, RTV(nt)%n_Azi
-
-                ! Set dependent component counters
-                RTV(nt)%mth_Azi = mth_Azi
-                SfcOptics(nt)%mth_Azi = mth_Azi
-
-                ! Solve the forward radiative transfer problem
-                Error_Status = CRTM_Compute_RTSolution( &
-                                 Atm             , &  ! Input
-                                 Surface(m)      , &  ! Input
-                                 AtmOptics(nt)       , &  ! Input
-                                 SfcOptics(nt)       , &  ! Input
-                                 GeometryInfo    , &  ! Input
-                                 SensorIndex     , &  ! Input
-                                 ChannelIndex    , &  ! Input
-                                 RTSolution(ln,m), &  ! Output
-                                 RTV(nt)               )  ! Internal variable output
-                IF ( Error_Status /= SUCCESS ) THEN
-                  WRITE( Message,'( "Error computing RTSolution for ", a, &
-                         &", channel ", i0,", profile #",i0)' ) &
-                         TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                  CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-                  CYCLE Thread_Loop
+            IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) .OR. &
+                 SpcCoeff_IsUltravioletSensor( SC(SensorIndex) ) ) THEN
+              IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
+                RTSolution(ln,m)%Total_Cloud_Cover = CloudCover%Total_Cloud_Cover
+                IF(RTV(nt)%n_Stokes == 1) THEN
+                  RTSolution_Clear_K(nt)%Radiance = (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_K(ln,m)%Radiance
+                  RTSolution_K(ln,m)%Radiance = CloudCover%Total_Cloud_Cover * RTSolution_K(ln,m)%Radiance
+                ELSE
+                  DO ks = 1, RTV(nt)%n_Stokes
+                    !  RTSolution_Clear_K(nt)%Stokes(ks)=(ONE-CloudCover%Total_Cloud_Cover)*RTSolution_K(ln,m)%Stokes(ks)
+                    !  Clear_sky case uses Emission_Module.f90 without atmospheric scatterings right now.
+                    IF( ks == 1 ) &
+                    RTSolution_Clear_K(nt)%Radiance=(ONE-CloudCover%Total_Cloud_Cover)*RTSolution_K(ln,m)%Stokes(ks)
+                    RTSolution_K(ln,m)%Stokes(ks) = CloudCover%Total_Cloud_Cover*RTSolution_K(ln,m)%Stokes(ks)
+                  END DO
                 END IF
-
-
-                ! Repeat clear sky for fractionally cloudy atmospheres
-           IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV(nt)%mth_Azi==0 ) THEN
-                  RTV_Clear(nt)%mth_Azi = RTV(nt)%mth_Azi
-                  SfcOptics_Clear(nt)%mth_Azi = SfcOptics(nt)%mth_Azi
-                  Error_Status = CRTM_Compute_RTSolution( &
-                                   Atm_Clear       , &  ! Input
-                                   Surface(m)      , &  ! Input
-                                   AtmOptics_Clear(nt) , &  ! Input
-                                   SfcOptics_Clear(nt) , &  ! Input
-                                   GeometryInfo    , &  ! Input
-                                   SensorIndex     , &  ! Input
-                                   ChannelIndex    , &  ! Input
-                                   RTSolution_Clear(nt), &  ! Output
-                                   RTV_Clear(nt)         )  ! Internal variable output
-                  IF ( Error_Status /= SUCCESS ) THEN
-                    WRITE( Message,'( "Error computing CLEAR SKY RTSolution for ", a, &
-                           &", channel ", i0,", profile #",i0)' ) &
-                           TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                    CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-                    CYCLE Thread_Loop
-                  END IF
-          END IF
-
-         IF(mth_Azi == RTV(nt)%n_Azi) THEN
-            ! Combine cloudy and clear radiances for fractional cloud coverage
-            IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-             IF( RTV(nt)%n_Stokes == 1 ) THEN
-              r_cloudy(1) = RTSolution(ln,m)%Radiance  ! Save the 100% cloudy radiance
-              RTSolution(ln,m)%Radiance = &
-                  ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Radiance) + &
-                  (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Radiance)
-              RTSolution(ln,m)%Stokes(1) = RTSolution(ln,m)%Radiance
-              ELSE
-              DO ks = 1, RTV(nt)%n_Stokes
-              r_cloudy(ks) = RTSolution(ln,m)%Stokes(ks)  ! Save the 100% cloudy radiance
-              RTSolution(ln,m)%Stokes(ks) = &
-                  ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Stokes(ks)) + &
-                  (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Stokes(ks))
-              END DO
-              RTSolution(ln,m)%Radiance = RTSolution(ln,m)%Stokes(1)
               END IF
-              ! ...Save the cloud cover in the output structure
-              RTSolution(ln,m)%Total_Cloud_Cover = CloudCover%Total_Cloud_Cover
             END IF
 
-              ! The radiance post-processing
-              CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), &
-                                           NLTE_Predictor, &
-                                           ChannelIndex, SensorIndex, &
-                                           compute_antenna_correction, GeometryInfo)
+            ! --------------
+            ! ...Fourier expansion over azimuth angle
 
-              !======= Active sensor =======
-              ! Calculate reflectivity for active instruments
-              IF  ( SC(SensorIndex)%Is_Active_Sensor .AND. AtmOptics(nt)%Include_Scattering) THEN
-                  CALL CRTM_Compute_Reflectivity(Atm             , & ! Input
-                                                 AtmOptics(nt)   , & ! Input
-                                                 GeometryInfo    , & ! Input
-                                                 SensorIndex     , & ! Input
-                                                 ChannelIndex    , & ! Input
-                                                 RTSolution(ln,m))   ! Input/Output
-              ENDIF
-              !=============================
+            Azimuth_Fourier_Loop: DO mth_Azi = 0, RTV(nt)%n_Azi
 
+              ! Set dependent component counters
+              RTV(nt)%mth_Azi = mth_Azi
+              SfcOptics(nt)%mth_Azi = mth_Azi
 
-           IF ( SpcCoeff_IsInfraredSensor( SC(SensorIndex) ) .OR. &
-               SpcCoeff_IsMicrowaveSensor( SC(SensorIndex) ) ) THEN
-              ! Perform clear-sky post and pre-processing
-              IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-                ! Radiance post-processing
-                CALL Post_Process_RTSolution(Opt, RTSolution_Clear(nt), &
-                                             NLTE_Predictor, &
-                                             ChannelIndex, SensorIndex, &
-                                             compute_antenna_correction, GeometryInfo)
-                RTSolution(ln,m)%R_Clear  = RTSolution_Clear(nt)%Radiance
-                RTSolution(ln,m)%Tb_Clear = RTSolution_Clear(nt)%Brightness_Temperature
-              END IF
-
-
-              ! The adjoint radiance pre-processing
-              CALL Pre_Process_RTSolution_K(Opt, RTSolution(ln,m), RTSolution_K(ln,m), &
-                                            NLTE_Predictor, NLTE_Predictor_K(nt), &
-                                            ChannelIndex, SensorIndex, &
-                                            compute_antenna_correction, GeometryInfo)
-
-              ! More fractionally cloudy atmospheres processing
-              IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-                ! The adjoint of the clear and cloudy radiance combination
-                CloudCover_K(nt)%Total_Cloud_Cover = RTSolution_K(ln,m)%Total_Cloud_Cover
-                RTSolution_K(ln,m)%Total_Cloud_Cover = ZERO
-                RTSolution_Clear_K(nt)%Radiance = (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_K(ln,m)%Radiance
-                CloudCover_K(nt)%Total_Cloud_Cover = CloudCover_K(nt)%Total_Cloud_Cover + &
-                           ((r_cloudy(1) - RTSolution_Clear(nt)%Radiance) * RTSolution_K(ln,m)%Radiance)
-                RTSolution_K(ln,m)%Radiance    = CloudCover%Total_Cloud_Cover * RTSolution_K(ln,m)%Radiance
-
-             END IF
-
-           END IF
-
-         END IF
-
-          IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV(nt)%mth_Azi==0 ) THEN
-                ! The adjoint of the clear sky radiative transfer for fractionally cloudy atmospheres
-                RTV_Clear(nt)%mth_Azi = RTV(nt)%mth_Azi
-                SfcOptics_Clear(nt)%mth_Azi = SfcOptics(nt)%mth_Azi
-              Error_Status = CRTM_Compute_RTSolution_AD( &
-                               Atm_Clear         , &  ! FWD Input
-                               Surface(m)        , &  ! FWD Input
-                               AtmOptics_Clear(nt)   , &  ! FWD Input
-                               SfcOptics_Clear(nt)   , &  ! FWD Input
-                               RTSolution_Clear(nt)  , &  ! FWD Input
-                               RTSolution_Clear_K(nt), &  ! K   Input
-                               GeometryInfo      , &  ! Input
-                               SensorIndex       , &  ! Input
-                               ChannelIndex      , &  ! Input
-                               Atm_Clear_K(nt)       , &  ! K  Output
-                               Surface_K(ln,m)   , &  ! K  Output
-                               AtmOptics_Clear_K(nt) , &  ! K  Output
-                               SfcOptics_Clear_K(nt) , &  ! K  Output
-                               RTV_Clear(nt)            )  ! Internal variable input
+              ! Solve the forward radiative transfer problem
+              Error_Status = CRTM_Compute_RTSolution( &
+                               Atm             , &  ! Input
+                               Surface(m)      , &  ! Input
+                               AtmOptics(nt)   , &  ! Input
+                               SfcOptics(nt)   , &  ! Input
+                               GeometryInfo    , &  ! Input
+                               SensorIndex     , &  ! Input
+                               ChannelIndex    , &  ! Input
+                               RTSolution(ln,m), &  ! Output
+                               RTV(nt)           )  ! Internal variable output
               IF ( Error_Status /= SUCCESS ) THEN
-                WRITE( Message,'( "Error computing CLEAR SKY RTSolution_K for ", a, &
+                WRITE( Message,'( "Error computing RTSolution for ", a, &
                        &", channel ", i0,", profile #",i0)' ) &
                        TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
                 CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
                 CYCLE Thread_Loop
               END IF
-            END IF
 
 
-                ! The adjoint of the radiative transfer
-                Error_Status = CRTM_Compute_RTSolution_AD( &
-                                 Atm               , &  ! FWD Input
-                                 Surface(m)        , &  ! FWD Input
-                                 AtmOptics(nt)         , &  ! FWD Input
-                                 SfcOptics(nt)         , &  ! FWD Input
-                                 RTSolution(ln,m)  , &  ! FWD Input
-                                 RTSolution_K(ln,m), &  ! K   Input
-                                 GeometryInfo      , &  ! Input
-                                 SensorIndex       , &  ! Input
-                                 ChannelIndex      , &  ! Input
-                                 Atm_K(nt)             , &  ! K  Output
-                                 Surface_K(ln,m)   , &  ! K  Output
-                                 AtmOptics_K(nt)       , &  ! K  Output
-                                 SfcOptics_K(nt)       , &  ! K  Output
-                                 RTV(nt)                 )  ! Internal variable input
+              ! Repeat clear sky for fractionally cloudy atmospheres
+              IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV(nt)%mth_Azi==0 ) THEN
+                RTV_Clear(nt)%mth_Azi = RTV(nt)%mth_Azi
+                SfcOptics_Clear(nt)%mth_Azi = SfcOptics(nt)%mth_Azi
+                Error_Status = CRTM_Compute_RTSolution( &
+                                 Atm_Clear           , &  ! Input
+                                 Surface(m)          , &  ! Input
+                                 AtmOptics_Clear(nt) , &  ! Input
+                                 SfcOptics_Clear(nt) , &  ! Input
+                                 GeometryInfo        , &  ! Input
+                                 SensorIndex         , &  ! Input
+                                 ChannelIndex        , &  ! Input
+                                 RTSolution_Clear(nt), &  ! Output
+                                 RTV_Clear(nt)         )  ! Internal variable output
                 IF ( Error_Status /= SUCCESS ) THEN
-                  WRITE( Message,'( "Error computing RTSolution_K for ", a, &
+                  WRITE( Message,'( "Error computing CLEAR SKY RTSolution for ", a, &
                          &", channel ", i0,", profile #",i0)' ) &
                          TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
                   CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
                   CYCLE Thread_Loop
                 END IF
-                ! Calculate the adjoint for the active sensor reflectivity
-                IF  ( SC(SensorIndex)%Is_Active_Sensor .AND. AtmOptics(nt)%Include_Scattering) THEN
-                    CALL CRTM_Compute_Reflectivity_AD(Atm             , &  ! Input
-                                                      AtmOptics(nt)   , &  ! Input
-                                                      RTSolution(ln,m), & ! Input
-                                                      GeometryInfo    , & ! Input
-                                                      SensorIndex     , &  ! Input
-                                                      ChannelIndex    , &  ! Input
-                                                      AtmOptics_K(nt) , &  ! Input/Output
-                                                      RTSolution_K(ln,m))   ! Input/Output
+              END IF
+
+              IF( mth_Azi == RTV(nt)%n_Azi ) THEN
+
+                ! Combine cloudy and clear radiances for fractional cloud coverage
+                IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
+                  IF( RTV(nt)%n_Stokes == 1 ) THEN
+                    r_cloudy(1) = RTSolution(ln,m)%Radiance  ! Save the 100% cloudy radiance
+                    RTSolution(ln,m)%Radiance = &
+                        ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Radiance) + &
+                        (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Radiance)
+                    RTSolution(ln,m)%Stokes(1) = RTSolution(ln,m)%Radiance
+                  ELSE
+                    DO ks = 1, RTV(nt)%n_Stokes
+                    r_cloudy(ks) = RTSolution(ln,m)%Stokes(ks)  ! Save the 100% cloudy radiance
+                    RTSolution(ln,m)%Stokes(ks) = &
+                        ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Stokes(ks)) + &
+                        (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Stokes(ks))
+                    END DO
+                    RTSolution(ln,m)%Radiance = RTSolution(ln,m)%Stokes(1)
+                  END IF
+                  ! ...Save the cloud cover in the output structure
+                  RTSolution(ln,m)%Total_Cloud_Cover = CloudCover%Total_Cloud_Cover
+                END IF
+
+                ! The radiance post-processing
+                CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), &
+                                             NLTE_Predictor, &
+                                             ChannelIndex, SensorIndex, &
+                                             compute_antenna_correction, GeometryInfo)
+
+                !======= Active sensor =======
+                ! Calculate reflectivity for active instruments
+                IF  ( SC(SensorIndex)%Is_Active_Sensor .AND. AtmOptics(nt)%Include_Scattering ) THEN
+                    CALL CRTM_Compute_Reflectivity(Atm             , & ! Input
+                                                   AtmOptics(nt)   , & ! Input
+                                                   GeometryInfo    , & ! Input
+                                                   SensorIndex     , & ! Input
+                                                   ChannelIndex    , & ! Input
+                                                   RTSolution(ln,m))   ! Input/Output
                 ENDIF
+                !=============================
 
 
-              END DO Azimuth_Fourier_Loop
+                IF ( SpcCoeff_IsInfraredSensor( SC(SensorIndex) ) .OR. &
+                     SpcCoeff_IsMicrowaveSensor( SC(SensorIndex) ) ) THEN
+                  ! Perform clear-sky post and pre-processing
+                  IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
+                    ! Radiance post-processing
+                    CALL Post_Process_RTSolution(Opt, RTSolution_Clear(nt), &
+                                                 NLTE_Predictor, &
+                                                 ChannelIndex, SensorIndex, &
+                                                 compute_antenna_correction, GeometryInfo)
+                    RTSolution(ln,m)%R_Clear  = RTSolution_Clear(nt)%Radiance
+                    RTSolution(ln,m)%Tb_Clear = RTSolution_Clear(nt)%Brightness_Temperature
+                  END IF
+                  ! The adjoint radiance pre-processing
+                  CALL Pre_Process_RTSolution_K(Opt, RTSolution(ln,m), RTSolution_K(ln,m), &
+                                                NLTE_Predictor, NLTE_Predictor_K(nt), &
+                                                ChannelIndex, SensorIndex, &
+                                                compute_antenna_correction, GeometryInfo)
+                  ! More fractionally cloudy atmospheres processing
+                  IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
+                    ! The adjoint of the clear and cloudy radiance combination
+                    CloudCover_K(nt)%Total_Cloud_Cover = RTSolution_K(ln,m)%Total_Cloud_Cover
+                    RTSolution_K(ln,m)%Total_Cloud_Cover = ZERO
+                    RTSolution_Clear_K(nt)%Radiance = (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_K(ln,m)%Radiance
+                    CloudCover_K(nt)%Total_Cloud_Cover = CloudCover_K(nt)%Total_Cloud_Cover + &
+                               ((r_cloudy(1) - RTSolution_Clear(nt)%Radiance) * RTSolution_K(ln,m)%Radiance)
+                    RTSolution_K(ln,m)%Radiance    = CloudCover%Total_Cloud_Cover * RTSolution_K(ln,m)%Radiance
+                 END IF
+                END IF
 
-! The following part corresponding TL part is moved from above CRTM_Compute_RTSolution
-! to here because forward radiance is not available above calling CRTM_Compute_RTSolution.
-      IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) .OR. &
-               SpcCoeff_IsUltravioletSensor( SC(SensorIndex) ) ) THEN
-            IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
-              RTSolution(ln,m)%R_Clear           = RTSolution_Clear(nt)%Radiance
-              RTSolution(ln,m)%Tb_Clear          = RTSolution_Clear(nt)%Brightness_Temperature
+              END IF  ! mth_Azi == RTV(nt)%n_Azi
 
-              IF( CloudCover%Total_Cloud_Cover > ZERO) THEN
-                IF( RTV(nt)%n_Stokes == 1 ) THEN
-                CloudCover_K(nt)%Total_Cloud_Cover = (r_cloudy(1) - RTSolution_Clear(nt)%Radiance) &
-                 * RTSolution_K(ln,m)%Radiance/CloudCover%Total_Cloud_Cover
-                ELSE
-                DO ks = 1, RTV(nt)%n_Stokes
-                 CloudCover_K(nt)%Total_Cloud_Cover = CloudCover_K(nt)%Total_Cloud_Cover &
-                   + (r_cloudy(ks) - RTSolution_Clear(nt)%Stokes(ks)) &
-                   * RTSolution_K(ln,m)%Stokes(ks)/CloudCover%Total_Cloud_Cover
-                END DO
+              IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV(nt)%mth_Azi==0 ) THEN
+                ! The adjoint of the clear sky radiative transfer for fractionally cloudy atmospheres
+                RTV_Clear(nt)%mth_Azi = RTV(nt)%mth_Azi
+                SfcOptics_Clear(nt)%mth_Azi = SfcOptics(nt)%mth_Azi
+                Error_Status = CRTM_Compute_RTSolution_AD( &
+                                 Atm_Clear             , &  ! FWD Input
+                                 Surface(m)            , &  ! FWD Input
+                                 AtmOptics_Clear(nt)   , &  ! FWD Input
+                                 SfcOptics_Clear(nt)   , &  ! FWD Input
+                                 RTSolution_Clear(nt)  , &  ! FWD Input
+                                 RTSolution_Clear_K(nt), &  ! K   Input
+                                 GeometryInfo          , &  ! Input
+                                 SensorIndex           , &  ! Input
+                                 ChannelIndex          , &  ! Input
+                                 Atm_Clear_K(nt)       , &  ! K  Output
+                                 Surface_K(ln,m)       , &  ! K  Output
+                                 AtmOptics_Clear_K(nt) , &  ! K  Output
+                                 SfcOptics_Clear_K(nt) , &  ! K  Output
+                                 RTV_Clear(nt)           )  ! Internal variable input
+                IF ( Error_Status /= SUCCESS ) THEN
+                  WRITE( Message,'( "Error computing CLEAR SKY RTSolution_K for ", a, &
+                         &", channel ", i0,", profile #",i0)' ) &
+                         TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
+                  CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                  CYCLE Thread_Loop
+                END IF
+              END IF
+
+
+              ! The adjoint of the radiative transfer
+              Error_Status = CRTM_Compute_RTSolution_AD( &
+                               Atm               , &  ! FWD Input
+                               Surface(m)        , &  ! FWD Input
+                               AtmOptics(nt)     , &  ! FWD Input
+                               SfcOptics(nt)     , &  ! FWD Input
+                               RTSolution(ln,m)  , &  ! FWD Input
+                               RTSolution_K(ln,m), &  ! K   Input
+                               GeometryInfo      , &  ! Input
+                               SensorIndex       , &  ! Input
+                               ChannelIndex      , &  ! Input
+                               Atm_K(nt)         , &  ! K  Output
+                               Surface_K(ln,m)   , &  ! K  Output
+                               AtmOptics_K(nt)   , &  ! K  Output
+                               SfcOptics_K(nt)   , &  ! K  Output
+                               RTV(nt)             )  ! Internal variable input
+              IF ( Error_Status /= SUCCESS ) THEN
+                WRITE( Message,'( "Error computing RTSolution_K for ", a, &
+                       &", channel ", i0,", profile #",i0)' ) &
+                       TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
+                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CYCLE Thread_Loop
+              END IF
+              ! Calculate the adjoint for the active sensor reflectivity
+              IF ( SC(SensorIndex)%Is_Active_Sensor .AND. AtmOptics(nt)%Include_Scattering ) THEN
+                CALL CRTM_Compute_Reflectivity_AD(Atm             , &  ! Input
+                                                  AtmOptics(nt)   , &  ! Input
+                                                  RTSolution(ln,m), & ! Input
+                                                  GeometryInfo    , & ! Input
+                                                  SensorIndex     , &  ! Input
+                                                  ChannelIndex    , &  ! Input
+                                                  AtmOptics_K(nt) , &  ! Input/Output
+                                                  RTSolution_K(ln,m))  ! Input/Output
+              END IF
+
+
+            END DO Azimuth_Fourier_Loop
+
+            ! The following part corresponding TL part is moved from above CRTM_Compute_RTSolution
+            ! to here because forward radiance is not available above calling CRTM_Compute_RTSolution.
+            IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) .OR. &
+                 SpcCoeff_IsUltravioletSensor( SC(SensorIndex) ) ) THEN
+
+              IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
+                RTSolution(ln,m)%R_Clear           = RTSolution_Clear(nt)%Radiance
+                RTSolution(ln,m)%Tb_Clear          = RTSolution_Clear(nt)%Brightness_Temperature
+
+                IF( CloudCover%Total_Cloud_Cover > ZERO ) THEN
+                  IF( RTV(nt)%n_Stokes == 1 ) THEN
+                    CloudCover_K(nt)%Total_Cloud_Cover = (r_cloudy(1) - RTSolution_Clear(nt)%Radiance) &
+                     * RTSolution_K(ln,m)%Radiance/CloudCover%Total_Cloud_Cover
+                  ELSE
+                    DO ks = 1, RTV(nt)%n_Stokes
+                     CloudCover_K(nt)%Total_Cloud_Cover = CloudCover_K(nt)%Total_Cloud_Cover &
+                       + (r_cloudy(ks) - RTSolution_Clear(nt)%Stokes(ks)) &
+                       * RTSolution_K(ln,m)%Stokes(ks)/CloudCover%Total_Cloud_Cover
+                    END DO
+                  END IF
                 END IF
               END IF
             END IF
-      END IF
+
             ! ###################################################
             ! TEMPORARY FIX : SENSOR-DEPENDENT AZIMUTH ANGLE LOOP
             ! ###################################################
-
 
             ! Compute the adjoint of the all-sky atmospheric transmittance
             ! for use in FASTEM-X reflection correction
@@ -1491,7 +1509,7 @@ CONTAINS
             ! Compute the adjoint of the combined atmospheric optical properties
             AtmOptics_K(nt)%Scattering_Optical_Depth = AtmOptics_K(nt)%Scattering_Optical_Depth + &
                                                    RTSolution_K(ln,m)%SOD
-            RTSolution_K(ln,m)%SOD               = ZERO
+            RTSolution_K(ln,m)%SOD = ZERO
             IF( AtmOptics(nt)%Include_Scattering ) THEN
               CALL CRTM_AtmOptics_Combine_AD( AtmOptics(nt), AtmOptics_K(nt), AOvar(nt) )
             END IF
@@ -1499,11 +1517,11 @@ CONTAINS
 
             ! Compute the adjoint aerosol absorption/scattering properties
             IF ( Atm%n_Aerosols > 0 ) THEN
-              Error_Status = CRTM_Compute_AerosolScatter_AD( Atm         , &  ! FWD Input
+              Error_Status = CRTM_Compute_AerosolScatter_AD( Atm             , &  ! FWD Input
                                                              AtmOptics(nt)   , &  ! FWD Input
                                                              AtmOptics_K(nt) , &  ! K   Input
-                                                             SensorIndex , &  ! Input
-                                                             ChannelIndex, &  ! Input
+                                                             SensorIndex     , &  ! Input
+                                                             ChannelIndex    , &  ! Input
                                                              Atm_K(nt)       , &  ! K   Output
                                                              ASvar(nt)         )  ! Internal variable input
               IF ( Error_Status /= SUCCESS ) THEN
@@ -1518,12 +1536,12 @@ CONTAINS
 
             ! Compute the adjoint cloud absorption/scattering properties
             IF ( Atm%n_Clouds > 0 ) THEN
-              Error_Status = CRTM_Compute_CloudScatter_AD( Atm         , &  ! FWD Input
+              Error_Status = CRTM_Compute_CloudScatter_AD( Atm             , &  ! FWD Input
                                                            AtmOptics(nt)   , &  ! FWD Input
                                                            AtmOptics_K(nt) , &  ! K   Input
                                                            GeometryInfo    , &  ! Input
-                                                           SensorIndex , &  ! Input
-                                                           ChannelIndex, &  ! Input
+                                                           SensorIndex     , &  ! Input
+                                                           ChannelIndex    , &  ! Input
                                                            Atm_K(nt)       , &  ! K   Output
                                                            CSvar(nt)         )  ! Internal variable input
               IF ( Error_Status /= SUCCESS ) THEN
@@ -1569,8 +1587,8 @@ CONTAINS
 
 
             ! Compute the adjoint gaseous absorption
-            CALL CRTM_Compute_AtmAbsorption_AD( SensorIndex , &  ! Input
-                                                ChannelIndex, &  ! Input
+            CALL CRTM_Compute_AtmAbsorption_AD( SensorIndex     , &  ! Input
+                                                ChannelIndex    , &  ! Input
                                                 Predictor(nt)   , &  ! FWD Input
                                                 AtmOptics_K(nt) , &  ! K   Input
                                                 Predictor_K(nt) , &  ! K   Output
@@ -1580,18 +1598,18 @@ CONTAINS
             ! K-matrix of the NLTE correction predictor calculations
             IF ( Opt%Apply_NLTE_Correction ) THEN
               CALL Compute_NLTE_Predictor_AD( &
-                     NLTE_Predictor   , &  ! Input
+                     NLTE_Predictor       , &  ! Input
                      NLTE_Predictor_K(nt) , &  ! Input
                      Atm_K(nt)              )  ! Output
             END IF
 
 
             ! K-matrix of the predictor calculations
-            CALL CRTM_Compute_Predictors_AD( SensorIndex   , &  ! Input
-                                             Atm           , &  ! FWD Input
+            CALL CRTM_Compute_Predictors_AD( SensorIndex       , &  ! Input
+                                             Atm               , &  ! FWD Input
                                              Predictor(nt)     , &  ! FWD Input
                                              Predictor_K(nt)   , &  ! K   Input
-                                             AncillaryInput, &  ! Input
+                                             AncillaryInput    , &  ! Input
                                              Atm_K(nt)         , &  ! K   Output
                                              PVar(nt)            )  ! Internal variable input
 
@@ -1650,10 +1668,15 @@ CONTAINS
             END IF
 
           END DO Channel_Loop
-        END DO Thread_Loop
-!$OMP END PARALLEL DO
-        IF ( Error_Status == FAILURE ) RETURN
+       END DO Thread_Loop
 
+!** BTJ preprocessor directive bypass of OMP directives causing issues when compiling with modern ifort/ifx
+!** https://github.com/JCSDA/CRTMv3/issues/231
+#if 0
+!$OMP END PARALLEL DO
+#endif         
+
+        IF ( Error_Status == FAILURE ) RETURN
         ln = ln + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
 
       END DO Sensor_Loop
@@ -1667,7 +1690,6 @@ CONTAINS
 !!      CALL CRTM_Predictor_Destroy( Predictor )
 
       DO nt = 1, n_channel_threads
-
         CALL CRTM_Predictor_Destroy( Predictor_K(nt) )
         CALL CRTM_AtmOptics_Destroy( AtmOptics(nt) )
         CALL CRTM_AtmOptics_Destroy( AtmOptics_K(nt) )
@@ -1747,7 +1769,7 @@ CONTAINS
                                         NLTE_Predictor, NLTE_Predictor_K, &
                                         ChannelIndex, SensorIndex, &
                                         compute_antenna_correction, GeometryInfo)
-      TYPE(CRTM_Options_type),       INTENT(IN)     :: Opt
+      TYPE(CRTM_Options_type),      INTENT(IN)     :: Opt
       TYPE(CRTM_RTSolution_type),   INTENT(IN OUT) :: rts, rts_K
       TYPE(NLTE_Predictor_type),    INTENT(IN)     :: NLTE_Predictor
       TYPE(NLTE_Predictor_type),    INTENT(IN OUT) :: NLTE_Predictor_K

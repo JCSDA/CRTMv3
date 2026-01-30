@@ -27,6 +27,7 @@ PROGRAM test_MWwater_io
                                  CRTM_MWwaterCoeff_Load_FASTEM, &
                                  MWwaterC
   USE MWwaterCoeff_Define, ONLY: MWwaterCoeff_type, &
+                                 MWwaterCoeff_Create, &
                                  MWwaterCoeff_Destroy, &
                                  MWwaterCoeff_Equal
   USE Message_Handler    , ONLY: SUCCESS, Display_Message
@@ -46,7 +47,6 @@ PROGRAM test_MWwater_io
   CHARACTER(*), PARAMETER :: Scheme_FASTEM4 = 'FASTEM4'
 
   TYPE(MWwaterCoeff_type) :: MWwaterC_LUT, MWwaterC_NEW
-  CHARACTER(2000)         :: info
   INTEGER                 :: err_stat
   TYPE(UnitTest_type)     :: ioTest
   LOGICAL                 :: testPassed, is_equal
@@ -59,6 +59,8 @@ PROGRAM test_MWwater_io
 
   ! FASTEM 6
   WRITE(*,*) 'CRTM_MWwaterCoeff_Load ...LOADING: ', File_FASTEM6
+  CALL MWwaterCoeff_Create (MWwaterC)
+  CALL MWwaterCoeff_Create (MWwaterC_LUT)
   err_stat = CRTM_MWwaterCoeff_Load(&
                   TRIM(TRIM(File_Path)//File_FASTEM6), &
                   Quiet = .TRUE.)
@@ -70,6 +72,9 @@ PROGRAM test_MWwater_io
   CALL MWwaterCoeff_Destroy (MWwaterC)
 
   WRITE(*,*) 'CRTM_MWwaterCoeff_Load_FASTEM ...LOADING: ', Scheme_FASTEM6
+  CALL MWwaterCoeff_Create (MWwaterC)
+  CALL MWwaterCoeff_Create (MWwaterC_NEW)
+  
   err_stat = CRTM_MWwaterCoeff_Load_FASTEM( &
                      Scheme_FASTEM6, &
                      Quiet = .TRUE.)
@@ -92,6 +97,7 @@ PROGRAM test_MWwater_io
 
   ! FASTEM 4
   WRITE(*,*) 'CRTM_MWwaterCoeff_Load ...LOADING: ', File_FASTEM4
+  CALL MWwaterCoeff_Create (MWwaterC)
   err_stat = CRTM_MWwaterCoeff_Load(&
                   TRIM(TRIM(File_Path)//File_FASTEM4), &
                   Quiet = .TRUE.)
@@ -103,6 +109,7 @@ PROGRAM test_MWwater_io
   CALL MWwaterCoeff_Destroy (MWwaterC)
 
   WRITE(*,*) 'CRTM_MWwaterCoeff_Load_FASTEM ...LOADING: ', Scheme_FASTEM4
+  CALL MWwaterCoeff_Create (MWwaterC)
   err_stat = CRTM_MWwaterCoeff_Load_FASTEM( &
                      Scheme_FASTEM4, &
                      Quiet = .TRUE.)

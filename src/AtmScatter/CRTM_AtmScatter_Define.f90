@@ -43,8 +43,6 @@ MODULE CRTM_AtmScatter_Define
   ! -----------------
   ! Module parameters
   ! -----------------
-  ! RCS Id for the module
-  CHARACTER(*), PARAMETER :: MODULE_RCS_ID = &
   ! Message string length
   INTEGER, PARAMETER :: ML = 256
 
@@ -66,6 +64,7 @@ MODULE CRTM_AtmScatter_Define
     REAL(fp), POINTER :: Optical_Depth(:)         => NULL() ! K
     REAL(fp), POINTER :: Single_Scatter_Albedo(:) => NULL() ! K
     REAL(fp), POINTER :: Asymmetry_Factor(:)      => NULL() ! K
+    REAL(fp), POINTER :: Backscat_Coefficient(:)  => NULL() ! K
     REAL(fp), POINTER :: Delta_Truncation(:)      => NULL() ! K
     REAL(fp), POINTER :: Phase_Coefficient(:,:,:) => NULL() ! 0:Ic x Ip x K
   END TYPE CRTM_AtmScatter_type
@@ -162,6 +161,7 @@ CONTAINS
     IF ( ALL_Test ) THEN
       IF ( ASSOCIATED(AtmScatter%Optical_Depth        ) .AND. &
            ASSOCIATED(AtmScatter%Single_Scatter_Albedo) .AND. &
+           ASSOCIATED(AtmScatter%Backscat_Coefficient ) .AND. &
            ASSOCIATED(AtmScatter%Asymmetry_Factor     ) .AND. &
            ASSOCIATED(AtmScatter%Delta_Truncation     ) .AND. &
            ASSOCIATED(AtmScatter%Phase_Coefficient    )       ) THEN
@@ -171,6 +171,7 @@ CONTAINS
       IF ( ASSOCIATED(AtmScatter%Optical_Depth        ) .OR. &
            ASSOCIATED(AtmScatter%Single_Scatter_Albedo) .OR. &
            ASSOCIATED(AtmScatter%Asymmetry_Factor     ) .OR. &
+           ASSOCIATED(AtmScatter%Backscat_Coefficient ) .AND. &
            ASSOCIATED(AtmScatter%Delta_Truncation     ) .OR. &
            ASSOCIATED(AtmScatter%Phase_Coefficient    )      ) THEN
         Association_Status = .TRUE.
@@ -276,6 +277,7 @@ CONTAINS
     DEALLOCATE( AtmScatter%Optical_Depth        , &
                 AtmScatter%Single_Scatter_Albedo, &
                 AtmScatter%Asymmetry_Factor     , &
+                AtmScatter%Backscat_Coefficient , &
                 AtmScatter%Delta_Truncation     , &
                 AtmScatter%Phase_Coefficient    , &
                 STAT=Allocate_Status )
@@ -439,6 +441,7 @@ CONTAINS
     ALLOCATE( AtmScatter%Optical_Depth( n_Layers ), &
               AtmScatter%Single_Scatter_Albedo( n_Layers ), &
               AtmScatter%Asymmetry_Factor( n_Layers ), &
+              AtmScatter%Backscat_Coefficient( n_Layers ), &
               AtmScatter%Delta_Truncation( n_Layers ), &
               AtmScatter%Phase_Coefficient( 0:n_Legendre_Terms, &
                                               n_Phase_Elements, &
@@ -467,6 +470,7 @@ CONTAINS
     AtmScatter%Optical_Depth         = ZERO
     AtmScatter%Single_Scatter_Albedo = ZERO
     AtmScatter%Asymmetry_Factor      = ZERO
+    AtmScatter%Backscat_Coefficient  = ZERO
     AtmScatter%Delta_Truncation      = ZERO
     AtmScatter%Phase_Coefficient     = ZERO
 
@@ -598,7 +602,8 @@ CONTAINS
     ! ---------------
     AtmScatter_out%Optical_Depth         = AtmScatter_in%Optical_Depth
     AtmScatter_out%Single_Scatter_Albedo = AtmScatter_in%Single_Scatter_Albedo 
-    AtmScatter_out%Asymmetry_Factor      = AtmScatter_in%Asymmetry_Factor      
+    AtmScatter_out%Asymmetry_Factor      = AtmScatter_in%Asymmetry_Factor
+    AtmScatter_out%Backscat_Coefficient  = AtmScatter_in%Backscat_Coefficient
     AtmScatter_out%Delta_Truncation      = AtmScatter_in%Delta_Truncation     
     AtmScatter_out%Phase_Coefficient     = AtmScatter_in%Phase_Coefficient     
 
@@ -644,7 +649,8 @@ CONTAINS
     ! Reset the array components
     AtmScatter%Optical_Depth         = ZERO
     AtmScatter%Single_Scatter_Albedo = ZERO 
-    AtmScatter%Asymmetry_Factor      = ZERO 
+    AtmScatter%Asymmetry_Factor      = ZERO
+    AtmScatter%Backscat_Coefficient  = ZERO
     AtmScatter%Delta_Truncation      = ZERO
     AtmScatter%Phase_Coefficient     = ZERO
   END SUBROUTINE CRTM_Zero_AtmScatter

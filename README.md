@@ -1,20 +1,21 @@
-CRTM REL-3.1.1
+CRTM REL-3.1.2
 ====================
 
-[![Build Status](https://app.travis-ci.com/JCSDA-internal/crtm.svg?token=r6aaq9P13fHcTi8yBgdM&branch=develop)](https://app.travis-ci.com/JCSDA-internal/crtm)
+[![Build Status](https://app.travis-ci.com/JCSDA/CRTMv3.svg?branch=develop)](https://app.travis-ci.com/JCSDA/CRTMv3)
 
 Preamble
 --------
 
-CRTM v3.1.1 release (`REL-3.1.1`)
+CRTM v3.1.2 release (`REL-3.1.2`)
 
+v3.1.2 released July 11, 2025
 v3.1.1 released August 12, 2024
 v3.1.0 (alpha) Released October 31, 2023
 v3.0.0 Released March, 2023  
-v2.4.1-alpha Released on April 1, 2021 (internal realease only)
+v2.4.1-alpha Released on April 1, 2021 (internal release only)
 v2.4.0 Released on October 23, 2020
 
-This is an experimental release of CRTM v3.0, some features may not be fully functional. Contact crtm-support@googlegroups.com.  
+This is a v3.x release of CRTM, some features may not be fully functional. Contact crtm-support@googlegroups.com.
 v3.x features will be rolled out in incremental updates. 
 
 Basic requirements:  
@@ -56,7 +57,7 @@ Contents
 
 Configuration, building, and testing the library
 ================================================  
-JCSDA CRTM v3.1.1 Build Instructions
+JCSDA CRTM v3.1.2 Build Instructions
 
 The CRTM repository directory structure looks (something) like:
 
@@ -67,9 +68,8 @@ The CRTM repository directory structure looks (something) like:
   ├── NOTES
   ├── README.md 
   ├── Get_CRTM_Binary_Files.sh  
-  ├── <b>configuration/</b>
-  ├── <b>documentation/</b>
-  ├── <b>fix/</b>
+  ├── <b>cmake/</b>
+  ├── <b>scripts/</b>
   │   ├── AerosolCoeff/
   │   ├── CloudCoeff/
   │   ├── EmisCoeff/
@@ -104,7 +104,7 @@ The CRTM repository directory structure looks (something) like:
   │   ├── Validation/
   │   ├── Zeeman/
   └── <b>test/</b>
-      └── Main/
+      └── mains/
 </pre>
 
 In the above list, the directories highlighted in bold (bold in markdown), are the key directories of interest to the casual developer.
@@ -116,10 +116,10 @@ But after a clean clone of the development repository, none of the links to sour
 Configuration
 -------------
 By default, the `fix/` directory is provided through ftp using the Get_CRTM_Binary_Files.sh script to obtain and unpack the dataset. 
-If this directory doesn't exist during the `cmake` step, then cmake will download and install into `build/test_data/fix_REL-3.1.1.x/fix/`.
+If this directory doesn't exist during the `cmake` step, then cmake will download and install into `build/test_data/fix_REL-3.1.2.x/fix/`.
 The path to an existing fix file installation can be specified using the `FIX_FILE_PATH` option (see CMake variables summary below).
 
-The fix/ directory (as of v3.1.1) contains most of the netCDF SpcCoeff and TauCoeff files, as part of our ongoing effort to transition toward netCDF-only CRTM.  We expect to deprecate the binary formats in v3.2.x 
+The fix/ directory (as of v3.1.2) contains most of the netCDF SpcCoeff and TauCoeff files, as part of our ongoing effort to transition toward netCDF-only CRTM.  We expect to deprecate the binary formats in v3.2.x, but code to read / convert binary format will continue.  
 
 As of CRTM v3.0.0, we no longer support legacy build system using autotools. (i.e., configure/make).  Only cmake / ecbuild (a cmake wrapper, but not required) is supported.   Many standalone Makefiles, make.dependencies, etc. have been removed, but not entirely.  Cleanup occurs as we work our way through the repository updating other things.  
 
@@ -128,7 +128,7 @@ From the top level of the CRTM directory, e.g., `CRTMv3/`
 <pre>
 mkdir build/
 cd build/
-cmake -D<cmake variables here, see below> ..
+cmake ..
 make clean
 make -j8
 make install (optional, see -DCMAKE_INSTALL_PREFIX below, default install location is `<build>/.`)
@@ -152,12 +152,12 @@ cmake -DCMAKE_BUILD_TYPE=DEBUG -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=./
 ```
 this would make a debug build of CRTM, static library (`libcrtm.a`) and set the optional install location to `<build>/install/.` (or something similar, search for `libcrtm.*` and `*.mod`).  Custom Install only happens if you issue the `make install` command. 
 
-The first time you run `cmake`, it will check for a `fix/` directory one level above (or `FIX_FILE_PATH` CMake variable), and if it does't find it, it will download the binary files (according to `test/CMakeLists.txt` file information), and store them in `<build>/test_data/**`.  
+The first time you run `cmake`, it will check for a `fix/` directory one level above (or `FIX_FILE_PATH` CMake variable), and if it doesn't find it, it will download the binary files (according to `test/CMakeLists.txt` file information), and store them in `<build>/test_data/**`.
 
 Linking to the library
 ----------------------
 
-Let's assume the above install was moved into "/home/username/CRTMv3/", to use the library in this structure in your own application, the usual environment variables would need to be be modified something like:
+Let's assume the above install was moved into "/home/username/CRTMv3/", to use the library in this structure in your own application, the usual environment variables would need to be modified something like:
 
 <pre>
 libroot="/home/username/CRTMv3/"
@@ -171,15 +171,27 @@ LIBS="-lcrtm ${LIBS}"
 
 CRTM SUPPORT: visit https://forums.jcsda.org/ or visit https://github.com/JCSDA/CRTMv3 and post an issue (be sure to assign someone from the team).
 
+System-specific notes
+---------------------
+WSL / Ubuntu installation:
+  sudo apt update && sudo apt upgrade
+  sudo apt install cmake
+  sudo apt install gcc   (probably installed already)
+  sudo apt install gfortran
+  sudo apt install libnetcdff-dev
+  
+Then continue with the build steps per above.  You can find your number of processors by 'cat /proc/cpuinfo' and then the -j ## values for make and ctest should be: number_processors-1  e.g., make -j31 if you have 32 processors.
+
+nvfortran also works on WSL, but has a more involved install process -- if you're using nvfortran, please visit https://github.com/JCSDA/CRTMv3 and create an issue. 
+
 
 Known Issues
 ------------
 
-(1) Any "Transmitance Coefficient" generation codes included in src/ are not functional.  Contact CRTM support above for details.  
+(1) Any "Transmittance Coefficient" generation codes included in src/ are not functional.  Contact CRTM support above for details.
 (2) No testing was done on PGI, XLF, or other less common compilers.  Feedback from users suggest that there's no major concerns though.  Please contact us with specifics.  Tested on GCC v5 and higher, and ifort v18 and higher.  Some specific compiler versions have issues, contact support if you run into problems.
 
   
-
 
 
 

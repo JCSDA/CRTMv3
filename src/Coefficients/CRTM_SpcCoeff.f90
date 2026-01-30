@@ -2,7 +2,7 @@
 ! CRTM_SpcCoeff
 !
 ! Module containing the shared CRTM spectral coefficients (SpcCoeff)
-! and their load/destruction routines. 
+! and their load/destruction routines.
 !
 ! PUBLIC DATA:
 !       SC:  Data structure array containing the spectral coefficient
@@ -46,7 +46,7 @@ MODULE CRTM_SpcCoeff
                                    LC_POLARIZATION         , &
                                    CONST_MIXED_POLARIZATION, &
                                    PRA_POLARIZATION        , &
-                                   POLARIZATION_TYPE_NAME 
+                                   POLARIZATION_TYPE_NAME
   USE SpcCoeff_Define      , ONLY: SpcCoeff_type               , &
                                    SpcCoeff_Associated         , &
                                    SpcCoeff_Destroy            , &
@@ -78,32 +78,32 @@ MODULE CRTM_SpcCoeff
   PUBLIC :: CRTM_SpcCoeff_IsLoaded
   ! Flag and sensor check procedures passed through from SpcCoeff_Define
   PUBLIC :: SpcCoeff_IsSolar
-  PUBLIC :: SpcCoeff_IsZeeman  
-  PUBLIC :: SpcCoeff_IsMicrowaveSensor  
-  PUBLIC :: SpcCoeff_IsInfraredSensor   
-  PUBLIC :: SpcCoeff_IsVisibleSensor    
+  PUBLIC :: SpcCoeff_IsZeeman
+  PUBLIC :: SpcCoeff_IsMicrowaveSensor
+  PUBLIC :: SpcCoeff_IsInfraredSensor
+  PUBLIC :: SpcCoeff_IsVisibleSensor
   PUBLIC :: SpcCoeff_IsUltravioletSensor
   ! Polarisation flag parameters passed through from SensorInfo_Parameters
-  PUBLIC :: N_POLARIZATION_TYPES   
-  PUBLIC :: INVALID_POLARIZATION   
-  PUBLIC :: UNPOLARIZED            
-  PUBLIC :: INTENSITY              
-  PUBLIC :: FIRST_STOKES_COMPONENT 
+  PUBLIC :: N_POLARIZATION_TYPES
+  PUBLIC :: INVALID_POLARIZATION
+  PUBLIC :: UNPOLARIZED
+  PUBLIC :: INTENSITY
+  PUBLIC :: FIRST_STOKES_COMPONENT
   PUBLIC :: SECOND_STOKES_COMPONENT
-  PUBLIC :: THIRD_STOKES_COMPONENT 
+  PUBLIC :: THIRD_STOKES_COMPONENT
   PUBLIC :: FOURTH_STOKES_COMPONENT
-  PUBLIC :: VL_POLARIZATION        
-  PUBLIC :: HL_POLARIZATION        
-  PUBLIC :: plus45L_POLARIZATION   
-  PUBLIC :: minus45L_POLARIZATION  
-  PUBLIC :: VL_MIXED_POLARIZATION  
-  PUBLIC :: HL_MIXED_POLARIZATION  
-  PUBLIC :: RC_POLARIZATION        
-  PUBLIC :: LC_POLARIZATION  
+  PUBLIC :: VL_POLARIZATION
+  PUBLIC :: HL_POLARIZATION
+  PUBLIC :: plus45L_POLARIZATION
+  PUBLIC :: minus45L_POLARIZATION
+  PUBLIC :: VL_MIXED_POLARIZATION
+  PUBLIC :: HL_MIXED_POLARIZATION
+  PUBLIC :: RC_POLARIZATION
+  PUBLIC :: LC_POLARIZATION
   PUBLIC :: CONST_MIXED_POLARIZATION
   PUBLIC :: PRA_POLARIZATION
   PUBLIC :: POLARIZATION_TYPE_NAME
-  
+
 
   ! -----------------
   ! Module parameters
@@ -135,7 +135,7 @@ CONTAINS
 !       Error_Status = CRTM_Load_SpcCoeff( &
 !                        Sensor_ID                            , &
 !                        File_Path         = File_Path        , &
-!                        netCDF            = netCDF           , &   
+!                        netCDF            = netCDF           , &
 !                        Quiet             = Quiet            , &
 !                        Process_ID        = Process_ID       , &
 !                        Output_Process_ID = Output_Process_ID  )
@@ -191,7 +191,7 @@ CONTAINS
 !       Output_Process_ID:  Set this argument to the MPI process ID in which
 !                           all INFORMATION messages are to be output. If
 !                           the passed Process_ID value agrees with this value
-!                           the INFORMATION messages are output. 
+!                           the INFORMATION messages are output.
 !                           This argument is ignored if the Quiet argument
 !                           is set.
 !                           UNITS:      None
@@ -218,7 +218,7 @@ CONTAINS
   FUNCTION CRTM_SpcCoeff_Load( &
     Sensor_ID        , &  ! Input
     File_Path        , &  ! Optional input
-    netCDF           , &  ! Optional input 
+    netCDF           , &  ! Optional input
     Quiet            , &  ! Optional input
     Process_ID       , &  ! Optional input
     Output_Process_ID) &  ! Optional input
@@ -227,14 +227,16 @@ CONTAINS
     CHARACTER(*),           INTENT(IN)  :: Sensor_ID(:)
     CHARACTER(*), OPTIONAL, INTENT(IN)  :: File_Path
     LOGICAL     , OPTIONAL, INTENT(IN)  :: netCDF
-    LOGICAL     , OPTIONAL, INTENT(IN)  :: Quiet             
-    INTEGER     , OPTIONAL, INTENT(IN)  :: Process_ID        
-    INTEGER     , OPTIONAL, INTENT(IN)  :: Output_Process_ID 
+    LOGICAL     , OPTIONAL, INTENT(IN)  :: Quiet
+    INTEGER     , OPTIONAL, INTENT(IN)  :: Process_ID
+    INTEGER     , OPTIONAL, INTENT(IN)  :: Output_Process_ID
     ! Function result
     INTEGER :: err_stat
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_SpcCoeff_Load'
     ! Local variables
+    CHARACTER(LEN=:), ALLOCATABLE :: base
+    CHARACTER(LEN=1) :: lastch
     CHARACTER(ML) :: msg, pid_msg
     CHARACTER(ML) :: path
     CHARACTER(ML) :: spccoeff_file, accoeff_file
@@ -242,14 +244,20 @@ CONTAINS
     INTEGER :: alloc_stat
     INTEGER :: n, n_sensors
     TYPE(ACCoeff_type)   :: AC
+    INTEGER :: blen
 
-    ! Setup 
+    ! Setup
     err_stat = SUCCESS
     ! ...Check the File_Path argument
-    IF ( PRESENT(File_Path) ) THEN
-      path = ADJUSTL(File_Path)
+    IF (PRESENT(File_Path)) THEN
+      base = TRIM(ADJUSTL(File_Path))
+      blen = LEN_TRIM(base)
+      IF (blen > 0) THEN
+        lastch = base(blen:blen)
+        IF (lastch /= '/' .AND. lastch /= '\') base = base // '/'
+      END IF
     ELSE
-      path = ''
+      base = ''
     END IF
     ! ...Check Quiet argument
     noisy = .TRUE.
@@ -265,7 +273,7 @@ CONTAINS
       pid_msg = ''
     END IF
 
-    
+
     ! Allocate the SpcCoeff shared data structure array
     n_sensors = SIZE(Sensor_ID)
     ALLOCATE( SC(n_sensors), STAT = alloc_stat )
@@ -278,7 +286,7 @@ CONTAINS
 
     ! Read the SpcCoeff data files
     DO n = 1, n_Sensors
-      spccoeff_file = TRIM(ADJUSTL(path))//TRIM(ADJUSTL(Sensor_ID(n)))//'.SpcCoeff.bin'
+      spccoeff_file = TRIM(ADJUSTL(base)) // TRIM(ADJUSTL(Sensor_ID(n))) // '.SpcCoeff.bin'
       IF( PRESENT(netCDF) ) THEN
         IF( netCDF ) THEN
           spccoeff_file = TRIM(ADJUSTL(path))//TRIM(ADJUSTL(Sensor_ID(n)))//'.SpcCoeff.nc'
