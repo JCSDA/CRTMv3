@@ -42,8 +42,8 @@ jobs:
         with:
           container_version: latest
           target_project_name: crtm
-          test_dependencies: ioda oops gsw ufo-data ufo
-          test_strategy: INTEGRATION
+          test_dependencies: ioda ioda-data oops gsw ufo ufo-data
+          test_strategy: ALL
           test_script: run_tests.sh
           bundle_repository: https://github.com/JCSDA/jedi-bundle.git
           target_repo_dir: target_repository
