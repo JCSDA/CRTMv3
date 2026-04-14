@@ -9,10 +9,11 @@ module crtm_onnx_interface
             integer(c_int) :: crtm_onnx_init
         end function crtm_onnx_init
 
-        function crtm_onnx_predict(input_data, input_dim, output_data, output_dim) &
+        function crtm_onnx_predict(input_data, batch_size, input_dim, output_data, output_dim) &
                 bind(c, name="crtm_onnx_predict")
             import :: c_int, c_float, c_size_t
             real(c_float), intent(in) :: input_data(*)
+            integer(c_size_t), value :: batch_size
             integer(c_size_t), value :: input_dim
             real(c_float), intent(out) :: output_data(*)
             integer(c_size_t), value :: output_dim

@@ -27,8 +27,9 @@ MODULE CRTM_AtmAbsorption
                                         CRTM_GeometryInfo_GetValue
   USE CRTM_AtmOptics_Define,      ONLY: CRTM_AtmOptics_type
   USE CRTM_Predictor_Define,      ONLY: CRTM_Predictor_type
-  USE CRTM_ChannelInfo_Define,   ONLY: CRTM_ChannelInfo_type
+  USE CRTM_ChannelInfo_Define,    ONLY: CRTM_ChannelInfo_type
   USE iso_c_binding,               ONLY: c_float, c_size_t, c_int
+  USE crtm_onnx_interface,         ONLY: crtm_onnx_predict
   ! ODAS modules
   USE ODAS_AtmAbsorption,         ONLY: ODAS_AAVar_type => iVar_type , &
                                         ODAS_Compute_AtmAbsorption   , &
@@ -52,7 +53,6 @@ MODULE CRTM_AtmAbsorption
                                         Is_Zeeman_Channel
 
   ! Disable implicit typing
-  USE crtm_onnx_interface,         ONLY: crtm_onnx_predict
   IMPLICIT NONE
 
 
@@ -67,7 +67,7 @@ MODULE CRTM_AtmAbsorption
   PUBLIC :: CRTM_Compute_AtmAbsorption
   PUBLIC :: CRTM_Compute_AtmAbsorption_TL
   PUBLIC :: CRTM_Compute_AtmAbsorption_AD
-  PUBLIC :: CRTM_Compute_AtmAbsorption_ONNX
+  PUBLIC :: CRTM_Compute_AtmAbsorption_ONNX_Batch
 
 
   ! -----------------
@@ -586,35 +586,30 @@ CONTAINS
 
   END SUBROUTINE CRTM_Compute_AtmAbsorption_AD
 
-  SUBROUTINE CRTM_Compute_AtmAbsorption_ONNX( &
-    SensorIndex , &
-    ChannelIndex, &
-    ChannelInfo , &
-    Atmosphere  , &
-    AtmOptics   , &
-    GeometryInfo  )
-    INTEGER,                    INTENT(IN)     :: SensorIndex
-    INTEGER,                    INTENT(IN)     :: ChannelIndex
-    TYPE(CRTM_ChannelInfo_type), INTENT(IN)     :: ChannelInfo
-    TYPE(CRTM_Atmosphere_type), INTENT(IN)     :: Atmosphere
-    TYPE(CRTM_AtmOptics_type),  INTENT(IN OUT) :: AtmOptics
-    TYPE(CRTM_GeometryInfo_type), INTENT(IN)    :: GeometryInfo
+
+
+  SUBROUTINE CRTM_Compute_AtmAbsorption_ONNX_Batch(SensorIndex, ChannelInfo, Atmosphere, GeometryInfo, Optical_Depth)
+    INTEGER, INTENT(IN) :: SensorIndex
+    TYPE(CRTM_ChannelInfo_type), INTENT(IN) :: ChannelInfo
+    TYPE(CRTM_Atmosphere_type), INTENT(IN) :: Atmosphere
+    TYPE(CRTM_GeometryInfo_type), INTENT(IN) :: GeometryInfo
+    REAL(fp), INTENT(OUT) :: Optical_Depth(:,:) ! [n_channels, n_layers]
     
-    ! Local variables
-    integer(c_int) :: status
-    real(c_float), dimension(6) :: features
-    real(c_float), dimension(:), allocatable :: output_data
-    integer :: n_layers
-    ! Update locals
+    INTEGER(c_int) :: status
+    REAL(c_float), ALLOCATABLE :: batch_features(:,:)
+    REAL(c_float), ALLOCATABLE :: batch_outputs(:,:)
+    INTEGER :: n_layers, n_channels, j, k, H2O_idx, CO2_idx, O3_idx
     REAL(fp) :: Sensor_Zenith
     REAL(c_float) :: secant
-    INTEGER :: j, k
-    INTEGER :: H2O_idx, CO2_idx, O3_idx
-    
+
+    n_layers = Atmosphere%n_Layers
+    n_channels = ChannelInfo%n_Channels
+    ALLOCATE(batch_features(6, n_layers))
+    ALLOCATE(batch_outputs(n_channels, n_layers))
+
     CALL CRTM_GeometryInfo_GetValue(GeometryInfo, Sensor_Zenith_Angle=Sensor_Zenith)
     secant = REAL(1.0_fp / COS(Sensor_Zenith * 0.017453292519943_fp), c_float)
     
-    ! Find absorber indices
     H2O_idx = 0; CO2_idx = 0; O3_idx = 0
     DO j = 1, Atmosphere%n_Absorbers
        IF (Atmosphere%Absorber_ID(j) == 1) H2O_idx = j
@@ -622,48 +617,30 @@ CONTAINS
        IF (Atmosphere%Absorber_ID(j) == 3) O3_idx = j
     END DO
 
-    n_layers = Atmosphere%n_Layers
-    IF (.NOT. ALLOCATED(output_data)) ALLOCATE(output_data(ChannelInfo%n_Channels))
-    
-    ! Loop over layers and fill AtmOptics
     DO k = 1, n_layers
-       features(1) = REAL(LOG10(MAX(Atmosphere%Pressure(k), 1.0e-4_fp)), c_float)
-       features(2) = REAL(Atmosphere%Temperature(k), c_float)
-       
-       IF (H2O_idx > 0) THEN
-          features(3) = REAL(LOG10(MAX(Atmosphere%Absorber(k, H2O_idx), 1.0e-12_fp)), c_float)
-       ELSE
-          features(3) = -12.0_c_float
-       END IF
-       
-       IF (CO2_idx > 0) THEN
-          features(4) = REAL(LOG10(MAX(Atmosphere%Absorber(k, CO2_idx), 1.0e-12_fp)), c_float)
-       ELSE
-          features(4) = -12.0_c_float
-       END IF
-       
-       IF (O3_idx > 0) THEN
-          features(5) = REAL(LOG10(MAX(Atmosphere%Absorber(k, O3_idx), 1.0e-12_fp)), c_float)
-       ELSE
-          features(5) = -12.0_c_float
-       END IF
-       
-       features(6) = secant
-       
-       ! Normalize
+       batch_features(1, k) = REAL(LOG10(MAX(Atmosphere%Pressure(k), 1.0e-4_fp)), c_float)
+       batch_features(2, k) = REAL(Atmosphere%Temperature(k), c_float)
+       batch_features(3, k) = -12.0_c_float; batch_features(4, k) = -12.0_c_float; batch_features(5, k) = -12.0_c_float
+       IF (H2O_idx > 0) batch_features(3, k) = REAL(LOG10(MAX(Atmosphere%Absorber(k, H2O_idx), 1.0e-12_fp)), c_float)
+       IF (CO2_idx > 0) batch_features(4, k) = REAL(LOG10(MAX(Atmosphere%Absorber(k, CO2_idx), 1.0e-12_fp)), c_float)
+       IF (O3_idx > 0) batch_features(5, k) = REAL(LOG10(MAX(Atmosphere%Absorber(k, O3_idx), 1.0e-12_fp)), c_float)
+       batch_features(6, k) = secant
        DO j = 1, 6
-          features(j) = (features(j) - REAL(ChannelInfo%ONNX_Mean(j), c_float)) / REAL(ChannelInfo%ONNX_Std(j), c_float)
+          batch_features(j, k) = (batch_features(j, k) - REAL(ChannelInfo%ONNX_Mean(j), c_float)) / REAL(ChannelInfo%ONNX_Std(j), c_float)
        END DO
-       
-       status = crtm_onnx_predict(features, size(features, kind=c_size_t), &
-                                  output_data, size(output_data, kind=c_size_t))
-       
-       IF (status == 0) THEN
-          AtmOptics%Optical_Depth(k) = REAL(-LOG(MAX(output_data(ChannelIndex), 1.0e-20_c_float)), fp)
-       END IF
     END DO
+
+    status = crtm_onnx_predict(batch_features, INT(n_layers, c_size_t), 6_c_size_t, &
+                               batch_outputs, INT(n_channels, c_size_t))
     
-    IF (ALLOCATED(output_data)) DEALLOCATE(output_data)
-  END SUBROUTINE CRTM_Compute_AtmAbsorption_ONNX
+    IF (status == 0) THEN
+       DO k = 1, n_layers
+          DO j = 1, n_channels
+             Optical_Depth(j, k) = REAL(-LOG(MAX(batch_outputs(j, k), 1.0e-20_c_float)), fp)
+          END DO
+       END DO
+    END IF
+    DEALLOCATE(batch_features, batch_outputs)
+  END SUBROUTINE CRTM_Compute_AtmAbsorption_ONNX_Batch
 
 END MODULE CRTM_AtmAbsorption

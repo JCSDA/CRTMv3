@@ -40,8 +40,10 @@ program test_onnx_bridge
     ! Dummy features (normalized)
     features = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
 
-    status = crtm_onnx_predict(features, size(features, kind=c_size_t), &
-                               transmittances, size(transmittances, kind=c_size_t))
+    status = crtm_onnx_predict(features, 1_c_size_t, &
+                               size(features, kind=c_size_t), &
+                               transmittances, &
+                               size(transmittances, kind=c_size_t))
     
     if (status == 0) then
         print *, "Successfully predicted transmittances"

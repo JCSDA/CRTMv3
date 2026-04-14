@@ -64,8 +64,8 @@ MODULE CRTM_Forward_Module
   USE CRTM_Predictor,             ONLY: CRTM_PVar_type => iVar_type, &
                                         CRTM_Compute_Predictors
   USE CRTM_AtmAbsorption,         ONLY: CRTM_AAvar_type => iVar_type, &
-                                        CRTM_Compute_AtmAbsorption , &
-                                        CRTM_Compute_AtmAbsorption_ONNX
+                                        CRTM_Compute_AtmAbsorption, &
+                                        CRTM_Compute_AtmAbsorption_ONNX_Batch
   USE CRTM_AtmOptics_Define,      ONLY: CRTM_AtmOptics_type      , &
                                         CRTM_AtmOptics_Associated, &
                                         CRTM_AtmOptics_Create    , &
@@ -481,6 +481,7 @@ CONTAINS
       TYPE(NLTE_Predictor_type)  :: NLTE_Predictor
       ! Cloud cover object
       TYPE(CRTM_CloudCover_type) :: CloudCover
+      REAL(fp), ALLOCATABLE :: ONNX_Optical_Depth(:,:)
       Error_Status = SUCCESS
 
       ! Reinitialise the output RTSolution
@@ -748,8 +749,6 @@ CONTAINS
 
          ! Shorter name
          SensorIndex = ChannelInfo(n)%Sensor_Index
-
-
          ! Check if antenna correction to be applied for current sensor
          compute_antenna_correction = ( Opt%Use_Antenna_Correction .AND. &
                           ACCoeff_Associated( SC(SensorIndex)%AC ) .AND. &
@@ -843,6 +842,20 @@ CONTAINS
          END IF
 
          ! ----------------------------
+         ! ONNX batch inference (once per profile/sensor)
+         ! ----------------------------
+         IF ( ChannelInfo(n)%Use_ONNX ) THEN
+            IF ( ALLOCATED(ONNX_Optical_Depth) ) DEALLOCATE(ONNX_Optical_Depth)
+            ALLOCATE(ONNX_Optical_Depth(ChannelInfo(n)%n_Channels, Atm%n_Layers))
+            CALL CRTM_Compute_AtmAbsorption_ONNX_Batch( &
+                 SensorIndex       , &
+                 ChannelInfo(n)    , &
+                 Atm               , &
+                 GeometryInfo      , &
+                 ONNX_Optical_Depth  )
+         END IF
+
+         ! ----------------------------
          ! counters for thread loop
          ! -----------------------------
          n_sensor_channels = ChannelInfo(n)%n_Channels
@@ -930,21 +943,16 @@ CONTAINS
                ! ...Transfer stream count to scattering structure
                AtmOptics(nt)%n_Legendre_Terms = n_Full_Streams
 
-               ! Compute the gas absorption
+               ! Compute the gas absorption (ONNX batch cache or standard model)
                IF ( ChannelInfo(n)%Use_ONNX ) THEN
-                  CALL CRTM_Compute_AtmAbsorption_ONNX( SensorIndex   , &
-                       ChannelIndex  , &
-                       ChannelInfo(n), &
-                       Atm           , &
-                       AtmOptics(nt) , &
-                       GeometryInfo    )
+                  AtmOptics(nt)%Optical_Depth(1:Atm%n_Layers) = ONNX_Optical_Depth(l, 1:Atm%n_Layers)
                ELSE
                   CALL CRTM_Compute_AtmAbsorption( SensorIndex   , &  ! Input
-                    ChannelIndex  , &  ! Input
-                    AncillaryInput, &  ! Input
-                    Predictor , &  ! Input
-                    AtmOptics(nt) , &  ! Output
-                    AAvar(nt)       )  ! Internal variable output
+                       ChannelIndex  , &  ! Input
+                       AncillaryInput, &  ! Input
+                       Predictor     , &  ! Input
+                       AtmOptics(nt) , &  ! Output
+                       AAvar(nt)       )  ! Internal variable output
                END IF
 
                ! Compute the molecular scattering properties
@@ -1220,6 +1228,7 @@ CONTAINS
       CALL CSvar_Destroy( CSvar )
       CALL ASvar_Destroy( ASvar )
       CALL RTV_Destroy( RTV )
+      IF (ALLOCATED(ONNX_Optical_Depth)) DEALLOCATE(ONNX_Optical_Depth)
     END FUNCTION profile_solution
 
     ! ----------------------------------------------------------------

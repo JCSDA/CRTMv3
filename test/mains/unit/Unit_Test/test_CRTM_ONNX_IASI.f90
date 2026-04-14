@@ -35,13 +35,18 @@ PROGRAM test_crtm_onnx_iasi
   CALL Load_Atm_Data()
   CALL Load_Sfc_Data()
   
+  ! Fill SensorData to pass validation
+  sfc(1)%SensorData%Sensor_Id = chinfo(1)%Sensor_Id
+  sfc(1)%SensorData%Sensor_Channel = chinfo(1)%Sensor_Channel
+  sfc(1)%SensorData%Tb = 280.0_fp ! Dummy Tb
+  
   CALL CRTM_Geometry_SetValue(geo, Sensor_Zenith_Angle = 30.0_fp)
   
   DO l = 1, n_channels
     rts(l, 1)%Sensor_Id = chinfo(1)%Sensor_Id
     rts(l, 1)%Sensor_Channel = chinfo(1)%Sensor_Channel(l)
-       rts(l, 1)%WMO_Satellite_Id = chinfo(1)%WMO_Satellite_Id
-       rts(l, 1)%WMO_Sensor_Id = chinfo(1)%WMO_Sensor_Id
+    rts(l, 1)%WMO_Satellite_Id = chinfo(1)%WMO_Satellite_Id
+    rts(l, 1)%WMO_Sensor_Id = chinfo(1)%WMO_Sensor_Id
   END DO
 
   ! 3. Call Forward
@@ -50,7 +55,7 @@ PROGRAM test_crtm_onnx_iasi
   
   IF (status == SUCCESS) THEN
     PRINT *, "CRTM_Forward successful"
-    PRINT *, "First 5 radiances: ", rts(1:5, 1)%Radiance
+    PRINT *, "First 5 radiances: ", rts(1:500, 1)%Radiance
   ELSE
     PRINT *, "CRTM_Forward failed"
   END IF
