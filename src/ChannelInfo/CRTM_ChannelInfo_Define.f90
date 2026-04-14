@@ -25,6 +25,7 @@ MODULE CRTM_ChannelInfo_Define
                                    INVALID_WMO_SATELLITE_ID, &
                                    INVALID_WMO_SENSOR_ID 
   USE Sort_Utility         , ONLY: InsertionSort  
+  USE Type_Kinds,           ONLY: fp
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -78,10 +79,13 @@ MODULE CRTM_ChannelInfo_Define
     INTEGER           :: WMO_Satellite_ID = INVALID_WMO_SATELLITE_ID
     INTEGER           :: WMO_Sensor_ID    = INVALID_WMO_SENSOR_ID
     INTEGER           :: Sensor_Index     = 0
+    LOGICAL           :: Use_ONNX         = .FALSE.
     ! Array data
     LOGICAL, ALLOCATABLE :: Process_Channel(:)  ! L
     INTEGER, ALLOCATABLE :: Sensor_Channel(:)   ! L
     INTEGER, ALLOCATABLE :: Channel_Index(:)    ! L
+    REAL(fp), ALLOCATABLE :: ONNX_Mean(:)       ! n_Features
+    REAL(fp), ALLOCATABLE :: ONNX_Std(:)        ! n_Features
   END TYPE CRTM_ChannelInfo_type
   !:tdoc-:
 
@@ -163,6 +167,7 @@ CONTAINS
     TYPE(CRTM_ChannelInfo_type), INTENT(OUT) :: ChannelInfo
     ChannelInfo%Is_Allocated = .FALSE.
     ChannelInfo%n_Channels = 0
+  ! Allocatable components are automatically deallocated
   END SUBROUTINE CRTM_ChannelInfo_Destroy
 
   
@@ -211,6 +216,8 @@ CONTAINS
 
     ! Perform the allocations.
     ALLOCATE( ChannelInfo%Process_Channel( n_Channels ), &
+              ChannelInfo%ONNX_Mean( 6 ), &
+              ChannelInfo%ONNX_Std( 6 ), &
               ChannelInfo%Sensor_Channel( n_Channels ), &
               ChannelInfo%Channel_Index( n_Channels ), &
               STAT = alloc_stat )
@@ -224,6 +231,8 @@ CONTAINS
     ChannelInfo%Process_Channel = .TRUE.
     ChannelInfo%Sensor_Channel  = 0
     ChannelInfo%Channel_Index   = 0
+    ChannelInfo%ONNX_Mean     = 0.0_fp
+    ChannelInfo%ONNX_Std      = 1.0_fp
 
 
     ! Set allocation indicator
@@ -577,6 +586,7 @@ CONTAINS
          (x%WMO_Satellite_ID == y%WMO_Satellite_ID) .AND. &
          (x%WMO_Sensor_ID    == y%WMO_Sensor_ID   ) .AND. &
          (x%Sensor_Index     == y%Sensor_Index    ) .AND. &
+         (x%Use_ONNX         .EQV. y%Use_ONNX        ) .AND. &
          ALL(x%Process_Channel .EQV. y%Process_Channel) .AND. &
          ALL(x%Sensor_Channel   ==   y%Sensor_Channel ) .AND. &
          ALL(x%Channel_Index    ==   y%Channel_Index  )       ) &

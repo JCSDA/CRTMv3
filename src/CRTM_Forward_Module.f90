@@ -64,7 +64,8 @@ MODULE CRTM_Forward_Module
   USE CRTM_Predictor,             ONLY: CRTM_PVar_type => iVar_type, &
                                         CRTM_Compute_Predictors
   USE CRTM_AtmAbsorption,         ONLY: CRTM_AAvar_type => iVar_type, &
-                                        CRTM_Compute_AtmAbsorption
+                                        CRTM_Compute_AtmAbsorption , &
+                                        CRTM_Compute_AtmAbsorption_ONNX
   USE CRTM_AtmOptics_Define,      ONLY: CRTM_AtmOptics_type      , &
                                         CRTM_AtmOptics_Associated, &
                                         CRTM_AtmOptics_Create    , &
@@ -930,12 +931,21 @@ CONTAINS
                AtmOptics(nt)%n_Legendre_Terms = n_Full_Streams
 
                ! Compute the gas absorption
-               CALL CRTM_Compute_AtmAbsorption( SensorIndex   , &  ! Input
+               IF ( ChannelInfo(n)%Use_ONNX ) THEN
+                  CALL CRTM_Compute_AtmAbsorption_ONNX( SensorIndex   , &
+                       ChannelIndex  , &
+                       ChannelInfo(n), &
+                       Atm           , &
+                       AtmOptics(nt) , &
+                       GeometryInfo    )
+               ELSE
+                  CALL CRTM_Compute_AtmAbsorption( SensorIndex   , &  ! Input
                     ChannelIndex  , &  ! Input
                     AncillaryInput, &  ! Input
                     Predictor , &  ! Input
                     AtmOptics(nt) , &  ! Output
                     AAvar(nt)       )  ! Internal variable output
+               END IF
 
                ! Compute the molecular scattering properties
                ! ...Solar radiation

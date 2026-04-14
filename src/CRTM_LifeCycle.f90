@@ -78,6 +78,8 @@ MODULE CRTM_LifeCycle
                                      CRTM_MWwaterCoeff_Destroy, &
                                      CRTM_MWwaterCoeff_Load_FASTEM
   ! Disable all implicit typing
+  USE crtm_onnx_interface,         ONLY: crtm_onnx_init, crtm_onnx_cleanup
+  USE iso_c_binding,               ONLY: c_null_char
   IMPLICIT NONE
 
 
@@ -555,7 +557,8 @@ CONTAINS
     Load_AerosolCoeff   , &  ! Optional input
     Quiet               , &  ! Optional input
     Process_ID          , &  ! Optional input
-    Output_Process_ID )   &  ! Optional input
+    Output_Process_ID , &
+    Use_ONNX )   &  ! Optional input
   RESULT( err_stat )
     ! Arguments
     CHARACTER(*)               , INTENT(IN)  :: Sensor_ID(:)
@@ -595,12 +598,16 @@ CONTAINS
     LOGICAL     ,      OPTIONAL, INTENT(IN)  :: Quiet
     INTEGER     ,      OPTIONAL, INTENT(IN)  :: Process_ID
     INTEGER     ,      OPTIONAL, INTENT(IN)  :: Output_Process_ID
+    LOGICAL     ,      OPTIONAL, INTENT(IN)  :: Use_ONNX
     ! Function result
     INTEGER :: err_stat
+    CHARACTER(256) :: onnx_path
+    INTEGER :: lun
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Init'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
+    CHARACTER(1), PARAMETER :: PATH_SEP = "/"
     CHARACTER(SL) :: Default_Aerosol_Model
     CHARACTER(SL) :: Default_AerosolCoeff_Format
     CHARACTER(SL) :: Default_AerosolCoeff_File
@@ -637,12 +644,12 @@ CONTAINS
     LOGICAL :: Local_Load_AerosolCoeff
     LOGICAL :: netCDF, isSEcategory
     LOGICAL :: Quiet_
-    INTEGER :: iQuiet ! TODO: iQuiet should be removed once load routine interfaces have been modified
+    INTEGER :: lunQuiet ! TODO: lunQuiet should be removed once load routine interfaces have been modified
     Quiet_ = .TRUE.
     IF ( PRESENT(Quiet) ) Quiet_ = Quiet
-    iQuiet = 0
+    lunQuiet = 0
     IF ( Quiet_ ) THEN
-      iQuiet = 1
+      lunQuiet = 1
     END IF
 
     ! Set up
@@ -776,7 +783,7 @@ CONTAINS
     err_stat = CRTM_Load_TauCoeff( &
                  Sensor_ID         = Sensor_ID        , &
                  File_Path         = File_Path        , &
-                 Quiet             = iQuiet           , &  ! *** Use of iQuiet temporary
+                 Quiet             = lunQuiet           , &  ! *** Use of lunQuiet temporary
                  netCDF            = netCDF           , &
                  Process_ID        = Process_ID       , &
                  Output_Process_ID = Output_Process_ID  )
@@ -1094,6 +1101,39 @@ CONTAINS
       ChannelInfo(n)%WMO_Satellite_ID = SC(n)%WMO_Satellite_ID
       ChannelInfo(n)%WMO_Sensor_ID    = SC(n)%WMO_Sensor_ID
       ChannelInfo(n)%Sensor_Channel   = SC(n)%Sensor_Channel
+      IF ( PRESENT(Use_ONNX) ) THEN
+        IF ( Use_ONNX ) THEN
+          ChannelInfo(n)%Use_ONNX = .TRUE.
+          ! Initialize ONNX for this sensor
+          IF ( PRESENT(File_Path) ) THEN
+             onnx_path = TRIM(File_Path)//PATH_SEP//"ONNX"//PATH_SEP//TRIM(ChannelInfo(n)%Sensor_ID)//PATH_SEP//"model.onnx"//c_null_char
+          ELSE
+             onnx_path = "fix"//PATH_SEP//"ONNX"//PATH_SEP//TRIM(ChannelInfo(n)%Sensor_ID)//PATH_SEP//"model.onnx"//c_null_char
+          END IF
+          err_stat = crtm_onnx_init(onnx_path)
+          ! Load scaling factors
+          IF ( PRESENT(File_Path) ) THEN
+             onnx_path = TRIM(File_Path)//PATH_SEP//"ONNX"//PATH_SEP//TRIM(ChannelInfo(n)%Sensor_ID)//PATH_SEP//"scaling.txt"
+          ELSE
+             onnx_path = "fix"//PATH_SEP//"ONNX"//PATH_SEP//TRIM(ChannelInfo(n)%Sensor_ID)//PATH_SEP//"scaling.txt"
+          END IF
+          OPEN(NEWUNIT=lun, FILE=TRIM(onnx_path), STATUS='OLD', ACTION='READ', IOSTAT=err_stat)
+          IF ( err_stat == 0 ) THEN
+             READ(lun, *) ChannelInfo(n)%ONNX_Mean
+             READ(lun, *) ChannelInfo(n)%ONNX_Std
+             CLOSE(lun)
+          ELSE
+             msg = "Error opening ONNX scaling file "//TRIM(onnx_path)
+             CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+             RETURN
+          END IF
+          IF ( err_stat /= 0 ) THEN
+            msg = "Error initializing ONNX for "//TRIM(ChannelInfo(n)%Sensor_ID)
+            CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+            RETURN
+          END IF
+        END IF
+      END IF
     END DO
 
   END FUNCTION CRTM_Init
@@ -1160,10 +1200,13 @@ CONTAINS
     INTEGER,           OPTIONAL, INTENT(IN)     :: Process_ID
     ! Function result
     INTEGER :: err_stat
+    CHARACTER(256) :: onnx_path
+    INTEGER :: lun
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Destroy'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
+    CHARACTER(1), PARAMETER :: PATH_SEP = "/"
     INTEGER :: Destroy_Status
 
     ! Set up
@@ -1178,6 +1221,7 @@ CONTAINS
 
     ! Destroy all the ChannelInfo structures
     CALL CRTM_ChannelInfo_Destroy( ChannelInfo )
+    IF ( ANY(ChannelInfo%Use_ONNX) ) CALL crtm_onnx_cleanup()
     IF ( ANY(CRTM_ChannelInfo_Associated(ChannelInfo)) ) THEN
       err_stat = FAILURE
       msg = 'Error deallocating ChannelInfo structure(s)'

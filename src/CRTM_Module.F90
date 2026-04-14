@@ -30,6 +30,7 @@ MODULE CRTM_Module
   ! The main function modules
   USE CRTM_LifeCycle
   USE CRTM_Forward_Module
+USE CRTM_AtmAbsorption, ONLY: CRTM_Compute_AtmAbsorption_ONNX
   USE CRTM_Tangent_Linear_Module
   USE CRTM_Adjoint_Module
   USE CRTM_K_Matrix_Module

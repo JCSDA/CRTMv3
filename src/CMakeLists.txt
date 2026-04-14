@@ -217,6 +217,11 @@ list( APPEND crtm_src_files
       Utility/Type_Kinds.f90
       Zeeman/Zeeman_Utility.f90
 )
+
+if(ONNX_SUPPORT)
+  list(APPEND crtm_src_files CRTM_ONNX_Interface.f90 crtm_onnx_bridge.c)
+endif()
+
 include(GNUInstallDirs)
 
 # Option to select between shared and static libraries
@@ -237,6 +242,10 @@ add_library(${PROJECT_NAME} ${LIBRARY_TYPE} ${crtm_src_files})
 # Link dependencies
 target_link_libraries(${PROJECT_NAME} PUBLIC OpenMP::OpenMP_Fortran)
 target_link_libraries(${PROJECT_NAME} PUBLIC NetCDF::NetCDF_Fortran)
+if(ONNX_SUPPORT)
+  target_link_libraries(${PROJECT_NAME} PUBLIC ${ONNXRUNTIME_LIB})
+  target_include_directories(${PROJECT_NAME} PRIVATE ${ONNXRUNTIME_INCLUDE_DIRS})
+endif()
 
 # Set the Fortran module directory for build and install phases
 set_target_properties(${PROJECT_NAME} PROPERTIES

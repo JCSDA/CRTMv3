@@ -44,6 +44,7 @@ endfunction()
 # Create Data directory for test input config and symlink all files
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/testinput)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/testinput/ONNX/iasi_metop-a)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results/adjoint)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results/tangent_linear)
@@ -283,7 +284,7 @@ list (APPEND TLAD_tests
 add_executable(check_tropics mains/application/check_tropics.f90)
 target_link_libraries(check_tropics PRIVATE crtm)
 
-add_executable(test_check_crtm mains/application/check_crtm.F90)
+add_executable(test_check_crtm mains/application/check_crtm_solar.F90)
 target_link_libraries(test_check_crtm PRIVATE crtm)
 add_test(NAME test_check_crtm 
          COMMAND test_check_crtm)
@@ -681,6 +682,20 @@ SpcCoeff/Little_Endian/ssu_n08.SpcCoeff.bin
 SpcCoeff/Little_Endian/ssu_n09.SpcCoeff.bin
 SpcCoeff/Little_Endian/ssu_n11.SpcCoeff.bin
 SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
+# Files required by test_TauCoeff_Emulator (reference side)
+SpcCoeff/Little_Endian/atms_n20.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/atms_n20.TauCoeff.bin
+SpcCoeff/Little_Endian/avhrr3_n19.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/avhrr3_n19.TauCoeff.bin
+SpcCoeff/Little_Endian/abi_g19.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/abi_g19.TauCoeff.bin
+)
+
+# ONNX models for testing
+list( APPEND crtm_onnx_test_input
+ONNX/iasi_metop-a/model.onnx
+ONNX/iasi_metop-a/model.onnx.data
+ONNX/iasi_metop-a/scaling.txt
 )
 
 # Symlink all CRTM files
@@ -688,3 +703,64 @@ SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
 CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
                          ${CMAKE_CURRENT_BINARY_DIR}/testinput
                          ${crtm_test_input} )
+
+# Symlink ONNX files preserving path
+CREATE_SYMLINK( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
+                ${CMAKE_CURRENT_BINARY_DIR}/testinput
+                ${crtm_onnx_test_input} )
+set(LBL_EMULATOR_OUTPUT_DIR "$ENV{HOME}/CRTM/LBL/emulator" CACHE PATH
+    "Root directory containing LBL emulator TauCoeff outputs")
+
+set(Emulator_Sensor_Ids atms_n20 atms_n21 mhs_n19 gmi_gpm avhrr3_n19 abi_g19)
+
+# Symlink each emulator TauCoeff.nc into testinput/, searching common layouts
+foreach(_sid IN LISTS Emulator_Sensor_Ids)
+    set(_emu_src "")
+    foreach(_cand
+        ${LBL_EMULATOR_OUTPUT_DIR}/output/${_sid}.TauCoeff.nc
+        ${LBL_EMULATOR_OUTPUT_DIR}/output_${_sid}/${_sid}.TauCoeff.nc)
+        if(EXISTS ${_cand} AND _emu_src STREQUAL "")
+            set(_emu_src ${_cand})
+        endif()
+    endforeach()
+    if(NOT _emu_src STREQUAL "")
+        execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
+            ${_emu_src}
+            ${CMAKE_CURRENT_BINARY_DIR}/testinput/${_sid}.TauCoeff.nc)
+        list(APPEND _emulator_sensors_available ${_sid})
+    else()
+        message(STATUS "test_TauCoeff_Emulator: skipping ${_sid} — no emulator file under ${LBL_EMULATOR_OUTPUT_DIR}")
+    endif()
+endforeach()
+
+if(_emulator_sensors_available)
+    add_executable(test_TauCoeff_Emulator
+        mains/unit/input_output/test_TauCoeff_Emulator/test_taucoeff_emulator.f90)
+    target_link_libraries(test_TauCoeff_Emulator PRIVATE crtm)
+    foreach(_sid IN LISTS _emulator_sensors_available)
+        add_test(NAME test_TauCoeff_Emulator_${_sid}
+                 COMMAND $<TARGET_FILE:test_TauCoeff_Emulator> ${_sid})
+        # Force single-threaded: the double CRTM_Init/Destroy cycle
+        # (reference + emulator) is not OpenMP-safe in this version.
+        set_tests_properties(test_TauCoeff_Emulator_${_sid}
+            PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1")
+    endforeach()
+endif()
+
+if(ONNX_SUPPORT)
+    add_executable(test_ONNX_Interface mains/unit/Unit_Test/test_ONNX_Interface.f90)
+    target_link_libraries(test_ONNX_Interface PRIVATE crtm)
+    add_test(NAME test_ONNX_Interface COMMAND test_ONNX_Interface)
+endif()
+
+if(ONNX_SUPPORT)
+    add_executable(test_CRTM_ONNX_Init mains/unit/Unit_Test/test_CRTM_ONNX_Init.f90)
+    target_link_libraries(test_CRTM_ONNX_Init PRIVATE crtm)
+    add_test(NAME test_CRTM_ONNX_Init COMMAND test_CRTM_ONNX_Init)
+endif()
+
+if(ONNX_SUPPORT)
+    add_executable(test_CRTM_ONNX_IASI mains/unit/Unit_Test/test_CRTM_ONNX_IASI.f90)
+    target_link_libraries(test_CRTM_ONNX_IASI PRIVATE crtm)
+    add_test(NAME test_CRTM_ONNX_IASI COMMAND test_CRTM_ONNX_IASI)
+endif()

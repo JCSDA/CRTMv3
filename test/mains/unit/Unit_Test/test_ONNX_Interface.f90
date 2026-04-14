@@ -1,30 +1,3 @@
-module crtm_onnx_interface
-    use iso_c_binding
-    implicit none
-
-    interface
-        function crtm_onnx_init(model_path) bind(c, name="crtm_onnx_init")
-            import :: c_int, c_char
-            character(kind=c_char), intent(in) :: model_path(*)
-            integer(c_int) :: crtm_onnx_init
-        end function crtm_onnx_init
-
-        function crtm_onnx_predict(input_data, input_dim, output_data, output_dim) &
-                bind(c, name="crtm_onnx_predict")
-            import :: c_int, c_float, c_size_t
-            real(c_float), intent(in) :: input_data(*)
-            integer(c_size_t), value :: input_dim
-            real(c_float), intent(out) :: output_data(*)
-            integer(c_size_t), value :: output_dim
-            integer(c_int) :: crtm_onnx_predict
-        end function crtm_onnx_predict
-
-        subroutine crtm_onnx_cleanup() bind(c, name="crtm_onnx_cleanup")
-        end subroutine crtm_onnx_cleanup
-    end interface
-
-end module crtm_onnx_interface
-
 program test_onnx_bridge
     use crtm_onnx_interface
     use iso_c_binding
@@ -35,9 +8,22 @@ program test_onnx_bridge
     real(c_float), dimension(8461) :: transmittances
     character(kind=c_char), dimension(:), allocatable :: model_path_c
     character(len=255) :: model_path_fortran
+    character(len=255) :: sensor_id
     integer :: i
 
-    model_path_fortran = "/home/ben/CRTM/LBL/ml_emulator/output_iasi_resnet_dynamic_v2/model.onnx"
+    ! Get Sensor_ID from command line
+    if (command_argument_count() < 1) then
+        print *, "Usage: test_ONNX_Interface <sensor_id>"
+        print *, "Example: test_ONNX_Interface iasi_metop-a"
+        stop
+    end if
+    call get_command_argument(1, sensor_id)
+    sensor_id = trim(adjustl(sensor_id))
+
+    ! Path: ./testinput/ONNX/<sensor_id>/model.onnx
+    model_path_fortran = "./testinput/ONNX/" // trim(sensor_id) // "/model.onnx"
+    print *, "Loading model: ", trim(model_path_fortran)
+
     allocate(model_path_c(len_trim(model_path_fortran) + 1))
     
     do i = 1, len_trim(model_path_fortran)

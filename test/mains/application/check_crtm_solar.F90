@@ -60,7 +60,7 @@ PROGRAM check_crtm
   ! --------------------------
   ! Some non-CRTM-y Parameters
   ! --------------------------
-  CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'check_crtm'
+  CHARACTER(*), PARAMETER :: PROGRAM_NAME   = 'check_crtm_solar'
 
   ! ============================================================================
   ! STEP 2. **** SET UP SOME PARAMETERS FOR THE CRTM RUN ****
@@ -96,14 +96,16 @@ PROGRAM check_crtm
   INTEGER, PARAMETER :: N_AEROSOLS  = 1
 
   ! Sensor information
-  INTEGER     , PARAMETER :: N_SENSORS = 2
-  CHARACTER(*), PARAMETER :: SENSOR_ID(N_SENSORS) = (/'cris399_npp', &
-                                                      'atms_npp   '/)
+  INTEGER     , PARAMETER :: N_SENSORS = 1
+  CHARACTER(*), PARAMETER :: SENSOR_ID(N_SENSORS) = (/'gmi_gpm'/)
 
   ! Some pretend geometry angles. The scan angle is based
   ! on the default Re (earth radius) and h (satellite height)
   REAL(fp), PARAMETER :: ZENITH_ANGLE = 30.0_fp
   REAL(fp), PARAMETER :: SCAN_ANGLE   = 26.37293341421_fp
+  REAL(fp), PARAMETER :: SOURCE_ZENITH_ANGLE  = 45.0_fp
+  REAL(fp), PARAMETER :: SOURCE_AZIMUTH_ANGLE = 150.0_fp
+  REAL(fp), PARAMETER :: SENSOR_AZIMUTH_ANGLE = 60.0_fp
   ! ============================================================================
 
   ! ---------
@@ -139,6 +141,7 @@ PROGRAM check_crtm
   TYPE(CRTM_Atmosphere_type), ALLOCATABLE :: atm_K(:,:)
   TYPE(CRTM_Surface_type)   , ALLOCATABLE :: sfc_K(:,:)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rts_K(:,:)
+  TYPE(CRTM_Options_type)                :: opts(N_PROFILES)
   ! ============================================================================
 
 
@@ -252,6 +255,11 @@ PROGRAM check_crtm
 
     ! The output K-MATRIX structure
     CALL CRTM_Atmosphere_Create( atm_K, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
+    DO m = 1, N_PROFILES
+      CALL CRTM_Options_Create( opts(m), n_channels )
+      opts(m)%Use_Emissivity = .TRUE.
+      opts(m)%Emissivity     = ONE
+    END DO
     IF ( ANY(.NOT. CRTM_Atmosphere_Associated(atm_K)) ) THEN
       message = 'Error allocating CRTM K-matrix Atmosphere structure'
       CALL Display_Message( PROGRAM_NAME, message, FAILURE )
@@ -292,8 +300,11 @@ PROGRAM check_crtm
     ! All profiles are given the same value
     !  The Sensor_Scan_Angle is optional.
     CALL CRTM_Geometry_SetValue( geo, &
-                                 Sensor_Zenith_Angle = ZENITH_ANGLE, &
-                                 Sensor_Scan_Angle   = SCAN_ANGLE )
+                                 Sensor_Zenith_Angle  = ZENITH_ANGLE, &
+                                 Sensor_Scan_Angle    = SCAN_ANGLE, &
+                                 Sensor_Azimuth_Angle = SENSOR_AZIMUTH_ANGLE, &
+                                 Source_Zenith_Angle  = SOURCE_ZENITH_ANGLE, &
+                                 Source_Azimuth_Angle = SOURCE_AZIMUTH_ANGLE )
     ! ==========================================================================
 
 
@@ -326,7 +337,7 @@ PROGRAM check_crtm
                              sfc        , &  ! Input
                              geo        , &  ! Input
                              chinfo(n:n), &  ! Input
-                             rts          )  ! Output
+                             rts, opts   )  ! Output
     IF ( err_stat /= SUCCESS ) THEN
       message = 'Error calling CRTM Forward Model for '//TRIM(SENSOR_ID(n))
       CALL Display_Message( PROGRAM_NAME, message, FAILURE )
@@ -343,7 +354,7 @@ PROGRAM check_crtm
                               chinfo(n:n), &  ! Input
                               atm_K      , &  ! K-MATRIX Output
                               sfc_K      , &  ! K-MATRIX Output
-                              rts          )  ! FORWARD  Output
+                              rts, opts   )  ! FORWARD  Output
     IF ( err_stat /= SUCCESS ) THEN
       message = 'Error calling CRTM K-Matrix Model for '//TRIM(SENSOR_ID(n))
       CALL Display_Message( PROGRAM_NAME, message, FAILURE )
@@ -1096,27 +1107,11 @@ CONTAINS
 
     ! 4a.1 Profile #1
     ! ---------------
-    ! ...Land surface characteristics
-    sfc(1)%Land_Coverage     = 0.1_fp
-    sfc(1)%Land_Type         = TUNDRA_SURFACE_TYPE
-    sfc(1)%Land_Temperature  = 272.0_fp
-    sfc(1)%Lai               = 0.17_fp
-    sfc(1)%Soil_Type         = COARSE_SOIL_TYPE
-    sfc(1)%Vegetation_Type   = GROUNDCOVER_VEGETATION_TYPE
     ! ...Water surface characteristics
-    sfc(1)%Water_Coverage    = 0.5_fp
+    sfc(1)%Water_Coverage    = 1.0_fp
     sfc(1)%Water_Type        = SEA_WATER_TYPE
     sfc(1)%Water_Temperature = 275.0_fp
-    ! ...Snow coverage characteristics
-    sfc(1)%Snow_Coverage    = 0.25_fp
-    sfc(1)%Snow_Type        = FRESH_SNOW_TYPE
-    sfc(1)%Snow_Temperature = 265.0_fp
-    ! ...Ice surface characteristics
-    sfc(1)%Ice_Coverage    = 0.15_fp
-    sfc(1)%Ice_Type        = FRESH_ICE_TYPE
-    sfc(1)%Ice_Temperature = 269.0_fp
-
-
+ 
 
     ! 4a.2 Profile #2
     ! ---------------

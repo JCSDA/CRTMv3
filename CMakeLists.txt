@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(crtm VERSION 3.1.3 LANGUAGES Fortran)
+project(crtm VERSION 3.1.3 LANGUAGES Fortran C)
 
 option(OPENMP "Build crtm with OpenMP support" ON)
 option(FIX_FILE_PATH "Path to fix files (default: fix/)" OFF)
@@ -78,6 +78,20 @@ elseif(DEFINED ENV{NETCDF})
   list(APPEND CMAKE_PREFIX_PATH $ENV{NETCDF})
 endif()
 find_package(NetCDF REQUIRED Fortran)
+
+option(ONNX_SUPPORT "Build crtm with ONNX support" ON)
+if(ONNX_SUPPORT)
+  if(DEFINED ENV{ONNXRUNTIME_ROOT})
+    set(ONNXRUNTIME_ROOT $ENV{ONNXRUNTIME_ROOT})
+  else()
+    set(ONNXRUNTIME_ROOT "/home/ben/CRTM/LBL/onnxruntime-linux-x64-1.19.0")
+  endif()
+
+  find_library(ONNXRUNTIME_LIB onnxruntime PATHS ${ONNXRUNTIME_ROOT}/lib REQUIRED)
+  set(ONNXRUNTIME_INCLUDE_DIRS ${ONNXRUNTIME_ROOT}/include)
+  message(STATUS "ONNXRuntime found: ${ONNXRUNTIME_LIB}")
+  message(STATUS "ONNXRuntime include: ${ONNXRUNTIME_INCLUDE_DIRS}")
+endif()
 
 ## Sources (unchanged from original)
 add_subdirectory(src)
