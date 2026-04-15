@@ -197,7 +197,7 @@ PROGRAM test_taucoeff_emulator
   WRITE(*,'(5x,"  RMSE     = ",f10.4," K   (tol ",f6.3,")")') rmse,    BT_RMSE_TOL
   WRITE(*,'(/5x,"Per-channel summary (profile 1):")')
   DO l = 1, n_Channels
-    WRITE(*,'(7x,"ch ",i3,":  ref=",f8.3," K  emu=",f8.3," K  d=",f7.3," K")') &
+    WRITE(*,'(7x,"ch ",i5,":  ref=",f8.3," K  emu=",f8.3," K  d=",f7.3," K")') &
           l, BT_ref(l,1), BT_emu(l,1), dBT(l,1)
   END DO
 

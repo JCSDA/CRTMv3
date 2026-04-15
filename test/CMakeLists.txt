@@ -136,6 +136,7 @@ list( APPEND Simple_Sensor_Ids
         abi_g18
         modis_aqua
         amsua_n19
+	      iasi_metop-a
 )
 
 list( APPEND ScatteringSwitch_Sensor_Ids
@@ -711,7 +712,7 @@ CREATE_SYMLINK( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_B
 set(LBL_EMULATOR_OUTPUT_DIR "$ENV{HOME}/CRTM/LBL/emulator" CACHE PATH
     "Root directory containing LBL emulator TauCoeff outputs")
 
-set(Emulator_Sensor_Ids atms_n20 atms_n21 mhs_n19 gmi_gpm avhrr3_n19 abi_g19)
+set(Emulator_Sensor_Ids iasi_metop-a atms_n20 atms_n21 mhs_n19 gmi_gpm avhrr3_n19 abi_g19)
 
 # Symlink each emulator TauCoeff.nc into testinput/, searching common layouts
 foreach(_sid IN LISTS Emulator_Sensor_Ids)
