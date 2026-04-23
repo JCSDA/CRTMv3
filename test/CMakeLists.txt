@@ -76,7 +76,7 @@ else() # Download CRTM coefficients
   set( CRTM_COEFFS_BRANCH_PREFIX "" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
   set( CRTM_COEFFS_BRANCH "fix_REL-3.1.2.0" )
 
-  set(CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${PROJECT_VERSION})
+  set(CRTM_COEFFS_PATH ${CMAKE_SOURCE_DIR}/test-data-release)
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
 
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
@@ -103,7 +103,7 @@ else() # Download CRTM coefficients
   # -- UNTAR -- 
   
   # Define the directory to untar into
-  set(UNTAR_DEST "${CMAKE_BINARY_DIR}/test_data/${PROJECT_VERSION}")
+  set(UNTAR_DEST "${CMAKE_SOURCE_DIR}/test-data-release")
     message(STATUS "Checking if ${UNTAR_DEST}/${CRTM_COEFFS_BRANCH} already exists...")
   # Only untar if the CHECK_PATH does not exist
   if(NOT EXISTS ${UNTAR_DEST}/${CRTM_COEFFS_BRANCH}/)
@@ -122,7 +122,9 @@ else() # Download CRTM coefficients
   endif()
 endif()
 
-
+  set (UFO_CRTM_TESTFILES_PATH ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH}/fix)
+  message(STATUS "Set the file path to be seen by UFO at ${UFO_CRTM_TESTFILES_PATH} ")
+  set_property (GLOBAL PROPERTY UFO_CRTM_TESTFILES_PATH ${UFO_CRTM_TESTFILES_PATH})
 
 # Create list of sensor ids for testing
 list( APPEND Simple_Sensor_Ids
