@@ -474,6 +474,25 @@ add_test(NAME test_MWSurfEM
          COMMAND $<TARGET_FILE:test_MWSurfEM>)
 set_tests_properties(test_MWSurfEM PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
+# test_PARMIO_TLAD
+add_executable(test_PARMIO_TLAD mains/regression/parmio_tlad/test_PARMIO_TLAD.f90)
+target_link_libraries(test_PARMIO_TLAD PRIVATE crtm)
+add_test(NAME test_PARMIO_TLAD
+         COMMAND $<TARGET_FILE:test_PARMIO_TLAD>
+                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
+set_tests_properties(test_PARMIO_TLAD PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(test_PARMIO_Dispatcher mains/regression/parmio_tlad/test_PARMIO_Dispatcher.f90)
+target_link_libraries(test_PARMIO_Dispatcher PRIVATE crtm)
+add_test(NAME test_PARMIO_Dispatcher
+         COMMAND $<TARGET_FILE:test_PARMIO_Dispatcher>
+                 "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
+                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
+set_tests_properties(test_PARMIO_Dispatcher PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(test_PARMIO_RC_Residual mains/regression/parmio_tlad/test_PARMIO_RC_Residual.f90)
+target_link_libraries(test_PARMIO_RC_Residual PRIVATE crtm)
+
 #=================================================================================
 #forward and k_matrix regression tests
 foreach(regtype IN LISTS regression_types)

@@ -63,6 +63,9 @@ list( APPEND crtm_src_files
       Coefficients/CRTM_IRsnowCoeff.f90
       Coefficients/CRTM_IRwaterCoeff.f90
       Coefficients/CRTM_MWwaterCoeff.f90
+      Coefficients/CRTM_PARMIOCoeff.f90
+      Coefficients/EmisCoeff/MW_Water/PARMIOCoeff/PARMIOCoeff_Define.f90
+      Coefficients/EmisCoeff/MW_Water/PARMIOCoeff/PARMIOCoeff_netCDF_IO.f90
       Coefficients/CRTM_SpcCoeff.f90
       Coefficients/CRTM_TauCoeff.f90
       Coefficients/CRTM_VISiceCoeff.f90
@@ -167,6 +170,12 @@ list( APPEND crtm_src_files
       SfcOptics/MW_Water/FASTEM_MWSSEM/Reflection_Correction_Module.f90
       SfcOptics/MW_Water/FASTEM_MWSSEM/Slope_Variance.f90
       SfcOptics/MW_Water/FASTEM_MWSSEM/Small_Scale_Correction_Module.f90
+      SfcOptics/MW_Water/PARMIO_MWSSEM/PARMIO_LUT_Interpolation.f90
+      SfcOptics/MW_Water/PARMIO_MWSSEM/PARMIO_RC_Interpolation.f90
+      SfcOptics/MW_Water/PARMIO_MWSSEM/PARMIO_Azimuth_Module.f90
+      SfcOptics/MW_Water/PARMIO_MWSSEM/CRTM_PARMIO.f90
+      SfcOptics/MW_Water/PARMIO_MWSSEM/CRTM_PARMIO_TL.f90
+      SfcOptics/MW_Water/PARMIO_MWSSEM/CRTM_PARMIO_AD.f90
       SfcOptics/MW_Water/Fresnel/Fresnel.f90
       SfcOptics/MW_Water/LowFrequency_MWSSEM/CRTM_LowFrequency_MWSSEM.f90
       SfcOptics/MW_Water/Ocean_Permittivity/Ellison.f90
