@@ -77,6 +77,10 @@ MODULE CRTM_LifeCycle
   USE CRTM_MWwaterCoeff      , ONLY: CRTM_MWwaterCoeff_Load, &
                                      CRTM_MWwaterCoeff_Destroy, &
                                      CRTM_MWwaterCoeff_Load_FASTEM
+  ! ...OpenMP API
+#ifdef _OPENMP
+  USE OMP_LIB
+#endif
   ! Disable all implicit typing
   IMPLICIT NONE
 
@@ -644,6 +648,20 @@ CONTAINS
     IF ( Quiet_ ) THEN
       iQuiet = 1
     END IF
+
+    ! Honor OMP_NUM_THREADS from the runtime environment.
+    ! If the variable is unset, default to a single thread so that downstream
+    ! parallel regions do not silently fan out across all available cores.
+#ifdef _OPENMP
+    BLOCK
+      CHARACTER(32) :: omp_env_value
+      INTEGER       :: omp_env_status
+      CALL GET_ENVIRONMENT_VARIABLE( 'OMP_NUM_THREADS', &
+                                     VALUE  = omp_env_value, &
+                                     STATUS = omp_env_status )
+      IF ( omp_env_status /= 0 ) CALL OMP_SET_NUM_THREADS( 1 )
+    END BLOCK
+#endif
 
     ! Set up
     err_stat = SUCCESS

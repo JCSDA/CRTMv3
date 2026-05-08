@@ -157,7 +157,9 @@ MODULE CRTM_K_Matrix_Module
                           RTV_Create
 
   ! ...OpenMP
+#ifdef _OPENMP
   USE omp_lib
+#endif
 
   ! -----------------------
   ! Disable implicit typing
@@ -412,6 +414,7 @@ CONTAINS
     ! -------
     ! OpenMP
     ! -------
+#ifdef _OPENMP
 !$OMP PARALLEL
 !$OMP SINGLE
     n_omp_threads = OMP_GET_NUM_THREADS()
@@ -432,17 +435,22 @@ CONTAINS
 !** BTJ: temporary preprocessor directive for openMP over channels bypass, permitting modern ifort / ifx versions to run properly
 !** https://github.com/JCSDA/CRTMv3/issues/231
 
-#if 1
+#  if 1
       n_channel_threads = 1
-#else
+#  else
       n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
-#endif
+#  endif
       IF(n_channel_threads > 1) THEN
         CALL OMP_SET_MAX_ACTIVE_LEVELS(2)
       ELSE
         CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
       END IF
     END IF
+#else
+    n_omp_threads     = 1
+    n_profile_threads = 1
+    n_channel_threads = 1
+#endif
 
 
 !    WRITE(6,*)

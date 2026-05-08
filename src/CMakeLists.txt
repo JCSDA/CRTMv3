@@ -244,18 +244,15 @@ set(MODULE_DIR module/${PROJECT_NAME}/${CMAKE_Fortran_COMPILER_ID}/${CMAKE_Fortr
 add_library(${PROJECT_NAME} ${LIBRARY_TYPE} ${crtm_src_files})
 
 # Link dependencies
-target_link_libraries(${PROJECT_NAME} PUBLIC OpenMP::OpenMP_Fortran)
+if(OPENMP)
+  target_link_libraries(${PROJECT_NAME} PUBLIC OpenMP::OpenMP_Fortran)
+endif()
 target_link_libraries(${PROJECT_NAME} PUBLIC NetCDF::NetCDF_Fortran)
 
 # Set the Fortran module directory for build and install phases
 set_target_properties(${PROJECT_NAME} PROPERTIES
     Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/${MODULE_DIR})
 
-set_source_files_properties(
-  ${CMAKE_CURRENT_SOURCE_DIR}/CRTM_K_Matrix_Module.f90
-  PROPERTIES COMPILE_FLAGS "-cpp"
-)
-  
 # Install Fortran modules into the correct destination
 install(DIRECTORY ${CMAKE_BINARY_DIR}/${MODULE_DIR}/ DESTINATION ${CRTM_INSTALL_PREFIX}/${MODULE_DIR})
 

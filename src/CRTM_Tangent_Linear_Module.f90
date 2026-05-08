@@ -141,7 +141,9 @@ MODULE CRTM_Tangent_Linear_Module
                           RTV_Create
 
   ! ...OpenMP
+#ifdef _OPENMP
   USE omp_lib
+#endif
   ! -----------------------
   ! Disable implicit typing
   ! -----------------------
@@ -372,6 +374,7 @@ CONTAINS
     ! -------
     ! OpenMP
     ! -------
+#ifdef _OPENMP
 !$OMP PARALLEL
 !$OMP SINGLE
     n_omp_threads = OMP_GET_NUM_THREADS()
@@ -399,6 +402,11 @@ CONTAINS
         CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
       END IF
     END IF
+#else
+    n_omp_threads     = 1
+    n_profile_threads = 1
+    n_channel_threads = 1
+#endif
 
 !    WRITE(6,*)
 !    WRITE(6,'("   Using",i3," OpenMP threads =",i3," for profiles and",i3," for channels.")') &

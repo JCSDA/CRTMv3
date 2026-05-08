@@ -121,7 +121,9 @@ MODULE CRTM_Forward_Module
                           RTV_Destroy   , &
                           RTV_Create
   ! ...OpenMP API
+#ifdef _OPENMP
   USE OMP_LIB
+#endif
 
   ! -----------------------
   ! Disable implicit typing
@@ -325,6 +327,7 @@ CONTAINS
     ! -------
     ! OpenMP
     ! -------
+#ifdef _OPENMP
     !$OMP PARALLEL
     !$OMP SINGLE
     n_omp_threads = OMP_GET_NUM_THREADS()
@@ -348,6 +351,11 @@ CONTAINS
           CALL OMP_SET_MAX_ACTIVE_LEVELS(1)
        END IF
     END IF
+#else
+    n_omp_threads     = 1
+    n_profile_threads = 1
+    n_channel_threads = 1
+#endif
 
     ! ------------
     ! PROFILE LOOPS

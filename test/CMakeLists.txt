@@ -38,7 +38,6 @@ function(ADD_CRTM_UNIT_TEST target source)
   target_link_libraries(${target} PRIVATE crtm)
   add_test(NAME test_${target}
            COMMAND $<TARGET_FILE:${target}>)
-  set_tests_properties(test_${target} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 endfunction()
 
 # Create Data directory for test input config and symlink all files
@@ -242,6 +241,12 @@ list( APPEND OMPoverChannels_Sensor_Ids
         atms_n21
 )
 
+# OMP_Speedup uses cris-fsr_n21 (~431 channels) so the channel-level OMP
+# parallelism in CRTM_Forward has enough work to demonstrate clear speedup.
+list( APPEND OMP_Speedup_Sensor_Ids
+        cris-fsr_n21
+)
+
 list (APPEND common_tests
      Simple
      AOD
@@ -259,6 +264,7 @@ list (APPEND common_tests
 
 list (APPEND omp_tests
      OMPoverChannels
+     OMP_Speedup
 )
 
 
@@ -287,55 +293,46 @@ add_executable(test_check_crtm mains/application/check_crtm.F90)
 target_link_libraries(test_check_crtm PRIVATE crtm)
 add_test(NAME test_check_crtm 
          COMMAND test_check_crtm)
-set_tests_properties(test_check_crtm PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_TL_TEST mains/unit/Unit_Test/test_TL.f90)
 target_link_libraries(Unit_TL_TEST PRIVATE crtm)
 add_test(NAME test_Unit_TL_TEST
          COMMAND $<TARGET_FILE:Unit_TL_TEST>)
-set_tests_properties(test_Unit_TL_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_Aerosol_Bypass mains/unit/Unit_Test/test_Aerosol_Bypass.f90)
 target_link_libraries(Unit_Aerosol_Bypass PRIVATE crtm)
 add_test(NAME test_Unit_Aerosol_Bypass
          COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass>)
-set_tests_properties(test_Unit_Aerosol_Bypass PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_AerosolScatter_TL mains/unit/Unit_Test/test_AerosolScatter_TL.f90)
 target_link_libraries(Unit_AerosolScatter_TL PRIVATE crtm)
 add_test(NAME test_Unit_AerosolScatter_TL
          COMMAND $<TARGET_FILE:Unit_AerosolScatter_TL>)
-set_tests_properties(test_Unit_AerosolScatter_TL PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_AerosolScatter_AD mains/unit/Unit_Test/test_AerosolScatter_AD.f90)
 target_link_libraries(Unit_AerosolScatter_AD PRIVATE crtm)
 add_test(NAME test_Unit_AerosolScatter_AD
          COMMAND $<TARGET_FILE:Unit_AerosolScatter_AD>)
-set_tests_properties(test_Unit_AerosolScatter_AD PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_AerosolScatter_K mains/unit/Unit_Test/test_AerosolScatter_K.f90)
 target_link_libraries(Unit_AerosolScatter_K PRIVATE crtm)
 add_test(NAME test_Unit_AerosolScatter_K
          COMMAND $<TARGET_FILE:Unit_AerosolScatter_K>)
-set_tests_properties(test_Unit_AerosolScatter_K PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_Aerosol_Bypass_TL mains/unit/Unit_Test/test_Aerosol_Bypass_TL.f90)
 target_link_libraries(Unit_Aerosol_Bypass_TL PRIVATE crtm)
 add_test(NAME test_Unit_Aerosol_Bypass_TL
 	 COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass_TL>)
-set_tests_properties(test_Unit_Aerosol_Bypass_TL PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_Aerosol_Bypass_adjoint mains/unit/Unit_Test/test_Aerosol_Bypass_adjoint.f90)
 target_link_libraries(Unit_Aerosol_Bypass_adjoint PRIVATE crtm)
 add_test(NAME test_Unit_Aerosol_Bypass_adjoint
 	 COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass_adjoint>)
-set_tests_properties(test_Unit_Aerosol_Bypass_adjoint  PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_Aerosol_Bypass_k_matrix mains/unit/Unit_Test/test_Aerosol_Bypass_k_matrix.f90)
 target_link_libraries(Unit_Aerosol_Bypass_k_matrix PRIVATE crtm)
 add_test(NAME test_Unit_Aerosol_Bypass_k_matrix
          COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass_k_matrix>)
-set_tests_properties(test_Unit_Aerosol_Bypass_k_matrix  PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 #SpcCoeff utilities
 list (APPEND SCoeff_Utils
@@ -458,21 +455,18 @@ add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
 target_link_libraries(hypsometric_eq PRIVATE crtm)
 add_test(NAME test_hypsometric_eq
          COMMAND $<TARGET_FILE:hypsometric_eq>)
-set_tests_properties(test_hypsometric_eq PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 # test_MWwater_io
 add_executable(MWwater_IO mains/unit/input_output/test_MWwater/test_MWwater_io.f90)
 target_link_libraries(MWwater_IO PRIVATE crtm)
 add_test(NAME test_MWwater_io
          COMMAND $<TARGET_FILE:MWwater_IO>)
-set_tests_properties(test_MWwater_io PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 # test_MWSurfEM
 add_executable(test_MWSurfEM mains/unit/Unit_Test/test_MWSurfEM.f90)
 target_link_libraries(test_MWSurfEM PRIVATE crtm)
 add_test(NAME test_MWSurfEM
          COMMAND $<TARGET_FILE:test_MWSurfEM>)
-set_tests_properties(test_MWSurfEM PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 # test_PARMIO_TLAD
 add_executable(test_PARMIO_TLAD mains/regression/parmio_tlad/test_PARMIO_TLAD.f90)
@@ -480,7 +474,6 @@ target_link_libraries(test_PARMIO_TLAD PRIVATE crtm)
 add_test(NAME test_PARMIO_TLAD
          COMMAND $<TARGET_FILE:test_PARMIO_TLAD>
                  "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
-set_tests_properties(test_PARMIO_TLAD PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(test_PARMIO_Dispatcher mains/regression/parmio_tlad/test_PARMIO_Dispatcher.f90)
 target_link_libraries(test_PARMIO_Dispatcher PRIVATE crtm)
@@ -488,7 +481,6 @@ add_test(NAME test_PARMIO_Dispatcher
          COMMAND $<TARGET_FILE:test_PARMIO_Dispatcher>
                  "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
                  "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
-set_tests_properties(test_PARMIO_Dispatcher PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 # test_PARMIO_M_Group_Probe (build-only diagnostic; not registered with CTest)
 add_executable(test_PARMIO_M_Group_Probe mains/regression/parmio_tlad/test_PARMIO_M_Group_Probe.f90)
@@ -507,7 +499,6 @@ target_link_libraries(test_PARMIO_RC_Residual PRIVATE crtm)
 add_test(NAME test_PARMIO_RC_Residual
          COMMAND $<TARGET_FILE:test_PARMIO_RC_Residual>
                  "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
-set_tests_properties(test_PARMIO_RC_Residual PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(test_PARMIO_FASTEM_DeltaSweep mains/regression/parmio_tlad/test_PARMIO_FASTEM_DeltaSweep.f90)
 target_link_libraries(test_PARMIO_FASTEM_DeltaSweep PRIVATE crtm)
@@ -517,7 +508,6 @@ add_test(NAME test_PARMIO_FASTEM_DeltaSweep
                  "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
 set_tests_properties(test_PARMIO_FASTEM_DeltaSweep
                      PROPERTIES
-                       ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}"
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
 # Same target, AWS sensor invocation. Reaches 325 GHz, well above ATMS's 183 GHz.
@@ -528,7 +518,6 @@ add_test(NAME test_PARMIO_FASTEM_DeltaSweep_AWS
                  "mwr_aws")
 set_tests_properties(test_PARMIO_FASTEM_DeltaSweep_AWS
                      PROPERTIES
-                       ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}"
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
 add_executable(test_PARMIO_AWS1_ObsSmoke mains/regression/parmio_tlad/test_PARMIO_AWS1_ObsSmoke.f90)
@@ -560,7 +549,6 @@ foreach(regtype IN LISTS regression_types)
     foreach(sensor_id IN LISTS ${testtype}_Sensor_Ids)
         add_test(NAME test_${regtype}_${testtype}_${sensor_id}
                  COMMAND $<TARGET_FILE:test_${regtype}_test_${testtype}> "${sensor_id}")
-        set_tests_properties(test_${regtype}_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
     endforeach()
   endforeach()
 endforeach()
@@ -575,7 +563,6 @@ foreach(regtype IN LISTS TLAD_types)
     foreach(sensor_id IN LISTS ${testtype}_Sensor_Ids)
         add_test(NAME test_${regtype}_${testtype}_${sensor_id}
                  COMMAND $<TARGET_FILE:test_${regtype}_test_${testtype}> "${sensor_id}")
-        set_tests_properties(test_${regtype}_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
     endforeach()
   endforeach()
 endforeach()
@@ -594,7 +581,6 @@ foreach(regtype IN LISTS regression_types)
     foreach(sensor_id IN LISTS ${testtype}_Sensor_Ids)
         add_test(NAME test_${regtype}_${testtype}_${sensor_id}
                  COMMAND $<TARGET_FILE:test_${regtype}_test_${testtype}> "${sensor_id}")
-        set_tests_properties(test_${regtype}_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
     endforeach()
   endforeach()
 endforeach()
@@ -607,7 +593,6 @@ target_link_libraries(test_Active_Sensor crtm)
 
 # Add test for test_Active_Sensor
 add_test(NAME test_Active_Sensor COMMAND test_Active_Sensor)
-set_tests_properties(test_Active_Sensor PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
 
 # Add test_AD_Active_Sensor executable
 add_executable(test_AD_Active_Sensor mains/unit/Unit_Test/test_AD_Active_Sensor.f90)
@@ -615,7 +600,6 @@ target_link_libraries(test_AD_Active_Sensor crtm)
 
 # Add test for test_AD_Active_Sensor
 add_test(NAME test_AD_Active_Sensor COMMAND test_AD_Active_Sensor)
-set_tests_properties(test_AD_Active_Sensor PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
 
 # Add test_TL_convergence_active_sensor executable
 add_executable(test_TL_convergence_active_sensor mains/unit/Unit_Test/test_TL_convergence_active_sensor.f90)
@@ -623,7 +607,6 @@ target_link_libraries(test_TL_convergence_active_sensor crtm)
 
 # Add test for test_TL_convergence_active_sensor
 add_test(NAME test_TL_convergence_active_sensor COMMAND test_TL_convergence_active_sensor)
-set_tests_properties(test_TL_convergence_active_sensor PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
 
 
 #####################################################################
