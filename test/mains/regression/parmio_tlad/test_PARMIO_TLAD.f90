@@ -53,6 +53,11 @@ PROGRAM test_PARMIO_TLAD
         -2.4314563947960824e-03_fp, &
          4.9242013158089660e-04_fp /), &
        nfail       = nfail)
+  ! Label kept as 'sss_nominal_h_grid' for historical continuity. 89 GHz now
+  ! routes to sss_nominal_m (the Meissner-permittivity threshold moved to
+  ! 200 GHz); expected_e was refreshed when the LUT's m-group rows were
+  ! regenerated with the correct Meissner permittivity (previously the m-group
+  ! held data computed with the high-frequency tabulated dielectric, mislabelled).
   CALL Check_Forward_Grid_Point( &
        label       = 'sss_nominal_h_grid', &
        frequency   = 89.0_fp, &
@@ -62,10 +67,10 @@ PROGRAM test_PARMIO_TLAD
        wind_speed  = 10.0_fp, &
        azimuth     = -22.0_fp, &
        expected_e  = (/ &
-         6.8291631366684735e-01_fp, &
-         4.6905358861108570e-01_fp, &
-         5.3499781732895485e-03_fp, &
-        -3.3450137748911420e-04_fp /), &
+         7.1240464322802577e-01_fp, &
+         4.9766145521667254e-01_fp, &
+         5.0850443213180914e-03_fp, &
+        -2.7572192979976429e-04_fp /), &
        nfail       = nfail)
 
   CALL Run_Case( &

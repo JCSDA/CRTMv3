@@ -490,6 +490,14 @@ add_test(NAME test_PARMIO_Dispatcher
                  "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
 set_tests_properties(test_PARMIO_Dispatcher PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
+# test_PARMIO_M_Group_Probe (build-only diagnostic; not registered with CTest)
+add_executable(test_PARMIO_M_Group_Probe mains/regression/parmio_tlad/test_PARMIO_M_Group_Probe.f90)
+target_link_libraries(test_PARMIO_M_Group_Probe PRIVATE crtm)
+
+# test_PARMIO_TLAD_RefValues (build-only helper to refresh test_PARMIO_TLAD's expected_e)
+add_executable(test_PARMIO_TLAD_RefValues mains/regression/parmio_tlad/test_PARMIO_TLAD_RefValues.f90)
+target_link_libraries(test_PARMIO_TLAD_RefValues PRIVATE crtm)
+
 add_executable(test_PARMIO_RC_Residual mains/regression/parmio_tlad/test_PARMIO_RC_Residual.f90)
 target_link_libraries(test_PARMIO_RC_Residual PRIVATE crtm)
 add_test(NAME test_PARMIO_RC_Residual
