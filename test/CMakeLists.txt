@@ -498,6 +498,10 @@ target_link_libraries(test_PARMIO_M_Group_Probe PRIVATE crtm)
 add_executable(test_PARMIO_TLAD_RefValues mains/regression/parmio_tlad/test_PARMIO_TLAD_RefValues.f90)
 target_link_libraries(test_PARMIO_TLAD_RefValues PRIVATE crtm)
 
+# test_PARMIO_FASTEM_VH_Sweep (build-only V/H emissivity comparison at 89/166/183/325 GHz)
+add_executable(test_PARMIO_FASTEM_VH_Sweep mains/regression/parmio_tlad/test_PARMIO_FASTEM_VH_Sweep.f90)
+target_link_libraries(test_PARMIO_FASTEM_VH_Sweep PRIVATE crtm)
+
 add_executable(test_PARMIO_RC_Residual mains/regression/parmio_tlad/test_PARMIO_RC_Residual.f90)
 target_link_libraries(test_PARMIO_RC_Residual PRIVATE crtm)
 add_test(NAME test_PARMIO_RC_Residual
@@ -512,6 +516,17 @@ add_test(NAME test_PARMIO_FASTEM_DeltaSweep
                  "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
                  "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
 set_tests_properties(test_PARMIO_FASTEM_DeltaSweep
+                     PROPERTIES
+                       ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}"
+                       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+
+# Same target, AWS sensor invocation. Reaches 325 GHz, well above ATMS's 183 GHz.
+add_test(NAME test_PARMIO_FASTEM_DeltaSweep_AWS
+         COMMAND $<TARGET_FILE:test_PARMIO_FASTEM_DeltaSweep>
+                 "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
+                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc"
+                 "mwr_aws")
+set_tests_properties(test_PARMIO_FASTEM_DeltaSweep_AWS
                      PROPERTIES
                        ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}"
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

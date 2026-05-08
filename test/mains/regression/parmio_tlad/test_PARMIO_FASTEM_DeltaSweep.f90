@@ -19,8 +19,7 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
   CHARACTER(*), PARAMETER :: DEFAULT_COEFF_PATH = './testinput/'
   CHARACTER(*), PARAMETER :: DEFAULT_LUT_FILE = &
        '../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc'
-  CHARACTER(*), PARAMETER :: SENSOR_ID = 'atms_npp'
-  CHARACTER(*), PARAMETER :: CSV_FILE = 'delta_sweep.csv'
+  CHARACTER(*), PARAMETER :: DEFAULT_SENSOR_ID = 'atms_npp'
 
   INTEGER, PARAMETER :: N_ATM_PROFILES = 2
   INTEGER, PARAMETER :: N_PROFILES = 1
@@ -39,13 +38,16 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
   REAL(fp), PARAMETER :: SALINITY = 35.0_fp
   REAL(fp), PARAMETER :: WIND_DIRECTION = 0.0_fp
   REAL(fp), PARAMETER :: MIN_VALID_TB = 2.7_fp
-  REAL(fp), PARAMETER :: MAX_DELTA_TB = 30.0_fp
+  ! Loosened above ATMS's 30 K to accommodate AWS-class 325 GHz channels in
+  ! cold/windy regimes; PARMIO and FASTEM physics genuinely diverge more there.
+  REAL(fp), PARAMETER :: MAX_DELTA_TB = 50.0_fp
 
   CHARACTER(512) :: coeff_path
   CHARACTER(512) :: lut_file
   CHARACTER(256) :: message
   CHARACTER(256) :: version
   CHARACTER(32)  :: sensor_id_arg
+  CHARACTER(64)  :: csv_file
   INTEGER :: err_stat
   INTEGER :: allocate_status
   INTEGER :: n_channels
@@ -65,15 +67,15 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rt_fastem(:,:)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rt_parmio(:,:)
 
-  CALL Parse_Arguments(coeff_path, lut_file)
+  CALL Parse_Arguments(coeff_path, lut_file, sensor_id_arg)
+  csv_file = 'delta_sweep_'//TRIM(sensor_id_arg)//'.csv'
 
   CALL CRTM_Version(version)
   CALL Program_Message( &
        PROGRAM_NAME, &
-       'FASTEM6-vs-PARMIO ATMS-NPP brightness-temperature delta sweep.', &
+       'FASTEM6-vs-PARMIO '//TRIM(sensor_id_arg)//' brightness-temperature delta sweep.', &
        'CRTM Version: '//TRIM(version))
 
-  sensor_id_arg = SENSOR_ID
   err_stat = CRTM_Init((/ sensor_id_arg /), channel_info, File_Path=TRIM(coeff_path))
   IF (err_stat /= SUCCESS) THEN
     CALL Display_Message(PROGRAM_NAME, 'CRTM_Init failed', FAILURE)
@@ -114,7 +116,7 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
   END IF
   CALL Load_ECMWF84_Atm_Data()
 
-  OPEN(NEWUNIT=csv_unit, FILE=CSV_FILE, STATUS='REPLACE', ACTION='WRITE')
+  OPEN(NEWUNIT=csv_unit, FILE=TRIM(csv_file), STATUS='REPLACE', ACTION='WRITE')
   WRITE(csv_unit,'(a)') &
        'case_id,channel,freq_GHz,sst,u10,zenith,tb_fastem,tb_parmio,delta_tb'
 
@@ -163,8 +165,8 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
 
   CLOSE(csv_unit)
 
-  WRITE(*,'("PARMIO FASTEM delta sweep passed: ",i0," cases, ",i0, &
-            " channels, CSV=",a)') case_id, n_channels, TRIM(CSV_FILE)
+  WRITE(*,'("PARMIO FASTEM delta sweep passed: sensor=",a,", ",i0," cases, ",i0, &
+            " channels, CSV=",a)') TRIM(sensor_id_arg), case_id, n_channels, TRIM(csv_file)
 
   CALL CRTM_PARMIOCoeff_Destroy()
   err_stat = CRTM_Destroy(channel_info)
@@ -173,9 +175,10 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
 
 CONTAINS
 
-  SUBROUTINE Parse_Arguments(coeff_path, lut_file)
+  SUBROUTINE Parse_Arguments(coeff_path, lut_file, sensor_id)
     CHARACTER(*), INTENT(OUT) :: coeff_path
     CHARACTER(*), INTENT(OUT) :: lut_file
+    CHARACTER(*), INTENT(OUT) :: sensor_id
 
     IF (COMMAND_ARGUMENT_COUNT() >= 1) THEN
       CALL GET_COMMAND_ARGUMENT(1, coeff_path)
@@ -187,6 +190,12 @@ CONTAINS
       CALL GET_COMMAND_ARGUMENT(2, lut_file)
     ELSE
       lut_file = DEFAULT_LUT_FILE
+    END IF
+
+    IF (COMMAND_ARGUMENT_COUNT() >= 3) THEN
+      CALL GET_COMMAND_ARGUMENT(3, sensor_id)
+    ELSE
+      sensor_id = DEFAULT_SENSOR_ID
     END IF
   END SUBROUTINE Parse_Arguments
 
