@@ -153,6 +153,8 @@ PROGRAM test_MWSurfEM
   CALL CRTM_SfcOptics_Create(SfcOptics, &
                               1, & ! n_Angles
                               4)   ! n_Stokes
+  SfcOptics%Angle(1)  = ZENITH_ANGLE
+  SfcOptics%Weight(1) = 1.0_fp
 
   !Error_Status = Compute_MW_Water_SfcOptics( &
   !  Sfc(1)     , &  ! Input

@@ -474,6 +474,72 @@ add_test(NAME test_MWSurfEM
          COMMAND $<TARGET_FILE:test_MWSurfEM>)
 set_tests_properties(test_MWSurfEM PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
+# test_PARMIO_TLAD
+add_executable(test_PARMIO_TLAD mains/regression/parmio_tlad/test_PARMIO_TLAD.f90)
+target_link_libraries(test_PARMIO_TLAD PRIVATE crtm)
+add_test(NAME test_PARMIO_TLAD
+         COMMAND $<TARGET_FILE:test_PARMIO_TLAD>
+                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
+set_tests_properties(test_PARMIO_TLAD PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(test_PARMIO_Dispatcher mains/regression/parmio_tlad/test_PARMIO_Dispatcher.f90)
+target_link_libraries(test_PARMIO_Dispatcher PRIVATE crtm)
+add_test(NAME test_PARMIO_Dispatcher
+         COMMAND $<TARGET_FILE:test_PARMIO_Dispatcher>
+                 "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
+                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
+set_tests_properties(test_PARMIO_Dispatcher PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+# test_PARMIO_M_Group_Probe (build-only diagnostic; not registered with CTest)
+add_executable(test_PARMIO_M_Group_Probe mains/regression/parmio_tlad/test_PARMIO_M_Group_Probe.f90)
+target_link_libraries(test_PARMIO_M_Group_Probe PRIVATE crtm)
+
+# test_PARMIO_TLAD_RefValues (build-only helper to refresh test_PARMIO_TLAD's expected_e)
+add_executable(test_PARMIO_TLAD_RefValues mains/regression/parmio_tlad/test_PARMIO_TLAD_RefValues.f90)
+target_link_libraries(test_PARMIO_TLAD_RefValues PRIVATE crtm)
+
+# test_PARMIO_FASTEM_VH_Sweep (build-only V/H emissivity comparison at 89/166/183/325 GHz)
+add_executable(test_PARMIO_FASTEM_VH_Sweep mains/regression/parmio_tlad/test_PARMIO_FASTEM_VH_Sweep.f90)
+target_link_libraries(test_PARMIO_FASTEM_VH_Sweep PRIVATE crtm)
+
+add_executable(test_PARMIO_RC_Residual mains/regression/parmio_tlad/test_PARMIO_RC_Residual.f90)
+target_link_libraries(test_PARMIO_RC_Residual PRIVATE crtm)
+add_test(NAME test_PARMIO_RC_Residual
+         COMMAND $<TARGET_FILE:test_PARMIO_RC_Residual>
+                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
+set_tests_properties(test_PARMIO_RC_Residual PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(test_PARMIO_FASTEM_DeltaSweep mains/regression/parmio_tlad/test_PARMIO_FASTEM_DeltaSweep.f90)
+target_link_libraries(test_PARMIO_FASTEM_DeltaSweep PRIVATE crtm)
+add_test(NAME test_PARMIO_FASTEM_DeltaSweep
+         COMMAND $<TARGET_FILE:test_PARMIO_FASTEM_DeltaSweep>
+                 "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
+                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
+set_tests_properties(test_PARMIO_FASTEM_DeltaSweep
+                     PROPERTIES
+                       ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}"
+                       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+
+# Same target, AWS sensor invocation. Reaches 325 GHz, well above ATMS's 183 GHz.
+add_test(NAME test_PARMIO_FASTEM_DeltaSweep_AWS
+         COMMAND $<TARGET_FILE:test_PARMIO_FASTEM_DeltaSweep>
+                 "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
+                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc"
+                 "mwr_aws")
+set_tests_properties(test_PARMIO_FASTEM_DeltaSweep_AWS
+                     PROPERTIES
+                       ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}"
+                       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+
+add_executable(test_PARMIO_AWS1_ObsSmoke mains/regression/parmio_tlad/test_PARMIO_AWS1_ObsSmoke.f90)
+target_link_libraries(test_PARMIO_AWS1_ObsSmoke PRIVATE crtm)
+
+add_executable(test_PARMIO_GMI_ObsSpace mains/regression/parmio_tlad/test_PARMIO_GMI_ObsSpace.f90)
+target_link_libraries(test_PARMIO_GMI_ObsSpace PRIVATE crtm)
+
+add_executable(test_PARMIO_ATMS_ClearOcean_ObsSpace mains/regression/parmio_tlad/test_PARMIO_ATMS_ClearOcean_ObsSpace.f90)
+target_link_libraries(test_PARMIO_ATMS_ClearOcean_ObsSpace PRIVATE crtm)
+
 #=================================================================================
 #forward and k_matrix regression tests
 foreach(regtype IN LISTS regression_types)

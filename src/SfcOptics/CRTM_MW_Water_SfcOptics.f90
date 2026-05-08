@@ -22,7 +22,7 @@ MODULE CRTM_MW_Water_SfcOptics
   ! -----------------
   ! Module use
   USE Type_Kinds,               ONLY: fp
-  USE Message_Handler,          ONLY: SUCCESS
+  USE Message_Handler,          ONLY: SUCCESS, FAILURE, Display_Message
   USE CRTM_Parameters,          ONLY: SET, NOT_SET, &
                                       ZERO, ONE, &
                                       MAX_N_ANGLES, &
@@ -42,6 +42,11 @@ MODULE CRTM_MW_Water_SfcOptics
                                       Compute_FastemX_TL,&
                                       Compute_FastemX_AD
   USE CRTM_MWwaterCoeff       , ONLY: MWwaterC
+  USE CRTM_PARMIO,              ONLY: PARMIO_type => iVar_type, &
+                                      Compute_PARMIO
+  USE CRTM_PARMIO_TL,           ONLY: Compute_PARMIO_TL
+  USE CRTM_PARMIO_AD,           ONLY: Compute_PARMIO_AD
+  USE CRTM_PARMIOCoeff,         ONLY: PARMIOC
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -76,6 +81,8 @@ MODULE CRTM_MW_Water_SfcOptics
     TYPE(FastemX_type), DIMENSION(MAX_N_ANGLES)   :: FastemX_Var
     ! Low frequency model internal variable structure
     TYPE(LF_MWSSEM_type), DIMENSION(MAX_N_ANGLES) :: LF_MWSSEM_Var
+    ! PARMIO model internal variable structure
+    TYPE(PARMIO_type), DIMENSION(MAX_N_ANGLES)    :: PARMIO_Var
     ! Fastem outputs
     REAL(fp), DIMENSION(MAX_N_ANGLES) :: dEH_dTs        = ZERO
     REAL(fp), DIMENSION(MAX_N_ANGLES) :: dEH_dWindSpeed = ZERO
@@ -214,7 +221,30 @@ CONTAINS
 
     
     ! Compute the surface optical parameters
-    IF( SfcOptics%Use_New_MWSSEM ) THEN
+    IF( SfcOptics%Use_PARMIO_Model ) THEN
+
+      ! PARMIO_MWSSEM (LUT-driven, replaces FASTEM at runtime)
+      SfcOptics%Azimuth_Angle = Surface%Wind_Direction - Sensor_Azimuth_Angle
+      DO i = 1, SfcOptics%n_Angles
+        CALL Compute_PARMIO( &
+               PARMIOC                                , &  ! Input PARMIO LUT coefficients
+               Frequency                              , &  ! Input
+               SfcOptics%n_Angles                     , &  ! Input
+               SfcOptics%Angle(i)                     , &  ! Input
+               Surface%Water_Temperature              , &  ! Input
+               Surface%Salinity                       , &  ! Input
+               Surface%Wind_Speed                     , &  ! Input
+               iVar%PARMIO_Var(i)                     , &  ! Internal variable output
+               SfcOptics%Emissivity(i,:)              , &  ! Output
+               Reflectivity                           , &  ! Output
+               Azimuth_Angle = SfcOptics%Azimuth_Angle, &  ! Optional input
+               Transmittance = SfcOptics%Transmittance  )  ! Optional input
+        DO j = 1, N_STOKES
+          SfcOptics%Reflectivity(i,j,i,j) = Reflectivity(j)
+        END DO
+      END DO
+
+    ELSE IF ( SfcOptics%Use_New_MWSSEM ) THEN
 
       ! FastemX model
       SfcOptics%Azimuth_Angle = Surface%Wind_Direction - Sensor_Azimuth_Angle
@@ -420,7 +450,26 @@ CONTAINS
 
 
     ! Compute the tangent-linear surface optical parameters
-    IF( SfcOptics%Use_New_MWSSEM ) THEN
+    IF( SfcOptics%Use_PARMIO_Model ) THEN
+
+      ! PARMIO_MWSSEM (LUT-driven)
+      DO i = 1, SfcOptics%n_Angles
+        CALL Compute_PARMIO_TL( &
+               PARMIOC                                     , &  ! Input PARMIO LUT coefficients
+               Surface_TL%Water_Temperature                , &  ! TL Input
+               Surface_TL%Salinity                         , &  ! TL Input
+               Surface_TL%Wind_Speed                       , &  ! TL Input
+               iVar%PARMIO_Var(i)                          , &  ! Internal variable input
+               SfcOptics_TL%Emissivity(i,:)                , &  ! TL Output
+               Reflectivity_TL                             , &  ! TL Output
+               Azimuth_Angle_TL = Surface_TL%Wind_Direction, &  ! Optional TL input
+               Transmittance_TL = SfcOptics_TL%Transmittance )  ! Optional TL input
+        DO j = 1, N_STOKES
+          SfcOptics_TL%Reflectivity(i,j,i,j) = Reflectivity_TL(j)
+        END DO
+      END DO
+
+    ELSE IF( SfcOptics%Use_New_MWSSEM ) THEN
 
       ! FastemX model
       DO i = 1, SfcOptics%n_Angles
@@ -620,7 +669,28 @@ CONTAINS
 
 
     ! Compute the adjoint surface optical parameters
-    IF( SfcOptics%Use_New_MWSSEM ) THEN
+    IF( SfcOptics%Use_PARMIO_Model ) THEN
+
+      ! PARMIO_MWSSEM (LUT-driven)
+      Azimuth_Angle_AD = ZERO
+      DO i = 1, SfcOptics%n_Angles
+        DO j = 1, N_STOKES
+          Reflectivity_AD(j) = SfcOptics_AD%Reflectivity(i,j,i,j)
+        END DO
+        CALL Compute_PARMIO_AD( &
+               PARMIOC                                      , &  ! Input PARMIO LUT coefficients
+               SfcOptics_AD%Emissivity(i,:)                 , &  ! AD Input
+               Reflectivity_AD                              , &  ! AD Input
+               iVar%PARMIO_Var(i)                           , &  ! Internal variable input
+               Surface_AD%Water_Temperature                 , &  ! AD Output
+               Surface_AD%Salinity                          , &  ! AD Output
+               Surface_AD%Wind_Speed                        , &  ! AD Output
+               Azimuth_Angle_AD = Azimuth_Angle_AD          , &  ! Optional AD Output
+               Transmittance_AD = SfcOptics_AD%Transmittance  )  ! Optional AD Output
+      END DO
+      Surface_AD%Wind_Direction = Surface_AD%Wind_Direction + Azimuth_Angle_AD
+
+    ELSE IF( SfcOptics%Use_New_MWSSEM ) THEN
 
       ! FastemX model
       Azimuth_Angle_AD = ZERO
