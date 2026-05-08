@@ -429,16 +429,15 @@ endforeach()
 
 #first upper level Unit_Test
 
+# REL-3.2.0: previously-binary IO tests now exercise NetCDF (the new default).
+# The dedicated _NC sibling tests have been removed because they are now
+# duplicative; if a binary regression test is needed in the future, add
+# it back as an explicit case.
 list(APPEND io_tests
   Spc_IO mains/unit/input_output/test_SpcCoeff/test_spc_io.f90
-  Spc_IO_NC mains/unit/input_output/test_SpcCoeff_NC/test_spc_io_nc.f90
-  TauCoeff_IO_NC mains/unit/input_output/test_TauCoeff_NC/test_taucoeff_io_nc.f90
-  EmisCoeff_IO_NC mains/unit/input_output/test_EmisCoeff_NC/test_emis_coeff_io_nc.f90
   AerosolCoeff_IO mains/unit/input_output/test_AerosolCoeff/test_aerosol_coeff_io.f90
-  AerosolCoeff_IO_NC mains/unit/input_output/test_AerosolCoeff_NC/test_aerosol_coeff_io_nc.f90
   CloudCoeff_IO mains/unit/input_output/test_CloudCoeff/test_cloud_coeff_io.f90
-  CloudCoeff_IO_NC mains/unit/input_output/test_CloudCoeff_NC/test_cloud_coeff_io_nc.f90
-  BeCoeff_IO_NC mains/unit/input_output/test_BeCoeff_NC/test_becoeff_io_nc.f90
+  EmisCoeff_IO mains/unit/input_output/test_EmisCoeff/test_emis_coeff_io.f90
 )
 
 list(LENGTH io_tests io_tests_len)
@@ -456,11 +455,10 @@ target_link_libraries(hypsometric_eq PRIVATE crtm)
 add_test(NAME test_hypsometric_eq
          COMMAND $<TARGET_FILE:hypsometric_eq>)
 
-# test_MWwater_io
-add_executable(MWwater_IO mains/unit/input_output/test_MWwater/test_MWwater_io.f90)
-target_link_libraries(MWwater_IO PRIVATE crtm)
-add_test(NAME test_MWwater_io
-         COMMAND $<TARGET_FILE:MWwater_IO>)
+# test_MWwater_io: removed in REL-3.2.0. The deprecated CRTM_MWwaterCoeff_Load
+# function it exercised reads a binary-only EmisCoeff file; with the LUT-based
+# FASTEM path retired in favor of CRTM_MWwaterCoeff_Load_FASTEM (no file IO),
+# this comparison test no longer has an active counterpart to compare against.
 
 # test_MWSurfEM
 add_executable(test_MWSurfEM mains/unit/Unit_Test/test_MWSurfEM.f90)
@@ -614,122 +612,126 @@ add_test(NAME test_TL_convergence_active_sensor COMMAND test_TL_convergence_acti
 #####################################################################
 
 list( APPEND crtm_test_input
-AerosolCoeff/Little_Endian/AerosolCoeff.bin
-AerosolCoeff/Little_Endian/AerosolCoeff.GOCART-GEOS5.bin
-AerosolCoeff/Little_Endian/AerosolCoeff.CMAQ.bin
+# REL-3.2.0: NetCDF is the canonical LUT format. Symlinks point at .nc/.nc4
+# files in the netCDF/ subtrees of the test data. Two exceptions retain
+# .bin symlinks because no NetCDF analog is published yet:
+#   - SSU TauCoeff (no TauCoeff/ODPS/netCDF/ssu_n*.TauCoeff.nc on disk)
+#   - Zeeman SSMIS TauCoeff (loaded by a path that hardcodes .bin)
+# CRTM_Init's per-loader fallback (Resolve_Coeff_Format / SpcCoeff /
+# TauCoeff) silently switches to .bin when an .nc file is missing, so
+# missing entries here are recoverable for sensors that have a binary copy.
+AerosolCoeff/netCDF/AerosolCoeff.nc4
 AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.nc4
 AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.BRC.kb.v2.nc
-AerosolCoeff/netCDF/AerosolCoeff.nc4
-CloudCoeff/Little_Endian/CloudCoeff.bin
+AerosolCoeff/netCDF/AerosolCoeff.CMAQ.nc4
 CloudCoeff/netCDF/CloudCoeff.nc4
 CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2022.nc4
 BeCoeff/netCDF/BeCoeff.nc
-EmisCoeff/MW_Water/Little_Endian/FASTEM6.MWwater.EmisCoeff.bin
-EmisCoeff/MW_Water/Little_Endian/FASTEM4.MWwater.EmisCoeff.bin
-EmisCoeff/IR_Ice/SEcategory/Little_Endian/NPOESS.IRice.EmisCoeff.bin
+EmisCoeff/MW_Water/netCDF/FASTEM6.MWwater.EmisCoeff.nc
+EmisCoeff/MW_Water/netCDF/FASTEM4.MWwater.EmisCoeff.nc
 EmisCoeff/IR_Ice/SEcategory/netCDF/NPOESS.IRice.EmisCoeff.nc4
-EmisCoeff/IR_Land/SEcategory/Little_Endian/NPOESS.IRland.EmisCoeff.bin
 EmisCoeff/IR_Land/SEcategory/netCDF/NPOESS.IRland.EmisCoeff.nc4
-EmisCoeff/IR_Snow/SEcategory/Little_Endian/NPOESS.IRsnow.EmisCoeff.bin
 EmisCoeff/IR_Snow/SEcategory/netCDF/NPOESS.IRsnow.EmisCoeff.nc4
-EmisCoeff/IR_Snow/Nalli/Little_Endian/Nalli.IRsnow.EmisCoeff.bin
 EmisCoeff/IR_Snow/Nalli/netCDF/Nalli.IRsnow.EmisCoeff.nc4
 EmisCoeff/IR_Snow/Nalli/netCDF/Nalli2.IRsnow.EmisCoeff.nc4
-EmisCoeff/VIS_Ice/SEcategory/Little_Endian/NPOESS.VISice.EmisCoeff.bin
 EmisCoeff/VIS_Ice/SEcategory/netCDF/NPOESS.VISice.EmisCoeff.nc4
-EmisCoeff/VIS_Land/SEcategory/Little_Endian/NPOESS.VISland.EmisCoeff.bin
 EmisCoeff/VIS_Land/SEcategory/netCDF/NPOESS.VISland.EmisCoeff.nc4
-EmisCoeff/VIS_Snow/SEcategory/Little_Endian/NPOESS.VISsnow.EmisCoeff.bin
 EmisCoeff/VIS_Snow/SEcategory/netCDF/NPOESS.VISsnow.EmisCoeff.nc4
-EmisCoeff/VIS_Water/SEcategory/Little_Endian/NPOESS.VISwater.EmisCoeff.bin
 EmisCoeff/VIS_Water/SEcategory/netCDF/NPOESS.VISwater.EmisCoeff.nc4
-EmisCoeff/IR_Water/Little_Endian/Nalli.IRwater.EmisCoeff.bin
-EmisCoeff/IR_Water/Little_Endian/Nalli2.IRwater.EmisCoeff.bin
 EmisCoeff/IR_Water/netCDF/Nalli.IRwater.EmisCoeff.nc4
 EmisCoeff/IR_Water/netCDF/Nalli2.IRwater.EmisCoeff.nc4
-EmisCoeff/IR_Land/SEcategory/Little_Endian/USGS.IRland.EmisCoeff.bin
-EmisCoeff/VIS_Land/SEcategory/Little_Endian/USGS.VISland.EmisCoeff.bin
-SpcCoeff/Little_Endian/hirs4_metop-a.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/hirs4_metop-a.TauCoeff.bin
-SpcCoeff/Little_Endian/amsua_n19.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/amsua_n19.TauCoeff.bin
-SpcCoeff/Little_Endian/amsua_metop-a.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/amsua_metop-a.TauCoeff.bin
+EmisCoeff/IR_Land/SEcategory/netCDF/USGS.IRland.EmisCoeff.nc4
+EmisCoeff/VIS_Land/SEcategory/netCDF/USGS.VISland.EmisCoeff.nc4
+SpcCoeff/netCDF/hirs4_metop-a.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/hirs4_metop-a.TauCoeff.nc
+SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/amsua_n19.TauCoeff.nc
+SpcCoeff/netCDF/amsua_metop-a.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/amsua_metop-a.TauCoeff.nc
 SpcCoeff/netCDF/amsua_aqua.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/amsua_aqua.TauCoeff.nc
-SpcCoeff/Little_Endian/gmi_gpm.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/gmi_gpm.TauCoeff.bin
-SpcCoeff/Little_Endian/seviri_m08.SpcCoeff.bin
-TauCoeff/ODAS/Little_Endian/seviri_m08.TauCoeff.bin
-SpcCoeff/Little_Endian/cris-fsr_n21.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/cris-fsr_n21.TauCoeff.bin
-SpcCoeff/Little_Endian/cris-fsr_npp.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/cris-fsr_npp.TauCoeff.bin
-SpcCoeff/Little_Endian/iasi_metop-a.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/iasi_metop-a.TauCoeff.bin
-SpcCoeff/Little_Endian/iasi_metop-b.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/iasi_metop-b.TauCoeff.bin
-SpcCoeff/Little_Endian/mhs_n19.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/mhs_n19.TauCoeff.bin
-SpcCoeff/Little_Endian/sndrD1_g15.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/sndrD1_g15.TauCoeff.bin
-SpcCoeff/Little_Endian/sndrD2_g15.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/sndrD2_g15.TauCoeff.bin
-SpcCoeff/Little_Endian/sndrD3_g15.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/sndrD3_g15.TauCoeff.bin
-SpcCoeff/Little_Endian/sndrD4_g15.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/sndrD4_g15.TauCoeff.bin
-SpcCoeff/Little_Endian/airs_aqua.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/airs_aqua.TauCoeff.bin
-SpcCoeff/Little_Endian/modis_aqua.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/modis_aqua.TauCoeff.bin
-SpcCoeff/Little_Endian/cris-fsr_n21.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/cris-fsr_n21.TauCoeff.bin
-SpcCoeff/Little_Endian/atms_n21.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/atms_n21.TauCoeff.bin
-SpcCoeff/Little_Endian/v.viirs-m_j2.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/v.viirs-m_j2.TauCoeff.bin
-SpcCoeff/Little_Endian/v.abi_g18.SpcCoeff.bin
-TauCoeff/ODAS/Little_Endian/v.abi_g18.TauCoeff.bin
-SpcCoeff/Little_Endian/abi_g18.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/abi_g18.TauCoeff.bin
-SpcCoeff/Little_Endian/cris399_npp.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/cris399_npp.TauCoeff.bin
-SpcCoeff/Little_Endian/crisB1_npp.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/crisB1_npp.TauCoeff.bin
-SpcCoeff/Little_Endian/atms_npp.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/atms_npp.TauCoeff.bin
-SpcCoeff/Little_Endian/v.viirs-m_npp.SpcCoeff.bin
-TauCoeff/ODAS/Little_Endian/v.viirs-m_npp.TauCoeff.bin
-SpcCoeff/Little_Endian/v.abi_gr.SpcCoeff.bin
-TauCoeff/ODAS/Little_Endian/v.abi_gr.TauCoeff.bin
+SpcCoeff/netCDF/gmi_gpm.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/gmi_gpm.TauCoeff.nc
+SpcCoeff/netCDF/seviri_m08.SpcCoeff.nc
+TauCoeff/ODAS/netCDF/seviri_m08.TauCoeff.nc
+SpcCoeff/netCDF/cris-fsr_n21.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/cris-fsr_n21.TauCoeff.nc
+SpcCoeff/netCDF/cris-fsr_npp.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/cris-fsr_npp.TauCoeff.nc
+SpcCoeff/netCDF/iasi_metop-a.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/iasi_metop-a.TauCoeff.nc
+SpcCoeff/netCDF/iasi_metop-b.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/iasi_metop-b.TauCoeff.nc
+SpcCoeff/netCDF/mhs_n19.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/mhs_n19.TauCoeff.nc
+SpcCoeff/netCDF/sndrD1_g15.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/sndrD1_g15.TauCoeff.nc
+SpcCoeff/netCDF/sndrD2_g15.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/sndrD2_g15.TauCoeff.nc
+SpcCoeff/netCDF/sndrD3_g15.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/sndrD3_g15.TauCoeff.nc
+SpcCoeff/netCDF/sndrD4_g15.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/sndrD4_g15.TauCoeff.nc
+SpcCoeff/netCDF/airs_aqua.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/airs_aqua.TauCoeff.nc
+SpcCoeff/netCDF/modis_aqua.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/modis_aqua.TauCoeff.nc
+SpcCoeff/netCDF/atms_n21.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/atms_n21.TauCoeff.nc
+# NLTECoeff / ACCoeff sibling files for sensors that need them.
+# SpcCoeff_netCDF_ReadFile loads <sensor>.{NLTE,AC}Coeff.nc from the same
+# directory as the SpcCoeff file when present; without these, NLTE-active
+# IR channels (e.g. cris399_npp 4.3 um band) and AMSU/MHS antenna
+# corrections silently default to zero.
+SpcCoeff/netCDF/cris399_npp.NLTECoeff.nc
+SpcCoeff/netCDF/iasi_metop-b.NLTECoeff.nc
+SpcCoeff/netCDF/airs_aqua.NLTECoeff.nc
+SpcCoeff/netCDF/amsua_n19.ACCoeff.nc
+SpcCoeff/netCDF/v.viirs-m_j2.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/v.viirs-m_j2.TauCoeff.nc
+SpcCoeff/netCDF/v.abi_g18.SpcCoeff.nc
+TauCoeff/ODAS/netCDF/v.abi_g18.TauCoeff.nc
+SpcCoeff/netCDF/abi_g18.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/abi_g18.TauCoeff.nc
+SpcCoeff/netCDF/cris399_npp.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/cris399_npp.TauCoeff.nc
+SpcCoeff/netCDF/crisB1_npp.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/crisB1_npp.TauCoeff.nc
+SpcCoeff/netCDF/atms_npp.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/atms_npp.TauCoeff.nc
+SpcCoeff/netCDF/v.viirs-m_npp.SpcCoeff.nc
+TauCoeff/ODAS/netCDF/v.viirs-m_npp.TauCoeff.nc
+SpcCoeff/netCDF/v.abi_gr.SpcCoeff.nc
+TauCoeff/ODAS/netCDF/v.abi_gr.TauCoeff.nc
+# Zeeman SSMIS TauCoeff: loader hardcodes .bin extension; keep binary symlinks.
 TauCoeff/ODPS/Little_Endian/zssmis_f20.TauCoeff.bin
 TauCoeff/ODPS/Little_Endian/zssmis_f19.TauCoeff.bin
 TauCoeff/ODPS/Little_Endian/zssmis_f18.TauCoeff.bin
 TauCoeff/ODPS/Little_Endian/zssmis_f17.TauCoeff.bin
 TauCoeff/ODPS/Little_Endian/zssmis_f16.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssmis_f20.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssmis_f19.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssmis_f18.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssmis_f17.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssmis_f16.TauCoeff.bin
-SpcCoeff/Little_Endian/ssmis_f20.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssmis_f18.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssmis_f19.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssmis_f16.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssmis_f17.SpcCoeff.bin
+TauCoeff/ODPS/netCDF/ssmis_f20.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssmis_f19.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssmis_f18.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssmis_f17.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssmis_f16.TauCoeff.nc
+SpcCoeff/netCDF/ssmis_f20.SpcCoeff.nc
+SpcCoeff/netCDF/ssmis_f18.SpcCoeff.nc
+SpcCoeff/netCDF/ssmis_f19.SpcCoeff.nc
+SpcCoeff/netCDF/ssmis_f16.SpcCoeff.nc
+SpcCoeff/netCDF/ssmis_f17.SpcCoeff.nc
+# SSU TauCoeff: no NetCDF copy on disk, keep binary symlinks.
 TauCoeff/ODPS/Little_Endian/ssu_n06.TauCoeff.bin
 TauCoeff/ODPS/Little_Endian/ssu_n07.TauCoeff.bin
 TauCoeff/ODPS/Little_Endian/ssu_n08.TauCoeff.bin
 TauCoeff/ODPS/Little_Endian/ssu_n09.TauCoeff.bin
 TauCoeff/ODPS/Little_Endian/ssu_n11.TauCoeff.bin
 TauCoeff/ODPS/Little_Endian/ssu_n14.TauCoeff.bin
-SpcCoeff/Little_Endian/ssu_n06.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssu_n07.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssu_n08.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssu_n09.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssu_n11.SpcCoeff.bin
-SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
+SpcCoeff/netCDF/ssu_n06.SpcCoeff.nc
+SpcCoeff/netCDF/ssu_n07.SpcCoeff.nc
+SpcCoeff/netCDF/ssu_n08.SpcCoeff.nc
+SpcCoeff/netCDF/ssu_n09.SpcCoeff.nc
+SpcCoeff/netCDF/ssu_n11.SpcCoeff.nc
+SpcCoeff/netCDF/ssu_n14.SpcCoeff.nc
 )
 
 # Symlink all CRTM files

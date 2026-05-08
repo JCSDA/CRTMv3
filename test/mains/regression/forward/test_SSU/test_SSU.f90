@@ -11,6 +11,7 @@ PROGRAM test_SSU
   !
   ! Module usage
   USE CRTM_Module
+  USE CRTM_RTSolution_Diff, ONLY: Report_RTSolution_Diff
   ! Disable all implicit typing
   IMPLICIT NONE
   ! ============================================================================
@@ -281,6 +282,7 @@ PROGRAM test_SSU
   ELSE
     Message = 'RTSolution results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_Diff( actual=RTSolution, expected=rts, label=PROGRAM_NAME )
     ! Write the current RTSolution results to file
     rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, Quiet=.TRUE. )

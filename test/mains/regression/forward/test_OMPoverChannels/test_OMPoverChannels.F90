@@ -12,6 +12,7 @@ PROGRAM test_OMPoverChannels
   !
   ! Module usage
   USE CRTM_Module
+  USE CRTM_RTSolution_Diff, ONLY: Report_RTSolution_Diff
 #ifdef _OPENMP
   USE OMP_LIB
 #endif
@@ -284,6 +285,7 @@ PROGRAM test_OMPoverChannels
   ELSE
     Message = 'RTSolution results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_Diff( actual=RTSolution, expected=rts, label=PROGRAM_NAME )
     ! Write the current RTSolution results to file
     rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, Quiet=.TRUE. )

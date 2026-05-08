@@ -13,6 +13,7 @@ PROGRAM test_VerticalCoordinates
   !
   ! Module usage
   USE CRTM_Module
+  USE CRTM_RTSolution_Diff, ONLY: Report_RTSolution_Diff
   ! Disable all implicit typing
   IMPLICIT NONE
   ! ============================================================================
@@ -390,6 +391,7 @@ PROGRAM test_VerticalCoordinates
   ELSE
     Message = 'RTSolution results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_Diff( actual=RTSolution, expected=rts, label=PROGRAM_NAME )
     ! Write the current RTSolution results to file
     rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, Quiet=.TRUE. )
@@ -406,6 +408,8 @@ PROGRAM test_VerticalCoordinates
   ELSE
     Message = 'regional RTSolution results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_Diff( actual=RTSolution_NAM, expected=rts_NAM, &
+                                 label=TRIM(PROGRAM_NAME)//' (regional)' )
     ! Write the current RTSolution results to file
     rts_NAM_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.RTSolution.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rts_NAM_File, RTSolution_NAM, Quiet=.TRUE. )
@@ -422,6 +426,8 @@ PROGRAM test_VerticalCoordinates
   ELSE
     Message = 'global RTSolution results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_Diff( actual=RTSolution_GFS, expected=rts_GFS, &
+                                 label=TRIM(PROGRAM_NAME)//' (global)' )
     ! Write the current RTSolution results to file
     rts_GFS_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.RTSolution.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rts_GFS_File, RTSolution_GFS, Quiet=.TRUE. )

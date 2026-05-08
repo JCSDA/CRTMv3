@@ -204,6 +204,7 @@ list( APPEND crtm_src_files
       Surface/CRTM_Surface_Define.f90
       Surface/SensorData/CRTM_SensorData_Define.f90
       Test_Utility/UnitTest/UnitTest_Define.f90
+      Test_Utility/CRTM_RTSolution_Diff.f90
       Utility/Binary_File_Utility.f90
       Utility/Compare_Float_Numbers.f90
       Utility/DateTime_Utility/DateTime_Utility.f90

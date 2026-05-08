@@ -32,7 +32,9 @@ MODULE SpcCoeff_netCDF_IO
                              SpcCoeff_Create        , &
                              SpcCoeff_Inspect       , &
                              SpcCoeff_ValidRelease  , &
-                             SpcCoeff_Info          
+                             SpcCoeff_Info
+  USE ACCoeff_netCDF_IO   , ONLY: ACCoeff_netCDF_ReadFile
+  USE NLTECoeff_netCDF_IO , ONLY: NLTECoeff_netCDF_ReadFile
   USE SensorInfo_Parameters, ONLY: ACTIVE_SENSOR
 
   USE netcdf
@@ -1124,6 +1126,63 @@ CONTAINS
     END IF
 
 
+    ! Read the substructure netCDF files when present. The binary SpcCoeff
+    ! reader streams ACCoeff and NLTECoeff inline from the same file via a
+    ! DATA_PRESENT indicator; the netCDF layout instead stores them as
+    ! sibling files named <sensor>.ACCoeff.nc / <sensor>.NLTECoeff.nc next
+    ! to the SpcCoeff file. Without this, SpcCoeff%AC and SpcCoeff%NC stay
+    ! default-initialized for sensors that need antenna correction or
+    ! non-LTE corrections (e.g. cris399_npp, iasi_metop-b), producing
+    ! brightness-temperature drift of several K vs. the binary path on
+    ! NLTE-active channels.
+    BLOCK
+      CHARACTER(LEN(Filename)) :: sub_filename
+      INTEGER                  :: sub_err_stat
+      INTEGER                  :: dot_pos
+
+      dot_pos = INDEX(Filename, '.SpcCoeff.', BACK=.TRUE.)
+      IF ( dot_pos > 0 ) THEN
+        ! ACCoeff sibling file
+        sub_filename = Filename(:dot_pos) // 'ACCoeff' // Filename(dot_pos+9:)
+        IF ( File_Exists(TRIM(sub_filename)) ) THEN
+          sub_err_stat = ACCoeff_netCDF_ReadFile( TRIM(sub_filename), &
+                                                  SpcCoeff%AC, &
+                                                  Quiet = Quiet )
+          IF ( sub_err_stat /= SUCCESS ) THEN
+            msg = 'Error reading ACCoeff sibling file '//TRIM(sub_filename)
+            CALL Read_Cleanup(); RETURN
+          END IF
+          IF ( SpcCoeff%Sensor_Id           /= SpcCoeff%AC%Sensor_Id        .OR. &
+               SpcCoeff%WMO_Satellite_Id    /= SpcCoeff%AC%WMO_Satellite_Id .OR. &
+               SpcCoeff%WMO_Sensor_Id       /= SpcCoeff%AC%WMO_Sensor_Id    .OR. &
+               ANY( SpcCoeff%Sensor_Channel /= SpcCoeff%AC%Sensor_Channel ) ) THEN
+            msg = 'Antenna correction sensor information is inconsistent with SpcCoeff'
+            CALL Read_Cleanup(); RETURN
+          END IF
+        END IF
+
+        ! NLTECoeff sibling file
+        sub_filename = Filename(:dot_pos) // 'NLTECoeff' // Filename(dot_pos+9:)
+        IF ( File_Exists(TRIM(sub_filename)) ) THEN
+          sub_err_stat = NLTECoeff_netCDF_ReadFile( TRIM(sub_filename), &
+                                                    SpcCoeff%NC, &
+                                                    Quiet = Quiet )
+          IF ( sub_err_stat /= SUCCESS ) THEN
+            msg = 'Error reading NLTECoeff sibling file '//TRIM(sub_filename)
+            CALL Read_Cleanup(); RETURN
+          END IF
+          IF ( SpcCoeff%Sensor_Id           /= SpcCoeff%NC%Sensor_Id        .OR. &
+               SpcCoeff%WMO_Satellite_Id    /= SpcCoeff%NC%WMO_Satellite_Id .OR. &
+               SpcCoeff%WMO_Sensor_Id       /= SpcCoeff%NC%WMO_Sensor_Id    .OR. &
+               ANY( SpcCoeff%Sensor_Channel /= SpcCoeff%NC%Sensor_Channel ) ) THEN
+            msg = 'non-LTE correction sensor information is inconsistent with SpcCoeff'
+            CALL Read_Cleanup(); RETURN
+          END IF
+        END IF
+      END IF
+    END BLOCK
+
+
     ! Output an info message
     IF ( noisy ) THEN
       CALL SpcCoeff_Info( SpcCoeff, msg )
@@ -1131,7 +1190,7 @@ CONTAINS
     END IF
 
   CONTAINS
- 
+
     SUBROUTINE Read_CleanUp()
       IF ( close_file ) THEN
         nf90_status = NF90_CLOSE( fileid )
@@ -1143,7 +1202,7 @@ CONTAINS
       err_stat = FAILURE
       CALL Display_Message( ROUTINE_NAME,msg,err_stat )
     END SUBROUTINE Read_CleanUp
-    
+
   END FUNCTION SpcCoeff_netCDF_ReadFile
 
 

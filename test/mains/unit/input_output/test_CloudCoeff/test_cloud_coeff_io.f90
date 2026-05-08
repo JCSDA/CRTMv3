@@ -39,10 +39,10 @@ PROGRAM test_cloud_coeff_io
   ! Data dictionary:
   CHARACTER(2000)         :: info
   CHARACTER(*), PARAMETER :: Cloud_Model = 'CRTM'
-  CHARACTER(*), PARAMETER :: CloudCoeff_File = 'CloudCoeff.bin'
+  CHARACTER(*), PARAMETER :: CloudCoeff_File = 'CloudCoeff.nc4'
   CHARACTER(*), PARAMETER :: File_Path = './testinput/'
   LOGICAL,      PARAMETER :: Quiet  = .TRUE.
-  LOGICAL,      PARAMETER :: netCDF = .FALSE.
+  LOGICAL,      PARAMETER :: netCDF = .TRUE.
   INTEGER                 :: err_stat
   TYPE(UnitTest_type)     :: ioTest
   LOGICAL                 :: testPassed

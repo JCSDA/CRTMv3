@@ -27,7 +27,8 @@ MODULE CRTM_SpcCoeff
   ! Enviroment setup
   ! ----------------
   ! Module use
-  USE Message_Handler      , ONLY: SUCCESS, FAILURE, WARNING, Display_Message
+  USE Message_Handler      , ONLY: SUCCESS, FAILURE, WARNING, INFORMATION, Display_Message
+  USE File_Utility         , ONLY: File_Exists
   USE SensorInfo_Parameters, ONLY: N_POLARIZATION_TYPES    , &
                                    INVALID_POLARIZATION    , &
                                    UNPOLARIZED             , &
@@ -280,23 +281,52 @@ CONTAINS
     END IF
 
 
-    ! Read the SpcCoeff data files
+    ! Read the SpcCoeff data files. Per-sensor format probing keeps the
+    ! REL-3.2.0 NetCDF transition robust: prefer the requested format, fall
+    ! back to the alternate if only that one exists on disk.
     DO n = 1, n_Sensors
-      spccoeff_file = TRIM(ADJUSTL(base)) // TRIM(ADJUSTL(Sensor_ID(n))) // '.SpcCoeff.bin'
-      IF( PRESENT(netCDF) ) THEN
-        IF( netCDF ) THEN
-          spccoeff_file = TRIM(ADJUSTL(base)) // TRIM(ADJUSTL(Sensor_ID(n))) // '.SpcCoeff.nc'
+      BLOCK
+        CHARACTER(ML) :: nc_file, bin_file
+        LOGICAL       :: requested_nc, use_netCDF
+
+        requested_nc = .TRUE.
+        IF ( PRESENT(netCDF) ) requested_nc = netCDF
+
+        nc_file  = TRIM(ADJUSTL(base)) // TRIM(ADJUSTL(Sensor_ID(n))) // '.SpcCoeff.nc'
+        bin_file = TRIM(ADJUSTL(base)) // TRIM(ADJUSTL(Sensor_ID(n))) // '.SpcCoeff.bin'
+
+        IF ( requested_nc ) THEN
+          use_netCDF = .TRUE.
+          spccoeff_file = nc_file
+          IF ( .NOT. File_Exists(spccoeff_file) .AND. File_Exists(bin_file) ) THEN
+            use_netCDF    = .FALSE.
+            spccoeff_file = bin_file
+            IF ( noisy ) CALL Display_Message( ROUTINE_NAME, &
+              'NetCDF SpcCoeff missing for '//TRIM(Sensor_ID(n))// &
+              '; falling back to Binary '//TRIM(bin_file), INFORMATION )
+          END IF
+        ELSE
+          use_netCDF = .FALSE.
+          spccoeff_file = bin_file
+          IF ( .NOT. File_Exists(spccoeff_file) .AND. File_Exists(nc_file) ) THEN
+            use_netCDF    = .TRUE.
+            spccoeff_file = nc_file
+            IF ( noisy ) CALL Display_Message( ROUTINE_NAME, &
+              'Binary SpcCoeff missing for '//TRIM(Sensor_ID(n))// &
+              '; falling back to NetCDF '//TRIM(nc_file), INFORMATION )
+          END IF
         END IF
-      END IF
-      err_stat = SpcCoeff_ReadFile( &
-        spccoeff_file      , &
-        SC(n)              , &
-        netCDF = netCDF    , &
-        Quiet = .NOT. noisy )
-      IF ( err_stat /= SUCCESS ) THEN
-        WRITE( msg,'("Error reading SpcCoeff file #",i0,", ",a)') n, TRIM(spccoeff_file)
-        CALL Display_Message( ROUTINE_NAME, TRIM(msg)//TRIM(pid_msg), err_stat ); RETURN
-      END IF
+
+        err_stat = SpcCoeff_ReadFile( &
+          spccoeff_file        , &
+          SC(n)                , &
+          netCDF = use_netCDF  , &
+          Quiet  = .NOT. noisy )
+        IF ( err_stat /= SUCCESS ) THEN
+          WRITE( msg,'("Error reading SpcCoeff file #",i0,", ",a)') n, TRIM(spccoeff_file)
+          CALL Display_Message( ROUTINE_NAME, TRIM(msg)//TRIM(pid_msg), err_stat ); RETURN
+        END IF
+      END BLOCK
     END DO
 
 

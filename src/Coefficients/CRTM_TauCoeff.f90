@@ -30,7 +30,7 @@ MODULE CRTM_TauCoeff
   USE Type_Kinds          , ONLY: Long
   USE File_Utility        , ONLY: File_Exists
   USE Binary_File_Utility , ONLY: Open_Binary_File
-  USE Message_Handler     , ONLY: SUCCESS, FAILURE, WARNING, Display_Message
+  USE Message_Handler     , ONLY: SUCCESS, FAILURE, WARNING, INFORMATION, Display_Message
   USE CRTM_Parameters     , ONLY: MAX_N_SENSORS, SET
   USE ODAS_TauCoeff       , ONLY: ODAS_Load_TauCoeff    => Load_TauCoeff   , &
                                   ODAS_Destroy_TauCoeff => Destroy_TauCoeff, &
@@ -231,7 +231,9 @@ CONTAINS
     CHARACTER(SL), ALLOCATABLE :: SensorIDs(:)
     CHARACTER(SL), ALLOCATABLE :: zfnames(:)
     INTEGER,       ALLOCATABLE :: SensorIndex(:)
-    LOGICAL :: binary 
+    LOGICAL :: binary
+    LOGICAL :: use_netCDF
+    LOGICAL :: alt_available
 
     ! Set up
     Error_Status = SUCCESS
@@ -245,8 +247,9 @@ CONTAINS
     ELSE
       Process_ID_Tag = ' '
     END IF
-    ! ...Check netCDF argument
-    binary = .TRUE.
+    ! ...Check netCDF argument. Default is NetCDF (REL-3.2.0); fallback to
+    !    Binary (or vice versa) is decided per-batch below.
+    binary = .FALSE.
     IF ( PRESENT(netCDF) ) binary = .NOT. netCDF
 
     ! Determine the number of sensors and construct their filenames
@@ -281,11 +284,71 @@ CONTAINS
         TauCoeff_File(1) = 'TauCoeff.nc'
       END IF
     END IF
-    
+
     ! Add the file path
     DO n=1,n_Sensors
       TauCoeff_File(n) = TRIM(ADJUSTL(local_path))//TRIM(TauCoeff_File(n))
     END DO
+
+    ! Batch-level format fallback: if any of the requested files is missing
+    ! but the alternate-format set is fully present, switch the whole batch.
+    ! ODAS/ODPS/ODSSU loaders accept a single netCDF flag, so per-sensor
+    ! mixed formats are not supported.
+    alt_available = .TRUE.
+    DO n=1,n_Sensors
+      IF ( .NOT. File_Exists(TRIM(TauCoeff_File(n))) ) THEN
+        alt_available = .FALSE.
+        EXIT
+      END IF
+    END DO
+    IF ( .NOT. alt_available ) THEN
+      ! Try the alternate format for the whole batch.
+      BLOCK
+        CHARACTER(256), DIMENSION(MAX_N_SENSORS) :: Alt_File
+        LOGICAL :: alt_complete
+        CHARACTER(8) :: alt_ext, req_ext
+
+        IF ( binary ) THEN
+          req_ext = '.bin'
+          alt_ext = '.nc'
+        ELSE
+          req_ext = '.nc'
+          alt_ext = '.bin'
+        END IF
+
+        IF ( PRESENT(Sensor_ID) ) THEN
+          DO n=1,n_Sensors
+            Alt_File(n) = TRIM(ADJUSTL(local_path)) // &
+                          TRIM(ADJUSTL(Sensor_ID(n))) // &
+                          '.TauCoeff' // TRIM(alt_ext)
+          END DO
+        ELSE
+          Alt_File(1) = TRIM(ADJUSTL(local_path)) // 'TauCoeff' // TRIM(alt_ext)
+        END IF
+
+        alt_complete = .TRUE.
+        DO n=1,n_Sensors
+          IF ( .NOT. File_Exists(TRIM(Alt_File(n))) ) THEN
+            alt_complete = .FALSE.
+            EXIT
+          END IF
+        END DO
+
+        IF ( alt_complete ) THEN
+          DO n=1,n_Sensors
+            TauCoeff_File(n) = Alt_File(n)
+          END DO
+          binary = .NOT. binary
+          CALL Display_Message( ROUTINE_NAME, &
+            'Requested '//TRIM(req_ext)//' TauCoeff file(s) missing; '// &
+            'falling back to '//TRIM(alt_ext)//' for the whole batch', &
+            INFORMATION )
+        END IF
+      END BLOCK
+    END IF
+
+    ! Resolved per-batch netCDF flag to pass downstream.
+    use_netCDF = .NOT. binary
 
     ! set the sensor dimension for structure TC
     TC%n_Sensors = n_Sensors
@@ -401,7 +464,7 @@ CONTAINS
                                        Sensor_ID        =SensorIDs(1:n)   , & 
                                        File_Path        =File_Path        , & 
                                        Quiet            =Quiet            , & 
-                                       netCDF           =netCDF           , &
+                                       netCDF           =use_netCDF       , &
                                        Process_ID       =Process_ID       , & 
                                        Output_Process_ID=Output_Process_ID, & 
                                        Message_Log      =Message_Log        ) 
@@ -410,7 +473,7 @@ CONTAINS
         Error_Status = ODAS_Load_TauCoeff( &
                                        File_Path        =File_Path        , &
                                        Quiet            =Quiet            , &
-                                       netCDF           =netCDF           , &
+                                       netCDF           =use_netCDF       , &
                                        Process_ID       =Process_ID       , &
                                        Output_Process_ID=Output_Process_ID, &
                                        Message_Log      =Message_Log        )
@@ -450,7 +513,7 @@ CONTAINS
                                        Sensor_ID        =SensorIDs(1:n)   , & 
                                        File_Path        =File_Path        , & 
                                        Quiet            =Quiet            , &
-                                       netCDF           =netCDF           , & 
+                                       netCDF           =use_netCDF       , & 
                                        Process_ID       =Process_ID       , & 
                                        Output_Process_ID=Output_Process_ID, & 
                                        Message_Log      =Message_Log        ) 
@@ -459,7 +522,7 @@ CONTAINS
         Error_Status = ODPS_Load_TauCoeff( &
                                        File_Path        =File_Path        , &
                                        Quiet            =Quiet            , &
-                                       netCDF           =netCDF           , &
+                                       netCDF           =use_netCDF       , &
                                        Process_ID       =Process_ID       , &
                                        Output_Process_ID=Output_Process_ID, &
                                        Message_Log      =Message_Log        )

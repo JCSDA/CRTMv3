@@ -12,6 +12,7 @@ PROGRAM test_ClearSky
   !
   ! Module usage
   USE CRTM_Module
+  USE CRTM_RTSolution_Diff, ONLY: Report_RTSolution_Diff
   ! Disable all implicit typing
   IMPLICIT NONE
   ! ============================================================================
@@ -310,6 +311,8 @@ PROGRAM test_ClearSky
   ELSE
     Message = 'RTSolution_TL results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_Diff( actual=RTSolution_TL, expected=rts_TL, &
+                                 label=TRIM(PROGRAM_NAME)//' (tangent-linear)' )
     ! Write the current RTSolution results to file
     rts_File = TRIM(Sensor_Id)//'.RTSolution_TL.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution_TL, Quiet=.TRUE. )

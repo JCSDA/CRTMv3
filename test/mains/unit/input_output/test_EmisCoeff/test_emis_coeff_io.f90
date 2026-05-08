@@ -47,17 +47,17 @@ PROGRAM test_emis_coeff_io
 
   ! Data dictionary:
   CHARACTER(2000)         :: info
-  CHARACTER(*), PARAMETER :: Default_IRwaterCoeff_File   = 'Nalli.IRwater.EmisCoeff.bin'
-  CHARACTER(*), PARAMETER :: Default_IRlandCoeff_File    = 'NPOESS.IRland.EmisCoeff.bin'
-  CHARACTER(*), PARAMETER :: Default_IRsnowCoeff_File    = 'NPOESS.IRsnow.EmisCoeff.bin'
-  CHARACTER(*), PARAMETER :: Default_IRiceCoeff_File     = 'NPOESS.IRice.EmisCoeff.bin'
-  CHARACTER(*), PARAMETER :: Default_VISwaterCoeff_File  = 'NPOESS.VISwater.EmisCoeff.bin'
-  CHARACTER(*), PARAMETER :: Default_VISlandCoeff_File   = 'NPOESS.VISland.EmisCoeff.bin'
-  CHARACTER(*), PARAMETER :: Default_VISsnowCoeff_File   = 'NPOESS.VISsnow.EmisCoeff.bin'
-  CHARACTER(*), PARAMETER :: Default_VISiceCoeff_File    = 'NPOESS.VISice.EmisCoeff.bin'
-  CHARACTER(*), PARAMETER :: Optional_IRwaterCoeff_File  = 'Nalli2.IRwater.EmisCoeff.bin'
-  CHARACTER(*), PARAMETER :: Optional_IRsnowCoeff_File   = 'Nalli.IRsnow.EmisCoeff.bin'
-  LOGICAL,      PARAMETER :: netCDF = .FALSE.
+  CHARACTER(*), PARAMETER :: Default_IRwaterCoeff_File   = 'Nalli.IRwater.EmisCoeff.nc4'
+  CHARACTER(*), PARAMETER :: Default_IRlandCoeff_File    = 'NPOESS.IRland.EmisCoeff.nc4'
+  CHARACTER(*), PARAMETER :: Default_IRsnowCoeff_File    = 'NPOESS.IRsnow.EmisCoeff.nc4'
+  CHARACTER(*), PARAMETER :: Default_IRiceCoeff_File     = 'NPOESS.IRice.EmisCoeff.nc4'
+  CHARACTER(*), PARAMETER :: Default_VISwaterCoeff_File  = 'NPOESS.VISwater.EmisCoeff.nc4'
+  CHARACTER(*), PARAMETER :: Default_VISlandCoeff_File   = 'NPOESS.VISland.EmisCoeff.nc4'
+  CHARACTER(*), PARAMETER :: Default_VISsnowCoeff_File   = 'NPOESS.VISsnow.EmisCoeff.nc4'
+  CHARACTER(*), PARAMETER :: Default_VISiceCoeff_File    = 'NPOESS.VISice.EmisCoeff.nc4'
+  CHARACTER(*), PARAMETER :: Optional_IRwaterCoeff_File  = 'Nalli2.IRwater.EmisCoeff.nc4'
+  CHARACTER(*), PARAMETER :: Optional_IRsnowCoeff_File   = 'Nalli.IRsnow.EmisCoeff.nc4'
+  LOGICAL,      PARAMETER :: netCDF = .TRUE.
   CHARACTER(*), PARAMETER :: File_Path = './testinput/'
   LOGICAL,      PARAMETER :: Quiet = .TRUE.
   INTEGER                 :: err_stat

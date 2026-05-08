@@ -26,8 +26,8 @@ PROGRAM test_Aerosol_Bypass_Adjoint
 
 
   ! Aerosol/Cloud coefficient format
-  CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
-  !CHARACTER(*), PARAMETER :: Coeff_Format = 'netCDF'
+  CHARACTER(*), PARAMETER :: Coeff_Format = 'netCDF'
+  !CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
 
 
 

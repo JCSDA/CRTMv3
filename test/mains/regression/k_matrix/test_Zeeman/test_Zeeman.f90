@@ -36,6 +36,7 @@ PROGRAM test_Zeeman
   !
   ! Module usage
   USE CRTM_Module
+  USE CRTM_RTSolution_Diff, ONLY: Report_RTSolution_Diff
   ! Disable all implicit typing
   IMPLICIT NONE
   ! ============================================================================
@@ -87,6 +88,7 @@ PROGRAM test_Zeeman
   INTEGER :: n_ls, n_ms
   INTEGER :: n_l, n_m
   CHARACTER(256) :: atmk_File, sfck_File, rtsk_File
+  LOGICAL        :: any_compare_failed = .FALSE.
   TYPE(CRTM_Atmosphere_type), ALLOCATABLE :: atm_k(:,:)
   TYPE(CRTM_Surface_type)   , ALLOCATABLE :: sfc_k(:,:)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rts_k(:,:)
@@ -429,7 +431,7 @@ PROGRAM test_Zeeman
       Message = 'Error creating temporary Atmosphere_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
-    STOP 1
+    any_compare_failed = .TRUE.
   END IF
   ! 9e.2 Surface
   IF ( ALL(CRTM_Surface_Compare(Surface_K, sfc_k, n_SigFig=5)) ) THEN
@@ -445,7 +447,7 @@ PROGRAM test_Zeeman
       Message = 'Error creating temporary Surface_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
-    STOP 1
+    any_compare_failed = .TRUE.
   END IF
   ! 9e.3 RTSolution_K
   IF ( ALL(CRTM_RTSolution_Compare(RTSolution_K, rts_k, n_SigFig=5)) ) THEN
@@ -454,14 +456,17 @@ PROGRAM test_Zeeman
   ELSE
     Message = 'RTSolution_K results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_Diff( actual=RTSolution_K, expected=rts_k, &
+                                 label=TRIM(PROGRAM_NAME)//' (K-matrix)' )
     rtsk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution_K.bin'
     Error_Status = CRTM_RTSolution_WriteFile( rtsk_File, RTSolution_K, Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary RTSolution_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
-    STOP 1
+    any_compare_failed = .TRUE.
   END IF
+  IF ( any_compare_failed ) STOP 1
   ! ============================================================================
 
   ! ============================================================================

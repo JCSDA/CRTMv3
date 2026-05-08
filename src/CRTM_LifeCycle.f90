@@ -35,6 +35,7 @@ MODULE CRTM_LifeCycle
   ! -----------------
   ! Module usage
   USE Message_Handler
+  USE File_Utility           , ONLY: File_Exists
   USE CRTM_ChannelInfo_Define, ONLY: CRTM_ChannelInfo_type, &
                                      CRTM_ChannelInfo_Associated, &
                                      CRTM_ChannelInfo_Destroy, &
@@ -634,6 +635,9 @@ CONTAINS
     CHARACTER(SL) :: Default_VISsnowCoeff_Format
     CHARACTER(SL) :: Default_VISiceCoeff_Format
     CHARACTER(SL) :: Default_File_Path
+    CHARACTER(SL) :: Effective_Bin_Path
+    CHARACTER(SL) :: Effective_NC_Path
+    CHARACTER(SL) :: Effective_Coeff_Path
 
 
     INTEGER :: l, n, n_Sensors
@@ -698,33 +702,35 @@ CONTAINS
     Default_File_Path = ''
     ! ...Default filenames
     Default_Aerosol_Model       = 'CRTM'
-    Default_AerosolCoeff_File   = 'AerosolCoeff.bin'
+    Default_AerosolCoeff_File   = 'AerosolCoeff.nc4'
     Default_Cloud_Model         = 'CRTM'
-    Default_CloudCoeff_File     = 'CloudCoeff.bin'
-    Default_IRwaterCoeff_File   = 'Nalli.IRwater.EmisCoeff.bin'
-    Default_IRlandCoeff_File    = 'NPOESS.IRland.EmisCoeff.bin'
+    Default_CloudCoeff_File     = 'CloudCoeff.nc4'
+    Default_IRwaterCoeff_File   = 'Nalli.IRwater.EmisCoeff.nc4'
+    Default_IRlandCoeff_File    = 'NPOESS.IRland.EmisCoeff.nc4'
     Default_IRsnow_Model        = 'SEcategory'
-    Default_IRsnowCoeff_File    = 'NPOESS.IRsnow.EmisCoeff.bin'
-    Default_IRiceCoeff_File     = 'NPOESS.IRice.EmisCoeff.bin'
-    Default_VISwaterCoeff_File  = 'NPOESS.VISwater.EmisCoeff.bin'
-    Default_VISlandCoeff_File   = 'NPOESS.VISland.EmisCoeff.bin'
-    Default_VISsnowCoeff_File   = 'NPOESS.VISsnow.EmisCoeff.bin'
-    Default_VISiceCoeff_File    = 'NPOESS.VISice.EmisCoeff.bin'
-    Default_MWwaterCoeff_File   = 'FASTEM6.MWwater.EmisCoeff.bin'
+    Default_IRsnowCoeff_File    = 'NPOESS.IRsnow.EmisCoeff.nc4'
+    Default_IRiceCoeff_File     = 'NPOESS.IRice.EmisCoeff.nc4'
+    Default_VISwaterCoeff_File  = 'NPOESS.VISwater.EmisCoeff.nc4'
+    Default_VISlandCoeff_File   = 'NPOESS.VISland.EmisCoeff.nc4'
+    Default_VISsnowCoeff_File   = 'NPOESS.VISsnow.EmisCoeff.nc4'
+    Default_VISiceCoeff_File    = 'NPOESS.VISice.EmisCoeff.nc4'
+    Default_MWwaterCoeff_File   = 'FASTEM6.MWwater.EmisCoeff.nc'
     Default_MWwaterCoeff_Scheme = 'FASTEM6'
-    ! ... Default file formats
-    Default_AerosolCoeff_Format = 'Binary'
-    Default_CloudCoeff_Format   = 'Binary'
-    Default_SpcCoeff_Format     = 'Binary'
-    Default_TauCoeff_Format     = 'Binary'
-    Default_IRwaterCoeff_Format = 'Binary'
-    Default_IRlandCoeff_Format  = 'Binary'
-    Default_IRsnowCoeff_Format  = 'Binary'
-    Default_IRiceCoeff_Format   = 'Binary'
-    Default_VISwaterCoeff_Format= 'Binary'
-    Default_VISlandCoeff_Format = 'Binary'
-    Default_VISsnowCoeff_Format = 'Binary'
-    Default_VISiceCoeff_Format  = 'Binary'
+    ! ... Default file formats (NetCDF is the canonical format from REL-3.2.0;
+    !     Resolve_Coeff_Format below will fall back to Binary if a NetCDF file
+    !     is missing on disk but the .bin equivalent is present.)
+    Default_AerosolCoeff_Format = 'netCDF'
+    Default_CloudCoeff_Format   = 'netCDF'
+    Default_SpcCoeff_Format     = 'netCDF'
+    Default_TauCoeff_Format     = 'netCDF'
+    Default_IRwaterCoeff_Format = 'netCDF'
+    Default_IRlandCoeff_Format  = 'netCDF'
+    Default_IRsnowCoeff_Format  = 'netCDF'
+    Default_IRiceCoeff_Format   = 'netCDF'
+    Default_VISwaterCoeff_Format= 'netCDF'
+    Default_VISlandCoeff_Format = 'netCDF'
+    Default_VISsnowCoeff_Format = 'netCDF'
+    Default_VISiceCoeff_Format  = 'netCDF'
     ! ...Were coefficient models specified?
     IF ( PRESENT(Aerosol_Model       ) ) Default_Aerosol_Model       = TRIM(ADJUSTL(Aerosol_Model))
     IF ( PRESENT(Cloud_Model         ) ) Default_Cloud_Model         = TRIM(ADJUSTL(Cloud_Model))
@@ -762,21 +768,33 @@ CONTAINS
       Default_MWwaterCoeff_File  = TRIM(ADJUSTL(File_Path)) // TRIM(Default_MWwaterCoeff_File)
     END IF
 
+    ! ...Effective search paths for the format-resolver. NC_File_Path wins for
+    !    NetCDF when it is supplied separately; otherwise both formats are
+    !    expected to live under File_Path (the typical layout for the CRTM
+    !    test-data tree and most external callers).
+    Effective_Bin_Path = ''
+    IF ( PRESENT(File_Path)    ) Effective_Bin_Path = File_Path
+    IF ( PRESENT(NC_File_Path) ) THEN
+      Effective_NC_Path = NC_File_Path
+    ELSE
+      Effective_NC_Path = Effective_Bin_Path
+    END IF
+
     ! Load the spectral coefficients
     netCDF = .FALSE.
     IF (Default_SpcCoeff_Format == 'netCDF' ) THEN
         netCDF = .TRUE.
     END IF
     IF ( .NOT. Quiet_ ) THEN
-      WRITE(*,*) "Loading"//SpcCoeff_Format//" spectral coefficients."
+      WRITE(*,*) "Loading "//TRIM(Default_SpcCoeff_Format)//" spectral coefficients."
     END IF
     err_stat = CRTM_SpcCoeff_Load( &
-                 Sensor_ID                            , &
-                 File_Path         = File_Path        , &
-                 netCDF            = netCDF           , &
-                 Quiet             = Quiet            , &
-                 Process_ID        = Process_ID       , &
-                 Output_Process_ID = Output_Process_ID  )
+                 Sensor_ID                                 , &
+                 File_Path         = Effective_NC_Path     , &
+                 netCDF            = netCDF                , &
+                 Quiet             = Quiet                 , &
+                 Process_ID        = Process_ID            , &
+                 Output_Process_ID = Output_Process_ID       )
     IF ( err_stat /= SUCCESS ) THEN
       CALL Display_Message( ROUTINE_NAME,'Error loading SpcCoeff data'//TRIM(pid_msg),err_stat )
       RETURN
@@ -789,15 +807,15 @@ CONTAINS
         netCDF = .TRUE.
     END IF
     IF ( .NOT. Quiet_ ) THEN
-      WRITE(*,*) "Loading "//TauCoeff_Format//" transmittance coefficients."
+      WRITE(*,*) "Loading "//TRIM(Default_TauCoeff_Format)//" transmittance coefficients."
     END IF
     err_stat = CRTM_Load_TauCoeff( &
-                 Sensor_ID         = Sensor_ID        , &
-                 File_Path         = File_Path        , &
-                 Quiet             = iQuiet           , &  ! *** Use of iQuiet temporary
-                 netCDF            = netCDF           , &
-                 Process_ID        = Process_ID       , &
-                 Output_Process_ID = Output_Process_ID  )
+                 Sensor_ID         = Sensor_ID             , &
+                 File_Path         = Effective_NC_Path     , &
+                 Quiet             = iQuiet                , &  ! *** Use of iQuiet temporary
+                 netCDF            = netCDF                , &
+                 Process_ID        = Process_ID            , &
+                 Output_Process_ID = Output_Process_ID       )
     IF ( err_stat /= SUCCESS ) THEN
       CALL Display_Message( ROUTINE_NAME,'Error loading TauCoeff data'//TRIM(pid_msg),err_stat )
       RETURN
@@ -806,14 +824,11 @@ CONTAINS
 
     ! Load the cloud coefficients
     IF ( Local_Load_CloudCoeff ) THEN
-      IF ( Default_CloudCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
-      ! Default_CloudCoeff_File = TRIM(ADJUSTL(Default_File_Path)) // TRIM(Default_CloudCoeff_File)
+      CALL Resolve_Coeff_Format( Default_CloudCoeff_File, Default_CloudCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_CloudCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading cloud coefficients: ", a) ') TRIM(Default_CloudCoeff_File)
       END IF
@@ -835,13 +850,11 @@ CONTAINS
 
     ! Load the aerosol coefficients
     IF ( Local_Load_AerosolCoeff ) THEN
-      IF ( Default_AerosolCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_AerosolCoeff_File, Default_AerosolCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_AerosolCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading aerosol coefficients: ", a) ') TRIM(Default_AerosolCoeff_File)
       END IF
@@ -865,13 +878,11 @@ CONTAINS
     ! ...Infrared
     Infrared_Sensor: IF ( ANY(SpcCoeff_IsInfraredSensor(SC)) ) THEN
       ! ...IR land
-      IF ( Default_IRlandCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_IRlandCoeff_File, Default_IRlandCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_IRlandCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading IR land emissivity coefficients: ", a) ') TRIM(Default_IRlandCoeff_File)
       END IF
@@ -888,13 +899,11 @@ CONTAINS
         RETURN
       END IF
       ! ...IR Water
-      IF ( Default_IRwaterCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_IRwaterCoeff_File, Default_IRwaterCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_IRwaterCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading IR water emissivity coefficients: ", a) ') TRIM(Default_IRwaterCoeff_File)
       END IF
@@ -911,13 +920,11 @@ CONTAINS
         RETURN
       END IF
       ! ...IR snow
-      IF ( Default_IRsnowCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_IRsnowCoeff_File, Default_IRsnowCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_IRsnowCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF (Default_IRsnow_Model == 'SEcategory') THEN
         isSEcategory = .TRUE.
       ELSE
@@ -940,13 +947,11 @@ CONTAINS
         RETURN
       END IF
       ! ...IR ice
-      IF ( Default_IRiceCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_IRiceCoeff_File, Default_IRiceCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_IRiceCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading IR ice emissivity coefficients: ", a) ') TRIM(Default_IRiceCoeff_File)
       END IF
@@ -967,13 +972,11 @@ CONTAINS
     ! ...Visible
     Visible_Sensor: IF ( ANY(SpcCoeff_IsVisibleSensor(SC)) ) THEN
       ! ...VIS land
-      IF ( Default_VISlandCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_VISlandCoeff_File, Default_VISlandCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_VISlandCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading VIS land emissivity coefficients: ", a) ') TRIM(Default_VISlandCoeff_File)
       END IF
@@ -990,13 +993,11 @@ CONTAINS
         RETURN
       END IF
       ! ...VIS water
-      IF ( Default_VISwaterCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_VISwaterCoeff_File, Default_VISwaterCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_VISwaterCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading VIS water emissivity coefficients: ", a) ') TRIM(Default_VISwaterCoeff_File)
       END IF
@@ -1013,13 +1014,11 @@ CONTAINS
         RETURN
       END IF
       ! ...VIS snow
-      IF ( Default_VISsnowCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_VISsnowCoeff_File, Default_VISsnowCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_VISsnowCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading VIS snow emissivity coefficients: ", a) ') TRIM(Default_VISsnowCoeff_File)
       END IF
@@ -1036,13 +1035,11 @@ CONTAINS
         RETURN
       END IF
       ! ...VIS ice
-      IF ( Default_VISiceCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_VISiceCoeff_File, Default_VISiceCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_VISiceCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading VIS ice emissivity coefficients: ", a) ') TRIM(Default_VISiceCoeff_File)
       END IF
@@ -1334,4 +1331,95 @@ CONTAINS
     LOGICAL :: Status
     Status = ALL(CRTM_ChannelInfo_Associated(ChannelInfo))
   END FUNCTION CRTM_IsInitialized
+
+
+!------------------------------------------------------------------------------
+! Resolve_Coeff_Format
+!
+! Decide which format/file/directory a coefficient loader should actually use
+! given a requested format and the user-supplied paths. If the requested file
+! exists, return it unchanged. Otherwise, probe the alternate-format
+! equivalent (NetCDF <-> Binary) and rewrite Filename, Format, and
+! Resolved_Path in place so the caller transparently loads the available
+! format. Supports the REL-3.2.0 Binary -> NetCDF transition.
+!
+! NC_Path and Bin_Path are the user's preferred directories for each format
+! (typically NC_File_Path and File_Path arguments to CRTM_Init). When only
+! one path is meaningful, callers can pass the same string for both.
+!
+! When falling back from .bin to NetCDF the helper prefers .nc4 then .nc,
+! matching the on-disk extensions used by different coefficient categories.
+!
+! When neither file exists, the in/out arguments are left unchanged so the
+! downstream loader's existing "file not found" error path triggers normally.
+!------------------------------------------------------------------------------
+  SUBROUTINE Resolve_Coeff_Format( Filename, Format, NC_Path, Bin_Path, &
+                                   Resolved_Path, Quiet )
+    CHARACTER(*),           INTENT(IN OUT) :: Filename
+    CHARACTER(*),           INTENT(IN OUT) :: Format
+    CHARACTER(*),           INTENT(IN)     :: NC_Path
+    CHARACTER(*),           INTENT(IN)     :: Bin_Path
+    CHARACTER(*),           INTENT(OUT)    :: Resolved_Path
+    LOGICAL,      OPTIONAL, INTENT(IN)     :: Quiet
+    ! Locals
+    CHARACTER(LEN(Filename)) :: trial_name, requested_name
+    CHARACTER(LEN(Format))   :: requested_format
+    LOGICAL :: noisy
+    INTEGER :: dot
+
+    noisy = .TRUE.
+    IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
+
+    requested_name   = Filename
+    requested_format = Format
+
+    ! Default the resolved path to whichever directory matches the request.
+    IF ( TRIM(Format) == 'netCDF' ) THEN
+      Resolved_Path = NC_Path
+    ELSE
+      Resolved_Path = Bin_Path
+    END IF
+
+    ! Already on disk: nothing to do.
+    IF ( File_Exists(TRIM(Resolved_Path)//TRIM(Filename)) ) RETURN
+
+    dot = INDEX(Filename, '.', BACK=.TRUE.)
+    IF ( dot < 1 ) RETURN  ! No extension; can't infer alternate.
+
+    SELECT CASE ( TRIM(Filename(dot:)) )
+    CASE ( '.nc', '.nc4' )
+      ! Requested NetCDF; try the binary alternate in Bin_Path.
+      trial_name = Filename(:dot-1) // '.bin'
+      IF ( File_Exists(TRIM(Bin_Path)//TRIM(trial_name)) ) THEN
+        Filename      = trial_name
+        Format        = 'Binary'
+        Resolved_Path = Bin_Path
+      END IF
+
+    CASE ( '.bin' )
+      ! Requested Binary; try .nc4 then .nc in NC_Path.
+      trial_name = Filename(:dot-1) // '.nc4'
+      IF ( File_Exists(TRIM(NC_Path)//TRIM(trial_name)) ) THEN
+        Filename      = trial_name
+        Format        = 'netCDF'
+        Resolved_Path = NC_Path
+      ELSE
+        trial_name = Filename(:dot-1) // '.nc'
+        IF ( File_Exists(TRIM(NC_Path)//TRIM(trial_name)) ) THEN
+          Filename      = trial_name
+          Format        = 'netCDF'
+          Resolved_Path = NC_Path
+        END IF
+      END IF
+
+    END SELECT
+
+    IF ( noisy .AND. Filename /= requested_name ) THEN
+      CALL Display_Message( 'CRTM_Init', &
+        'Requested '//TRIM(requested_format)//' file '//TRIM(requested_name)// &
+        ' not found; falling back to '//TRIM(Format)//' file '//TRIM(Filename), &
+        INFORMATION )
+    END IF
+  END SUBROUTINE Resolve_Coeff_Format
+
 END MODULE CRTM_LifeCycle
