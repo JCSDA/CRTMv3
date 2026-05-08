@@ -1,4 +1,4 @@
-CRTM REL-3.1.3
+CRTM REL-3.2.0
 ====================
 
 [![Build Status](https://app.travis-ci.com/JCSDA/CRTMv3.svg?branch=develop)](https://app.travis-ci.com/JCSDA/CRTMv3)
@@ -9,11 +9,13 @@ Preamble
 CRTM v3.2.0 release (`REL-3.2.0`)
 
 v3.2.0 released MMMM DD, YYYY
+v3.1.3 released February 12, 2026 (small release)
 v3.1.2 released July 11, 2025
 v3.1.1 released August 12, 2024
 v3.1.0 (alpha) Released October 31, 2023
 v3.0.0 Released March, 2023  
-v2.4.1-alpha Released on April 1, 2021 (internal release only)
+
+v2.4.1 Released on June 9, 2025 (NB 2.4.x development/releases persisted well into the era where v3.x was being developed) 
 v2.4.0 Released on October 23, 2020
 
 This is a v3.x release of CRTM, some features may not be fully functional. Contact crtm-support@googlegroups.com.
