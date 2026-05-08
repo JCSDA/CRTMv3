@@ -27,20 +27,26 @@ PROGRAM AerosolCoeff_Inspect
   ! Parameters
   ! ----------
   CHARACTER(*), PARAMETER :: PROGRAM_NAME = 'AerosolCoeff_Inspect'
-  CHARACTER(*), PARAMETER :: PROGRAM_RCS_ID = &
+  CHARACTER(*), PARAMETER :: PROGRAM_RCS_ID = '$Id$'
 
   ! ---------
   ! Variables
   ! ---------
   INTEGER :: Error_Status
   CHARACTER(256) :: Filename
+  CHARACTER(256) :: Aerosol_Model
   TYPE(AerosolCoeff_type) :: A
 
   ! Output program header
   CALL Program_Message( PROGRAM_NAME, &
                         'Program to display the contents of a CRTM Binary format '//&
                         'AerosolCoeff file to stdout.', &
-                        '$Revision$' )
+                        PROGRAM_RCS_ID )
+
+  ! Get the aerosol model
+  WRITE( *,FMT='(/5x,"Enter the Aerosol Model (CRTM, CMAQ, GOCART-GEOS5, or NAAPS): ")',ADVANCE='NO' )
+  READ( *,'(a)' ) Aerosol_Model
+  Aerosol_Model = ADJUSTL( Aerosol_Model )
 
   ! Get the filename
   WRITE( *,FMT='(/5x,"Enter the Binary AerosolCoeff filename: ")',ADVANCE='NO' )
@@ -54,7 +60,7 @@ PROGRAM AerosolCoeff_Inspect
   END IF
 
   ! Read the binary data file
-  Error_Status = AerosolCoeff_Binary_ReadFile( Filename, A )
+  Error_Status = AerosolCoeff_Binary_ReadFile( Aerosol_Model, Filename, A )
   IF ( Error_Status /= SUCCESS ) THEN
     CALL Display_Message( PROGRAM_NAME, &
                           'Error reading Binary AerosolCoeff file '//&

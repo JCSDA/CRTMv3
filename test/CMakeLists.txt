@@ -33,6 +33,14 @@ function(CREATE_SYMLINK_FILENAME src dst)
         endforeach(FILENAME)
 endfunction(CREATE_SYMLINK_FILENAME)
 
+function(ADD_CRTM_UNIT_TEST target source)
+  add_executable(${target} ${source})
+  target_link_libraries(${target} PRIVATE crtm)
+  add_test(NAME test_${target}
+           COMMAND $<TARGET_FILE:${target}>)
+  set_tests_properties(test_${target} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+endfunction()
+
 # Create Data directory for test input config and symlink all files
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/testinput)
@@ -281,13 +289,6 @@ add_test(NAME test_check_crtm
          COMMAND test_check_crtm)
 set_tests_properties(test_check_crtm PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
-add_executable(test_check_crtm_random  mains/application/check_crtm_random_profiles.F90)
-target_link_libraries(test_check_crtm_random PRIVATE crtm)
-add_test(NAME test_check_crtm_random
-         COMMAND test_check_crtm_random)
-set_tests_properties(test_check_crtm_random PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-
-
 add_executable(Unit_TL_TEST mains/unit/Unit_Test/test_TL.f90)
 target_link_libraries(Unit_TL_TEST PRIVATE crtm)
 add_test(NAME test_Unit_TL_TEST
@@ -299,6 +300,24 @@ target_link_libraries(Unit_Aerosol_Bypass PRIVATE crtm)
 add_test(NAME test_Unit_Aerosol_Bypass
          COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass>)
 set_tests_properties(test_Unit_Aerosol_Bypass PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(Unit_AerosolScatter_TL mains/unit/Unit_Test/test_AerosolScatter_TL.f90)
+target_link_libraries(Unit_AerosolScatter_TL PRIVATE crtm)
+add_test(NAME test_Unit_AerosolScatter_TL
+         COMMAND $<TARGET_FILE:Unit_AerosolScatter_TL>)
+set_tests_properties(test_Unit_AerosolScatter_TL PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(Unit_AerosolScatter_AD mains/unit/Unit_Test/test_AerosolScatter_AD.f90)
+target_link_libraries(Unit_AerosolScatter_AD PRIVATE crtm)
+add_test(NAME test_Unit_AerosolScatter_AD
+         COMMAND $<TARGET_FILE:Unit_AerosolScatter_AD>)
+set_tests_properties(test_Unit_AerosolScatter_AD PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(Unit_AerosolScatter_K mains/unit/Unit_Test/test_AerosolScatter_K.f90)
+target_link_libraries(Unit_AerosolScatter_K PRIVATE crtm)
+add_test(NAME test_Unit_AerosolScatter_K
+         COMMAND $<TARGET_FILE:Unit_AerosolScatter_K>)
+set_tests_properties(test_Unit_AerosolScatter_K PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_Aerosol_Bypass_TL mains/unit/Unit_Test/test_Aerosol_Bypass_TL.f90)
 target_link_libraries(Unit_Aerosol_Bypass_TL PRIVATE crtm)
@@ -350,6 +369,15 @@ foreach(testtype IN LISTS ODPS_Utils)
 	target_link_libraries(${testtype} PRIVATE crtm)
 endforeach()
 
+#TauCoeff general utilities
+list (APPEND TCoeff_Utils
+  TauCoeff_Inspect
+)
+foreach(testtype IN LISTS TCoeff_Utils)
+	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/TauCoeff/${testtype}/${testtype}.f90)
+	target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
 #CloudCoeff utilities 
 list (APPEND CCoef_Utils
   CloudCoeff_NC2BIN
@@ -358,6 +386,15 @@ list (APPEND CCoef_Utils
 )
 foreach(testtype IN LISTS CCoef_Utils)
 	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/CloudCoeff/${testtype}/${testtype}.f90)
+	target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+#AerosolCoeff utilities
+list (APPEND ACoeff_Utils
+  AerosolCoeff_Inspect
+)
+foreach(testtype IN LISTS ACoeff_Utils)
+	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/AerosolCoeff/${testtype}/${testtype}.f90)
 	target_link_libraries(${testtype} PRIVATE crtm)
 endforeach()
 
@@ -395,54 +432,26 @@ endforeach()
 
 #first upper level Unit_Test
 
-#(PS) SpcCoeff Version 3 I/O test
-add_executable(Spc_IO mains/unit/input_output/test_SpcCoeff/test_spc_io.f90)
-target_link_libraries(Spc_IO PRIVATE crtm)
-add_test(NAME test_Spc_IO
-         COMMAND $<TARGET_FILE:Spc_IO>)
-set_tests_properties(test_Spc_IO PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+list(APPEND io_tests
+  Spc_IO mains/unit/input_output/test_SpcCoeff/test_spc_io.f90
+  Spc_IO_NC mains/unit/input_output/test_SpcCoeff_NC/test_spc_io_nc.f90
+  TauCoeff_IO_NC mains/unit/input_output/test_TauCoeff_NC/test_taucoeff_io_nc.f90
+  EmisCoeff_IO_NC mains/unit/input_output/test_EmisCoeff_NC/test_emis_coeff_io_nc.f90
+  AerosolCoeff_IO mains/unit/input_output/test_AerosolCoeff/test_aerosol_coeff_io.f90
+  AerosolCoeff_IO_NC mains/unit/input_output/test_AerosolCoeff_NC/test_aerosol_coeff_io_nc.f90
+  CloudCoeff_IO mains/unit/input_output/test_CloudCoeff/test_cloud_coeff_io.f90
+  CloudCoeff_IO_NC mains/unit/input_output/test_CloudCoeff_NC/test_cloud_coeff_io_nc.f90
+  BeCoeff_IO_NC mains/unit/input_output/test_BeCoeff_NC/test_becoeff_io_nc.f90
+)
 
-#(PS) SpcCoeff netCDF I/O test
-add_executable(Spc_IO_NC mains/unit/input_output/test_SpcCoeff_NC/test_spc_io_nc.f90)
-target_link_libraries(Spc_IO_NC PRIVATE crtm)
-add_test(NAME test_Spc_IO_NC
-         COMMAND $<TARGET_FILE:Spc_IO_NC>)
-set_tests_properties(test_Spc_IO_NC PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-
-#(PS) TauCoeff netCDF I/O test
-add_executable(TauCoeff_IO_NC mains/unit/input_output/test_TauCoeff_NC/test_taucoeff_io_nc.f90)
-target_link_libraries(TauCoeff_IO_NC PRIVATE crtm)
-add_test(NAME test_TauCoeff_IO_NC
-         COMMAND $<TARGET_FILE:TauCoeff_IO_NC>)
-set_tests_properties(test_TauCoeff_IO_NC PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-
-#(CD) AerosolCoeff I/O test
-add_executable(AerosolCoeff_IO mains/unit/input_output/test_AerosolCoeff/test_aerosol_coeff_io.f90)
-target_link_libraries(AerosolCoeff_IO PRIVATE crtm)
-add_test(NAME test_AerosolCoeff_IO
-         COMMAND $<TARGET_FILE:AerosolCoeff_IO>)
-set_tests_properties(test_AerosolCoeff_IO PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-
-#(CD) AerosolCoeff netCDF I/O test
-add_executable(AerosolCoeff_IO_NC mains/unit/input_output/test_AerosolCoeff_NC/test_aerosol_coeff_io_nc.f90)
-target_link_libraries(AerosolCoeff_IO_NC PRIVATE crtm)
-add_test(NAME test_AerosolCoeff_IO_NC
-         COMMAND $<TARGET_FILE:AerosolCoeff_IO_NC>)
-set_tests_properties(test_AerosolCoeff_IO_NC PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-
-#(CD) CloudCoeff Binary I/O test
-add_executable(CloudCoeff_IO mains/unit/input_output/test_CloudCoeff/test_cloud_coeff_io.f90)
-target_link_libraries(CloudCoeff_IO PRIVATE crtm)
-add_test(NAME test_CloudCoeff_IO
-         COMMAND $<TARGET_FILE:CloudCoeff_IO>)
-set_tests_properties(test_CloudCoeff_IO PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-
-#(CD) CloudCoeff netCDF I/O test
-add_executable(CloudCoeff_IO_NC mains/unit/input_output/test_CloudCoeff_NC/test_cloud_coeff_io_nc.f90)
-target_link_libraries(CloudCoeff_IO_NC PRIVATE crtm)
-add_test(NAME test_CloudCoeff_IO_NC
-         COMMAND $<TARGET_FILE:CloudCoeff_IO_NC>)
-set_tests_properties(test_CloudCoeff_IO_NC PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+list(LENGTH io_tests io_tests_len)
+math(EXPR io_tests_max "${io_tests_len} - 1")
+foreach(io_test_index RANGE 0 ${io_tests_max} 2)
+  list(GET io_tests ${io_test_index} io_test_name)
+  math(EXPR io_test_source_index "${io_test_index} + 1")
+  list(GET io_tests ${io_test_source_index} io_test_source)
+  ADD_CRTM_UNIT_TEST(${io_test_name} ${io_test_source})
+endforeach()
 
 #(PS) Hypsometric Equation test
 add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
@@ -557,10 +566,15 @@ set_tests_properties(test_TL_convergence_active_sensor PROPERTIES ENVIRONMENT OM
 
 list( APPEND crtm_test_input
 AerosolCoeff/Little_Endian/AerosolCoeff.bin
+AerosolCoeff/Little_Endian/AerosolCoeff.GOCART-GEOS5.bin
+AerosolCoeff/Little_Endian/AerosolCoeff.CMAQ.bin
+AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.nc4
+AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.BRC.kb.v2.nc
 AerosolCoeff/netCDF/AerosolCoeff.nc4
 CloudCoeff/Little_Endian/CloudCoeff.bin
 CloudCoeff/netCDF/CloudCoeff.nc4
 CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2022.nc4
+BeCoeff/netCDF/BeCoeff.nc
 EmisCoeff/MW_Water/Little_Endian/FASTEM6.MWwater.EmisCoeff.bin
 EmisCoeff/MW_Water/Little_Endian/FASTEM4.MWwater.EmisCoeff.bin
 EmisCoeff/IR_Ice/SEcategory/Little_Endian/NPOESS.IRice.EmisCoeff.bin

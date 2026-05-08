@@ -41,7 +41,7 @@ MODULE BeCoeff_Binary_IO
   ! -----------------
   ! Module parameters
   ! -----------------
-  CHARACTER(*), PRIVATE, PARAMETER :: MODULE_VERSION_ID = &
+  CHARACTER(*), PRIVATE, PARAMETER :: MODULE_VERSION_ID = ''
   CHARACTER(*), PARAMETER :: WRITE_ERROR_STATUS = 'DELETE'
   ! Default message length
   INTEGER, PARAMETER :: ML = 256
@@ -471,7 +471,7 @@ CONTAINS
 
 
     ! Open the file for writing
-    err_stat = Open_Binary_File( Filename, fid, For_Output=SET )
+    err_stat = Open_Binary_File( Filename, fid, For_Output=.TRUE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error opening '//TRIM(Filename)
       CALL Write_Cleanup(); RETURN

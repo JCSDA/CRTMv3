@@ -289,6 +289,9 @@ CONTAINS
       CALL AtmOptics_Allocate( self, alloc_stat )
       IF ( alloc_stat /= 0 ) RETURN
     END IF
+    
+    ! Set the default value 
+    CALL CRTM_AtmOptics_Zero( self )
 
     ! Initialise dimensions (but not arrays!)
     self%n_Layers         = n_Layers
@@ -400,7 +403,7 @@ CONTAINS
     WRITE(*,'(5(1x,es22.15,:))') self%Single_Scatter_Albedo(1:self%n_Layers)
     WRITE(*,'(3x,"Asymmetry_Factor :")')
     WRITE(*,'(5(1x,es22.15,:))') self%Asymmetry_Factor(1:self%n_Layers)
-    WRITE(*,'(3x,"Backscat_Coefficient Backscattering coefficient :")')
+    WRITE(*,'(3x,"Backscat_Coefficient :")')
     WRITE(*,'(5(1x,es22.15,:))') self%Backscat_Coefficient(1:self%n_Layers)
     WRITE(*,'(3x,"Delta_Truncation :")')
     WRITE(*,'(5(1x,es22.15,:))') self%Delta_Truncation(1:self%n_Layers)

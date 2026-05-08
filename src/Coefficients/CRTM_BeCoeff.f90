@@ -28,8 +28,8 @@ MODULE CRTM_BeCoeff
   ! ----------------
   ! Module use
   USE Message_Handler  , ONLY: SUCCESS, FAILURE, WARNING, Display_Message
-  USE BeCoeff_Define   , ONLY: BeCoeff_type, BeCoeff_Associated, BeCoeff_Destroy
-  USE BeCoeff_Binary_IO, ONLY: BeCoeff_Binary_ReadFile
+  USE BeCoeff_Define, ONLY: BeCoeff_type, BeCoeff_Associated, BeCoeff_Destroy
+  USE BeCoeff_IO    , ONLY: BeCoeff_ReadFile
   ! Disable all implicit typing
   IMPLICIT NONE
 
@@ -50,7 +50,7 @@ MODULE CRTM_BeCoeff
   ! Module parameters
   ! -----------------
   ! Version Id for the module
-  CHARACTER(*),  PARAMETER :: MODULE_VERSION_ID = &
+  CHARACTER(*),  PARAMETER :: MODULE_VERSION_ID = ''
   ! Message string length
   INTEGER, PARAMETER :: ML = 256
 
@@ -78,12 +78,13 @@ CONTAINS
 !       Error_Status = CRTM_BeCoeff_Load( &
 !                        Filename, &
 !                        File_Path         = File_Path        , &
+!                        netCDF            = netCDF           , &
 !                        Quiet             = Quiet            , &
 !                        Process_ID        = Process_ID       , &
 !                        Output_Process_ID = Output_Process_ID  )
 !
 ! INPUTS:
-!       Filename:           Name of the Binary format BeCoeff file.
+!       Filename:           Name of the BeCoeff file.
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -95,6 +96,16 @@ CONTAINS
 !                           directory is the default.
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
+!                           DIMENSION:  Scalar
+!                           ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+!       netCDF:             Set this logical argument to access netCDF format
+!                           BeCoeff datafiles.
+!                           If == .FALSE., file format is BINARY.
+!                              == .TRUE.,  file format is NETCDF [DEFAULT].
+!                           If not specified, default is .TRUE.
+!                           UNITS:      N/A
+!                           TYPE:       LOGICAL
 !                           DIMENSION:  Scalar
 !                           ATTRIBUTES: INTENT(IN), OPTIONAL
 !
@@ -149,6 +160,7 @@ CONTAINS
   FUNCTION CRTM_BeCoeff_Load( &
     Filename         , &  ! Input
     File_Path        , &  ! Optional input
+    netCDF           , &  ! Optional input
     Quiet            , &  ! Optional input
     Process_ID       , &  ! Optional input
     Output_Process_ID) &  ! Optional input
@@ -156,9 +168,10 @@ CONTAINS
     ! Arguments
     CHARACTER(*),           INTENT(IN)  :: Filename
     CHARACTER(*), OPTIONAL, INTENT(IN)  :: File_Path
-    LOGICAL     , OPTIONAL, INTENT(IN)  :: Quiet             
-    INTEGER     , OPTIONAL, INTENT(IN)  :: Process_ID        
-    INTEGER     , OPTIONAL, INTENT(IN)  :: Output_Process_ID 
+    LOGICAL     , OPTIONAL, INTENT(IN)  :: netCDF
+    LOGICAL     , OPTIONAL, INTENT(IN)  :: Quiet
+    INTEGER     , OPTIONAL, INTENT(IN)  :: Process_ID
+    INTEGER     , OPTIONAL, INTENT(IN)  :: Output_Process_ID
     ! Function result
     INTEGER :: err_stat
     ! Local parameters
@@ -167,6 +180,7 @@ CONTAINS
     CHARACTER(ML) :: msg, pid_msg
     CHARACTER(ML) :: BeCoeff_File
     LOGICAL :: noisy
+    LOGICAL :: Binary
 
     ! Setup 
     err_stat = SUCCESS
@@ -187,12 +201,16 @@ CONTAINS
     ELSE
       pid_msg = ''
     END IF
+    ! ...Check netCDF argument
+    Binary = .FALSE.
+    IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
     
     ! Read the BeCoeff data file
-    err_stat = BeCoeff_Binary_ReadFile( &
+    err_stat = BeCoeff_ReadFile( &
                  BeCoeff_File, &
                  BeC, &
-                 Quiet = .NOT. noisy )
+                 netCDF = .NOT. Binary, &
+                 Quiet  = .NOT. noisy )
     IF ( err_stat /= SUCCESS ) THEN
       WRITE( msg,'("Error reading BeCoeff file ",a)') TRIM(BeCoeff_File)
       CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
