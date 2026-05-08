@@ -234,6 +234,8 @@ CONTAINS
     LOGICAL :: binary
     LOGICAL :: use_netCDF
     LOGICAL :: alt_available
+    LOGICAL :: zeeman_use_netCDF
+    CHARACTER(16) :: zeeman_ext
 
     ! Set up
     Error_Status = SUCCESS
@@ -604,11 +606,34 @@ CONTAINS
     TC%ZSensor_LoIndex = 0
     TC%n_ODZeeman = 0
     i = 1
+
+    ! Batch-level format probe: prefer NetCDF when every Zeeman candidate has a
+    ! .nc sibling on disk; otherwise fall back to .bin for the whole Zeeman batch.
+    ! ODZeeman_Load_TauCoeff takes a single netCDF flag, so per-sensor mixed
+    ! formats are not supported.
+    zeeman_use_netCDF = .TRUE.
+    DO n = 1, n_Sensors
+      IF ( TC%WMO_Sensor_ID(n) == WMO_SSMIS .OR. TC%WMO_Sensor_ID(n) == WMO_AMSUA ) THEN
+        IF ( .NOT. File_Exists( TRIM(local_path) // 'z' // TRIM(TC%Sensor_ID(n)) // '.TauCoeff.nc' ) ) THEN
+          zeeman_use_netCDF = .FALSE.
+          EXIT
+        END IF
+      END IF
+    END DO
+    IF ( zeeman_use_netCDF ) THEN
+      zeeman_ext = '.TauCoeff.nc'
+    ELSE
+      zeeman_ext = '.TauCoeff.bin'
+      CALL Display_Message( ROUTINE_NAME, &
+        'NetCDF Zeeman TauCoeff incomplete; falling back to Binary for the whole Zeeman batch', &
+        INFORMATION )
+    END IF
+
     DO n = 1, n_Sensors
       IF(TC%WMO_Sensor_ID(n) == WMO_SSMIS .OR. TC%WMO_Sensor_ID(n) == WMO_AMSUA )THEN
-               
-          ! file name: i.g. zssmis_n16.TauCoeff.bin
-        zfnames(i) = 'z'//TRIM(TC%Sensor_ID(n))//'.TauCoeff.bin'
+
+          ! file name: e.g. zssmis_f16.TauCoeff.nc (or .bin if NetCDF set incomplete)
+        zfnames(i) = 'z'//TRIM(TC%Sensor_ID(n))//TRIM(zeeman_ext)
         IF( File_Exists(TRIM(local_path)//TRIM(zfnames(i))) ) THEN
           TC%ZSensor_LoIndex(n) = i
           TC%n_ODZeeman = i
@@ -616,14 +641,15 @@ CONTAINS
         END IF
       END IF
     END DO
-    IF( TC%n_ODZeeman > 0 )THEN 
-      Error_Status = ODZeeman_Load_TauCoeff( &                              
-                                     zfnames(1:TC%n_ODZeeman)           , &                     
-                                     File_Path        =File_Path        , &    
-                                     Quiet            =Quiet            , &    
-                                     Process_ID       =Process_ID       , &    
-                                     Output_Process_ID=Output_Process_ID, &    
-                                     Message_Log      =Message_Log        )  
+    IF( TC%n_ODZeeman > 0 )THEN
+      Error_Status = ODZeeman_Load_TauCoeff( &
+                                     zfnames(1:TC%n_ODZeeman)            , &
+                                     File_Path        =File_Path         , &
+                                     Quiet            =Quiet             , &
+                                     netCDF           =zeeman_use_netCDF , &
+                                     Process_ID       =Process_ID        , &
+                                     Output_Process_ID=Output_Process_ID , &
+                                     Message_Log      =Message_Log         )
       IF ( Error_Status /= SUCCESS ) THEN
         CALL Display_Message( ROUTINE_NAME, &
                               'Error loading ODZeeman TauCoeff data', &

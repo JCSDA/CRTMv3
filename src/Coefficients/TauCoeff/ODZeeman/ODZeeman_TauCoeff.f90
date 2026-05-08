@@ -27,9 +27,10 @@ MODULE ODZeeman_TauCoeff
   ! -----------------
   ! Module use
   USE Message_Handler   , ONLY: SUCCESS, FAILURE, WARNING, Display_Message
-  USE ODPS_Define       , ONLY: ODPS_TauCoeff_type    => ODPS_type, &         
-                                ODPS_Destroy_TauCoeff => Destroy_ODPS        
+  USE ODPS_Define       , ONLY: ODPS_TauCoeff_type    => ODPS_type, &
+                                ODPS_Destroy_TauCoeff => Destroy_ODPS
   USE ODPS_Binary_IO    , ONLY: Read_TauCoeff_Binary  => Read_ODPS_Binary
+  USE ODPS_netCDF_IO    , ONLY: Read_TauCoeff_netCDF  => Read_ODPS_netCDF
 
   ! Disable all implicit typing
   IMPLICIT NONE
@@ -156,16 +157,18 @@ CONTAINS
 !------------------------------------------------------------------------------
 
   FUNCTION Load_TauCoeff( FileName         , &  ! Input
-                          File_Path        , &  ! Optional input      
-                          Quiet            , &  ! Optional input      
-                          Process_ID       , &  ! Optional input      
-                          Output_Process_ID, &  ! Optional input      
-                          Message_Log      ) &  ! Error messaging     
-                        RESULT( Error_Status )                        
+                          File_Path        , &  ! Optional input
+                          Quiet            , &  ! Optional input
+                          netCDF           , &  ! Optional input
+                          Process_ID       , &  ! Optional input
+                          Output_Process_ID, &  ! Optional input
+                          Message_Log      ) &  ! Error messaging
+                        RESULT( Error_Status )
     ! Arguments
     CHARACTER(*), DIMENSION(:), INTENT(IN) :: FileName
     CHARACTER(*),               OPTIONAL, INTENT(IN) :: File_Path
     INTEGER,                    OPTIONAL, INTENT(IN) :: Quiet
+    LOGICAL,                    OPTIONAL, INTENT(IN) :: netCDF
     INTEGER,                    OPTIONAL, INTENT(IN) :: Process_ID
     INTEGER,                    OPTIONAL, INTENT(IN) :: Output_Process_ID
     CHARACTER(*),               OPTIONAL, INTENT(IN) :: Message_Log
@@ -179,6 +182,7 @@ CONTAINS
     CHARACTER(256) :: TauCoeff_File
     INTEGER :: Allocate_Status
     INTEGER :: n, n_Sensors
+    LOGICAL :: binary
 
     ! Set up
     Error_Status = SUCCESS
@@ -189,6 +193,9 @@ CONTAINS
     ELSE
       Process_ID_Tag = ' '
     END IF
+    ! ...Check netCDF argument
+    binary = .TRUE.
+    IF ( PRESENT(netCDF) ) binary = .NOT. netCDF
 
     n_Sensors = SIZE(Filename)
     
@@ -214,12 +221,19 @@ CONTAINS
         TauCoeff_File = TRIM(FileName(n))
       END IF
       
-      Error_Status = Read_TauCoeff_Binary( TRIM(TauCoeff_File)                , &  ! Input
-                                           TC(n)                              , &  ! Output
-                                           Quiet            =Quiet            , &
-                                           Process_ID       =Process_ID       , &
-                                           Output_Process_ID=Output_Process_ID, &
-                                           Message_Log      =Message_Log        )
+      IF ( .NOT. binary ) THEN
+        Error_Status = Read_TauCoeff_netCDF( TRIM(TauCoeff_File)                , &  ! Input
+                                             TC(n)                              , &  ! Output
+                                             Quiet            =Quiet            , &
+                                             Message_Log      =Message_Log        )
+      ELSE
+        Error_Status = Read_TauCoeff_Binary( TRIM(TauCoeff_File)                , &  ! Input
+                                             TC(n)                              , &  ! Output
+                                             Quiet            =Quiet            , &
+                                             Process_ID       =Process_ID       , &
+                                             Output_Process_ID=Output_Process_ID, &
+                                             Message_Log      =Message_Log        )
+      END IF
       IF ( Error_Status /= SUCCESS ) THEN
         WRITE(Message,'("Error reading TauCoeff file #",i0,", ",a)') &
                       n, TRIM(TauCoeff_File)
