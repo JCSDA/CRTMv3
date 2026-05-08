@@ -16,8 +16,9 @@
 !
 ! At runtime the PARMIO_MWSSEM module looks up the 14 harmonic terms in
 ! the appropriate group, recombines them through cos/sin in azimuth, and
-! returns the 4-Stokes (V, H, U, V) emissivity / reflectivity at FastemX
-! call sites.
+! returns CRTM's microwave surface-optics basis
+! (V-pol, H-pol, U, circular/Stokes-V) at FastemX call sites. The first
+! two slots are V/H, not canonical Stokes I/Q.
 
 MODULE PARMIOCoeff_Define
 
@@ -64,7 +65,7 @@ MODULE PARMIOCoeff_Define
   ! Frequency thresholds (GHz) for group selection. Must match the values
   ! used by the offline LUT generator (parmio/scripts/parmio_lut_grid.py).
   REAL(fp), PARAMETER :: SSS_CUTOFF_GHZ          = 10.65_fp
-  REAL(fp), PARAMETER :: PERMITTIVITY_SWITCH_GHZ = 28.8_fp
+  REAL(fp), PARAMETER :: PERMITTIVITY_SWITCH_GHZ = 200.0_fp
 
   ! Number of harmonic coefficient terms stored per (axis, foam_state) cell.
   ! Order matches Tb.f output columns 7-18, 26-27 divided by SST_K:

@@ -2,7 +2,10 @@
 ! PARMIO_Azimuth_Module
 !
 ! Recombine PARMIO's azimuthal-harmonic emissivity coefficients into the
-! 4-Stokes emissivity vector (V, H, U, V_Stokes) at a given azimuth angle.
+! CRTM microwave surface-optics emissivity basis:
+!   (V-pol, H-pol, U, circular/Stokes-V).
+! The first two entries are the decoupled V/H slots expected by
+! CRTM_SfcOptics and FASTEM, not canonical Stokes I/Q.
 !
 ! PARMIO stores per (freq, theta, U10, sst, sss) cell a 14-vector of
 ! dimensionless coefficients = Tb / SST_K:
@@ -47,8 +50,9 @@ CONTAINS
 
   !-----------------------------------------------------------------
   !  PARMIO_Azimuth_Recombine
-  !  Combine the 14 harmonic coefficients into the 4-Stokes emissivity
-  !  (V, H, U, V_Stokes) at the requested relative azimuth.
+  !  Combine the 14 harmonic coefficients into CRTM's microwave
+  !  surface-optics basis (V-pol, H-pol, U, circular/Stokes-V) at the
+  !  requested relative azimuth.
   !-----------------------------------------------------------------
   SUBROUTINE PARMIO_Azimuth_Recombine( &
       Coefficients, Azimuth_Angle_deg, Emissivity)

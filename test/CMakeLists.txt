@@ -492,6 +492,30 @@ set_tests_properties(test_PARMIO_Dispatcher PROPERTIES ENVIRONMENT "OMP_NUM_THRE
 
 add_executable(test_PARMIO_RC_Residual mains/regression/parmio_tlad/test_PARMIO_RC_Residual.f90)
 target_link_libraries(test_PARMIO_RC_Residual PRIVATE crtm)
+add_test(NAME test_PARMIO_RC_Residual
+         COMMAND $<TARGET_FILE:test_PARMIO_RC_Residual>
+                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
+set_tests_properties(test_PARMIO_RC_Residual PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(test_PARMIO_FASTEM_DeltaSweep mains/regression/parmio_tlad/test_PARMIO_FASTEM_DeltaSweep.f90)
+target_link_libraries(test_PARMIO_FASTEM_DeltaSweep PRIVATE crtm)
+add_test(NAME test_PARMIO_FASTEM_DeltaSweep
+         COMMAND $<TARGET_FILE:test_PARMIO_FASTEM_DeltaSweep>
+                 "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
+                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
+set_tests_properties(test_PARMIO_FASTEM_DeltaSweep
+                     PROPERTIES
+                       ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}"
+                       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+
+add_executable(test_PARMIO_AWS1_ObsSmoke mains/regression/parmio_tlad/test_PARMIO_AWS1_ObsSmoke.f90)
+target_link_libraries(test_PARMIO_AWS1_ObsSmoke PRIVATE crtm)
+
+add_executable(test_PARMIO_GMI_ObsSpace mains/regression/parmio_tlad/test_PARMIO_GMI_ObsSpace.f90)
+target_link_libraries(test_PARMIO_GMI_ObsSpace PRIVATE crtm)
+
+add_executable(test_PARMIO_ATMS_ClearOcean_ObsSpace mains/regression/parmio_tlad/test_PARMIO_ATMS_ClearOcean_ObsSpace.f90)
+target_link_libraries(test_PARMIO_ATMS_ClearOcean_ObsSpace PRIVATE crtm)
 
 #=================================================================================
 #forward and k_matrix regression tests

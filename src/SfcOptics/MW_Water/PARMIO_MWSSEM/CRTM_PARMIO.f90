@@ -31,7 +31,9 @@ MODULE CRTM_PARMIO
   PUBLIC :: iVar_type
   PUBLIC :: Compute_PARMIO
 
-  ! Stokes-vector index conventions (mirror CRTM_FastemX.f90:121-122)
+  ! CRTM microwave surface-optics index convention. These mirror
+  ! CRTM_FastemX.f90:121-122; slots 1/2 are decoupled V/H, not
+  ! canonical Stokes I/Q.
   INTEGER, PARAMETER :: N_STOKES = 4
   INTEGER, PARAMETER :: Iv_IDX = 1
   INTEGER, PARAMETER :: Ih_IDX = 2
@@ -59,7 +61,7 @@ MODULE CRTM_PARMIO
     REAL(fp) :: Transmittance  = ONE
     LOGICAL  :: Has_Azimuth    = .FALSE.
     LOGICAL  :: Has_Transmittance = .FALSE.
-    ! Emissivity (V, H, U, V_circ) and pre-RC reflectivity, plus the
+    ! Emissivity (V-pol, H-pol, U, V_circ) and pre-RC reflectivity, plus the
     ! Reflection_Correction iVar so TL/AD can drive the FASTEM RC kernel.
     REAL(fp) :: Emissivity(N_STOKES)   = ZERO
     REAL(fp) :: Reflectivity(N_STOKES) = ZERO
@@ -86,7 +88,7 @@ CONTAINS
       Salinity,       &  ! in  ppt
       Wind_Speed,     &  ! in  m/s
       iVar,           &  ! out internal state for TL/AD
-      Emissivity,     &  ! out (4) V, H, U, V_circ
+      Emissivity,     &  ! out (4) V-pol, H-pol, U, V_circ
       Reflectivity,   &  ! out (4)
       Azimuth_Angle,  &  ! in,opt deg (relative to wind)
       Transmittance)     ! in,opt
@@ -134,8 +136,9 @@ CONTAINS
           Foam_Fraction    = iVar%Foam_Fraction, &
           iVar             = iVar%LUT_Var)
 
-    ! 2) Recombine the 14 coefficients into the 4-Stokes emissivity at
-    !    the requested azimuth (phi=0 if azimuth absent — matches FastemX).
+    ! 2) Recombine the 14 coefficients into CRTM's microwave surface-
+    !    optics basis at the requested azimuth (phi=0 if azimuth absent,
+    !    matching FastemX).
     CALL PARMIO_Azimuth_Recombine( &
           Coefficients      = iVar%Coefficients, &
           Azimuth_Angle_deg = phi_deg,           &

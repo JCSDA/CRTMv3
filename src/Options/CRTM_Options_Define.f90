@@ -129,6 +129,9 @@ MODULE CRTM_Options_Define
     ! User defined MW water emissivity algorithm
     LOGICAL :: Use_Old_MWSSEM = .FALSE.
 
+    ! Select PARMIO-LUT MW water emissivity backend (wins over Use_Old_MWSSEM)
+    LOGICAL :: Use_PARMIO_Model = .FALSE.
+
     ! Antenna correction application
     LOGICAL :: Use_Antenna_Correction = .FALSE.
 
@@ -207,6 +210,7 @@ CONTAINS
 !          Options                                          , &
 !          Check_Input             = Check_Input            , &
 !          Use_Old_MWSSEM          = Use_Old_MWSSEM         , &
+!          Use_PARMIO_Model        = Use_PARMIO_Model       , &
 !          Use_Antenna_Correction  = Use_Antenna_Correction , &
 !          Apply_NLTE_Correction   = Apply_NLTE_Correction  , &
 !          Set_ADA_RT              = Set_ADA_RT             , &
@@ -244,6 +248,16 @@ CONTAINS
 !                             of the microwave sea surface emissivity model.
 !                             If == .TRUE. , the old model is used.
 !                                == .FALSE., the current model is used [DEFAULT]
+!                             UNITS:      N/A
+!                             TYPE:       LOGICAL
+!                             DIMENSION:  Conformable with Options object
+!                             ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+!   Use_PARMIO_Model:         Set this logical argument to select the PARMIO-LUT
+!                             microwave sea surface emissivity backend. Takes
+!                             precedence over Use_Old_MWSSEM when .TRUE.
+!                             If == .TRUE. , the PARMIO LUT backend is used.
+!                                == .FALSE., FASTEM/MWSSEM is used [DEFAULT]
 !                             UNITS:      N/A
 !                             TYPE:       LOGICAL
 !                             DIMENSION:  Conformable with Options object
@@ -354,6 +368,7 @@ CONTAINS
     self                   , &
     Check_Input            , &
     Use_Old_MWSSEM         , &
+    Use_PARMIO_Model       , &
     Use_Antenna_Correction , &
     Apply_NLTE_Correction  , &
     Set_ADA_RT             , &
@@ -372,6 +387,7 @@ CONTAINS
     TYPE(CRTM_Options_type), INTENT(IN OUT) :: self
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Check_Input
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_Old_MWSSEM
+    LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_PARMIO_Model
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_Antenna_Correction
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Apply_NLTE_Correction
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Set_ADA_RT
@@ -390,6 +406,7 @@ CONTAINS
     ! Set the "direct copy" components
     IF ( PRESENT(Check_Input           ) ) self%Check_Input            = Check_Input
     IF ( PRESENT(Use_Old_MWSSEM        ) ) self%Use_Old_MWSSEM         = Use_Old_MWSSEM
+    IF ( PRESENT(Use_PARMIO_Model      ) ) self%Use_PARMIO_Model       = Use_PARMIO_Model
     IF ( PRESENT(Use_Antenna_Correction) ) self%Use_Antenna_Correction = Use_Antenna_Correction
     IF ( PRESENT(Apply_NLTE_Correction ) ) self%Apply_NLTE_Correction  = Apply_NLTE_Correction
     IF ( PRESENT(Include_Scattering    ) ) self%Include_Scattering     = Include_Scattering
@@ -815,6 +832,7 @@ CONTAINS
     ! Display components
     WRITE(*,'(3x,"Check input flag            :",1x,l1)') self%Check_Input
     WRITE(*,'(3x,"Use old MWSSEM flag         :",1x,l1)') self%Use_Old_MWSSEM
+    WRITE(*,'(3x,"Use PARMIO model flag       :",1x,l1)') self%Use_PARMIO_Model
     WRITE(*,'(3x,"Use antenna correction flag :",1x,l1)') self%Use_Antenna_Correction
     WRITE(*,'(3x,"Apply NLTE correction flag  :",1x,l1)') self%Apply_NLTE_Correction
     WRITE(*,'(3x,"Aircraft pressure altitude  :",1x,es22.15)') self%Aircraft_Pressure
@@ -1333,6 +1351,7 @@ CONTAINS
 
     is_equal = (x%Check_Input              .EQV.   y%Check_Input           ) .AND. &
                (x%Use_Old_MWSSEM           .EQV.   y%Use_Old_MWSSEM        ) .AND. &
+               (x%Use_PARMIO_Model         .EQV.   y%Use_PARMIO_Model      ) .AND. &
                (x%Use_Antenna_Correction   .EQV.   y%Use_Antenna_Correction) .AND. &
                (x%Apply_NLTE_Correction    .EQV.   y%Apply_NLTE_Correction ) .AND. &
                (x%RT_Algorithm_Id           ==     y%RT_Algorithm_Id       ) .AND. &
@@ -1432,6 +1451,12 @@ CONTAINS
     err_stat = ReadLogical_Binary_File( fid, opt%Use_Old_MWSSEM )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading old MW water emissivity algorithm switch option'
+      CALL Read_Record_Cleanup(); RETURN
+    END IF
+    ! ...PARMIO model logical
+    err_stat = ReadLogical_Binary_File( fid, opt%Use_PARMIO_Model )
+    IF ( err_stat /= SUCCESS ) THEN
+      msg = 'Error reading PARMIO model switch option'
       CALL Read_Record_Cleanup(); RETURN
     END IF
     ! ...Antenna correction logical
@@ -1606,6 +1631,12 @@ CONTAINS
     err_stat = WriteLogical_Binary_File( fid, opt%Use_Old_MWSSEM )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error writing old MW water emissivity algorithm switch option'
+      CALL Write_Record_Cleanup(); RETURN
+    END IF
+    ! ...PARMIO model logical
+    err_stat = WriteLogical_Binary_File( fid, opt%Use_PARMIO_Model )
+    IF ( err_stat /= SUCCESS ) THEN
+      msg = 'Error writing PARMIO model switch option'
       CALL Write_Record_Cleanup(); RETURN
     END IF
     ! ...Antenna correction logical
