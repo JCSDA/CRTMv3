@@ -654,8 +654,9 @@ CONTAINS
     END IF
 
     ! Honor OMP_NUM_THREADS from the runtime environment.
-    ! If the variable is unset, default to a single thread so that downstream
-    ! parallel regions do not silently fan out across all available cores.
+    ! If the variable is unset OR set but empty, default to a single thread.
+    ! libgomp can corrupt the heap when OMP_NUM_THREADS is the empty string,
+    ! so an empty value must be coerced to 1 the same as unset.
 #ifdef _OPENMP
     BLOCK
       CHARACTER(32) :: omp_env_value
@@ -663,7 +664,8 @@ CONTAINS
       CALL GET_ENVIRONMENT_VARIABLE( 'OMP_NUM_THREADS', &
                                      VALUE  = omp_env_value, &
                                      STATUS = omp_env_status )
-      IF ( omp_env_status /= 0 ) CALL OMP_SET_NUM_THREADS( 1 )
+      IF ( omp_env_status /= 0 .OR. LEN_TRIM(omp_env_value) == 0 ) &
+        CALL OMP_SET_NUM_THREADS( 1 )
     END BLOCK
 #endif
 
