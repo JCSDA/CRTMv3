@@ -937,8 +937,9 @@ CONTAINS
         n_inactive_channels(:) = 0
         DO l = 1, n_sensor_channels
           IF ( .NOT. ChannelInfo(n)%Process_Channel(l) ) THEN
-!            nt = l / chunk_ch + 1
-            nt = FLOOR( REAL(l) / REAL(chunk_ch) ) + 1
+            ! Channel l belongs to chunk nt where l in [(nt-1)*chunk_ch+1, nt*chunk_ch]
+            nt = (l - 1) / chunk_ch + 1
+            IF ( nt > n_channel_threads ) nt = n_channel_threads
             n_inactive_channels(nt) = n_inactive_channels(nt) + 1
           END IF
         END DO
@@ -962,10 +963,10 @@ CONTAINS
         Thread_Loop: DO nt = 1, n_channel_threads
 
           start_ch = (nt - 1) * chunk_ch + 1
-          IF ( nt == n_channel_threads) THEN
+          IF ( nt == n_channel_threads ) THEN
             end_ch = n_sensor_channels
           ELSE
-            end_ch = start_ch + chunk_ch - 1
+            end_ch = MIN( start_ch + chunk_ch - 1, n_sensor_channels )
           END IF
           ln = (start_ch - 1) - n_inactive_channels(nt)
 
