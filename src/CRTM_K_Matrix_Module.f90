@@ -432,10 +432,12 @@ CONTAINS
     ELSE
       n_profile_threads = n_Profiles
 
-!** BTJ: temporary preprocessor directive for openMP over channels bypass, permitting modern ifort / ifx versions to run properly
-!** https://github.com/JCSDA/CRTMv3/issues/231
-
-#  if 1
+!** Channel-thread OpenMP for K-matrix.
+!** Verified clean on gfortran 13.x and ifx 2026.0 once the per-channel
+!** NLTE_Predictor_K(nt) reset above is in place (see JCSDA/CRTMv3#231).
+!** Legacy classic ifort (icc/ifort, not ifx) is left on the serial fallback
+!** because we have no installed toolchain to verify it.
+#  if defined(__INTEL_COMPILER) && !defined(__INTEL_LLVM_COMPILER)
       n_channel_threads = 1
 #  else
       n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
@@ -997,12 +999,10 @@ CONTAINS
         ! ------------
         ! THREAD LOOP
         ! ------------
-!** BTJ preprocessor directive bypass of OMP directives causing issues when compiling with modern ifort/ifx
-!** https://github.com/JCSDA/CRTMv3/issues/231
-#if 1
+!** See the dispatch-side note above for the legacy-ifort gate (JCSDA/CRTMv3#231).
+#if defined(__INTEL_COMPILER) && !defined(__INTEL_LLVM_COMPILER)
         IF (n_channel_threads > 1) THEN
-           WRITE( Message,'("ERROR: n_channel_threads > 1, this should not happen with the current preprocessor directives")')
-           
+           WRITE( Message,'("ERROR: n_channel_threads > 1, this should not happen under the legacy-ifort bypass")')
            Error_status = FAILURE
            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
         END IF
@@ -1065,6 +1065,16 @@ CONTAINS
             transmittance_K = ZERO
             CALL CRTM_RTSolution_Zero( RTSolution_Clear(nt) )
             CALL CRTM_RTSolution_Zero( RTSolution_Clear_K(nt) )
+            ! Per-channel reset of the NLTE adjoint predictor.
+            ! Without this, NLTE_Predictor_K(nt) carries state from a previous
+            ! channel within the same thread; under channel-thread parallelism
+            ! the resulting Atmosphere_K Jacobians depend on the per-thread
+            ! channel partition and diverge from the serial reference.
+            IF ( Opt%Apply_NLTE_Correction .AND. NLTE_Predictor_IsActive(NLTE_Predictor) ) THEN
+              NLTE_Predictor_K(nt) = NLTE_Predictor
+              NLTE_Predictor_K(nt)%Tm = ZERO
+              NLTE_Predictor_K(nt)%Predictor = ZERO
+            END IF
 
 
             ! Copy the input K-matrix atmosphere with extra layers if necessary
@@ -1681,11 +1691,10 @@ CONTAINS
           END DO Channel_Loop
        END DO Thread_Loop
 
-!** BTJ preprocessor directive bypass of OMP directives causing issues when compiling with modern ifort/ifx
-!** https://github.com/JCSDA/CRTMv3/issues/231
-#if 0
+!** Match the legacy-ifort gate above (JCSDA/CRTMv3#231).
+#if !(defined(__INTEL_COMPILER) && !defined(__INTEL_LLVM_COMPILER))
 !$OMP END PARALLEL DO
-#endif         
+#endif
 
         IF ( Error_Status == FAILURE ) RETURN
         ln = ln + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
