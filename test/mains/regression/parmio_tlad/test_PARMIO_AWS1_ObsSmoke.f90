@@ -11,8 +11,9 @@
 PROGRAM test_PARMIO_AWS1_ObsSmoke
 
   USE CRTM_Module
-  USE CRTM_MWwaterCoeff, ONLY: CRTM_MWwaterCoeff_Load_FASTEM
-  USE CRTM_PARMIOCoeff, ONLY: CRTM_PARMIOCoeff_Load, CRTM_PARMIOCoeff_Destroy
+  ! FASTEM6 is loaded by CRTM_Init's default Microwave_Sensor block.
+  ! PARMIO LUT is loaded by CRTM_Init via the PARMIOCoeff_File argument and
+  ! freed by CRTM_Destroy; no direct CRTM_PARMIOCoeff_* calls needed.
   USE CRTM_SpcCoeff, ONLY: SC
 
   IMPLICIT NONE
@@ -101,22 +102,14 @@ PROGRAM test_PARMIO_AWS1_ObsSmoke
 
   sensor_id = (/ DEFAULT_SENSOR_ID /)
   err_stat = CRTM_Init( &
-       sensor_id, channel_info, File_Path=TRIM(coeff_path), &
-       SpcCoeff_Format='netCDF', TauCoeff_Format='netCDF')
+       sensor_id, channel_info, &
+       File_Path        = TRIM(coeff_path), &
+       SpcCoeff_Format  = 'netCDF', &
+       TauCoeff_Format  = 'netCDF', &
+       PARMIOCoeff_File = TRIM(lut_file), &
+       Quiet            = .TRUE.)
   IF (err_stat /= SUCCESS) THEN
     CALL Display_Message(PROGRAM_NAME, 'CRTM_Init failed for '//DEFAULT_SENSOR_ID, FAILURE)
-    STOP 1
-  END IF
-
-  err_stat = CRTM_MWwaterCoeff_Load_FASTEM('FASTEM6', Quiet=.TRUE.)
-  IF (err_stat /= SUCCESS) THEN
-    CALL Display_Message(PROGRAM_NAME, 'Failed to load FASTEM6 MWwater coefficients', FAILURE)
-    STOP 1
-  END IF
-
-  err_stat = CRTM_PARMIOCoeff_Load(TRIM(lut_file), Quiet=.TRUE.)
-  IF (err_stat /= SUCCESS) THEN
-    CALL Display_Message(PROGRAM_NAME, 'Failed to load PARMIO coefficient LUT', FAILURE)
     STOP 1
   END IF
 
@@ -252,7 +245,6 @@ PROGRAM test_PARMIO_AWS1_ObsSmoke
   WRITE(*,'("Residual CSV: ",a)') TRIM(residual_file)
   WRITE(*,'("Summary CSV: ",a)') TRIM(summary_file)
 
-  CALL CRTM_PARMIOCoeff_Destroy()
   err_stat = CRTM_Destroy(channel_info)
   CALL CRTM_Atmosphere_Destroy(atm)
   DEALLOCATE(rt_fastem, rt_parmio)
