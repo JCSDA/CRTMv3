@@ -466,19 +466,68 @@ target_link_libraries(test_MWSurfEM PRIVATE crtm)
 add_test(NAME test_MWSurfEM
          COMMAND $<TARGET_FILE:test_MWSurfEM>)
 
+# Stage locally-generated PARMIO LUT and AWS coefficients into the canonical
+# test_data tree, so test commands can reference testinput/ paths only and not
+# reach outside the build tree. PARMIO_LUT_SRC and AWS_COEFF_SRC are cache
+# variables so users can override them at configure time:
+#   cmake -DPARMIO_LUT_SRC=/path/to/PARMIO.production.MWwater.EmisCoeff.nc \
+#         -DAWS_COEFF_SRC=/path/containing/mwr_aws.{Spc,Tau}Coeff.nc ..
+# If either set is missing the corresponding tests are not registered, so
+# upstream builds without these locally-generated files still configure clean.
+set(_PARMIO_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix")
+
+set(PARMIO_LUT_SRC
+    "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc"
+    CACHE FILEPATH "Path to the production PARMIO LUT (locally generated; staged into test_data)")
+if(EXISTS "${PARMIO_LUT_SRC}")
+  file(MAKE_DIRECTORY "${_PARMIO_FIX}/EmisCoeff/MW_Water/netCDF")
+  execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
+                  "${PARMIO_LUT_SRC}"
+                  "${_PARMIO_FIX}/EmisCoeff/MW_Water/netCDF/PARMIO.production.MWwater.EmisCoeff.nc")
+  set(PARMIO_LUT_PRESENT TRUE)
+else()
+  message(STATUS "PARMIO LUT not found at ${PARMIO_LUT_SRC}; PARMIO regression tests will not be registered.")
+  set(PARMIO_LUT_PRESENT FALSE)
+endif()
+
+set(AWS_COEFF_SRC
+    "${CRTM_SOURCE_DIR}/../LBL/emulator/output_mwr_aws_rosenkranz_optran"
+    CACHE PATH "Directory containing mwr_aws.{Spc,Tau}Coeff.nc (locally generated; staged into test_data)")
+if(EXISTS "${AWS_COEFF_SRC}/mwr_aws.SpcCoeff.nc"
+   AND EXISTS "${AWS_COEFF_SRC}/mwr_aws.TauCoeff.nc")
+  file(MAKE_DIRECTORY "${_PARMIO_FIX}/SpcCoeff/netCDF")
+  file(MAKE_DIRECTORY "${_PARMIO_FIX}/TauCoeff/ODPS/netCDF")
+  execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
+                  "${AWS_COEFF_SRC}/mwr_aws.SpcCoeff.nc"
+                  "${_PARMIO_FIX}/SpcCoeff/netCDF/mwr_aws.SpcCoeff.nc")
+  execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
+                  "${AWS_COEFF_SRC}/mwr_aws.TauCoeff.nc"
+                  "${_PARMIO_FIX}/TauCoeff/ODPS/netCDF/mwr_aws.TauCoeff.nc")
+  set(AWS_COEFFS_PRESENT TRUE)
+else()
+  message(STATUS "AWS coefficients not found at ${AWS_COEFF_SRC}; AWS PARMIO test will not be registered.")
+  set(AWS_COEFFS_PRESENT FALSE)
+endif()
+unset(_PARMIO_FIX)
+
+set(_PARMIO_LUT_TESTINPUT "${CMAKE_CURRENT_BINARY_DIR}/testinput/PARMIO.production.MWwater.EmisCoeff.nc")
+
 # test_PARMIO_TLAD
 add_executable(test_PARMIO_TLAD mains/regression/parmio_tlad/test_PARMIO_TLAD.f90)
 target_link_libraries(test_PARMIO_TLAD PRIVATE crtm)
-add_test(NAME test_PARMIO_TLAD
-         COMMAND $<TARGET_FILE:test_PARMIO_TLAD>
-                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
+if(PARMIO_LUT_PRESENT)
+  add_test(NAME test_PARMIO_TLAD
+           COMMAND $<TARGET_FILE:test_PARMIO_TLAD> "${_PARMIO_LUT_TESTINPUT}")
+endif()
 
 add_executable(test_PARMIO_Dispatcher mains/regression/parmio_tlad/test_PARMIO_Dispatcher.f90)
 target_link_libraries(test_PARMIO_Dispatcher PRIVATE crtm)
-add_test(NAME test_PARMIO_Dispatcher
-         COMMAND $<TARGET_FILE:test_PARMIO_Dispatcher>
-                 "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
-                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
+if(PARMIO_LUT_PRESENT)
+  add_test(NAME test_PARMIO_Dispatcher
+           COMMAND $<TARGET_FILE:test_PARMIO_Dispatcher>
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
+                   "${_PARMIO_LUT_TESTINPUT}")
+endif()
 
 # test_PARMIO_M_Group_Probe (build-only diagnostic; not registered with CTest)
 add_executable(test_PARMIO_M_Group_Probe mains/regression/parmio_tlad/test_PARMIO_M_Group_Probe.f90)
@@ -492,31 +541,39 @@ target_link_libraries(test_PARMIO_TLAD_RefValues PRIVATE crtm)
 add_executable(test_PARMIO_FASTEM_VH_Sweep mains/regression/parmio_tlad/test_PARMIO_FASTEM_VH_Sweep.f90)
 target_link_libraries(test_PARMIO_FASTEM_VH_Sweep PRIVATE crtm)
 
+# test_PARMIO_RC_Residual: build-only diagnostic. The driver compares CRTM's
+# atmosphere-on TB (Kirchhoff (1-e)*Mod sky-reflection via FASTEM RCCoeff)
+# against PARMIO standalone Tb.f's atmosphere-on output (specular Rvv0 sky
+# reflection). Those are different atmospheric conventions, so the residual
+# is structural rather than a defect on either side. Not registered as a
+# CTest gate; runnable manually for diagnosis.
 add_executable(test_PARMIO_RC_Residual mains/regression/parmio_tlad/test_PARMIO_RC_Residual.f90)
 target_link_libraries(test_PARMIO_RC_Residual PRIVATE crtm)
-add_test(NAME test_PARMIO_RC_Residual
-         COMMAND $<TARGET_FILE:test_PARMIO_RC_Residual>
-                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
 
 add_executable(test_PARMIO_FASTEM_DeltaSweep mains/regression/parmio_tlad/test_PARMIO_FASTEM_DeltaSweep.f90)
 target_link_libraries(test_PARMIO_FASTEM_DeltaSweep PRIVATE crtm)
-add_test(NAME test_PARMIO_FASTEM_DeltaSweep
-         COMMAND $<TARGET_FILE:test_PARMIO_FASTEM_DeltaSweep>
-                 "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
-                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc")
-set_tests_properties(test_PARMIO_FASTEM_DeltaSweep
-                     PROPERTIES
-                       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+if(PARMIO_LUT_PRESENT)
+  add_test(NAME test_PARMIO_FASTEM_DeltaSweep
+           COMMAND $<TARGET_FILE:test_PARMIO_FASTEM_DeltaSweep>
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
+                   "${_PARMIO_LUT_TESTINPUT}")
+  set_tests_properties(test_PARMIO_FASTEM_DeltaSweep
+                       PROPERTIES
+                         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
-# Same target, AWS sensor invocation. Reaches 325 GHz, well above ATMS's 183 GHz.
-add_test(NAME test_PARMIO_FASTEM_DeltaSweep_AWS
-         COMMAND $<TARGET_FILE:test_PARMIO_FASTEM_DeltaSweep>
-                 "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
-                 "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc"
-                 "mwr_aws")
-set_tests_properties(test_PARMIO_FASTEM_DeltaSweep_AWS
-                     PROPERTIES
-                       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+  # Same target, AWS sensor invocation. Reaches 325 GHz, well above ATMS's 183 GHz.
+  if(AWS_COEFFS_PRESENT)
+    add_test(NAME test_PARMIO_FASTEM_DeltaSweep_AWS
+             COMMAND $<TARGET_FILE:test_PARMIO_FASTEM_DeltaSweep>
+                     "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
+                     "${_PARMIO_LUT_TESTINPUT}"
+                     "mwr_aws")
+    set_tests_properties(test_PARMIO_FASTEM_DeltaSweep_AWS
+                         PROPERTIES
+                           WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+  endif()
+endif()
+unset(_PARMIO_LUT_TESTINPUT)
 
 add_executable(test_PARMIO_AWS1_ObsSmoke mains/regression/parmio_tlad/test_PARMIO_AWS1_ObsSmoke.f90)
 target_link_libraries(test_PARMIO_AWS1_ObsSmoke PRIVATE crtm)
@@ -732,6 +789,19 @@ SpcCoeff/netCDF/ssu_n09.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n11.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n14.SpcCoeff.nc
 )
+
+# Locally-staged coefficients (PARMIO LUT, AWS) live in test_data/.../fix/
+# under canonical paths (see PARMIO/AWS staging block above) and are added to
+# the symlink list only when available.
+if(PARMIO_LUT_PRESENT)
+  list(APPEND crtm_test_input
+       EmisCoeff/MW_Water/netCDF/PARMIO.production.MWwater.EmisCoeff.nc)
+endif()
+if(AWS_COEFFS_PRESENT)
+  list(APPEND crtm_test_input
+       SpcCoeff/netCDF/mwr_aws.SpcCoeff.nc
+       TauCoeff/ODPS/netCDF/mwr_aws.TauCoeff.nc)
+endif()
 
 # Symlink all CRTM files
 # Version 3

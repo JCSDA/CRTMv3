@@ -18,7 +18,7 @@ PROGRAM test_PARMIO_GMI_ObsSpace
   CHARACTER(*), PARAMETER :: DEFAULT_SENSOR_ID = 'gmi_gpm'
   CHARACTER(*), PARAMETER :: DEFAULT_COEFF_PATH = './testinput/'
   CHARACTER(*), PARAMETER :: DEFAULT_LUT_FILE = &
-       '../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc'
+       './testinput/PARMIO.production.MWwater.EmisCoeff.nc'
   CHARACTER(*), PARAMETER :: DEFAULT_SCENE_FILE = 'gmi_soca_scenes.csv'
   CHARACTER(*), PARAMETER :: DEFAULT_RESIDUAL_FILE = 'gmi_soca_residuals.csv'
   CHARACTER(*), PARAMETER :: DEFAULT_SUMMARY_FILE = 'gmi_soca_summary.csv'

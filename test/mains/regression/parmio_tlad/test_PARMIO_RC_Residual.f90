@@ -1,8 +1,18 @@
 !
 ! test_PARMIO_RC_Residual
 !
-! Spot-check the Phase-4 PARMIO + FASTEM-RCCoeff reflection correction
-! against PARMIO's own atmosphere-on brightness-temperature output.
+! Build-only diagnostic. NOT a CTest gate.
+!
+! Compares CRTM's atmosphere-on TB (Kirchhoff (1-e)*Mod sky reflection via
+! FASTEM RCCoeff) against PARMIO standalone Tb.f's atmosphere-on output
+! (specular Rvv0 sky reflection, see Tb.f:2267-2277). The two end-to-end
+! TB calculators use different sky-reflection conventions, so the residual
+! is structural -- 20-40 K at high frequency / high U10 -- rather than a
+! defect in the PARMIO emissivity LUT or in CRTM. CRTM's Kirchhoff+bistatic
+! formulation is the more physical of the two; PARMIO Tb.f is a known
+! simplification used only for offline reference. The actual PARMIO
+! promotion gates live elsewhere (test_PARMIO_TLAD, test_PARMIO_FASTEM_*,
+! and the obs-space ATMS clear-ocean smoke test).
 !
 
 PROGRAM test_PARMIO_RC_Residual

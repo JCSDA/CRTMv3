@@ -44,7 +44,7 @@ PROGRAM test_PARMIO_FASTEM_VH_Sweep
   IF (COMMAND_ARGUMENT_COUNT() >= 1) THEN
     CALL GET_COMMAND_ARGUMENT(1, lut_file)
   ELSE
-    lut_file = '../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc'
+    lut_file = './testinput/PARMIO.production.MWwater.EmisCoeff.nc'
   END IF
   IF (COMMAND_ARGUMENT_COUNT() >= 2) THEN
     CALL GET_COMMAND_ARGUMENT(2, csv_file)
