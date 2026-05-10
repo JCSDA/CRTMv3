@@ -284,8 +284,13 @@ CONTAINS
       w = wx(lx) * wf(lf) * wt(lt) * wu(lu) * ws(ls) * wq(lq)
       IF (w == 0.0_fp) CYCLE
       DO ipol = 1, N_POL
-        out(ipol) = out(ipol) + w * REAL( &
-          grp%Rdown(ipol, idx(lx), foam_idx, idq(lq), ids(ls), idu(lu), idt(lt), idf(lf)), fp)
+        IF (ipol == PARMIO_RC_V_POL) THEN
+          out(ipol) = out(ipol) + w * REAL( &
+            grp%Rdown_v(idx(lx), foam_idx, idq(lq), ids(ls), idu(lu), idt(lt), idf(lf)), fp)
+        ELSE
+          out(ipol) = out(ipol) + w * REAL( &
+            grp%Rdown_h(idx(lx), foam_idx, idq(lq), ids(ls), idu(lu), idt(lt), idf(lf)), fp)
+        END IF
       END DO
     END DO; END DO; END DO; END DO; END DO; END DO
   END SUBROUTINE Interp_Rdown
@@ -337,7 +342,11 @@ CONTAINS
              wx(lx)    * wf(lf)    * wt(lt)    * wu(lu)    * ws(ls)    * wq_TL(lq)
       IF (w_TL == 0.0_fp) CYCLE
       DO ipol = 1, N_POL
-        value = REAL(grp%Rdown(ipol, idx(lx), foam_idx, idq(lq), ids(ls), idu(lu), idt(lt), idf(lf)), fp)
+        IF (ipol == PARMIO_RC_V_POL) THEN
+          value = REAL(grp%Rdown_v(idx(lx), foam_idx, idq(lq), ids(ls), idu(lu), idt(lt), idf(lf)), fp)
+        ELSE
+          value = REAL(grp%Rdown_h(idx(lx), foam_idx, idq(lq), ids(ls), idu(lu), idt(lt), idf(lf)), fp)
+        END IF
         out_TL(ipol) = out_TL(ipol) + w_TL * value
       END DO
     END DO; END DO; END DO; END DO; END DO; END DO
@@ -364,7 +373,11 @@ CONTAINS
 
     DO lx = 1, 2; DO lf = 1, 2; DO lt = 1, 2; DO lu = 1, 2; DO ls = 1, 2; DO lq = 1, 2
       DO ipol = 1, N_POL
-        value = REAL(grp%Rdown(ipol, idx(lx), foam_idx, idq(lq), ids(ls), idu(lu), idt(lt), idf(lf)), fp)
+        IF (ipol == PARMIO_RC_V_POL) THEN
+          value = REAL(grp%Rdown_v(idx(lx), foam_idx, idq(lq), ids(ls), idu(lu), idt(lt), idf(lf)), fp)
+        ELSE
+          value = REAL(grp%Rdown_h(idx(lx), foam_idx, idq(lq), ids(ls), idu(lu), idt(lt), idf(lf)), fp)
+        END IF
         adj = value * out_AD(ipol)
         wx_AD(lx) = wx_AD(lx) + wf(lf) * wt(lt) * wu(lu) * ws(ls) * wq(lq) * adj
         wf_AD(lf) = wf_AD(lf) + wx(lx) * wt(lt) * wu(lu) * ws(ls) * wq(lq) * adj

@@ -159,8 +159,11 @@ MODULE PARMIOCoeff_Define
     REAL(Double), ALLOCATABLE :: SST(:)            ! deg C
     REAL(Double), ALLOCATABLE :: SSS(:)            ! psu
     REAL(Double), ALLOCATABLE :: Transmittance(:)  ! 1
-    ! Rdown(pol, transmittance, foam_state, sss, sst, U10, theta, freq)
-    REAL(Double), ALLOCATABLE :: Rdown(:,:,:,:,:,:,:,:)
+    ! Rdown_v / Rdown_h (transmittance, foam_state, sss, sst, U10, theta, freq)
+    ! Polarization is split into separate arrays so each is rank 7
+    ! (nvfortran caps rank at 7; mirrors on-disk Rdown_v / Rdown_h variables).
+    REAL(Double), ALLOCATABLE :: Rdown_v(:,:,:,:,:,:,:)
+    REAL(Double), ALLOCATABLE :: Rdown_h(:,:,:,:,:,:,:)
   END TYPE PARMIOCoeff_RC_Group_type
 
   ! ----------------------------------
@@ -263,7 +266,8 @@ CONTAINS
     IF (ALLOCATED(self%SST))           DEALLOCATE(self%SST)
     IF (ALLOCATED(self%SSS))           DEALLOCATE(self%SSS)
     IF (ALLOCATED(self%Transmittance)) DEALLOCATE(self%Transmittance)
-    IF (ALLOCATED(self%Rdown))         DEALLOCATE(self%Rdown)
+    IF (ALLOCATED(self%Rdown_v))       DEALLOCATE(self%Rdown_v)
+    IF (ALLOCATED(self%Rdown_h))       DEALLOCATE(self%Rdown_h)
   END SUBROUTINE PARMIOCoeff_RC_Group_Destroy
 
 
@@ -480,7 +484,8 @@ CONTAINS
     IF (.NOT. ALL(x%SST           .EqualTo. y%SST))           RETURN
     IF (.NOT. ALL(x%SSS           .EqualTo. y%SSS))           RETURN
     IF (.NOT. ALL(x%Transmittance .EqualTo. y%Transmittance)) RETURN
-    IF (.NOT. ALL(x%Rdown         .EqualTo. y%Rdown))         RETURN
+    IF (.NOT. ALL(x%Rdown_v       .EqualTo. y%Rdown_v))       RETURN
+    IF (.NOT. ALL(x%Rdown_h       .EqualTo. y%Rdown_h))       RETURN
     is_equal = .TRUE.
   END FUNCTION RC_Group_Equal
 

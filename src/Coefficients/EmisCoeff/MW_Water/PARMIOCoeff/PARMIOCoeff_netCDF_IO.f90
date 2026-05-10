@@ -298,7 +298,6 @@ CONTAINS
     INTEGER :: nF, nT, nU, nS, nQ, nFoam, nTau
     LOGICAL :: has_sss
     INTEGER :: dimid_sss
-    REAL(Double), ALLOCATABLE :: buf7(:,:,:,:,:,:,:)
     REAL(Double), ALLOCATABLE :: buf6(:,:,:,:,:,:)
 
     err_stat = FAILURE
@@ -337,21 +336,16 @@ CONTAINS
     END IF
 
     IF (has_sss) THEN
-      ALLOCATE(buf7(nTau, nFoam, nQ, nS, nU, nT, nF))
-      IF (.NOT. Get_Var_7D(gid, VAR_RDOWN_V, buf7, msg)) RETURN
-      rcoeff%Rdown(PARMIO_RC_V_POL, :, :, :, :, :, :, :) = buf7
-      IF (.NOT. Get_Var_7D(gid, VAR_RDOWN_H, buf7, msg)) RETURN
-      rcoeff%Rdown(PARMIO_RC_H_POL, :, :, :, :, :, :, :) = buf7
+      IF (.NOT. Get_Var_7D(gid, VAR_RDOWN_V, rcoeff%Rdown_v, msg)) RETURN
+      IF (.NOT. Get_Var_7D(gid, VAR_RDOWN_H, rcoeff%Rdown_h, msg)) RETURN
     ELSE
       ALLOCATE(buf6(nTau, nFoam, nS, nU, nT, nF))
       IF (.NOT. Get_Var_6D(gid, VAR_RDOWN_V, buf6, msg)) RETURN
-      rcoeff%Rdown(PARMIO_RC_V_POL, :, :, 1, :, :, :, :) = buf6
+      rcoeff%Rdown_v(:, :, 1, :, :, :, :) = buf6
       IF (.NOT. Get_Var_6D(gid, VAR_RDOWN_H, buf6, msg)) RETURN
-      rcoeff%Rdown(PARMIO_RC_H_POL, :, :, 1, :, :, :, :) = buf6
+      rcoeff%Rdown_h(:, :, 1, :, :, :, :) = buf6
+      DEALLOCATE(buf6)
     END IF
-
-    IF (ALLOCATED(buf7)) DEALLOCATE(buf7)
-    IF (ALLOCATED(buf6)) DEALLOCATE(buf6)
     err_stat = SUCCESS
   END SUBROUTINE Read_RC_Group
 
@@ -524,8 +518,8 @@ CONTAINS
       self%SST(nS),                                            &
       self%SSS(nQ),                                            &
       self%Transmittance(nTau),                                &
-      self%Rdown(PARMIO_N_RC_POLARIZATIONS, nTau, nFoam,       &
-                 nQ, nS, nU, nT, nF),                          &
+      self%Rdown_v(nTau, nFoam, nQ, nS, nU, nT, nF),           &
+      self%Rdown_h(nTau, nFoam, nQ, nS, nU, nT, nF),           &
       STAT=alloc_stat)
     IF (alloc_stat /= 0) RETURN
     self%n_Frequencies    = nF
@@ -542,7 +536,8 @@ CONTAINS
     self%SST              = 0.0_Double
     self%SSS              = 0.0_Double
     self%Transmittance    = 0.0_Double
-    self%Rdown            = 0.0_Double
+    self%Rdown_v          = 0.0_Double
+    self%Rdown_h          = 0.0_Double
     self%Is_Allocated     = .TRUE.
   END SUBROUTINE RC_Group_Create_Wrapper
 

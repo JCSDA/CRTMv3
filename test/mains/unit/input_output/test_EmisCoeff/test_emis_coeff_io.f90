@@ -66,8 +66,8 @@ PROGRAM test_emis_coeff_io
   CHARACTER(*), PARAMETER :: Program_Name = 'Test_Emi_Coeff_io'
 
   ! Initialize Unit test:
-  CALL UnitTest_Init(ioTest, .TRUE.)
-  CALL UnitTest_Setup(ioTest, 'Emi_Coeff_IO_Test', Program_Name, .TRUE.)
+  CALL ioTest%Init(.TRUE.)
+  CALL ioTest%Setup('Emi_Coeff_IO_Test', Program_Name, .TRUE.)
 
   ! Greeting:
   WRITE(*,*) 'HELLO, THIS IS A TEST CODE TO INSPECT EmisCoeff files in binary format.'
@@ -82,8 +82,8 @@ PROGRAM test_emis_coeff_io
                netCDF     = netCDF, &
                Quiet      = Quiet, &
                File_Path  = File_Path)
-  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
+  CALL ioTest%Assert((err_stat==SUCCESS) )
+  testPassed = ioTest%Passed()
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_IRlandCoeff_Load' ,'Error loading IRlandCoeff data', err_stat )
     STOP 1
@@ -96,8 +96,8 @@ PROGRAM test_emis_coeff_io
                netCDF     = netCDF, &
                Quiet      = Quiet, &
                File_Path  = File_Path)
-  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
+  CALL ioTest%Assert((err_stat==SUCCESS) )
+  testPassed = ioTest%Passed()
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_IRwaterCoeff_Load' ,'Error loading IRwaterCoeff data', err_stat )
     STOP 1
@@ -110,8 +110,8 @@ PROGRAM test_emis_coeff_io
                netCDF     = netCDF, &
                Quiet      = Quiet, &
                File_Path  = File_Path)
-  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
+  CALL ioTest%Assert((err_stat==SUCCESS) )
+  testPassed = ioTest%Passed()
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_IRsnowCoeff_Load' ,'Error loading IRsnowCoeff data', err_stat )
     STOP 1
@@ -124,8 +124,8 @@ PROGRAM test_emis_coeff_io
                netCDF     = netCDF, &
                Quiet      = Quiet, &
                File_Path  = File_Path)
-  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
+  CALL ioTest%Assert((err_stat==SUCCESS) )
+  testPassed = ioTest%Passed()
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_IRiceCoeff_Load' ,'Error loading IRiceCoeff data', err_stat )
     STOP 1
@@ -138,8 +138,8 @@ PROGRAM test_emis_coeff_io
                netCDF     = netCDF, &
                Quiet      = Quiet, &
                File_Path  = File_Path)
-  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
+  CALL ioTest%Assert((err_stat==SUCCESS) )
+  testPassed = ioTest%Passed()
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_VISlandCoeff_Load' ,'Error loading VISlandCoeff data', err_stat )
     STOP 1
@@ -152,8 +152,8 @@ PROGRAM test_emis_coeff_io
                netCDF     = netCDF, &
                Quiet      = Quiet, &
                File_Path  = File_Path)
-  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
+  CALL ioTest%Assert((err_stat==SUCCESS) )
+  testPassed = ioTest%Passed()
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_VISwaterCoeff_Load' ,'Error loading VISwaterCoeff data', err_stat )
     STOP 1
@@ -166,8 +166,8 @@ PROGRAM test_emis_coeff_io
                netCDF     = netCDF, &
                Quiet      = Quiet, &
                File_Path  = File_Path)
-  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
+  CALL ioTest%Assert((err_stat==SUCCESS) )
+  testPassed = ioTest%Passed()
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_VISsnowCoeff_Load' ,'Error loading VISsnowCoeff data', err_stat )
     STOP 1
@@ -180,8 +180,8 @@ PROGRAM test_emis_coeff_io
                netCDF     = netCDF, &
                Quiet      = Quiet, &
                File_Path  = File_Path)
-  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
+  CALL ioTest%Assert((err_stat==SUCCESS) )
+  testPassed = ioTest%Passed()
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_VISiceCoeff_Load' ,'Error loading VISiceCoeff data', err_stat )
     STOP 1
@@ -198,8 +198,8 @@ PROGRAM test_emis_coeff_io
                netCDF     = netCDF, &
                Quiet      = Quiet, &
                File_Path  = File_Path)
-  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
+  CALL ioTest%Assert((err_stat==SUCCESS) )
+  testPassed = ioTest%Passed()
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_IRwaterCoeff_Load' ,'Error loading IRwaterCoeff data', err_stat )
     STOP 1
@@ -213,8 +213,8 @@ PROGRAM test_emis_coeff_io
                isSEcategory = .FALSE., &
                Quiet        = Quiet, &
                File_Path    = File_Path)
-  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
+  CALL ioTest%Assert((err_stat==SUCCESS) )
+  testPassed = ioTest%Passed()
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_IRsnowCoeff_Load' ,'Error loading IRsnowCoeff data', err_stat )
     STOP 1

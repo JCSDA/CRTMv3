@@ -77,7 +77,7 @@ PROGRAM test_active_sensor
   INTEGER :: n_ls, n_ms
   CHARACTER(256) :: atmk_File, sfck_File
   REAL(fp) :: Perturbation
-  REAL(16) :: Ratio_new(nsign), Ratio_old(nsign)
+  REAL(fp) :: Ratio_new(nsign), Ratio_old(nsign)
   REAL(fp), PARAMETER :: TOLERANCE = 0.1_fp
 
 

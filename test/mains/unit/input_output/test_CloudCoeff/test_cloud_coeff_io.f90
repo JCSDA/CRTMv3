@@ -49,8 +49,8 @@ PROGRAM test_cloud_coeff_io
   CHARACTER(*), PARAMETER :: Program_Name = 'Test_Cloud_Coeff_IO_Binary'
 
   ! Initialize Unit test:
-  CALL UnitTest_Init(ioTest, .TRUE.)
-  CALL UnitTest_Setup(ioTest, 'Test_Cloud_Coeff_IO_Binary', Program_Name, .TRUE.)
+  CALL ioTest%Init(.TRUE.)
+  CALL ioTest%Setup('Test_Cloud_Coeff_IO_Binary', Program_Name, .TRUE.)
 
   ! Greeting:
   WRITE(*,*) 'HELLO, THIS IS A TEST CODE TO INSPECT CloudCoefff files.'
@@ -63,8 +63,8 @@ PROGRAM test_cloud_coeff_io
                 File_Path                , &
                 netCDF          = netCDF , &
                 Quiet           = Quiet    )
-  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
+  CALL ioTest%Assert((err_stat==SUCCESS) )
+  testPassed = ioTest%Passed()
 
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_Load_Cloud_Coeff' ,'Error loading CloudCoeff data', err_stat )

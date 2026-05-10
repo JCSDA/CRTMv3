@@ -47,8 +47,8 @@ PROGRAM test_spc_io
   CHARACTER(*), PARAMETER :: Program_Name = 'Test_Spc_IO'
 
   ! Initialize Unit test:
-  CALL UnitTest_Init(ioTest, .TRUE.)
-  CALL UnitTest_Setup(ioTest, 'Spc_IO_Test', Program_Name, .TRUE.)
+  CALL ioTest%Init(.TRUE.)
+  CALL ioTest%Setup('Spc_IO_Test', Program_Name, .TRUE.)
 
   ! Greeting:
   WRITE(*,*) 'HELLO, THIS IS A TEST CODE TO INSPECT SpcCoeff files.' 
@@ -60,8 +60,8 @@ PROGRAM test_spc_io
                 File_Path         = File_Path        , &
                 netCDF            = .TRUE.           , &
                 Quiet             = Quiet          )
-  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
+  CALL ioTest%Assert((err_stat==SUCCESS) )
+  testPassed = ioTest%Passed()
 
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_Load_SpcCoeff' ,'Error loading SpcCoeff data', err_stat )
