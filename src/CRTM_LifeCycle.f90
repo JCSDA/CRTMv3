@@ -78,6 +78,9 @@ MODULE CRTM_LifeCycle
   USE CRTM_MWwaterCoeff      , ONLY: CRTM_MWwaterCoeff_Load, &
                                      CRTM_MWwaterCoeff_Destroy, &
                                      CRTM_MWwaterCoeff_Load_FASTEM
+  USE CRTM_PARMIOCoeff       , ONLY: CRTM_PARMIOCoeff_Load, &
+                                     CRTM_PARMIOCoeff_Destroy, &
+                                     CRTM_PARMIOCoeff_IsLoaded
   ! ...OpenMP API
 #ifdef _OPENMP
   USE OMP_LIB
@@ -545,6 +548,7 @@ CONTAINS
     VISiceCoeff_File    , &  ! Optional input
     MWwaterCoeff_File   , &  ! Optional input
     MWwaterCoeff_Scheme , &  ! Optional input
+    PARMIOCoeff_File    , &  ! Optional input
     IRwaterCoeff_Format , &  ! Optional input
     IRlandCoeff_Format  , &  ! Optional input
     IRsnowCoeff_Format  , &  ! Optional input
@@ -584,6 +588,7 @@ CONTAINS
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: VISiceCoeff_File
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: MWwaterCoeff_File
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: MWwaterCoeff_Scheme
+    CHARACTER(*),      OPTIONAL, INTENT(IN)  :: PARMIOCoeff_File
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRwaterCoeff_Format
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRlandCoeff_Format
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRsnowCoeff_Format
@@ -625,6 +630,7 @@ CONTAINS
     CHARACTER(SL) :: Default_VISiceCoeff_File
     CHARACTER(SL) :: Default_MWwaterCoeff_File
     CHARACTER(SL) :: Default_MWwaterCoeff_Scheme
+    CHARACTER(SL) :: Resolved_PARMIOCoeff_File
     CHARACTER(SL) :: Default_IRwaterCoeff_Format
     CHARACTER(SL) :: Default_IRlandCoeff_Format
     CHARACTER(SL) :: Default_IRsnowCoeff_Format
@@ -1090,6 +1096,28 @@ CONTAINS
         CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
         RETURN
       END IF
+
+      ! ...Optional PARMIO LUT. Loaded only when the caller supplies a filename;
+      !    Options%Use_PARMIO_Model toggles dispatch at Forward/TL/AD time. When
+      !    the LUT is not loaded the dispatcher silently falls back to FASTEM,
+      !    so omitting PARMIOCoeff_File is byte-identical to a pre-PARMIO build.
+      IF ( PRESENT(PARMIOCoeff_File) ) THEN
+        Resolved_PARMIOCoeff_File = TRIM(ADJUSTL(PARMIOCoeff_File))
+        IF ( LEN_TRIM(Resolved_PARMIOCoeff_File) > 0 ) THEN
+          IF ( PRESENT(File_Path) ) THEN
+            Resolved_PARMIOCoeff_File = TRIM(ADJUSTL(File_Path)) // TRIM(Resolved_PARMIOCoeff_File)
+          END IF
+          IF ( .NOT. Quiet_ ) THEN
+            WRITE(*, '("Loading PARMIO MW water emissivity LUT: ", a)') TRIM(Resolved_PARMIOCoeff_File)
+          END IF
+          err_stat = CRTM_PARMIOCoeff_Load( TRIM(Resolved_PARMIOCoeff_File), Quiet=Quiet )
+          IF ( err_stat /= SUCCESS ) THEN
+            msg = 'Error loading PARMIOCoeff data from '//TRIM(Resolved_PARMIOCoeff_File)
+            CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+            RETURN
+          END IF
+        END IF
+      END IF
     END IF Microwave_Sensor
 
 
@@ -1293,6 +1321,8 @@ CONTAINS
       msg = 'Error deallocating shared MWwaterCoeff data structure'//TRIM(pid_msg)
       CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
     END IF
+
+    IF ( CRTM_PARMIOCoeff_IsLoaded() ) CALL CRTM_PARMIOCoeff_Destroy()
 
   END FUNCTION CRTM_Destroy
 

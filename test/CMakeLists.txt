@@ -538,12 +538,27 @@ target_link_libraries(test_PARMIO_RC_Residual PRIVATE crtm)
 
 add_executable(test_PARMIO_FASTEM_DeltaSweep mains/regression/parmio_tlad/test_PARMIO_FASTEM_DeltaSweep.f90)
 target_link_libraries(test_PARMIO_FASTEM_DeltaSweep PRIVATE crtm)
+
+# Phase-4 lifecycle integration test: exercises CRTM_Init(PARMIOCoeff_File=...)
+# plus dispatch routing and silent FASTEM fallback. Filename is passed as a
+# basename relative to the testinput/ directory; CRTM_Init handles prepending.
+add_executable(test_PARMIO_Lifecycle mains/regression/parmio_tlad/test_PARMIO_Lifecycle.f90)
+target_link_libraries(test_PARMIO_Lifecycle PRIVATE crtm)
+
 if(PARMIO_LUT_PRESENT)
   add_test(NAME test_PARMIO_FASTEM_DeltaSweep
            COMMAND $<TARGET_FILE:test_PARMIO_FASTEM_DeltaSweep>
                    "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
                    "${_PARMIO_LUT_TESTINPUT}")
   set_tests_properties(test_PARMIO_FASTEM_DeltaSweep
+                       PROPERTIES
+                         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+
+  add_test(NAME test_PARMIO_Lifecycle
+           COMMAND $<TARGET_FILE:test_PARMIO_Lifecycle>
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
+                   "PARMIO.MWwater.EmisCoeff.nc")
+  set_tests_properties(test_PARMIO_Lifecycle
                        PROPERTIES
                          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 

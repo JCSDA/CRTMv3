@@ -46,7 +46,7 @@ MODULE CRTM_MW_Water_SfcOptics
                                       Compute_PARMIO
   USE CRTM_PARMIO_TL,           ONLY: Compute_PARMIO_TL
   USE CRTM_PARMIO_AD,           ONLY: Compute_PARMIO_AD
-  USE CRTM_PARMIOCoeff,         ONLY: PARMIOC
+  USE CRTM_PARMIOCoeff,         ONLY: PARMIOC, CRTM_PARMIOCoeff_IsLoaded
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -221,7 +221,10 @@ CONTAINS
 
     
     ! Compute the surface optical parameters
-    IF( SfcOptics%Use_PARMIO_Model ) THEN
+    ! PARMIO dispatch requires both the per-call flag and a loaded LUT.
+    ! If the flag is set but no LUT was loaded at CRTM_Init time, fall
+    ! through to FASTEM silently (byte-identical to a non-PARMIO build).
+    IF( SfcOptics%Use_PARMIO_Model .AND. CRTM_PARMIOCoeff_IsLoaded() ) THEN
 
       ! PARMIO_MWSSEM (LUT-driven, replaces FASTEM at runtime)
       SfcOptics%Azimuth_Angle = Surface%Wind_Direction - Sensor_Azimuth_Angle
@@ -450,7 +453,7 @@ CONTAINS
 
 
     ! Compute the tangent-linear surface optical parameters
-    IF( SfcOptics%Use_PARMIO_Model ) THEN
+    IF( SfcOptics%Use_PARMIO_Model .AND. CRTM_PARMIOCoeff_IsLoaded() ) THEN
 
       ! PARMIO_MWSSEM (LUT-driven)
       DO i = 1, SfcOptics%n_Angles
@@ -669,7 +672,7 @@ CONTAINS
 
 
     ! Compute the adjoint surface optical parameters
-    IF( SfcOptics%Use_PARMIO_Model ) THEN
+    IF( SfcOptics%Use_PARMIO_Model .AND. CRTM_PARMIOCoeff_IsLoaded() ) THEN
 
       ! PARMIO_MWSSEM (LUT-driven)
       Azimuth_Angle_AD = ZERO
