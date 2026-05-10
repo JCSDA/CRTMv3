@@ -73,14 +73,14 @@ IF(EXISTS  ${FIX_FILE_PATH})
 
 else() # Download CRTM coefficients
   set( CRTM_COEFFS_BRANCH_PREFIX "" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
-  set( CRTM_COEFFS_BRANCH "fix_REL-3.1.2.0" )  #Note switch to 3.2.0 when tarball ready
+  set( CRTM_COEFFS_BRANCH "fix_REL-3.2.0.0" )  #Note switch to 3.2.0 when tarball ready
 
   set(CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${PROJECT_VERSION})
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
 
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
   set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz)
-  set(checksum "0e5888cae80aa674b2e67ecd4490317d") # MD5SUM of fix_REL-3.1.2.0.tgz
+  set(checksum "19eea9e0dce6aa94756707db9ea43e9e") # MD5SUM of fix_REL-3.2.0.0.tgz
   
   # Check if the CRTM binary tarball is already present otherwise download it.
   if (DEFINED ENV{CRTM_BINARY_FILES_TARBALL})
@@ -669,7 +669,7 @@ add_test(NAME test_TL_convergence_active_sensor COMMAND test_TL_convergence_acti
 #####################################################################
 
 list( APPEND crtm_test_input
-# REL-3.2.0: NetCDF is the canonical LUT format. Symlinks point at .nc/.nc4
+# REL-3.2.0: NetCDF is the canonical LUT format. Symlinks point at .nc
 # files in the netCDF/ subtrees of the test data. Two exceptions retain
 # .bin symlinks because no NetCDF analog is published yet:
 #   - SSU TauCoeff (no TauCoeff/ODPS/netCDF/ssu_n*.TauCoeff.nc on disk)
@@ -677,28 +677,28 @@ list( APPEND crtm_test_input
 # CRTM_Init's per-loader fallback (Resolve_Coeff_Format / SpcCoeff /
 # TauCoeff) silently switches to .bin when an .nc file is missing, so
 # missing entries here are recoverable for sensors that have a binary copy.
-AerosolCoeff/netCDF/AerosolCoeff.nc4
-AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.nc4
+AerosolCoeff/netCDF/AerosolCoeff.nc
+AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.nc
 AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.BRC.kb.v2.nc
-AerosolCoeff/netCDF/AerosolCoeff.CMAQ.nc4
-CloudCoeff/netCDF/CloudCoeff.nc4
-CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2022.nc4
+AerosolCoeff/netCDF/AerosolCoeff.CMAQ.nc
+CloudCoeff/netCDF/CloudCoeff.nc
+CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2022.nc
 BeCoeff/netCDF/BeCoeff.nc
 EmisCoeff/MW_Water/netCDF/FASTEM6.MWwater.EmisCoeff.nc
 EmisCoeff/MW_Water/netCDF/FASTEM4.MWwater.EmisCoeff.nc
-EmisCoeff/IR_Ice/SEcategory/netCDF/NPOESS.IRice.EmisCoeff.nc4
-EmisCoeff/IR_Land/SEcategory/netCDF/NPOESS.IRland.EmisCoeff.nc4
-EmisCoeff/IR_Snow/SEcategory/netCDF/NPOESS.IRsnow.EmisCoeff.nc4
-EmisCoeff/IR_Snow/Nalli/netCDF/Nalli.IRsnow.EmisCoeff.nc4
-EmisCoeff/IR_Snow/Nalli/netCDF/Nalli2.IRsnow.EmisCoeff.nc4
-EmisCoeff/VIS_Ice/SEcategory/netCDF/NPOESS.VISice.EmisCoeff.nc4
-EmisCoeff/VIS_Land/SEcategory/netCDF/NPOESS.VISland.EmisCoeff.nc4
-EmisCoeff/VIS_Snow/SEcategory/netCDF/NPOESS.VISsnow.EmisCoeff.nc4
-EmisCoeff/VIS_Water/SEcategory/netCDF/NPOESS.VISwater.EmisCoeff.nc4
-EmisCoeff/IR_Water/netCDF/Nalli.IRwater.EmisCoeff.nc4
-EmisCoeff/IR_Water/netCDF/Nalli2.IRwater.EmisCoeff.nc4
-EmisCoeff/IR_Land/SEcategory/netCDF/USGS.IRland.EmisCoeff.nc4
-EmisCoeff/VIS_Land/SEcategory/netCDF/USGS.VISland.EmisCoeff.nc4
+EmisCoeff/IR_Ice/SEcategory/netCDF/NPOESS.IRice.EmisCoeff.nc
+EmisCoeff/IR_Land/SEcategory/netCDF/NPOESS.IRland.EmisCoeff.nc
+EmisCoeff/IR_Snow/SEcategory/netCDF/NPOESS.IRsnow.EmisCoeff.nc
+EmisCoeff/IR_Snow/Nalli/netCDF/Nalli.IRsnow.EmisCoeff.nc
+EmisCoeff/IR_Snow/Nalli/netCDF/Nalli2.IRsnow.EmisCoeff.nc
+EmisCoeff/VIS_Ice/SEcategory/netCDF/NPOESS.VISice.EmisCoeff.nc
+EmisCoeff/VIS_Land/SEcategory/netCDF/NPOESS.VISland.EmisCoeff.nc
+EmisCoeff/VIS_Snow/SEcategory/netCDF/NPOESS.VISsnow.EmisCoeff.nc
+EmisCoeff/VIS_Water/SEcategory/netCDF/NPOESS.VISwater.EmisCoeff.nc
+EmisCoeff/IR_Water/netCDF/Nalli.IRwater.EmisCoeff.nc
+EmisCoeff/IR_Water/netCDF/Nalli2.IRwater.EmisCoeff.nc
+EmisCoeff/IR_Land/SEcategory/netCDF/USGS.IRland.EmisCoeff.nc
+EmisCoeff/VIS_Land/SEcategory/netCDF/USGS.VISland.EmisCoeff.nc
 SpcCoeff/netCDF/hirs4_metop-a.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/hirs4_metop-a.TauCoeff.nc
 SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc

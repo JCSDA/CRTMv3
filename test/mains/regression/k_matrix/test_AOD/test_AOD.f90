@@ -100,11 +100,11 @@ PROGRAM test_AOD
   ! ---------------------------------------
   WRITE( *,'(/5x,"Initializing the CRTM...")' )
   has_new_coeff = File_Exists(COEFFICIENTS_PATH//'AerosolCoeff.GOCART-GEOS5.BRC.kb.v2.nc')
-  has_old_coeff = File_Exists(COEFFICIENTS_PATH//'AerosolCoeff.GOCART-GEOS5.nc4')
+  has_old_coeff = File_Exists(COEFFICIENTS_PATH//'AerosolCoeff.GOCART-GEOS5.nc')
   IF ( has_new_coeff ) THEN
     AerosolCoeff_File = 'AerosolCoeff.GOCART-GEOS5.BRC.kb.v2.nc'
   ELSE
-    AerosolCoeff_File = 'AerosolCoeff.GOCART-GEOS5.nc4'
+    AerosolCoeff_File = 'AerosolCoeff.GOCART-GEOS5.nc'
   END IF
   Error_Status = CRTM_Init( (/Sensor_Id/), &
                             ChannelInfo, &
@@ -112,8 +112,8 @@ PROGRAM test_AOD
                             AerosolCoeff_Format = 'netCDF', &
                             AerosolCoeff_File = TRIM(AerosolCoeff_File), &
                             File_Path=COEFFICIENTS_PATH)
-  IF ( Error_Status /= SUCCESS .AND. has_old_coeff .AND. TRIM(AerosolCoeff_File) /= 'AerosolCoeff.GOCART-GEOS5.nc4' ) THEN
-    AerosolCoeff_File = 'AerosolCoeff.GOCART-GEOS5.nc4'
+  IF ( Error_Status /= SUCCESS .AND. has_old_coeff .AND. TRIM(AerosolCoeff_File) /= 'AerosolCoeff.GOCART-GEOS5.nc' ) THEN
+    AerosolCoeff_File = 'AerosolCoeff.GOCART-GEOS5.nc'
     Error_Status = CRTM_Init( (/Sensor_Id/), &
                               ChannelInfo, &
                               Aerosol_Model = 'GOCART-GEOS5', &

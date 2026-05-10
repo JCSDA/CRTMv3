@@ -147,9 +147,9 @@ PROGRAM test_Simple
   ! if netCDF I/O
   ELSE IF ( Coeff_Format == 'netCDF' ) THEN
     AerosolCoeff_Format = 'netCDF'
-    AerosolCoeff_File   = 'AerosolCoeff.nc4'
+    AerosolCoeff_File   = 'AerosolCoeff.nc'
     CloudCoeff_Format   = 'netCDF'
-    CloudCoeff_File     = 'CloudCoeff.nc4'
+    CloudCoeff_File     = 'CloudCoeff.nc'
   ELSE
     message = 'Aerosol/Cloud coefficient format is not supported'
     CALL Display_Message( PROGRAM_NAME, message, FAILURE )
@@ -162,7 +162,7 @@ PROGRAM test_Simple
       AerosolCoeff_File   = 'AerosolCoeff.bin'
     ELSE IF ( Coeff_Format == 'netCDF' ) THEN
       AerosolCoeff_Format = 'netCDF'
-      AerosolCoeff_File   = 'AerosolCoeff.nc4'
+      AerosolCoeff_File   = 'AerosolCoeff.nc'
     ELSE
       message = 'Aerosol coefficient format is not supported'
       CALL Display_Message( PROGRAM_NAME, message, FAILURE )
@@ -174,7 +174,7 @@ PROGRAM test_Simple
       AerosolCoeff_File   = 'AerosolCoeff.CMAQ.bin'
     ELSE IF ( Coeff_Format == 'netCDF' ) THEN
       AerosolCoeff_Format = 'netCDF'
-      AerosolCoeff_File   = 'AerosolCoeff.CMAQ.nc4'
+      AerosolCoeff_File   = 'AerosolCoeff.CMAQ.nc'
     ELSE
       message = 'Aerosol coefficient format is not supported'
       CALL Display_Message( PROGRAM_NAME, message, FAILURE )

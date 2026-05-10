@@ -63,7 +63,7 @@ PROGRAM test_AerosolScatter_K
   IF ( Error_Status /= SUCCESS ) STOP 1
   
   ! Load GOCART-GEOS5
-  Error_Status = CRTM_AerosolCoeff_Load('GOCART-GEOS5', 'AerosolCoeff.GOCART-GEOS5.nc4', File_Path=COEFFICIENTS_PATH, netCDF=.TRUE.)
+  Error_Status = CRTM_AerosolCoeff_Load('GOCART-GEOS5', 'AerosolCoeff.GOCART-GEOS5.nc', File_Path=COEFFICIENTS_PATH, netCDF=.TRUE.)
   IF ( Error_Status /= SUCCESS ) STOP 1
 
   n_Channels = ChannelInfo(1)%n_Channels

@@ -40,7 +40,7 @@ PROGRAM test_aerosol_coeff_io
   !TYPE(AerosolCoeff_type) :: aero_coeff
   CHARACTER(2000)         :: info
   CHARACTER(*), PARAMETER :: Aerosol_Model = 'CRTM'
-  CHARACTER(*), PARAMETER :: AerosolCoeff_File = 'AerosolCoeff.nc4'
+  CHARACTER(*), PARAMETER :: AerosolCoeff_File = 'AerosolCoeff.nc'
   CHARACTER(*), PARAMETER :: File_Path = './testinput/'
   LOGICAL,      PARAMETER :: netCDF = .TRUE.
   LOGICAL,      PARAMETER :: Quiet = .TRUE.
