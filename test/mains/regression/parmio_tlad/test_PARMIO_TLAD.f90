@@ -29,7 +29,7 @@ PROGRAM test_PARMIO_TLAD
   IF (COMMAND_ARGUMENT_COUNT() >= 1) THEN
     CALL GET_COMMAND_ARGUMENT(1, lut_file)
   ELSE
-    lut_file = './testinput/PARMIO.production.MWwater.EmisCoeff.nc'
+    lut_file = './testinput/PARMIO.MWwater.EmisCoeff.nc'
   END IF
 
   err_stat = CRTM_MWwaterCoeff_Load_FASTEM('FASTEM6', Quiet=.TRUE.)

@@ -18,7 +18,7 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
   CHARACTER(*), PARAMETER :: PROGRAM_NAME = 'test_PARMIO_FASTEM_DeltaSweep'
   CHARACTER(*), PARAMETER :: DEFAULT_COEFF_PATH = './testinput/'
   CHARACTER(*), PARAMETER :: DEFAULT_LUT_FILE = &
-       '../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc'
+       './testinput/PARMIO.MWwater.EmisCoeff.nc'
   CHARACTER(*), PARAMETER :: DEFAULT_SENSOR_ID = 'atms_npp'
 
   INTEGER, PARAMETER :: N_ATM_PROFILES = 2

@@ -44,7 +44,7 @@ PROGRAM test_PARMIO_Dispatcher
   IF (COMMAND_ARGUMENT_COUNT() >= 2) THEN
     CALL GET_COMMAND_ARGUMENT(2, lut_file)
   ELSE
-    lut_file = './testinput/PARMIO.production.MWwater.EmisCoeff.nc'
+    lut_file = './testinput/PARMIO.MWwater.EmisCoeff.nc'
   END IF
 
   sensor_id = (/ 'atms_npp' /)

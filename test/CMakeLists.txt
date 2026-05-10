@@ -475,51 +475,28 @@ target_link_libraries(test_MWSurfEM PRIVATE crtm)
 add_test(NAME test_MWSurfEM
          COMMAND $<TARGET_FILE:test_MWSurfEM>)
 
-# Stage locally-generated PARMIO LUT and AWS coefficients into the canonical
-# test_data tree, so test commands can reference testinput/ paths only and not
-# reach outside the build tree. PARMIO_LUT_SRC and AWS_COEFF_SRC are cache
-# variables so users can override them at configure time:
-#   cmake -DPARMIO_LUT_SRC=/path/to/PARMIO.production.MWwater.EmisCoeff.nc \
-#         -DAWS_COEFF_SRC=/path/containing/mwr_aws.{Spc,Tau}Coeff.nc ..
-# If either set is missing the corresponding tests are not registered, so
-# upstream builds without these locally-generated files still configure clean.
+# Check for canonical PARMIO LUT and AWS coefficients inside the staged
+# test_data tree. Tests are registered only when the files are present at
+# their canonical paths; nothing outside build/test_data/** is referenced.
 set(_PARMIO_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix")
 
-set(PARMIO_LUT_SRC
-    "${CRTM_SOURCE_DIR}/../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc"
-    CACHE FILEPATH "Path to the production PARMIO LUT (locally generated; staged into test_data)")
-if(EXISTS "${PARMIO_LUT_SRC}")
-  file(MAKE_DIRECTORY "${_PARMIO_FIX}/EmisCoeff/MW_Water/netCDF")
-  execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
-                  "${PARMIO_LUT_SRC}"
-                  "${_PARMIO_FIX}/EmisCoeff/MW_Water/netCDF/PARMIO.production.MWwater.EmisCoeff.nc")
+if(EXISTS "${_PARMIO_FIX}/EmisCoeff/MW_Water/netCDF/PARMIO.MWwater.EmisCoeff.nc")
   set(PARMIO_LUT_PRESENT TRUE)
 else()
-  message(STATUS "PARMIO LUT not found at ${PARMIO_LUT_SRC}; PARMIO regression tests will not be registered.")
+  message(STATUS "PARMIO LUT not found at ${_PARMIO_FIX}/EmisCoeff/MW_Water/netCDF/PARMIO.MWwater.EmisCoeff.nc; PARMIO regression tests will not be registered.")
   set(PARMIO_LUT_PRESENT FALSE)
 endif()
 
-set(AWS_COEFF_SRC
-    "${CRTM_SOURCE_DIR}/../LBL/emulator/output_mwr_aws_rosenkranz_optran"
-    CACHE PATH "Directory containing mwr_aws.{Spc,Tau}Coeff.nc (locally generated; staged into test_data)")
-if(EXISTS "${AWS_COEFF_SRC}/mwr_aws.SpcCoeff.nc"
-   AND EXISTS "${AWS_COEFF_SRC}/mwr_aws.TauCoeff.nc")
-  file(MAKE_DIRECTORY "${_PARMIO_FIX}/SpcCoeff/netCDF")
-  file(MAKE_DIRECTORY "${_PARMIO_FIX}/TauCoeff/ODPS/netCDF")
-  execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
-                  "${AWS_COEFF_SRC}/mwr_aws.SpcCoeff.nc"
-                  "${_PARMIO_FIX}/SpcCoeff/netCDF/mwr_aws.SpcCoeff.nc")
-  execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
-                  "${AWS_COEFF_SRC}/mwr_aws.TauCoeff.nc"
-                  "${_PARMIO_FIX}/TauCoeff/ODPS/netCDF/mwr_aws.TauCoeff.nc")
+if(EXISTS "${_PARMIO_FIX}/SpcCoeff/netCDF/mwr_aws.SpcCoeff.nc"
+   AND EXISTS "${_PARMIO_FIX}/TauCoeff/ODPS/netCDF/mwr_aws.TauCoeff.nc")
   set(AWS_COEFFS_PRESENT TRUE)
 else()
-  message(STATUS "AWS coefficients not found at ${AWS_COEFF_SRC}; AWS PARMIO test will not be registered.")
+  message(STATUS "AWS coefficients (mwr_aws.{Spc,Tau}Coeff.nc) not found in ${_PARMIO_FIX}; AWS PARMIO test will not be registered.")
   set(AWS_COEFFS_PRESENT FALSE)
 endif()
 unset(_PARMIO_FIX)
 
-set(_PARMIO_LUT_TESTINPUT "${CMAKE_CURRENT_BINARY_DIR}/testinput/PARMIO.production.MWwater.EmisCoeff.nc")
+set(_PARMIO_LUT_TESTINPUT "${CMAKE_CURRENT_BINARY_DIR}/testinput/PARMIO.MWwater.EmisCoeff.nc")
 
 # test_PARMIO_TLAD
 add_executable(test_PARMIO_TLAD mains/regression/parmio_tlad/test_PARMIO_TLAD.f90)
@@ -805,7 +782,7 @@ SpcCoeff/netCDF/ssu_n14.SpcCoeff.nc
 # the symlink list only when available.
 if(PARMIO_LUT_PRESENT)
   list(APPEND crtm_test_input
-       EmisCoeff/MW_Water/netCDF/PARMIO.production.MWwater.EmisCoeff.nc)
+       EmisCoeff/MW_Water/netCDF/PARMIO.MWwater.EmisCoeff.nc)
 endif()
 if(AWS_COEFFS_PRESENT)
   list(APPEND crtm_test_input

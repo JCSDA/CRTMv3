@@ -142,7 +142,7 @@ PROGRAM test_PARMIO_RC_Residual
   IF (COMMAND_ARGUMENT_COUNT() >= 1) THEN
     CALL GET_COMMAND_ARGUMENT(1, lut_file)
   ELSE
-    lut_file = '../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc'
+    lut_file = './testinput/PARMIO.MWwater.EmisCoeff.nc'
   END IF
 
   err_stat = CRTM_MWwaterCoeff_Load_FASTEM('FASTEM6', Quiet=.TRUE.)

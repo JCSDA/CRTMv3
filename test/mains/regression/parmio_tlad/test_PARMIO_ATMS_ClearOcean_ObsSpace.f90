@@ -18,7 +18,7 @@ PROGRAM test_PARMIO_ATMS_ClearOcean_ObsSpace
   CHARACTER(*), PARAMETER :: DEFAULT_SENSOR_ID = 'atms_npp'
   CHARACTER(*), PARAMETER :: DEFAULT_COEFF_PATH = './testinput/'
   CHARACTER(*), PARAMETER :: DEFAULT_LUT_FILE = &
-       '../parmio/Outputs/sweep/lut_production/PARMIO.production.MWwater.EmisCoeff.nc'
+       './testinput/PARMIO.MWwater.EmisCoeff.nc'
   CHARACTER(*), PARAMETER :: DEFAULT_SCENE_FILE = 'atms_npp_clear_ocean_scenes.csv'
   CHARACTER(*), PARAMETER :: DEFAULT_RESIDUAL_FILE = 'atms_npp_clear_ocean_residuals.csv'
   CHARACTER(*), PARAMETER :: DEFAULT_SUMMARY_FILE = 'atms_npp_clear_ocean_summary.csv'
