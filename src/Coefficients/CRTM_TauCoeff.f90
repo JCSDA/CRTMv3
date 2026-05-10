@@ -561,17 +561,19 @@ CONTAINS
                                 SensorIDs, SensorIndex, &
                                 SensorID_in = Sensor_ID )
         Error_Status = ODSSU_Load_TauCoeff( &
-                                       Sensor_ID        =SensorIDs(1:n)   , & 
-                                       File_Path        =File_Path        , & 
-                                       Quiet            =Quiet            , & 
-                                       Process_ID       =Process_ID       , & 
-                                       Output_Process_ID=Output_Process_ID, & 
-                                       Message_Log      =Message_Log        ) 
+                                       Sensor_ID        =SensorIDs(1:n)   , &
+                                       File_Path        =File_Path        , &
+                                       Quiet            =Quiet            , &
+                                       netCDF           =use_netCDF       , &
+                                       Process_ID       =Process_ID       , &
+                                       Output_Process_ID=Output_Process_ID, &
+                                       Message_Log      =Message_Log        )
       ELSE
         ! for the case that the Sensor_ID is not present (in this case, 1 sensor only)
         Error_Status = ODSSU_Load_TauCoeff( &
                                        File_Path        =File_Path        , &
                                        Quiet            =Quiet            , &
+                                       netCDF           =use_netCDF       , &
                                        Process_ID       =Process_ID       , &
                                        Output_Process_ID=Output_Process_ID, &
                                        Message_Log      =Message_Log        )

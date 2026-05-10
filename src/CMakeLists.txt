@@ -110,6 +110,7 @@ list( APPEND crtm_src_files
       Coefficients/TauCoeff/ODPS/ODPS_Define.f90
       Coefficients/TauCoeff/ODPS/ODPS_TauCoeff.f90
       Coefficients/TauCoeff/ODSSU/ODSSU_Binary_IO.f90
+      Coefficients/TauCoeff/ODSSU/ODSSU_netCDF_IO.f90
       Coefficients/TauCoeff/ODSSU/ODSSU_Define.f90
       Coefficients/TauCoeff/ODSSU/ODSSU_TauCoeff.f90
       Coefficients/TauCoeff/ODZeeman/ODZeeman_TauCoeff.f90

@@ -80,7 +80,7 @@ else() # Download CRTM coefficients
 
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
   set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz)
-  set(checksum "19eea9e0dce6aa94756707db9ea43e9e") # MD5SUM of fix_REL-3.2.0.0.tgz
+  set(checksum "11dcb08a6b56905772ef3ad29135348b") # MD5SUM of fix_REL-3.2.0.0.tgz
   
   # Check if the CRTM binary tarball is already present otherwise download it.
   if (DEFINED ENV{CRTM_BINARY_FILES_TARBALL})
@@ -363,6 +363,15 @@ list (APPEND ODPS_Utils
 )
 foreach(testtype IN LISTS ODPS_Utils)
 	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/TauCoeff/ODPS/${testtype}/${testtype}.f90)
+	target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+#TauCoeff ODSSU utilities (SSU container, BIN -> NC only)
+list (APPEND ODSSU_Utils
+  ODSSUBIN2NC
+)
+foreach(testtype IN LISTS ODSSU_Utils)
+	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/TauCoeff/ODSSU/${testtype}/${testtype}.f90)
 	target_link_libraries(${testtype} PRIVATE crtm)
 endforeach()
 
@@ -775,13 +784,14 @@ SpcCoeff/netCDF/ssmis_f18.SpcCoeff.nc
 SpcCoeff/netCDF/ssmis_f19.SpcCoeff.nc
 SpcCoeff/netCDF/ssmis_f16.SpcCoeff.nc
 SpcCoeff/netCDF/ssmis_f17.SpcCoeff.nc
-# SSU TauCoeff: no NetCDF copy on disk, keep binary symlinks.
-TauCoeff/ODPS/Little_Endian/ssu_n06.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssu_n07.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssu_n08.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssu_n09.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssu_n11.TauCoeff.bin
-TauCoeff/ODPS/Little_Endian/ssu_n14.TauCoeff.bin
+# SSU TauCoeff: ODSSU container in netCDF, generated from the legacy
+# REL-3.1.2.0 binaries via src/.../ODSSU/ODSSUBIN2NC.
+TauCoeff/ODPS/netCDF/ssu_n06.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssu_n07.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssu_n08.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssu_n09.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssu_n11.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssu_n14.TauCoeff.nc
 SpcCoeff/netCDF/ssu_n06.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n07.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n08.SpcCoeff.nc
