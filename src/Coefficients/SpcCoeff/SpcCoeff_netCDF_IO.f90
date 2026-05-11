@@ -1129,21 +1129,38 @@ CONTAINS
     ! Read the substructure netCDF files when present. The binary SpcCoeff
     ! reader streams ACCoeff and NLTECoeff inline from the same file via a
     ! DATA_PRESENT indicator; the netCDF layout instead stores them as
-    ! sibling files named <sensor>.ACCoeff.nc / <sensor>.NLTECoeff.nc next
-    ! to the SpcCoeff file. Without this, SpcCoeff%AC and SpcCoeff%NC stay
-    ! default-initialized for sensors that need antenna correction or
-    ! non-LTE corrections (e.g. cris399_npp, iasi_metop-b), producing
-    ! brightness-temperature drift of several K vs. the binary path on
-    ! NLTE-active channels.
+    ! separate files named <sensor>.ACCoeff.nc / <sensor>.NLTECoeff.nc.
+    !
+    ! Canonical layout (REL-3.2 fix tree): each coefficient type lives in its
+    ! own subdirectory, e.g. fix/SpcCoeff/netCDF/, fix/ACCoeff/netCDF/,
+    ! fix/NLTECoeff/netCDF/. When the SpcCoeff path matches that convention
+    ! we substitute the directory token to find the sibling. For flat layouts
+    ! (no /SpcCoeff/netCDF/ in the path) or when the canonical file is absent,
+    ! we fall back to looking for the sibling next to the SpcCoeff file.
     BLOCK
-      CHARACTER(LEN(Filename)) :: sub_filename
-      INTEGER                  :: sub_err_stat
-      INTEGER                  :: dot_pos
+      ! Worst-case buffer: NLTECoeff is +1 char vs SpcCoeff in the filename
+      ! and the /SpcCoeff/netCDF/ → /NLTECoeff/netCDF/ directory swap adds
+      ! another +1 char. Sized generously so File_Exists checks against the
+      ! full path, not a silently truncated one.
+      CHARACTER(LEN(Filename)+16) :: sub_filename
+      INTEGER                     :: sub_err_stat
+      INTEGER                     :: dot_pos, dir_pos
 
       dot_pos = INDEX(Filename, '.SpcCoeff.', BACK=.TRUE.)
       IF ( dot_pos > 0 ) THEN
-        ! ACCoeff sibling file
-        sub_filename = Filename(:dot_pos) // 'ACCoeff' // Filename(dot_pos+9:)
+        ! Canonical-directory anchor inside the path portion. dir_pos=0 means
+        ! the caller passed a non-canonical layout; skip the directory swap.
+        dir_pos = INDEX(Filename(:dot_pos), '/SpcCoeff/netCDF/', BACK=.TRUE.)
+
+        ! ----- ACCoeff sibling file -----
+        IF ( dir_pos > 0 ) THEN
+          sub_filename = Filename(:dir_pos-1) // '/ACCoeff/netCDF/' // &
+                         Filename(dir_pos+17:dot_pos) // 'ACCoeff' // Filename(dot_pos+9:)
+        ELSE
+          sub_filename = Filename(:dot_pos) // 'ACCoeff' // Filename(dot_pos+9:)
+        END IF
+        IF ( .NOT. File_Exists(TRIM(sub_filename)) ) &
+          sub_filename = Filename(:dot_pos) // 'ACCoeff' // Filename(dot_pos+9:)
         IF ( File_Exists(TRIM(sub_filename)) ) THEN
           sub_err_stat = ACCoeff_netCDF_ReadFile( TRIM(sub_filename), &
                                                   SpcCoeff%AC, &
@@ -1161,8 +1178,15 @@ CONTAINS
           END IF
         END IF
 
-        ! NLTECoeff sibling file
-        sub_filename = Filename(:dot_pos) // 'NLTECoeff' // Filename(dot_pos+9:)
+        ! ----- NLTECoeff sibling file -----
+        IF ( dir_pos > 0 ) THEN
+          sub_filename = Filename(:dir_pos-1) // '/NLTECoeff/netCDF/' // &
+                         Filename(dir_pos+17:dot_pos) // 'NLTECoeff' // Filename(dot_pos+9:)
+        ELSE
+          sub_filename = Filename(:dot_pos) // 'NLTECoeff' // Filename(dot_pos+9:)
+        END IF
+        IF ( .NOT. File_Exists(TRIM(sub_filename)) ) &
+          sub_filename = Filename(:dot_pos) // 'NLTECoeff' // Filename(dot_pos+9:)
         IF ( File_Exists(TRIM(sub_filename)) ) THEN
           sub_err_stat = NLTECoeff_netCDF_ReadFile( TRIM(sub_filename), &
                                                     SpcCoeff%NC, &
