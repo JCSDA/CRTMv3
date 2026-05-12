@@ -226,7 +226,6 @@ list( APPEND crtm_src_files
       Utility/String_Utility.f90
       Utility/Timing_Utility.f90
       Utility/Type_Kinds.f90
-      Zeeman/Zeeman_Utility.f90
 )
 include(GNUInstallDirs)
 
