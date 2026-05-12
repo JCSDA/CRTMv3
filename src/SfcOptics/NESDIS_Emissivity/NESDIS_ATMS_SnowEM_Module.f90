@@ -339,12 +339,24 @@ CONTAINS
            ENDIF
      END SELECT
 
-    IF (ANY(Tbs((/1,2,3,4,5/)) < 50.0_fp) .OR. ANY(TBs((/1,2,3,4,5/)) > 500.0_fp)) THEN
-        !** use default snow EM
-        CALL ATMS_SNOW_ByTypes(Frequency,Snow_Type,em_vector)
-     ELSE
-        ! the above regression-based snow-typing algs are superseded by the diagnosis-based snow-typing
-        CALL ATMS_SNOW_ByTBTs_D(Frequency,Tbs,Ts,Snow_Type,em_vector)  
+   ! The regression-based snow-typing above is superseded by the diagnosis-based
+   ! snow-typing (ATMS_SNOW_ByTBTs_D), but that needs the five ATMS window-channel
+   ! TBs (23.8/31.4/50.3/88.2/165.5 GHz). Only apply it when Tbs is actually
+   ! present and large enough, and when all five values are physically sane
+   ! (in particular, reject NaN via the x/=x test) -- otherwise keep the result
+   ! from the SELECT CASE above. Indexing an absent or too-short Tbs here was the
+   ! out-of-bounds crash reported in JCSDA/CRTMv3#192.
+     IF ( PRESENT(Tbs) ) THEN
+        IF ( SIZE(Tbs) >= nwch ) THEN
+           IF ( ANY( Tbs(1:nwch) < 50.0_fp  .OR. &
+                     Tbs(1:nwch) > 500.0_fp .OR. &
+                     Tbs(1:nwch) /= Tbs(1:nwch) ) ) THEN
+              !** TBs out of range / not finite -- use default snow EM
+              CALL ATMS_SNOW_ByTypes(Frequency,Snow_Type,em_vector)
+           ELSE
+              CALL ATMS_SNOW_ByTBTs_D(Frequency,Tbs,Ts,Snow_Type,em_vector)
+           END IF
+        END IF
      END IF
 
 
