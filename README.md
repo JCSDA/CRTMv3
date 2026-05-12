@@ -147,6 +147,7 @@ The CMake variables of interest are:
 `-DCMAKE_INSTALL_PREFIX=<path-to-install>` (You have to run `make install` to install the libcrtm* into your desired directory `<build>/path-to-install`).
 `-DFIX_FILE_PATH=<path-to-fix-files>` (default is `fix/`, populated by Get_CRTM_Binary_Files.sh if needed)
 `-DBUILD_TESTING = ON / OFF` (enables/disabled testing under `test/`; default is ON)
+`-DOPENMP = ON / OFF` (build with OpenMP support; default is ON. `OFF` produces a fully serial library -- see "OpenMP and thread safety" below)
 
 
 example:
@@ -187,6 +188,41 @@ Then continue with the build steps per above.  You can find your number of proce
 
 nvfortran also works on WSL, but has a more involved install process -- if you're using nvfortran, please visit https://github.com/JCSDA/CRTMv3 and create an issue. 
 
+
+OpenMP and thread safety
+------------------------
+
+CRTM is built with OpenMP enabled by default (`-DOPENMP=ON`). Build with `-DOPENMP=OFF`
+for a fully serial library.
+
+**Controlling the thread count.** Parallelism is controlled at run time by the standard
+`OMP_NUM_THREADS` environment variable. If `OMP_NUM_THREADS` is *unset or set to an empty
+string*, CRTM coerces it to **1 thread** (i.e. CRTM runs serially) -- this is done in
+`CRTM_Init` because some OpenMP runtimes misbehave on an empty `OMP_NUM_THREADS`. Set
+`OMP_NUM_THREADS=N` to run with N threads.
+
+**Where the parallelism is.** Each call to a CRTM forward operator parallelizes internally:
+`CRTM_Forward`, `CRTM_Tangent_Linear`, and `CRTM_K_Matrix` parallelize over channels (and,
+when multiple profiles are passed and there are enough threads, also over profiles);
+`CRTM_Adjoint` parallelizes over profiles. You do not (and should not) wrap CRTM calls in
+your own OpenMP region -- see the thread-safety rules below.
+
+**Thread-safety rules for host applications:**
+
+  1. `CRTM_Init` and `CRTM_Destroy` are **not** thread-safe. Call each exactly once, from a
+     single thread, with no concurrent CRTM activity -- they create/destroy the shared,
+     process-wide coefficient state.
+  2. After a successful `CRTM_Init`, the four RT entry points (`CRTM_Forward`,
+     `CRTM_Tangent_Linear`, `CRTM_K_Matrix`, `CRTM_Adjoint`) only *read* the shared
+     coefficient data. Call them from a single host thread and let CRTM's internal OpenMP
+     do the parallelization; calling them concurrently from multiple host threads is not
+     supported.
+  3. As always, give each call non-overlapping input/output arrays (the usual rule for
+     Fortran array arguments).
+
+**Compiler note.** The K-matrix channel-level parallel path is enabled for gfortran,
+Intel LLVM (`ifx` / IntelLLVM), and nvfortran. Legacy "classic" Intel `ifort`
+(pre-LLVM) uses a serial fallback for that path; everything else is unchanged.
 
 Known Issues
 ------------
