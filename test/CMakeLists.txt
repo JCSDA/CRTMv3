@@ -247,6 +247,15 @@ list( APPEND OMP_Speedup_Sensor_Ids
         cris-fsr_n21
 )
 
+# OMP_Consistency: Forward + K_Matrix must be bit-identical across thread counts.
+# A spread of paths: MW radiometer, IR imager, and a hyperspectral IR sounder
+# (the latter exercises the per-channel NLTE/Zeeman predictor handling).
+list( APPEND OMP_Consistency_Sensor_Ids
+        atms_n21
+        abi_g18
+        cris399_npp
+)
+
 list (APPEND common_tests
      Simple
      AOD
@@ -265,6 +274,7 @@ list (APPEND common_tests
 list (APPEND omp_tests
      OMPoverChannels
      OMP_Speedup
+     OMP_Consistency
 )
 
 
