@@ -256,6 +256,18 @@ list( APPEND OMP_Consistency_Sensor_Ids
         cris399_npp
 )
 
+# ChannelSubset_OMP: like OMP_Consistency, but applies several channel subsets
+# first (sparse / front-loaded / split) so the channel-thread chunking and the
+# inactive-channel bookkeeping in CRTM_Forward / _K_Matrix get exercised under a
+# thread-count sweep. iasi_metop-b gives a large channel count for meaningful
+# chunk sizes, cris399_npp adds the NLTE per-channel path, and atms_n21 covers
+# the small-channel-count clamps. (Follow-up coverage for JCSDA/CRTMv3#164.)
+list( APPEND ChannelSubset_OMP_Sensor_Ids
+        iasi_metop-b
+        cris399_npp
+        atms_n21
+)
+
 list (APPEND common_tests
      Simple
      AOD
@@ -275,6 +287,7 @@ list (APPEND omp_tests
      OMPoverChannels
      OMP_Speedup
      OMP_Consistency
+     ChannelSubset_OMP
 )
 
 
