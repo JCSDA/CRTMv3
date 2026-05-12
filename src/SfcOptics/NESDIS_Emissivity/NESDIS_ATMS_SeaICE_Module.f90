@@ -124,8 +124,13 @@ CONTAINS
     ! Check available data
       IF ((Ts <= 150.0_fp) .OR. (Ts >= 280.0_fp) ) Ts = 260.0
 
-    ! Emissivity at the local zenith angle of satellite measurements
-      CALL  ATMS_SeaICE_ByTbTs_D(frequency,tbs,Ts,em_vector)
+    ! Emissivity at the local zenith angle of satellite measurements.
+    ! Only apply the diagnosis-based seaice EM when the five window-channel TBs
+    ! are physically sane (the >= test also rejects NaN); otherwise keep the
+    ! default em_vector set above. (Companion guard to JCSDA/CRTMv3#192.)
+      IF ( ALL( tbs >= 50.0_fp .AND. tbs <= 500.0_fp ) ) THEN
+        CALL  ATMS_SeaICE_ByTbTs_D(frequency,tbs,Ts,em_vector)
+      END IF
     ! Get the emissivity angle dependence
       CALL NESDIS_LandEM(Satellite_Angle,Frequency,0.0_fp,0.0_fp,Ts,Ts,0.0_fp,9,13,2.0_fp,esh1,esv1)
       CALL NESDIS_LandEM(User_Angle,Frequency,0.0_fp,0.0_fp,Ts,Ts,0.0_fp,9,13,2.0_fp,esh2,esv2)
