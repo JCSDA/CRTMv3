@@ -12,8 +12,11 @@ PROGRAM test_PARMIO_AWS1_ObsSmoke
 
   USE CRTM_Module
   ! FASTEM6 is loaded by CRTM_Init's default Microwave_Sensor block.
-  ! PARMIO LUT is loaded by CRTM_Init via the PARMIOCoeff_File argument and
-  ! freed by CRTM_Destroy; no direct CRTM_PARMIOCoeff_* calls needed.
+  ! PARMIO LUT is loaded mid-program via CRTM_PARMIOCoeff_Load between the
+  ! two simulation phases (FASTEM-only, then PARMIO) so the dispatcher's
+  ! frequency-gated routing produces distinguishable rt_fastem / rt_parmio
+  ! results on the same scene set.
+  USE CRTM_PARMIOCoeff, ONLY: CRTM_PARMIOCoeff_Load, CRTM_PARMIOCoeff_Destroy
   USE CRTM_SpcCoeff, ONLY: SC
 
   IMPLICIT NONE
@@ -67,22 +70,25 @@ PROGRAM test_PARMIO_AWS1_ObsSmoke
   INTEGER :: residual_unit
   INTEGER :: summary_unit
   INTEGER :: processed
-  INTEGER :: l
+  INTEGER :: l, i
+  INTEGER :: n_scenes
   REAL(fp) :: obs_tb
   REAL(fp) :: tb_fastem
   REAL(fp) :: tb_parmio
   REAL(fp) :: omf_fastem
   REAL(fp) :: omf_parmio
   REAL(fp) :: frequency
-  TYPE(Scene_type) :: scene
 
   TYPE(CRTM_ChannelInfo_type)             :: channel_info(N_SENSORS)
   TYPE(CRTM_Geometry_type)                :: geometry(N_PROFILES)
   TYPE(CRTM_Atmosphere_type)              :: atm(N_ATM_PROFILES)
   TYPE(CRTM_Surface_type)                 :: sfc(N_PROFILES)
   TYPE(CRTM_Options_type)                 :: opt(N_PROFILES)
-  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rt_fastem(:,:)
-  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rt_parmio(:,:)
+  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rt(:,:)
+  TYPE(Scene_type),           ALLOCATABLE :: scenes(:)
+  ! Per-(channel, scene) brightness-temperature buffers for the two phases.
+  REAL(fp),                   ALLOCATABLE :: tb_fastem_arr(:,:)
+  REAL(fp),                   ALLOCATABLE :: tb_parmio_arr(:,:)
 
   INTEGER :: n(EXPECTED_AWS_CHANNELS)
   REAL(fp) :: sum_omf_fastem(EXPECTED_AWS_CHANNELS)
@@ -101,12 +107,14 @@ PROGRAM test_PARMIO_AWS1_ObsSmoke
        'CRTM Version: '//TRIM(version))
 
   sensor_id = (/ DEFAULT_SENSOR_ID /)
+  ! CRTM_Init WITHOUT PARMIOCoeff_File so the first simulation phase exercises
+  ! pure FASTEM regardless of channel frequency. The PARMIO LUT is loaded
+  ! between phases via CRTM_PARMIOCoeff_Load.
   err_stat = CRTM_Init( &
        sensor_id, channel_info, &
        File_Path        = TRIM(coeff_path), &
        SpcCoeff_Format  = 'netCDF', &
        TauCoeff_Format  = 'netCDF', &
-       PARMIOCoeff_File = TRIM(lut_file), &
        Quiet            = .TRUE.)
   IF (err_stat /= SUCCESS) THEN
     CALL Display_Message(PROGRAM_NAME, 'CRTM_Init failed for '//DEFAULT_SENSOR_ID, FAILURE)
@@ -121,16 +129,13 @@ PROGRAM test_PARMIO_AWS1_ObsSmoke
     STOP 1
   END IF
 
-  ALLOCATE(rt_fastem(n_channels, N_PROFILES), &
-           rt_parmio(n_channels, N_PROFILES), STAT=allocate_status)
+  ALLOCATE(rt(n_channels, N_PROFILES), STAT=allocate_status)
   IF (allocate_status /= 0) THEN
     CALL Display_Message(PROGRAM_NAME, 'RTSolution allocation failed', FAILURE)
     STOP 1
   END IF
-  CALL CRTM_RTSolution_Create(rt_fastem, N_LAYERS)
-  CALL CRTM_RTSolution_Create(rt_parmio, N_LAYERS)
-  IF (ANY(.NOT. CRTM_RTSolution_Associated(rt_fastem)) .OR. &
-      ANY(.NOT. CRTM_RTSolution_Associated(rt_parmio))) THEN
+  CALL CRTM_RTSolution_Create(rt, N_LAYERS)
+  IF (ANY(.NOT. CRTM_RTSolution_Associated(rt))) THEN
     CALL Display_Message(PROGRAM_NAME, 'RTSolution create failed', FAILURE)
     STOP 1
   END IF
@@ -142,6 +147,56 @@ PROGRAM test_PARMIO_AWS1_ObsSmoke
   END IF
   CALL Load_ECMWF84_Atm_Data()
 
+  ! Pre-read all scenes into memory so we can iterate twice (FASTEM then PARMIO)
+  ! over the same set without re-reading the CSV.
+  CALL Load_All_Scenes(scene_file, scenes)
+  n_scenes = SIZE(scenes)
+  IF (n_scenes == 0) THEN
+    CALL Display_Message(PROGRAM_NAME, 'No scenes were read from '//TRIM(scene_file), FAILURE)
+    STOP 1
+  END IF
+  ALLOCATE(tb_fastem_arr(n_channels, n_scenes), tb_parmio_arr(n_channels, n_scenes), &
+           STAT=allocate_status)
+  IF (allocate_status /= 0) THEN
+    CALL Display_Message(PROGRAM_NAME, 'TB-buffer allocation failed', FAILURE)
+    STOP 1
+  END IF
+
+  ! ---- Phase 1: FASTEM-only (PARMIO LUT not loaded) ----
+  DO i = 1, n_scenes
+    CALL Configure_Scene(sfc, geometry, scenes(i))
+    err_stat = CRTM_Forward( &
+         atm(1:N_PROFILES), sfc, geometry, channel_info, rt, Options=opt)
+    IF (err_stat /= SUCCESS) THEN
+      CALL Display_Message(PROGRAM_NAME, 'FASTEM CRTM_Forward failed', FAILURE)
+      STOP 1
+    END IF
+    DO l = 1, n_channels
+      tb_fastem_arr(l, i) = rt(l,1)%Brightness_Temperature
+    END DO
+  END DO
+
+  ! ---- Phase 2: PARMIO LUT loaded; dispatcher routes >=200 GHz channels through PARMIO ----
+  err_stat = CRTM_PARMIOCoeff_Load(TRIM(lut_file), Quiet=.TRUE.)
+  IF (err_stat /= SUCCESS) THEN
+    CALL Display_Message(PROGRAM_NAME, 'Failed to load PARMIO coefficient LUT', FAILURE)
+    STOP 1
+  END IF
+  DO i = 1, n_scenes
+    CALL Configure_Scene(sfc, geometry, scenes(i))
+    err_stat = CRTM_Forward( &
+         atm(1:N_PROFILES), sfc, geometry, channel_info, rt, Options=opt)
+    IF (err_stat /= SUCCESS) THEN
+      CALL Display_Message(PROGRAM_NAME, 'PARMIO CRTM_Forward failed', FAILURE)
+      STOP 1
+    END IF
+    DO l = 1, n_channels
+      tb_parmio_arr(l, i) = rt(l,1)%Brightness_Temperature
+    END DO
+  END DO
+  CALL CRTM_PARMIOCoeff_Destroy()
+
+  ! ---- Compare phases, write residual CSV, accumulate per-channel stats ----
   n = 0
   sum_omf_fastem = 0.0_fp
   sum_omf_parmio = 0.0_fp
@@ -149,14 +204,7 @@ PROGRAM test_PARMIO_AWS1_ObsSmoke
   sum_sq_parmio = 0.0_fp
   sum_abs_delta = 0.0_fp
   max_abs_delta = 0.0_fp
-  processed = 0
-
-  OPEN(NEWUNIT=scene_unit, FILE=TRIM(scene_file), STATUS='OLD', ACTION='READ', IOSTAT=err_stat)
-  IF (err_stat /= 0) THEN
-    CALL Display_Message(PROGRAM_NAME, 'Unable to open scene CSV: '//TRIM(scene_file), FAILURE)
-    STOP 1
-  END IF
-  CALL Skip_Header(scene_unit)
+  processed = n_scenes
 
   OPEN(NEWUNIT=residual_unit, FILE=TRIM(residual_file), STATUS='REPLACE', ACTION='WRITE', IOSTAT=err_stat)
   IF (err_stat /= 0) THEN
@@ -166,58 +214,33 @@ PROGRAM test_PARMIO_AWS1_ObsSmoke
   WRITE(residual_unit,'(a)') &
        'scene_id,scan,fov,channel,freq_GHz,obs_tb,tb_fastem,tb_parmio,omf_fastem,omf_parmio,abs_omf_delta'
 
-  DO
-    IF (.NOT. Read_Scene(scene_unit, scene)) EXIT
-    processed = processed + 1
-    CALL Configure_Scene(sfc, geometry, scene)
-
-    opt(:)%Use_PARMIO_Model = .FALSE.
-    err_stat = CRTM_Forward( &
-         atm(1:N_PROFILES), sfc, geometry, channel_info, rt_fastem, Options=opt)
-    IF (err_stat /= SUCCESS) THEN
-      CALL Display_Message(PROGRAM_NAME, 'FASTEM CRTM_Forward failed', FAILURE)
-      STOP 1
-    END IF
-
-    opt(:)%Use_PARMIO_Model = .TRUE.
-    err_stat = CRTM_Forward( &
-         atm(1:N_PROFILES), sfc, geometry, channel_info, rt_parmio, Options=opt)
-    IF (err_stat /= SUCCESS) THEN
-      CALL Display_Message(PROGRAM_NAME, 'PARMIO CRTM_Forward failed', FAILURE)
-      STOP 1
-    END IF
-
+  DO i = 1, n_scenes
     DO l = 1, n_channels
-      obs_tb = scene%obs_tb(l)
-      tb_fastem = rt_fastem(l,1)%Brightness_Temperature
-      tb_parmio = rt_parmio(l,1)%Brightness_Temperature
+      obs_tb     = scenes(i)%obs_tb(l)
+      tb_fastem  = tb_fastem_arr(l, i)
+      tb_parmio  = tb_parmio_arr(l, i)
       omf_fastem = obs_tb - tb_fastem
       omf_parmio = obs_tb - tb_parmio
-      frequency = SC(channel_info(1)%Sensor_Index)%Frequency(channel_info(1)%Channel_Index(l))
+      frequency  = SC(channel_info(1)%Sensor_Index)%Frequency(channel_info(1)%Channel_Index(l))
 
       n(l) = n(l) + 1
       sum_omf_fastem(l) = sum_omf_fastem(l) + omf_fastem
       sum_omf_parmio(l) = sum_omf_parmio(l) + omf_parmio
-      sum_sq_fastem(l) = sum_sq_fastem(l) + omf_fastem**2
-      sum_sq_parmio(l) = sum_sq_parmio(l) + omf_parmio**2
-      sum_abs_delta(l) = sum_abs_delta(l) + (ABS(omf_parmio) - ABS(omf_fastem))
-      max_abs_delta = MAX(max_abs_delta, ABS(tb_parmio - tb_fastem))
+      sum_sq_fastem(l)  = sum_sq_fastem(l)  + omf_fastem**2
+      sum_sq_parmio(l)  = sum_sq_parmio(l)  + omf_parmio**2
+      sum_abs_delta(l)  = sum_abs_delta(l)  + (ABS(omf_parmio) - ABS(omf_fastem))
+      max_abs_delta     = MAX(max_abs_delta, ABS(tb_parmio - tb_fastem))
 
       WRITE(residual_unit,'(i0,",",i0,",",i0,",",i0,",",f10.4,",", &
                            f12.6,",",f12.6,",",f12.6,",",f12.6,",",f12.6,",",f12.6)') &
-           scene%scene_id, scene%scan, scene%fov, rt_fastem(l,1)%Sensor_Channel, frequency, &
+           scenes(i)%scene_id, scenes(i)%scan, scenes(i)%fov, &
+           channel_info(1)%Sensor_Channel(l), frequency, &
            obs_tb, tb_fastem, tb_parmio, omf_fastem, omf_parmio, &
            ABS(omf_parmio) - ABS(omf_fastem)
     END DO
   END DO
 
-  CLOSE(scene_unit)
   CLOSE(residual_unit)
-
-  IF (processed == 0) THEN
-    CALL Display_Message(PROGRAM_NAME, 'No scenes were read from '//TRIM(scene_file), FAILURE)
-    STOP 1
-  END IF
 
   OPEN(NEWUNIT=summary_unit, FILE=TRIM(summary_file), STATUS='REPLACE', ACTION='WRITE', IOSTAT=err_stat)
   IF (err_stat /= 0) THEN
@@ -229,7 +252,7 @@ PROGRAM test_PARMIO_AWS1_ObsSmoke
   DO l = 1, n_channels
     frequency = SC(channel_info(1)%Sensor_Index)%Frequency(channel_info(1)%Channel_Index(l))
     WRITE(summary_unit,'(i0,",",f10.4,",",i0,",",f12.6,",",f12.6,",",f12.6,",",f12.6,",",f12.6,",",f12.6)') &
-         rt_fastem(l,1)%Sensor_Channel, frequency, n(l), &
+         channel_info(1)%Sensor_Channel(l), frequency, n(l), &
          sum_omf_fastem(l)/REAL(n(l),fp), &
          sum_omf_parmio(l)/REAL(n(l),fp), &
          SQRT(sum_sq_fastem(l)/REAL(n(l),fp)), &
@@ -247,7 +270,7 @@ PROGRAM test_PARMIO_AWS1_ObsSmoke
 
   err_stat = CRTM_Destroy(channel_info)
   CALL CRTM_Atmosphere_Destroy(atm)
-  DEALLOCATE(rt_fastem, rt_parmio)
+  DEALLOCATE(rt, tb_fastem_arr, tb_parmio_arr, scenes)
 
 CONTAINS
 
@@ -319,6 +342,46 @@ CONTAINS
     END IF
     Read_Scene = .TRUE.
   END FUNCTION Read_Scene
+
+  SUBROUTINE Load_All_Scenes(path, out_scenes)
+    CHARACTER(*),                  INTENT(IN)  :: path
+    TYPE(Scene_type), ALLOCATABLE, INTENT(OUT) :: out_scenes(:)
+
+    INTEGER :: unit_l, ios, n_count, idx
+    TYPE(Scene_type) :: tmp
+
+    ! First pass: count valid scene rows so we can allocate exactly.
+    OPEN(NEWUNIT=unit_l, FILE=TRIM(path), STATUS='OLD', ACTION='READ', IOSTAT=ios)
+    IF (ios /= 0) THEN
+      CALL Display_Message(PROGRAM_NAME, 'Unable to open scene CSV: '//TRIM(path), FAILURE)
+      STOP 1
+    END IF
+    CALL Skip_Header(unit_l)
+    n_count = 0
+    DO
+      IF (.NOT. Read_Scene(unit_l, tmp)) EXIT
+      n_count = n_count + 1
+    END DO
+    CLOSE(unit_l)
+
+    ALLOCATE(out_scenes(n_count))
+    IF (n_count == 0) RETURN
+
+    ! Second pass: actually load.
+    OPEN(NEWUNIT=unit_l, FILE=TRIM(path), STATUS='OLD', ACTION='READ', IOSTAT=ios)
+    IF (ios /= 0) THEN
+      CALL Display_Message(PROGRAM_NAME, 'Unable to reopen scene CSV: '//TRIM(path), FAILURE)
+      STOP 1
+    END IF
+    CALL Skip_Header(unit_l)
+    DO idx = 1, n_count
+      IF (.NOT. Read_Scene(unit_l, out_scenes(idx))) THEN
+        CALL Display_Message(PROGRAM_NAME, 'Scene CSV truncated on second pass', FAILURE)
+        STOP 1
+      END IF
+    END DO
+    CLOSE(unit_l)
+  END SUBROUTINE Load_All_Scenes
 
   SUBROUTINE Configure_Scene(sfc, geometry, scene)
     TYPE(CRTM_Surface_type),  INTENT(IN OUT) :: sfc(:)

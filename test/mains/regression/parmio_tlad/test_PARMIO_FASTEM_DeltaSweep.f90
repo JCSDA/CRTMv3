@@ -54,6 +54,7 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
   INTEGER :: csv_unit
   INTEGER :: case_id
   INTEGER :: i_sst, i_u10, i_zenith, l
+  INTEGER :: n_cases
   REAL(fp) :: tb_fastem
   REAL(fp) :: tb_parmio
   REAL(fp) :: delta_tb
@@ -64,8 +65,14 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
   TYPE(CRTM_Atmosphere_type)              :: atm(N_ATM_PROFILES)
   TYPE(CRTM_Surface_type)                 :: sfc(N_PROFILES)
   TYPE(CRTM_Options_type)                 :: opt(N_PROFILES)
-  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rt_fastem(:,:)
-  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rt_parmio(:,:)
+  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rt(:,:)
+  ! Per-(channel, case) brightness-temperature buffers for the two phases.
+  ! FASTEM-vs-PARMIO is now determined inside CRTM by frequency (>=200 GHz
+  ! routes to PARMIO when the LUT is loaded), so we run two passes over the
+  ! same grid: phase 1 with no LUT loaded (pure FASTEM), phase 2 with the
+  ! LUT loaded (PARMIO at high frequency channels, FASTEM elsewhere).
+  REAL(fp), ALLOCATABLE :: tb_fastem_grid(:,:)
+  REAL(fp), ALLOCATABLE :: tb_parmio_grid(:,:)
 
   CALL Parse_Arguments(coeff_path, lut_file, sensor_id_arg)
   csv_file = 'delta_sweep_'//TRIM(sensor_id_arg)//'.csv'
@@ -88,23 +95,17 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
     STOP 1
   END IF
 
-  err_stat = CRTM_PARMIOCoeff_Load(TRIM(lut_file), Quiet=.TRUE.)
-  IF (err_stat /= SUCCESS) THEN
-    CALL Display_Message(PROGRAM_NAME, 'Failed to load PARMIO coefficient LUT', FAILURE)
-    STOP 1
-  END IF
-
   n_channels = SUM(CRTM_ChannelInfo_n_Channels(channel_info))
-  ALLOCATE(rt_fastem(n_channels, N_PROFILES), &
-           rt_parmio(n_channels, N_PROFILES), STAT=allocate_status)
+  n_cases    = N_SST * N_U10 * N_ZENITH
+  ALLOCATE(rt(n_channels, N_PROFILES), &
+           tb_fastem_grid(n_channels, n_cases), &
+           tb_parmio_grid(n_channels, n_cases), STAT=allocate_status)
   IF (allocate_status /= 0) THEN
-    CALL Display_Message(PROGRAM_NAME, 'RTSolution allocation failed', FAILURE)
+    CALL Display_Message(PROGRAM_NAME, 'RTSolution / TB-grid allocation failed', FAILURE)
     STOP 1
   END IF
-  CALL CRTM_RTSolution_Create(rt_fastem, N_LAYERS)
-  CALL CRTM_RTSolution_Create(rt_parmio, N_LAYERS)
-  IF (ANY(.NOT. CRTM_RTSolution_Associated(rt_fastem)) .OR. &
-      ANY(.NOT. CRTM_RTSolution_Associated(rt_parmio))) THEN
+  CALL CRTM_RTSolution_Create(rt, N_LAYERS)
+  IF (ANY(.NOT. CRTM_RTSolution_Associated(rt))) THEN
     CALL Display_Message(PROGRAM_NAME, 'RTSolution create failed', FAILURE)
     STOP 1
   END IF
@@ -116,6 +117,19 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
   END IF
   CALL Load_ECMWF84_Atm_Data()
 
+  ! ---- Phase 1: FASTEM-only sweep (PARMIO LUT not loaded) ----
+  CALL Run_Grid_Sweep(tb_fastem_grid)
+
+  ! ---- Phase 2: PARMIO sweep (LUT loaded, dispatcher routes >=200 GHz channels) ----
+  err_stat = CRTM_PARMIOCoeff_Load(TRIM(lut_file), Quiet=.TRUE.)
+  IF (err_stat /= SUCCESS) THEN
+    CALL Display_Message(PROGRAM_NAME, 'Failed to load PARMIO coefficient LUT', FAILURE)
+    STOP 1
+  END IF
+  CALL Run_Grid_Sweep(tb_parmio_grid)
+  CALL CRTM_PARMIOCoeff_Destroy()
+
+  ! ---- Compare phases, write CSV, gate on sanity bounds ----
   OPEN(NEWUNIT=csv_unit, FILE=TRIM(csv_file), STATUS='REPLACE', ACTION='WRITE')
   WRITE(csv_unit,'(a)') &
        'case_id,channel,freq_GHz,sst,u10,zenith,tb_fastem,tb_parmio,delta_tb'
@@ -125,38 +139,19 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
     DO i_sst = 1, N_SST
       DO i_u10 = 1, N_U10
         case_id = case_id + 1
-        CALL Configure_Case( &
-             sfc, geometry, SST_GRID(i_sst), U10_GRID(i_u10), ZENITH_GRID(i_zenith))
-
-        opt(:)%Use_PARMIO_Model = .FALSE.
-        err_stat = CRTM_Forward( &
-             atm(1:N_PROFILES), sfc, geometry, channel_info, rt_fastem, Options=opt)
-        IF (err_stat /= SUCCESS) THEN
-          CALL Display_Message(PROGRAM_NAME, 'FASTEM CRTM_Forward failed', FAILURE)
-          STOP 1
-        END IF
-
-        opt(:)%Use_PARMIO_Model = .TRUE.
-        err_stat = CRTM_Forward( &
-             atm(1:N_PROFILES), sfc, geometry, channel_info, rt_parmio, Options=opt)
-        IF (err_stat /= SUCCESS) THEN
-          CALL Display_Message(PROGRAM_NAME, 'PARMIO CRTM_Forward failed', FAILURE)
-          STOP 1
-        END IF
-
         DO l = 1, n_channels
-          tb_fastem = rt_fastem(l,1)%Brightness_Temperature
-          tb_parmio = rt_parmio(l,1)%Brightness_Temperature
-          delta_tb = tb_parmio - tb_fastem
+          tb_fastem = tb_fastem_grid(l, case_id)
+          tb_parmio = tb_parmio_grid(l, case_id)
+          delta_tb  = tb_parmio - tb_fastem
           frequency = SC(channel_info(1)%Sensor_Index)%Frequency(channel_info(1)%Channel_Index(l))
 
           CALL Check_Row( &
-               case_id, rt_fastem(l,1)%Sensor_Channel, SST_GRID(i_sst), U10_GRID(i_u10), &
+               case_id, channel_info(1)%Sensor_Channel(l), SST_GRID(i_sst), U10_GRID(i_u10), &
                ZENITH_GRID(i_zenith), tb_fastem, tb_parmio, delta_tb)
 
           WRITE(csv_unit,'(i0,",",i0,",",f10.4,",",f8.2,",",f8.2,",",f8.2,",", &
                           f12.6,",",f12.6,",",f12.6)') &
-               case_id, rt_fastem(l,1)%Sensor_Channel, frequency, SST_GRID(i_sst), &
+               case_id, channel_info(1)%Sensor_Channel(l), frequency, SST_GRID(i_sst), &
                U10_GRID(i_u10), ZENITH_GRID(i_zenith), tb_fastem, tb_parmio, delta_tb
         END DO
       END DO
@@ -168,12 +163,41 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
   WRITE(*,'("PARMIO FASTEM delta sweep passed: sensor=",a,", ",i0," cases, ",i0, &
             " channels, CSV=",a)') TRIM(sensor_id_arg), case_id, n_channels, TRIM(csv_file)
 
-  CALL CRTM_PARMIOCoeff_Destroy()
   err_stat = CRTM_Destroy(channel_info)
   CALL CRTM_Atmosphere_Destroy(atm)
-  DEALLOCATE(rt_fastem, rt_parmio)
+  DEALLOCATE(rt, tb_fastem_grid, tb_parmio_grid)
 
 CONTAINS
+
+  ! Walk the SST x U10 x ZENITH grid; store brightness temperatures into
+  ! tb_out(:,:) keyed by (channel, case_id). Whether the call resolves to
+  ! FASTEM or PARMIO is determined solely by whether the PARMIO LUT was
+  ! loaded prior to invocation (and per-channel frequency >= 200 GHz).
+  SUBROUTINE Run_Grid_Sweep(tb_out)
+    REAL(fp), INTENT(OUT) :: tb_out(:,:)
+    INTEGER :: i_sst_l, i_u10_l, i_zenith_l, ll, case_local
+
+    case_local = 0
+    DO i_zenith_l = 1, N_ZENITH
+      DO i_sst_l = 1, N_SST
+        DO i_u10_l = 1, N_U10
+          case_local = case_local + 1
+          CALL Configure_Case( &
+               sfc, geometry, &
+               SST_GRID(i_sst_l), U10_GRID(i_u10_l), ZENITH_GRID(i_zenith_l))
+          err_stat = CRTM_Forward( &
+               atm(1:N_PROFILES), sfc, geometry, channel_info, rt, Options=opt)
+          IF (err_stat /= SUCCESS) THEN
+            CALL Display_Message(PROGRAM_NAME, 'CRTM_Forward failed in Run_Grid_Sweep', FAILURE)
+            STOP 1
+          END IF
+          DO ll = 1, SIZE(tb_out, 1)
+            tb_out(ll, case_local) = rt(ll, 1)%Brightness_Temperature
+          END DO
+        END DO
+      END DO
+    END DO
+  END SUBROUTINE Run_Grid_Sweep
 
   SUBROUTINE Parse_Arguments(coeff_path, lut_file, sensor_id)
     CHARACTER(*), INTENT(OUT) :: coeff_path
