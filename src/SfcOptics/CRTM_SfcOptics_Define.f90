@@ -86,7 +86,6 @@ MODULE CRTM_SfcOptics_Define
 
     ! MW Water SfcOptics options
     LOGICAL  :: Use_New_MWSSEM = .TRUE.    ! Flag for MW Water SfcOptics algorithm switch
-    LOGICAL  :: Use_PARMIO_Model = .FALSE. ! Selects PARMIO_MWSSEM (LUT-driven); wins over Use_New_MWSSEM
     REAL(fp) :: Azimuth_Angle  = 999.9_fp  ! Relative azimuth angle
     REAL(fp) :: Transmittance  = ZERO      ! Total atmospheric transmittance
 
@@ -392,7 +391,6 @@ CONTAINS
     ! Display components
     WRITE(*, '(3x,"Compute flag              :",1x,l1)') self%Compute
     WRITE(*, '(3x,"Use_New_MWSSEM flag       :",1x,l1)') self%Use_New_MWSSEM
-    WRITE(*, '(3x,"Use_PARMIO_Model flag     :",1x,l1)') self%Use_PARMIO_Model
     WRITE(*, '(3x,"  MWSSEM- azimuth angle   :",1x,es22.15)') self%Azimuth_Angle
     WRITE(*, '(3x,"  MWSSEM- transmittance   :",1x,es22.15)') self%Transmittance
     WRITE(*, '(3x,"Satellite view angle index:",1x,i0)') self%Index_Sat_Ang
@@ -506,8 +504,7 @@ CONTAINS
     ! Check scalars
     ! ...Logicals
     IF ( (x%Compute          .NEQV. y%Compute         ) .OR. &
-         (x%Use_New_MWSSEM   .NEQV. y%Use_New_MWSSEM  ) .OR. &
-         (x%Use_PARMIO_Model .NEQV. y%Use_PARMIO_Model) ) RETURN
+         (x%Use_New_MWSSEM   .NEQV. y%Use_New_MWSSEM  ) ) RETURN
     ! ...Other types
     IF ( (.NOT. Compares_Within_Tolerance(x%Azimuth_Angle,y%Azimuth_Angle,n)) .OR. &
          (.NOT. Compares_Within_Tolerance(x%Transmittance,y%Transmittance,n)) .OR. &
@@ -586,7 +583,6 @@ CONTAINS
     ! ...Scalars
     IF ( .NOT. ((x%Compute               .EQV.   y%Compute            ) .AND. &
                 (x%Use_New_MWSSEM        .EQV.   y%Use_New_MWSSEM     ) .AND. &
-                (x%Use_PARMIO_Model      .EQV.   y%Use_PARMIO_Model   ) .AND. &
                 (x%Azimuth_Angle       .EqualTo. y%Azimuth_Angle      ) .AND. &
                 (x%Transmittance       .EqualTo. y%Transmittance      ) .AND. &
                 (x%Index_Sat_Ang          ==     y%Index_Sat_Ang      ) .AND. &

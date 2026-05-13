@@ -539,8 +539,6 @@ CONTAINS
       SfcOptics_AD%n_Stokes = RTV%n_Stokes
       SfcOptics%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
       SfcOptics_AD%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
-      SfcOptics%Use_PARMIO_Model = Opt%Use_PARMIO_Model
-      SfcOptics_AD%Use_PARMIO_Model = Opt%Use_PARMIO_Model
       ! Check whether to skip this profile
       IF ( Opt%Skip_Profile ) RETURN
 
@@ -750,8 +748,6 @@ CONTAINS
         ! ...Copy over surface optics input
         SfcOptics_Clear%Use_New_MWSSEM    = .NOT. Opt%Use_Old_MWSSEM
         SfcOptics_Clear_AD%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
-        SfcOptics_Clear%Use_PARMIO_Model    = Opt%Use_PARMIO_Model
-        SfcOptics_Clear_AD%Use_PARMIO_Model = Opt%Use_PARMIO_Model
         SfcOptics_Clear%n_Stokes = RTV%n_Stokes
         SfcOptics_Clear_AD%n_Stokes = RTV%n_Stokes
         ! ...CLEAR SKY average surface skin temperature for multi-surface types
