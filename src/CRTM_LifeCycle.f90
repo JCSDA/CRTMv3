@@ -651,6 +651,7 @@ CONTAINS
     LOGICAL :: Local_Load_AerosolCoeff
     LOGICAL :: netCDF, isSEcategory
     LOGICAL :: Quiet_
+    LOGICAL :: parmio_explicit, parmio_present
     INTEGER :: iQuiet ! TODO: iQuiet should be removed once load routine interfaces have been modified
     Quiet_ = .TRUE.
     IF ( PRESENT(Quiet) ) Quiet_ = Quiet
@@ -1097,26 +1098,42 @@ CONTAINS
         RETURN
       END IF
 
-      ! ...Optional PARMIO LUT. Loaded only when the caller supplies a filename;
-      !    Options%Use_PARMIO_Model toggles dispatch at Forward/TL/AD time. When
-      !    the LUT is not loaded the dispatcher silently falls back to FASTEM,
-      !    so omitting PARMIOCoeff_File is byte-identical to a pre-PARMIO build.
+      ! ...PARMIO LUT. By default CRTM_Init auto-loads
+      !    File_Path/PARMIO.MWwater.EmisCoeff.nc when the file is present, so
+      !    PARMIO is "drop-in" at the coefficient path. Absence of the file
+      !    silently falls through to FASTEM (byte-identical to a pre-PARMIO
+      !    build). The caller can override by passing PARMIOCoeff_File
+      !    explicitly to point at a non-default location; in that case a
+      !    missing file is treated as an error.
+      !    Once loaded, the MW-water dispatcher routes channels at or above
+      !    PARMIO_FREQ_THRESHOLD (200 GHz) through the LUT.
+      parmio_explicit = .FALSE.
       IF ( PRESENT(PARMIOCoeff_File) ) THEN
         Resolved_PARMIOCoeff_File = TRIM(ADJUSTL(PARMIOCoeff_File))
-        IF ( LEN_TRIM(Resolved_PARMIOCoeff_File) > 0 ) THEN
-          IF ( PRESENT(File_Path) ) THEN
-            Resolved_PARMIOCoeff_File = TRIM(ADJUSTL(File_Path)) // TRIM(Resolved_PARMIOCoeff_File)
-          END IF
-          IF ( .NOT. Quiet_ ) THEN
-            WRITE(*, '("Loading PARMIO MW water emissivity LUT: ", a)') TRIM(Resolved_PARMIOCoeff_File)
-          END IF
-          err_stat = CRTM_PARMIOCoeff_Load( TRIM(Resolved_PARMIOCoeff_File), Quiet=Quiet )
-          IF ( err_stat /= SUCCESS ) THEN
-            msg = 'Error loading PARMIOCoeff data from '//TRIM(Resolved_PARMIOCoeff_File)
-            CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-            RETURN
-          END IF
+        IF ( LEN_TRIM(Resolved_PARMIOCoeff_File) > 0 ) parmio_explicit = .TRUE.
+      END IF
+      IF ( .NOT. parmio_explicit ) THEN
+        Resolved_PARMIOCoeff_File = 'PARMIO.MWwater.EmisCoeff.nc'
+      END IF
+      IF ( PRESENT(File_Path) ) THEN
+        Resolved_PARMIOCoeff_File = TRIM(ADJUSTL(File_Path)) // TRIM(Resolved_PARMIOCoeff_File)
+      END IF
+      INQUIRE(FILE=TRIM(Resolved_PARMIOCoeff_File), EXIST=parmio_present)
+      IF ( parmio_present ) THEN
+        IF ( .NOT. Quiet_ ) THEN
+          WRITE(*, '("Loading PARMIO MW water emissivity LUT: ", a)') TRIM(Resolved_PARMIOCoeff_File)
         END IF
+        err_stat = CRTM_PARMIOCoeff_Load( TRIM(Resolved_PARMIOCoeff_File), Quiet=Quiet )
+        IF ( err_stat /= SUCCESS ) THEN
+          msg = 'Error loading PARMIOCoeff data from '//TRIM(Resolved_PARMIOCoeff_File)
+          CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+          RETURN
+        END IF
+      ELSE IF ( parmio_explicit ) THEN
+        msg = 'PARMIOCoeff_File explicitly supplied but file not found: '//TRIM(Resolved_PARMIOCoeff_File)
+        err_stat = FAILURE
+        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+        RETURN
       END IF
     END IF Microwave_Sensor
 
