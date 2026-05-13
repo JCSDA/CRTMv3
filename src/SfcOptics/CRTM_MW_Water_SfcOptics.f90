@@ -69,6 +69,16 @@ MODULE CRTM_MW_Water_SfcOptics
   ! -----------------
   ! Low frequency model threshold
   REAL(fp), PARAMETER :: LOW_F_THRESHOLD = 20.0_fp ! GHz
+  ! PARMIO LUT is the surface-emissivity backend at and above this frequency
+  ! when the LUT has been loaded. Below this threshold the FASTEM/Stogryn
+  ! legacy path is used.
+  ! Set from obs-space validation against ATMS-NPP (see
+  !   PARMIO vs FASTEM6 — ATMS-NPP obs-space validation report, 2026-05-13):
+  ! FASTEM6 is tuned and competitive against real obs through the entire ATMS
+  ! band (max 183.31 GHz); PARMIO's physical-reference advantage only shows
+  ! cleanly where FASTEM6 extrapolates beyond its tuning band (e.g. 325 GHz
+  ! synthetic-RT wind-roughness sign flip).
+  REAL(fp), PARAMETER :: PARMIO_FREQ_THRESHOLD = 200.0_fp ! GHz
 
 
   ! --------------------------------------
@@ -221,10 +231,13 @@ CONTAINS
 
     
     ! Compute the surface optical parameters
-    ! PARMIO dispatch requires both the per-call flag and a loaded LUT.
-    ! If the flag is set but no LUT was loaded at CRTM_Init time, fall
-    ! through to FASTEM silently (byte-identical to a non-PARMIO build).
-    IF( SfcOptics%Use_PARMIO_Model .AND. CRTM_PARMIOCoeff_IsLoaded() ) THEN
+    ! PARMIO dispatch is gated by frequency: at and above
+    ! PARMIO_FREQ_THRESHOLD (and provided the LUT was loaded at CRTM_Init
+    ! time) PARMIO is used as the MW-water emissivity backend. Below the
+    ! threshold the FASTEM/Stogryn legacy path is used. If no LUT was
+    ! loaded the path is byte-identical to a pre-PARMIO build at every
+    ! frequency.
+    IF( CRTM_PARMIOCoeff_IsLoaded() .AND. Frequency >= PARMIO_FREQ_THRESHOLD ) THEN
 
       ! PARMIO_MWSSEM (LUT-driven, replaces FASTEM at runtime)
       SfcOptics%Azimuth_Angle = Surface%Wind_Direction - Sensor_Azimuth_Angle
@@ -453,7 +466,9 @@ CONTAINS
 
 
     ! Compute the tangent-linear surface optical parameters
-    IF( SfcOptics%Use_PARMIO_Model .AND. CRTM_PARMIOCoeff_IsLoaded() ) THEN
+    ! Dispatch matches the Forward path: PARMIO at and above
+    ! PARMIO_FREQ_THRESHOLD when the LUT is loaded.
+    IF( CRTM_PARMIOCoeff_IsLoaded() .AND. Frequency >= PARMIO_FREQ_THRESHOLD ) THEN
 
       ! PARMIO_MWSSEM (LUT-driven)
       DO i = 1, SfcOptics%n_Angles
@@ -672,7 +687,9 @@ CONTAINS
 
 
     ! Compute the adjoint surface optical parameters
-    IF( SfcOptics%Use_PARMIO_Model .AND. CRTM_PARMIOCoeff_IsLoaded() ) THEN
+    ! Dispatch matches the Forward path: PARMIO at and above
+    ! PARMIO_FREQ_THRESHOLD when the LUT is loaded.
+    IF( CRTM_PARMIOCoeff_IsLoaded() .AND. Frequency >= PARMIO_FREQ_THRESHOLD ) THEN
 
       ! PARMIO_MWSSEM (LUT-driven)
       Azimuth_Angle_AD = ZERO
