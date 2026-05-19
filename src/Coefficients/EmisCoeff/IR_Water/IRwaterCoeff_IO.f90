@@ -86,9 +86,9 @@ MODULE IRwaterCoeff_IO
 ! OPTIONAL INPUTS:
 !       netCDF:            Set this logical argument to access netCDF format
 !                          IRwaterCoeff datafiles.
-!                          If == .FALSE., file format is BINARY [DEFAULT].
-!                             == .TRUE.,  file format is NETCDF.
-!                          If not specified, default is .FALSE.
+!                          If == .FALSE., file format is BINARY.
+!                             == .TRUE.,  file format is NETCDF [DEFAULT].
+!                          If not specified, default is .TRUE.
 !                          UNITS:      N/A
 !                          TYPE:       LOGICAL
 !                          DIMENSION:  Scalar
@@ -205,7 +205,7 @@ MODULE IRwaterCoeff_IO
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    Binary = .TRUE.
+    Binary = .FALSE.
     IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
 
@@ -357,7 +357,7 @@ MODULE IRwaterCoeff_IO
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    Binary = .TRUE.
+    Binary = .FALSE.
     IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
     !Call the appropriate function
@@ -513,7 +513,7 @@ MODULE IRwaterCoeff_IO
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    Binary = .TRUE.
+    Binary = .FALSE.
     IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
     ! Call the appropriate function
