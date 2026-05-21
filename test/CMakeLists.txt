@@ -123,7 +123,7 @@ else() # Download CRTM coefficients
 endif()
 
   set (CRTM_TESTFILES_PATH ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH}/fix)
-  message(STATUS "Set the file path to be seen by UFO at ${CRTM_TESTFILES_PATH} ")
+  message(STATUS "Set the file path to be seen at ${CRTM_TESTFILES_PATH} ")
   set_property (GLOBAL PROPERTY CRTM_TESTFILES_PATH ${CRTM_TESTFILES_PATH})
 
 # Create list of sensor ids for testing
