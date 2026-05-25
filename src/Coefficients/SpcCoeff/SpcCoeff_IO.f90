@@ -282,9 +282,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:         Set this logical argument to access netCDF format
 !                       SpcCoeff datafiles.
-!                       If == .FALSE., file format is BINARY [DEFAULT].
-!                          == .TRUE.,  file format is NETCDF.
-!                       If not specified, default is .FALSE.
+!                       If == .FALSE., file format is BINARY.
+!                          == .TRUE.,  file format is NETCDF [DEFAULT].
+!                       If not specified, default is .TRUE.
 !                       UNITS:      N/A
 !                       TYPE:       LOGICAL
 !                       DIMENSION:  Scalar
@@ -424,9 +424,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:         Set this logical argument to access netCDF format
 !                       SpcCoeff datafiles.
-!                       If == .FALSE., file format is BINARY [DEFAULT].
-!                          == .TRUE.,  file format is NETCDF.
-!                       If not specified, default is .FALSE.
+!                       If == .FALSE., file format is BINARY.
+!                          == .TRUE.,  file format is NETCDF [DEFAULT].
+!                       If not specified, default is .TRUE.
 !                       UNITS:      N/A
 !                       TYPE:       LOGICAL
 !                       DIMENSION:  Scalar
