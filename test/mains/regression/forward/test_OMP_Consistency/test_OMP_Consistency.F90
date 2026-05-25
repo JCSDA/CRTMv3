@@ -2,12 +2,12 @@
 ! test_OMP_Consistency
 !
 ! Thread-safety regression test (JCSDA/CRTMv3#111). For a given sensor it runs
-! CRTM_Forward and CRTM_K_Matrix on the same input at OMP_NUM_THREADS = 1
+! CRTM_Forward, CRTM_Tangent_Linear and CRTM_K_Matrix on the same input at OMP_NUM_THREADS = 1
 ! (the serial reference) and then again at an increasing sweep of thread counts
 ! (2, 4, 8, ... up to the number available on the host), asserting that every
 ! result is BIT-IDENTICAL to the serial run.
 !
-! Channel-thread parallelism in CRTM_Forward / _K_Matrix must not change any
+! Channel-thread parallelism in CRTM_Forward / _Tangent_Linear / _K_Matrix must not change any
 ! per-channel value, so the parallel and serial outputs are required to be
 ! exactly equal -- not merely "close". This is the kind of check that surfaces
 ! the races fixed for #111 (unindexed RTV broadcasts, off-by-one / overshoot in
@@ -54,6 +54,10 @@ PROGRAM test_OMP_Consistency
   TYPE(CRTM_Surface_type)                 :: Sfc(N_PROFILES)
   ! Forward
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution(:,:), RTSolution_ref(:,:)
+  ! Tangent-Linear
+  TYPE(CRTM_Atmosphere_type)              :: Atmosphere_TL(N_PROFILES)
+  TYPE(CRTM_Surface_type)                 :: Surface_TL(N_PROFILES)
+  TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution_TL(:,:), RTSolution_TL_ref(:,:)
   ! K-Matrix
   TYPE(CRTM_Atmosphere_type), ALLOCATABLE :: Atmosphere_K(:,:), Atmosphere_K_ref(:,:)
   TYPE(CRTM_Surface_type)   , ALLOCATABLE :: Surface_K(:,:)   , Surface_K_ref(:,:)
@@ -75,7 +79,7 @@ PROGRAM test_OMP_Consistency
 
   CALL CRTM_Version(Version)
   CALL Program_Message( PROGRAM_NAME, &
-    'OpenMP / serial consistency test for CRTM_Forward and CRTM_K_Matrix.', &
+    'OpenMP / serial consistency test for CRTM_Forward, CRTM_Tangent_Linear and CRTM_K_Matrix.', &
     'CRTM Version: '//TRIM(Version) )
   WRITE( *,'(/5x,"Sensor: ",a)' ) TRIM(Sensor_Id)
 
@@ -124,6 +128,8 @@ PROGRAM test_OMP_Consistency
   ! --- Allocate ---
   ALLOCATE( RTSolution      (n_Channels, N_PROFILES), &
             RTSolution_ref  (n_Channels, N_PROFILES), &
+            RTSolution_TL   (n_Channels, N_PROFILES), &
+            RTSolution_TL_ref(n_Channels, N_PROFILES), &
             Atmosphere_K    (n_Channels, N_PROFILES), &
             Atmosphere_K_ref(n_Channels, N_PROFILES), &
             Surface_K       (n_Channels, N_PROFILES), &
@@ -135,10 +141,12 @@ PROGRAM test_OMP_Consistency
     CALL Display_Message( PROGRAM_NAME, 'Error allocating result arrays', FAILURE )
     STOP 1
   END IF
-  CALL CRTM_Atmosphere_Create( Atm,          N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
-  CALL CRTM_Atmosphere_Create( Atmosphere_K, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
+  CALL CRTM_Atmosphere_Create( Atm,           N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
+  CALL CRTM_Atmosphere_Create( Atmosphere_K,  N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
+  CALL CRTM_Atmosphere_Create( Atmosphere_TL, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
   IF ( ANY(.NOT. CRTM_Atmosphere_Associated(Atm)) .OR. &
-       ANY(.NOT. CRTM_Atmosphere_Associated(Atmosphere_K)) ) THEN
+       ANY(.NOT. CRTM_Atmosphere_Associated(Atmosphere_K)) .OR. &
+       ANY(.NOT. CRTM_Atmosphere_Associated(Atmosphere_TL)) ) THEN
     CALL Display_Message( PROGRAM_NAME, 'Error allocating Atmosphere structures', FAILURE )
     STOP 1
   END IF
@@ -150,6 +158,17 @@ PROGRAM test_OMP_Consistency
                                Sensor_Zenith_Angle = ZENITH_ANGLE, &
                                Sensor_Scan_Angle   = SCAN_ANGLE )
 
+  ! Tangent-linear perturbation: zero, then +0.5 K on temperature (matches the
+  ! standard tangent_linear regression setup). The actual perturbation values
+  ! are immaterial here -- the invariant under test is parallel == serial.
+  Atmosphere_TL = Atm
+  CALL CRTM_Atmosphere_Zero( Atmosphere_TL )
+  DO l = 1, N_PROFILES
+    Atmosphere_TL(l)%Temperature = 0.5_fp
+  END DO
+  Surface_TL = Sfc
+  CALL CRTM_Surface_Zero( Surface_TL )
+
 #ifdef _OPENMP
   ! ===================  reference run @ 1 thread  ===================
   CALL OMP_SET_NUM_THREADS(1)
@@ -159,6 +178,14 @@ PROGRAM test_OMP_Consistency
     CALL Display_Message( PROGRAM_NAME, 'Serial CRTM_Forward failed', FAILURE )
     STOP 1
   END IF
+
+  Error_Status = CRTM_Tangent_Linear( Atm, Sfc, Atmosphere_TL, Surface_TL, &
+                                      Geometry, ChannelInfo, RTSolution, RTSolution_TL )
+  IF ( Error_Status /= SUCCESS ) THEN
+    CALL Display_Message( PROGRAM_NAME, 'Serial CRTM_Tangent_Linear failed', FAILURE )
+    STOP 1
+  END IF
+  RTSolution_TL_ref = RTSolution_TL
 
   CALL Init_K_Inputs( Atmosphere_K, Surface_K, RTSolution_K )
   Error_Status = CRTM_K_Matrix( Atm, Sfc, RTSolution_K, Geometry, ChannelInfo, &
@@ -190,6 +217,20 @@ PROGRAM test_OMP_Consistency
       n_mismatch = n_mismatch + 1
     END IF
 
+    ! --- Tangent-Linear ---
+    Error_Status = CRTM_Tangent_Linear( Atm, Sfc, Atmosphere_TL, Surface_TL, &
+                                        Geometry, ChannelInfo, RTSolution, RTSolution_TL )
+    IF ( Error_Status /= SUCCESS ) THEN
+      WRITE(Message,'("CRTM_Tangent_Linear failed at OMP_NUM_THREADS=",i0)') nthr
+      CALL Display_Message( PROGRAM_NAME, TRIM(Message), FAILURE )
+      STOP 1
+    END IF
+    IF ( .NOT. ALL(RTSolution_TL == RTSolution_TL_ref) ) THEN
+      WRITE(Message,'("Tangent-Linear RTSolution_TL differs from the 1-thread run at OMP_NUM_THREADS=",i0)') nthr
+      CALL Display_Message( PROGRAM_NAME, TRIM(Message), FAILURE )
+      n_mismatch = n_mismatch + 1
+    END IF
+
     ! --- K-Matrix ---
     CALL Init_K_Inputs( Atmosphere_K, Surface_K, RTSolution_K )
     Error_Status = CRTM_K_Matrix( Atm, Sfc, RTSolution_K, Geometry, ChannelInfo, &
@@ -215,14 +256,14 @@ PROGRAM test_OMP_Consistency
       n_mismatch = n_mismatch + 1
     END IF
 
-    WRITE(*,'(5x,"OMP_NUM_THREADS=",i0,": Forward & K-Matrix bit-identical to serial.")') nthr
+    WRITE(*,'(5x,"OMP_NUM_THREADS=",i0,": Forward, Tangent-Linear & K-Matrix bit-identical to serial.")') nthr
   END DO
 
   IF ( n_mismatch > 0 ) THEN
     WRITE(*,'(/5x,"FAIL: ",i0," parallel result(s) differed from the serial run.")') n_mismatch
     STOP 1
   END IF
-  WRITE(*,'(/5x,"PASS: Forward & K-Matrix are thread-count invariant.")')
+  WRITE(*,'(/5x,"PASS: Forward, Tangent-Linear & K-Matrix are thread-count invariant.")')
 #endif
 
   ! --- Cleanup ---
@@ -234,7 +275,9 @@ PROGRAM test_OMP_Consistency
   CALL CRTM_Atmosphere_Destroy( Atm )
   CALL CRTM_Atmosphere_Destroy( Atmosphere_K )
   CALL CRTM_Atmosphere_Destroy( Atmosphere_K_ref )
-  DEALLOCATE( RTSolution, RTSolution_ref, Atmosphere_K, Atmosphere_K_ref, &
+  CALL CRTM_Atmosphere_Destroy( Atmosphere_TL )
+  DEALLOCATE( RTSolution, RTSolution_ref, RTSolution_TL, RTSolution_TL_ref, &
+              Atmosphere_K, Atmosphere_K_ref, &
               Surface_K, Surface_K_ref, RTSolution_K, RTSolution_K_ref, &
               STAT=Allocate_Status )
 
