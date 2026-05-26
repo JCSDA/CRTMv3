@@ -519,7 +519,8 @@ CONTAINS
                            Surface     , &  ! Input
                            SensorIndex , &  ! Input
                            ChannelIndex, &  ! Input
-                           SfcOptics     )  ! In/Output
+                           SfcOptics   , &  ! In/Output
+                           iVar%MWLSOV   )  ! Internal variable output
           IF ( Error_Status /= SUCCESS ) THEN
             WRITE( Message,'("Error computing MW land SfcOptics at ",&
                             &"channel index ",i0)' ) ChannelIndex
@@ -1295,7 +1296,11 @@ CONTAINS
         Microwave_Land: IF( Surface%Land_Coverage > ZERO) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_MW_Land_SfcOptics_TL( SfcOptics_TL )
+          Error_Status = Compute_MW_Land_SfcOptics_TL( &
+                           SfcOptics   , &  ! Input
+                           Surface_TL  , &  ! Input
+                           SfcOptics_TL, &  ! Output
+                           iVar%MWLSOV   )  ! Internal variable input
           IF ( Error_Status /= SUCCESS ) THEN
             WRITE( Message,'("Error computing MW land SfcOptics_TL at ",&
                             &"channel index ",i0)' ) ChannelIndex
@@ -2222,7 +2227,11 @@ CONTAINS
             (Reflectivity_AD(1:nZ,1:2,1:nZ,1:2)*Surface%Land_Coverage)
 
           ! Compute the surface optics adjoints
-          Error_Status = Compute_MW_Land_SfcOptics_AD( SfcOptics_AD )
+          Error_Status = Compute_MW_Land_SfcOptics_AD( &
+                           SfcOptics   , &  ! Input
+                           SfcOptics_AD, &  ! Input
+                           Surface_AD  , &  ! Output
+                           iVar%MWLSOV   )  ! Internal variable input
           IF ( Error_Status /= SUCCESS ) THEN
             WRITE( Message,'("Error computing MW land SfcOptics_AD at ",&
                             &"channel index ",i0)' ) ChannelIndex

@@ -86,7 +86,22 @@ MODULE CRTM_MW_Land_SfcOptics
   ! --------------------------------------
   TYPE :: iVar_type
     PRIVATE
-    INTEGER :: Dummy = 0
+    ! Whether the low-frequency canopy model path was used. When .FALSE.
+    ! (high-frequency default emissivity, or an invalid-type early return)
+    ! the TL/AD results are zero.
+    LOGICAL  :: Compute     = .FALSE.
+    ! Whether the input vegetation fraction / soil moisture were clipped to [0,1]
+    LOGICAL  :: Veg_Clipped = .FALSE.
+    LOGICAL  :: Smc_Clipped = .FALSE.
+    ! Forward values used to form vlai = Lai * Veg_Frac (Veg_Frac is post-clip)
+    REAL(fp) :: Lai      = ZERO
+    REAL(fp) :: Veg_Frac = ZERO
+    ! Cached d(emissivity)/d(vlai) per angle: V is index 1, H is index 2
+    REAL(fp), DIMENSION(MAX_N_ANGLES) :: dEV_dvlai = ZERO
+    REAL(fp), DIMENSION(MAX_N_ANGLES) :: dEH_dvlai = ZERO
+    ! Cached d(emissivity)/d(Soil_Moisture_Content) per angle
+    REAL(fp), DIMENSION(MAX_N_ANGLES) :: dEV_dmv = ZERO
+    REAL(fp), DIMENSION(MAX_N_ANGLES) :: dEH_dmv = ZERO
   END TYPE iVar_type
 
 
@@ -177,13 +192,15 @@ CONTAINS
     Surface     , &  ! Input
     SensorIndex , &  ! Input
     ChannelIndex, &  ! Input
-    SfcOptics   ) &  ! Output
+    SfcOptics   , &  ! Output
+    iVar        ) &  ! Internal variable output
   RESULT ( err_stat )
     ! Arguments
     TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface
     INTEGER,                      INTENT(IN)     :: SensorIndex
     INTEGER,                      INTENT(IN)     :: ChannelIndex
     TYPE(CRTM_SfcOptics_type),    INTENT(IN OUT) :: SfcOptics
+    TYPE(iVar_type),              INTENT(OUT)    :: iVar
     ! Function result
     INTEGER :: err_stat
     ! Local parameters
@@ -219,7 +236,17 @@ CONTAINS
 
     ! Compute the surface optical parameters
     IF ( SC(SensorIndex)%Frequency(ChannelIndex) < FREQUENCY_CUTOFF ) THEN
-      ! Frequency is low enough for the model
+      ! Frequency is low enough for the model.
+      ! ...Cache the forward state needed for the LAI/vegetation Jacobian.
+      !    vlai = Lai*Vegetation_Fraction, with the vegetation fraction clipped
+      !    to [0,1] inside NESDIS_LandEM (replicated here for the chain rule).
+      iVar%Compute     = .TRUE.
+      iVar%Lai         = Surface%Lai
+      iVar%Veg_Frac    = MAX(MIN(Surface%Vegetation_Fraction,ONE),ZERO)
+      iVar%Veg_Clipped = (Surface%Vegetation_Fraction < ZERO) .OR. &
+                         (Surface%Vegetation_Fraction > ONE)
+      iVar%Smc_Clipped = (Surface%Soil_Moisture_Content < ZERO) .OR. &
+                         (Surface%Soil_Moisture_Content > ONE)
       DO i = 1, SfcOptics%n_Angles
         CALL NESDIS_LandEM(SfcOptics%Angle(i),            & ! Input, Degree
                            SC(SensorIndex)%Frequency(ChannelIndex),   & ! Input, GHz
@@ -232,7 +259,11 @@ CONTAINS
                            Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
                            ZERO,                          & ! Input, Snow depth, mm
                            SfcOptics%Emissivity(i,2),     & ! Output, H component
-                           SfcOptics%Emissivity(i,1)      ) ! Output, V component
+                           SfcOptics%Emissivity(i,1),     & ! Output, V component
+                           dEV_dvlai = iVar%dEV_dvlai(i), & ! Optional output, V
+                           dEH_dvlai = iVar%dEH_dvlai(i), & ! Optional output, H
+                           dEV_dmv   = iVar%dEV_dmv(i),   & ! Optional output, V
+                           dEH_dmv   = iVar%dEH_dmv(i)    ) ! Optional output, H
         ! Assume specular surface
         SfcOptics%Reflectivity(i,1,i,1) = ONE-SfcOptics%Emissivity(i,1)
         SfcOptics%Reflectivity(i,2,i,2) = ONE-SfcOptics%Emissivity(i,2)
@@ -293,25 +324,55 @@ CONTAINS
 !----------------------------------------------------------------------------------
 
   FUNCTION Compute_MW_Land_SfcOptics_TL( &
-    SfcOptics_TL) &  ! TL  Output
+    SfcOptics   , &  ! FWD Input
+    Surface_TL  , &  ! TL  Input
+    SfcOptics_TL, &  ! TL  Output
+    iVar        ) &  ! Internal variable input
   RESULT ( err_stat )
     ! Arguments
+    TYPE(CRTM_SfcOptics_type), INTENT(IN)     :: SfcOptics
+    TYPE(CRTM_Surface_type),   INTENT(IN)     :: Surface_TL
     TYPE(CRTM_SfcOptics_type), INTENT(IN OUT) :: SfcOptics_TL
+    TYPE(iVar_type),           INTENT(IN)     :: iVar
     ! Function result
     INTEGER :: err_stat
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_MW_Land_SfcOptics_TL'
     ! Local variables
+    INTEGER  :: i
+    REAL(fp) :: veg_frac_TL, vlai_TL, smc_TL
 
 
     ! Set up
     err_stat = SUCCESS
-
-
-    ! Compute the tangent-linear surface optical parameters
-    ! ***No TL models yet, so default TL output is zero***
     SfcOptics_TL%Reflectivity = ZERO
     SfcOptics_TL%Emissivity   = ZERO
+
+    ! No sensitivity unless the low-frequency canopy model path was taken
+    IF ( .NOT. iVar%Compute ) RETURN
+
+    ! Tangent-linear of vlai = Lai*Veg_Frac, with Veg_Frac clipped to [0,1]
+    IF ( iVar%Veg_Clipped ) THEN
+      veg_frac_TL = ZERO
+    ELSE
+      veg_frac_TL = Surface_TL%Vegetation_Fraction
+    END IF
+    vlai_TL = iVar%Veg_Frac*Surface_TL%Lai + iVar%Lai*veg_frac_TL
+
+    ! Tangent-linear of soil moisture (clipped to [0,1] in the forward)
+    IF ( iVar%Smc_Clipped ) THEN
+      smc_TL = ZERO
+    ELSE
+      smc_TL = Surface_TL%Soil_Moisture_Content
+    END IF
+
+    ! Propagate to the surface emissivity/reflectivity (specular: r = 1 - e)
+    DO i = 1, SfcOptics%n_Angles
+      SfcOptics_TL%Emissivity(i,1) = iVar%dEV_dvlai(i)*vlai_TL + iVar%dEV_dmv(i)*smc_TL  ! V
+      SfcOptics_TL%Emissivity(i,2) = iVar%dEH_dvlai(i)*vlai_TL + iVar%dEH_dmv(i)*smc_TL  ! H
+      SfcOptics_TL%Reflectivity(i,1,i,1) = -SfcOptics_TL%Emissivity(i,1)
+      SfcOptics_TL%Reflectivity(i,2,i,2) = -SfcOptics_TL%Emissivity(i,2)
+    END DO
 
   END FUNCTION Compute_MW_Land_SfcOptics_TL
 
@@ -364,23 +425,66 @@ CONTAINS
 !----------------------------------------------------------------------------------
 
   FUNCTION Compute_MW_Land_SfcOptics_AD( &
-    SfcOptics_AD) &  ! AD  Input
+    SfcOptics   , &  ! FWD Input
+    SfcOptics_AD, &  ! AD  Input
+    Surface_AD  , &  ! AD  Output
+    iVar        ) &  ! Internal variable input
   RESULT( err_stat )
     ! Arguments
+    TYPE(CRTM_SfcOptics_type),    INTENT(IN)     :: SfcOptics
     TYPE(CRTM_SfcOptics_type),    INTENT(IN OUT) :: SfcOptics_AD
+    TYPE(CRTM_Surface_type),      INTENT(IN OUT) :: Surface_AD
+    TYPE(iVar_type),              INTENT(IN)     :: iVar
     ! Function result
     INTEGER :: err_stat
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_MW_Land_SfcOptics_AD'
     ! Local variables
+    INTEGER  :: i
+    REAL(fp) :: vlai_AD, smc_AD
 
 
     ! Set up
     err_stat = SUCCESS
 
+    ! No sensitivity unless the low-frequency canopy model path was taken; the
+    ! incoming adjoints are still consumed (zeroed) so they are not double counted.
+    IF ( .NOT. iVar%Compute ) THEN
+      SfcOptics_AD%Reflectivity = ZERO
+      SfcOptics_AD%Emissivity   = ZERO
+      RETURN
+    END IF
 
-    ! Compute the adjoint surface optical parameters
-    ! ***No AD models yet, so there is no impact on AD result***
+    ! Adjoint of the emissivity/reflectivity -> vlai and soil moisture
+    vlai_AD = ZERO
+    smc_AD  = ZERO
+    DO i = 1, SfcOptics%n_Angles
+      ! Adjoint of specular reflectivity (r = 1 - e): e_AD += -r_AD, then zero r_AD
+      SfcOptics_AD%Emissivity(i,1) = SfcOptics_AD%Emissivity(i,1) - SfcOptics_AD%Reflectivity(i,1,i,1)
+      SfcOptics_AD%Emissivity(i,2) = SfcOptics_AD%Emissivity(i,2) - SfcOptics_AD%Reflectivity(i,2,i,2)
+      SfcOptics_AD%Reflectivity(i,1,i,1) = ZERO
+      SfcOptics_AD%Reflectivity(i,2,i,2) = ZERO
+      ! Adjoint of emissivity = dE/dvlai * vlai + dE/dmv * soil_moisture
+      vlai_AD = vlai_AD + iVar%dEV_dvlai(i)*SfcOptics_AD%Emissivity(i,1) &
+                        + iVar%dEH_dvlai(i)*SfcOptics_AD%Emissivity(i,2)
+      smc_AD  = smc_AD  + iVar%dEV_dmv(i)*SfcOptics_AD%Emissivity(i,1) &
+                        + iVar%dEH_dmv(i)*SfcOptics_AD%Emissivity(i,2)
+      SfcOptics_AD%Emissivity(i,1) = ZERO
+      SfcOptics_AD%Emissivity(i,2) = ZERO
+    END DO
+
+    ! Adjoint of vlai = Lai*Veg_Frac (Veg_Frac clipped to [0,1])
+    Surface_AD%Lai = Surface_AD%Lai + iVar%Veg_Frac*vlai_AD
+    IF ( .NOT. iVar%Veg_Clipped ) THEN
+      Surface_AD%Vegetation_Fraction = Surface_AD%Vegetation_Fraction + iVar%Lai*vlai_AD
+    END IF
+
+    ! Adjoint of soil moisture (clipped to [0,1] in the forward)
+    IF ( .NOT. iVar%Smc_Clipped ) THEN
+      Surface_AD%Soil_Moisture_Content = Surface_AD%Soil_Moisture_Content + smc_AD
+    END IF
+
+    ! Ensure no residual surface-optics adjoints leak downstream
     SfcOptics_AD%Reflectivity = ZERO
     SfcOptics_AD%Emissivity   = ZERO
 

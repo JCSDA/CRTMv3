@@ -357,6 +357,13 @@ target_link_libraries(Unit_Aerosol_Bypass_k_matrix PRIVATE crtm)
 add_test(NAME test_Unit_Aerosol_Bypass_k_matrix
          COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass_k_matrix>)
 
+# MW land surface Jacobian validation (issue #281): analytic LAI / Vegetation_Fraction
+# Jacobians (K-matrix adjoint and tangent-linear) vs finite differences.
+add_executable(Unit_Land_Jacobian mains/unit/Unit_Test/test_Land_Jacobian.f90)
+target_link_libraries(Unit_Land_Jacobian PRIVATE crtm)
+add_test(NAME test_Unit_Land_Jacobian
+         COMMAND $<TARGET_FILE:Unit_Land_Jacobian>)
+
 #SpcCoeff utilities
 list (APPEND SCoeff_Utils
   SpcCoeff_Edit

@@ -67,7 +67,11 @@ CONTAINS
                            Vegetation_Type,       &   ! Input
                            Snow_Depth,            &   ! Input
                            Emissivity_H,          &   ! Output
-                           Emissivity_V)              ! Output
+                           Emissivity_V,          &   ! Output
+                           dEV_dvlai,             &   ! Optional Output
+                           dEH_dvlai,             &   ! Optional Output
+                           dEV_dmv,               &   ! Optional Output
+                           dEH_dmv)                   ! Optional Output
     ! Arguments
     REAL(fp), intent(in) :: Angle
     REAL(fp), intent(in) :: Frequency
@@ -80,6 +84,12 @@ CONTAINS
     INTEGER,  intent(in) :: Vegetation_Type
     REAL(fp), intent(in) :: Snow_Depth
     REAL(fp), intent(out):: Emissivity_V,Emissivity_H
+    ! Optional tangent-linear/adjoint support, returned only for the (no-snow)
+    ! canopy path and set to zero otherwise (snow/ice callers omit them):
+    !   dEV_dvlai/dEH_dvlai : d(emissivity)/d(vlai), vlai = Lai*Vegetation_Fraction
+    !   dEV_dmv/dEH_dmv     : d(emissivity)/d(Soil_Moisture_Content)
+    REAL(fp), OPTIONAL, intent(out) :: dEV_dvlai, dEH_dvlai
+    REAL(fp), OPTIONAL, intent(out) :: dEV_dmv, dEH_dmv
     ! Local parameters
     REAL(fp), PARAMETER :: snow_depth_c     = 10.0_fp
     REAL(fp), PARAMETER :: tsoilc_undersnow = 280.0_fp
@@ -121,11 +131,24 @@ CONTAINS
     REAL(fp) :: t_soil
     REAL(fp) :: rhoveg, vlai
     REAL(fp) :: local_snow_depth
+    REAL(fp) :: dtau_dvlai_l, desv_dtauv_l, desh_dtauh_l
+    REAL(fp) :: desv_dr23v_l, desh_dr23h_l
+    REAL(fp) :: dtheta_t_dmv, ds_dmv, cos_i_l, cos_tt, sin_tt, qr_l
+    REAL(fp) :: drv0_dmv, drh0_dmv, dr23v_dmv, dr23h_dmv
     COMPLEX(fp) :: esoil, eveg, esnow, eair
+    COMPLEX(fp) :: desoil_dmv, dqc_dmv, m1c, m2c, dm2_dmv, angle_i_c, angle_t_c, dangle_t_dmv
+    COMPLEX(fp) :: nv_c, dv_c, dnv_c, ddv_c, zv_c, dzv_c
+    COMPLEX(fp) :: nh_c, dh_c, dnh_c, ddh_c, zh_c, dzh_c
     LOGICAL :: SnowEM_Physical_Model
 
     eair = CMPLX(ONE,-ZERO,fp)
     theta = Angle*PI/180.0_fp
+
+    ! Default the optional derivative outputs (filled only on the canopy path)
+    IF (PRESENT(dEV_dvlai)) dEV_dvlai = ZERO
+    IF (PRESENT(dEH_dvlai)) dEH_dvlai = ZERO
+    IF (PRESENT(dEV_dmv))   dEV_dmv   = ZERO
+    IF (PRESENT(dEH_dmv))   dEH_dmv   = ZERO
 
     ! By default use the 
     ! Assign local variable
@@ -217,15 +240,65 @@ CONTAINS
       t21_h    = ONE
       t21_v    = ONE
 
-      CALL Soil_Diel(Frequency, t_soil, mv, rhob, rhos, sand, clay, esoil)
+      CALL Soil_Diel(Frequency, t_soil, mv, rhob, rhos, sand, clay, esoil, &
+                     desm_dvmc=desoil_dmv)
       theta_t = ASIN(REAL(SIN(theta)*SQRT(eair)/SQRT(esoil),fp))
       CALL Reflectance(eair, esoil, theta, theta_t, r23_v, r23_h)
       CALL Roughness_Reflectance(Frequency, sigma, r23_v, r23_h)
       CALL Canopy_Diel(Frequency, mge, eveg, rhoveg)
-      CALL Canopy_Optic(vlai,Frequency,theta,eveg,leaf_thick,gv,gh,ssalb_v,ssalb_h,tau_v,tau_h)
+      CALL Canopy_Optic(vlai,Frequency,theta,eveg,leaf_thick,gv,gh,ssalb_v,ssalb_h,tau_v,tau_h, &
+                        dtau_dvlai=dtau_dvlai_l)
       CALL Two_Stream_Solution(mu,gv,gh,ssalb_h,ssalb_v,tau_h,tau_v, &
                                r21_h,r21_v,r23_h,r23_v,t21_v,t21_h,Emissivity_V,Emissivity_H, &
-                               frequency, t_soil, t_skin)
+                               frequency, t_soil, t_skin, &
+                               desv_dtauv=desv_dtauv_l, desh_dtauh=desh_dtauh_l, &
+                               desv_dr23v=desv_dr23v_l, desh_dr23h=desh_dr23h_l)
+
+      ! Chain rule: d(emissivity)/d(vlai) = d(emissivity)/d(tau) * d(tau)/d(vlai)
+      IF (PRESENT(dEV_dvlai)) dEV_dvlai = desv_dtauv_l*dtau_dvlai_l
+      IF (PRESENT(dEH_dvlai)) dEH_dvlai = desh_dtauh_l*dtau_dvlai_l
+
+      ! Chain rule for soil moisture: mv -> esoil (Soil_Diel) -> {theta_t, Fresnel
+      ! reflectances rv0,rh0} -> roughened r23 -> emissivity (two-stream).
+      IF ( PRESENT(dEV_dmv) .OR. PRESENT(dEH_dmv) ) THEN
+        ! theta_t = ASIN(arg), arg = SIN(theta)*SQRT(eair)/SQRT(esoil); sin(theta_t)=arg
+        ! d/dmv of arg = SIN(theta)*SQRT(eair)*esoil^(-1/2): -1/2*esoil^(-3/2)*desoil_dmv
+        dqc_dmv      = SIN(theta)*SQRT(eair)*(-POINT5)*esoil**(-1.5_fp)*desoil_dmv
+        ds_dmv       = REAL(dqc_dmv, fp)
+        cos_tt       = COS(theta_t)
+        sin_tt       = SIN(theta_t)
+        dtheta_t_dmv = ds_dmv/cos_tt
+        ! Fresnel reflectance derivatives (medium 1 = air, medium 2 = soil)
+        cos_i_l      = COS(theta)
+        m1c          = SQRT(eair)
+        m2c          = SQRT(esoil)
+        dm2_dmv      = POINT5*esoil**(-POINT5)*desoil_dmv
+        angle_i_c    = CMPLX(cos_i_l, ZERO, fp)
+        angle_t_c    = CMPLX(cos_tt,  ZERO, fp)
+        dangle_t_dmv = CMPLX(-sin_tt*dtheta_t_dmv, ZERO, fp)
+        ! Vertical polarisation: rv0 = |nv/dv|^2
+        nv_c  = m1c*angle_t_c - m2c*angle_i_c
+        dv_c  = m1c*angle_t_c + m2c*angle_i_c
+        dnv_c = m1c*dangle_t_dmv - dm2_dmv*angle_i_c
+        ddv_c = m1c*dangle_t_dmv + dm2_dmv*angle_i_c
+        zv_c  = nv_c/dv_c
+        dzv_c = (dnv_c*dv_c - nv_c*ddv_c)/(dv_c*dv_c)
+        drv0_dmv = TWO*REAL(CONJG(zv_c)*dzv_c, fp)
+        ! Horizontal polarisation: rh0 = |nh/dh|^2
+        nh_c  = m1c*angle_i_c - m2c*angle_t_c
+        dh_c  = m1c*angle_i_c + m2c*angle_t_c
+        dnh_c = -(dm2_dmv*angle_t_c + m2c*dangle_t_dmv)
+        ddh_c =  (dm2_dmv*angle_t_c + m2c*dangle_t_dmv)
+        zh_c  = nh_c/dh_c
+        dzh_c = (dnh_c*dh_c - nh_c*ddh_c)/(dh_c*dh_c)
+        drh0_dmv = TWO*REAL(CONJG(zh_c)*dzh_c, fp)
+        ! Roughness mixing (linear), matching Roughness_Reflectance
+        qr_l = 0.35_fp*(ONE - EXP(-0.60_fp*Frequency*sigma**TWO))
+        dr23h_dmv = 0.3_fp*drh0_dmv + qr_l*(0.3_fp*drv0_dmv - 0.3_fp*drh0_dmv)
+        dr23v_dmv = 0.3_fp*drv0_dmv + qr_l*(0.3_fp*drh0_dmv - 0.3_fp*drv0_dmv)
+        IF (PRESENT(dEV_dmv)) dEV_dmv = desv_dr23v_l*dr23v_dmv
+        IF (PRESENT(dEH_dmv)) dEH_dmv = desh_dr23h_l*dr23h_dmv
+      END IF
     END IF
 
   END SUBROUTINE NESDIS_LandEM
@@ -314,13 +387,17 @@ end subroutine SnowEM_Default
 
 
 subroutine Canopy_Optic(vlai,frequency,theta,esv,d,gv,gh,&
-                        ssalb_v,ssalb_h,tau_v, tau_h)
+                        ssalb_v,ssalb_h,tau_v, tau_h, dtau_dvlai)
 
 
   REAL(fp) :: frequency,theta,d,vlai,ssalb_v,ssalb_h,tau_v,tau_h,gv, gh, mu
   COMPLEX(fp) :: ix,k0,kz0,kz1,rhc,rvc,esv,expval1,factt,factrvc,factrhc
   REAL(fp) :: rh,rv,th,tv
   REAL(fp), PARAMETER :: threshold = 0.999_fp
+  ! Optional tangent-linear/adjoint support: d(tau)/d(vlai). The single-scatter
+  ! albedo and asymmetry factor do not depend on vlai, so only the optical
+  ! depth carries the LAI/vegetation sensitivity.
+  REAL(fp), OPTIONAL, INTENT(OUT) :: dtau_dvlai
 
   mu = COS(theta)
   ix = CMPLX(ZERO, ONE, fp)
@@ -351,6 +428,9 @@ subroutine Canopy_Optic(vlai,frequency,theta,esv,d,gv,gh,&
 
   ssalb_v = MIN((rv+rh)/(TWO-tv-th),threshold)
   ssalb_h = ssalb_v
+
+  ! tau_v = tau_h = 0.5*vlai*(2-tv-th) is linear in vlai
+  IF (PRESENT(dtau_dvlai)) dtau_dvlai = POINT5*(TWO-tv-th)
 
 end subroutine Canopy_Optic
 
@@ -400,13 +480,16 @@ subroutine Snow_Optic(frequency,a,h,f,ep_real,ep_imag,gv,gh, ssalb_v,ssalb_h,tau
 end subroutine Snow_Optic
 
 
-subroutine Soil_Diel(freq,t_soil,vmc,rhob,rhos,sand,clay,esm)
+subroutine Soil_Diel(freq,t_soil,vmc,rhob,rhos,sand,clay,esm,desm_dvmc)
 
 
   REAL(fp) :: f,tauw,freq,t_soil,vmc,rhob,rhos,sand,clay
   REAL(fp) :: alpha,beta,ess,rhoef,t,eswi,eswo
   REAL(fp) :: esof
   COMPLEX(fp) :: esm,esw,es1,es2
+  ! Optional tangent-linear/adjoint support: d(esm)/d(vmc) (complex)
+  COMPLEX(fp), OPTIONAL, INTENT(OUT) :: desm_dvmc
+  COMPLEX(fp) :: des1_dvmc, dinner_dvmc
 
   alpha = 0.65_fp
   beta  = 1.09_fp - 0.11_fp*sand + 0.18_fp*clay
@@ -434,7 +517,28 @@ subroutine Soil_Diel(freq,t_soil,vmc,rhob,rhos,sand,clay,esm)
   es2 = CMPLX(eswo-eswi, ZERO, fp)/CMPLX(ONE, f*tauw, fp)
   esw = es1 + es2
   esm = ONE + (ess**alpha - ONE)*rhob/rhos + vmc**beta*esw**alpha - vmc
+
+  ! Analytic d(esm)/d(vmc): esm above is the pre-power "inner" value. The water
+  ! permittivity esw depends on vmc only through the imaginary part of es1
+  ! (= -K/vmc), so d(esw)/d(vmc) = +K/vmc^2 (imaginary). es2 is independent of vmc.
+  IF ( PRESENT(desm_dvmc) ) THEN
+    IF ( vmc > ZERO ) THEN
+      des1_dvmc = CMPLX(ZERO, rhoef*(rhos-rhob)/(TWOPI*f*esof*rhos*vmc*vmc), fp)
+    ELSE
+      des1_dvmc = CMPLX(ZERO, ZERO, fp)
+    END IF
+    dinner_dvmc = beta*vmc**(beta-ONE)*esw**alpha &
+                + vmc**beta*alpha*esw**(alpha-ONE)*des1_dvmc - ONE
+    desm_dvmc   = (ONE/alpha)*esm**(ONE/alpha - ONE)*dinner_dvmc
+  END IF
+
   esm = esm**(ONE/alpha)
+
+  ! The forward clamps the imaginary part of esm to a constant when it is
+  ! non-negative; in that branch the imaginary part of the derivative is zero.
+  IF ( PRESENT(desm_dvmc) ) THEN
+    IF ( AIMAG(esm) >= ZERO ) desm_dvmc = CMPLX(REAL(desm_dvmc,fp), ZERO, fp)
+  END IF
 
   if(AIMAG(esm) >= ZERO) esm = CMPLX(REAL(esm,fp),-0.0001_fp, fp)
 
@@ -586,7 +690,8 @@ end subroutine Roughness_Reflectance
 
 
 subroutine Two_Stream_Solution(mu,gv,gh,ssalb_h,ssalb_v,tau_h,tau_v, &
-      r21_h,r21_v,r23_h,r23_v,t21_v,t21_h,esv,esh,frequency,t_soil,t_skin)
+      r21_h,r21_v,r23_h,r23_v,t21_v,t21_h,esv,esh,frequency,t_soil,t_skin, &
+      desv_dtauv,desh_dtauh,desv_dr23v,desh_dr23h)
 
 
   REAL(fp) :: mu, gv, gh, ssalb_h, ssalb_v, tau_h,tau_v,                 &
@@ -595,6 +700,16 @@ subroutine Two_Stream_Solution(mu,gv,gh,ssalb_h,ssalb_v,tau_h,tau_v, &
   REAL(fp) :: fact1,fact2
   REAL(fp) :: frequency, t_soil, t_skin
   REAL(fp) :: gsect0, gsect1_h, gsect1_v, gsect2_h, gsect2_v
+  ! Optional tangent-linear/adjoint support: d(emissivity)/d(optical depth)
+  ! (tau, LAI/vegetation) and d(emissivity)/d(lower-boundary reflectance r23,
+  ! soil moisture).
+  REAL(fp), OPTIONAL, INTENT(OUT) :: desv_dtauv, desh_dtauh
+  REAL(fp), OPTIONAL, INTENT(OUT) :: desv_dr23v, desh_dr23h
+  REAL(fp) :: num_h, den_h, num_v, den_v
+  REAL(fp) :: dfact1_dtauh, dfact2_dtauv, dgsect2_h_dtauh, dgsect2_v_dtauv
+  REAL(fp) :: dnum_h, dden_h, dnum_v, dden_v
+  REAL(fp) :: e1h, e2h, e1v, e2v, dgamma_h, dgamma_v, dAcoef_h, dAcoef_v
+  REAL(fp) :: dfact1_dr23h, dfact2_dr23v, dgsect1_dr23, dgsect2_h_dr23h, dgsect2_v_dr23v
 
   alfa_h  = SQRT((ONE - ssalb_h)/(ONE - gh*ssalb_h))
   kk_h    = SQRT((ONE - ssalb_h)*(ONE -  gh*ssalb_h))/mu
@@ -617,14 +732,78 @@ subroutine Two_Stream_Solution(mu,gv,gh,ssalb_h,ssalb_v,tau_h,tau_v, &
   gsect1_v=(ONE-r23_v)*(gsect0-ONE)
   gsect2_v=((ONE-beta_v*beta_v)/(ONE-beta_v*r23_v))*EXP(-kk_h*tau_v)
 
-  esh  = t21_h*((ONE - beta_h)*(ONE + fact1)+gsect1_h*gsect2_h) /(ONE-beta_h*r21_h-(beta_h-r21_h)*fact1)
-  esv  = t21_v*((ONE - beta_v)*(ONE + fact2)+gsect1_v*gsect2_v) /(ONE-beta_v*r21_v-(beta_v-r21_v)*fact2)
+  num_h = (ONE - beta_h)*(ONE + fact1) + gsect1_h*gsect2_h
+  den_h = ONE-beta_h*r21_h-(beta_h-r21_h)*fact1
+  num_v = (ONE - beta_v)*(ONE + fact2) + gsect1_v*gsect2_v
+  den_v = ONE-beta_v*r21_v-(beta_v-r21_v)*fact2
 
-  if (esh < EMISSH_DEFAULT) esh = EMISSH_DEFAULT
-  if (esv < EMISSV_DEFAULT) esv = EMISSV_DEFAULT
+  esh  = t21_h*num_h/den_h
+  esv  = t21_v*num_v/den_v
 
-  if (esh > ONE) esh = ONE
-  if (esv > ONE) esv = ONE
+  ! Tangent-linear/adjoint sensitivities of the (pre-clip) emissivities to the
+  ! canopy/snow optical depths. Only tau_h and tau_v vary with LAI/vegetation;
+  ! beta, kk, gamma, r21, r23, t21, gsect0 and gsect1 are independent of them.
+  ! Note gsect2_v carries EXP(-kk_h*tau_v) in the forward, so its tau_v
+  ! derivative uses kk_h (preserved here for exact consistency).
+  IF ( PRESENT(desh_dtauh) .OR. PRESENT(desv_dtauv) ) THEN
+    dfact1_dtauh    = -TWO*kk_h*fact1
+    dgsect2_h_dtauh = -kk_h*gsect2_h
+    dnum_h          = (ONE - beta_h)*dfact1_dtauh + gsect1_h*dgsect2_h_dtauh
+    dden_h          = -(beta_h-r21_h)*dfact1_dtauh
+    dfact2_dtauv    = -TWO*kk_v*fact2
+    dgsect2_v_dtauv = -kk_h*gsect2_v
+    dnum_v          = (ONE - beta_v)*dfact2_dtauv + gsect1_v*dgsect2_v_dtauv
+    dden_v          = -(beta_v-r21_v)*dfact2_dtauv
+    IF (PRESENT(desh_dtauh)) desh_dtauh = t21_h*(dnum_h*den_h - num_h*dden_h)/(den_h*den_h)
+    IF (PRESENT(desv_dtauv)) desv_dtauv = t21_v*(dnum_v*den_v - num_v*dden_v)/(den_v*den_v)
+  END IF
+
+  ! Tangent-linear/adjoint sensitivities of the (pre-clip) emissivities to the
+  ! lower-boundary reflectances r23 (the soil-moisture path enters here). r23_h
+  ! affects gamma_h, gsect1_h and gsect2_h; likewise r23_v for the V component.
+  IF ( PRESENT(desh_dr23h) .OR. PRESENT(desv_dr23v) ) THEN
+    e1h = EXP(-TWO*kk_h*tau_h); e2h = EXP(-kk_h*tau_h)
+    e1v = EXP(-TWO*kk_v*tau_v); e2v = EXP(-kk_h*tau_v)
+    dgsect1_dr23 = -(gsect0-ONE)
+    ! H component
+    dgamma_h        = (beta_h*beta_h - ONE)/(ONE-beta_h*r23_h)**2
+    dfact1_dr23h    = e1h*dgamma_h
+    dAcoef_h        = (ONE-beta_h*beta_h)*beta_h/(ONE-beta_h*r23_h)**2
+    dgsect2_h_dr23h = e2h*dAcoef_h
+    dnum_h = (ONE-beta_h)*dfact1_dr23h + dgsect1_dr23*gsect2_h + gsect1_h*dgsect2_h_dr23h
+    dden_h = -(beta_h-r21_h)*dfact1_dr23h
+    ! V component
+    dgamma_v        = (beta_v*beta_v - ONE)/(ONE-beta_v*r23_v)**2
+    dfact2_dr23v    = e1v*dgamma_v
+    dAcoef_v        = (ONE-beta_v*beta_v)*beta_v/(ONE-beta_v*r23_v)**2
+    dgsect2_v_dr23v = e2v*dAcoef_v
+    dnum_v = (ONE-beta_v)*dfact2_dr23v + dgsect1_dr23*gsect2_v + gsect1_v*dgsect2_v_dr23v
+    dden_v = -(beta_v-r21_v)*dfact2_dr23v
+    IF (PRESENT(desh_dr23h)) desh_dr23h = t21_h*(dnum_h*den_h - num_h*dden_h)/(den_h*den_h)
+    IF (PRESENT(desv_dr23v)) desv_dr23v = t21_v*(dnum_v*den_v - num_v*dden_v)/(den_v*den_v)
+  END IF
+
+  if (esh < EMISSH_DEFAULT) then
+    esh = EMISSH_DEFAULT
+    if (PRESENT(desh_dtauh)) desh_dtauh = ZERO
+    if (PRESENT(desh_dr23h)) desh_dr23h = ZERO
+  end if
+  if (esv < EMISSV_DEFAULT) then
+    esv = EMISSV_DEFAULT
+    if (PRESENT(desv_dtauv)) desv_dtauv = ZERO
+    if (PRESENT(desv_dr23v)) desv_dr23v = ZERO
+  end if
+
+  if (esh > ONE) then
+    esh = ONE
+    if (PRESENT(desh_dtauh)) desh_dtauh = ZERO
+    if (PRESENT(desh_dr23h)) desh_dr23h = ZERO
+  end if
+  if (esv > ONE) then
+    esv = ONE
+    if (PRESENT(desv_dtauv)) desv_dtauv = ZERO
+    if (PRESENT(desv_dr23v)) desv_dr23v = ZERO
+  end if
 
 end subroutine Two_Stream_Solution
 
