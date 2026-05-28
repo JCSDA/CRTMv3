@@ -555,6 +555,26 @@ endif()
 unset(_TMS_TAU)
 unset(_TMS_SPC)
 
+# test_TELSEM2_MWland
+# Stage the TELSEM2 atlas under a test-only name (NOT the default
+# TELSEM2.MWland.EmisCoeff.nc) so the drop-in default behaviour of the other
+# land tests, which use NESDIS_LandEM, is left unchanged. The test loads it
+# explicitly via the MWlandCoeff_File argument. Registered only when the atlas
+# is present in the staged fix tree.
+set(_TELSEM2_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/EmisCoeff/MW_Land/netCDF/TELSEM2.MWland.EmisCoeff.nc")
+add_executable(test_TELSEM2_MWland mains/unit/Unit_Test/test_TELSEM2_MWland.f90)
+target_link_libraries(test_TELSEM2_MWland PRIVATE crtm)
+if(EXISTS "${_TELSEM2_FIX}")
+  execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                   "${_TELSEM2_FIX}"
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/TELSEM2.MWland.test.nc" )
+  add_test(NAME test_TELSEM2_MWland
+           COMMAND $<TARGET_FILE:test_TELSEM2_MWland>)
+else()
+  message(STATUS "TELSEM2 atlas not found at ${_TELSEM2_FIX}; test_TELSEM2_MWland will not be registered.")
+endif()
+unset(_TELSEM2_FIX)
+
 # Check for canonical PARMIO LUT and AWS coefficients inside the staged
 # test_data tree. Tests are registered only when the files are present at
 # their canonical paths; nothing outside build/test_data/** is referenced.
