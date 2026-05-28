@@ -26,9 +26,12 @@ MODULE CRTM_MW_Land_SfcOptics
   USE CRTM_Parameters,          ONLY: ZERO, ONE, MAX_N_ANGLES
   USE CRTM_SpcCoeff,            ONLY: SC
   USE CRTM_Surface_Define,      ONLY: CRTM_Surface_type
-  USE CRTM_GeometryInfo_Define, ONLY: CRTM_GeometryInfo_type
+  USE CRTM_GeometryInfo_Define, ONLY: CRTM_GeometryInfo_type, &
+                                      CRTM_GeometryInfo_GetValue
   USE CRTM_SfcOptics_Define,    ONLY: CRTM_SfcOptics_type
   USE NESDIS_LandEM_Module,     ONLY: NESDIS_LandEM
+  USE CRTM_MWlandCoeff,         ONLY: MWlandC, CRTM_MWlandCoeff_IsLoaded
+  USE TELSEM2_Atlas_Module,     ONLY: TELSEM2_Emissivity
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -190,6 +193,7 @@ CONTAINS
 
   FUNCTION Compute_MW_Land_SfcOptics( &
     Surface     , &  ! Input
+    GeometryInfo, &  ! Input
     SensorIndex , &  ! Input
     ChannelIndex, &  ! Input
     SfcOptics   , &  ! Output
@@ -197,6 +201,7 @@ CONTAINS
   RESULT ( err_stat )
     ! Arguments
     TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface
+    TYPE(CRTM_GeometryInfo_type), INTENT(IN)     :: GeometryInfo
     INTEGER,                      INTENT(IN)     :: SensorIndex
     INTEGER,                      INTENT(IN)     :: ChannelIndex
     TYPE(CRTM_SfcOptics_type),    INTENT(IN OUT) :: SfcOptics
@@ -210,10 +215,45 @@ CONTAINS
     ! Local variables
     CHARACTER(ML) :: msg
     INTEGER :: i
+    INTEGER  :: month
+    REAL(fp) :: lat, lon, ev, eh
+    LOGICAL  :: atlas_valid, valid
 
 
     ! Set up
     err_stat = SUCCESS
+
+    ! ----------------------------------------------------------------------
+    ! TELSEM2 atlas path. When the microwave land emissivity atlas is loaded
+    ! and has land climatology at this location/month, use it for all angles.
+    ! The atlas depends only on lat/lon/month/frequency/angle (no CRTM control
+    ! variable), so iVar%Compute is left .FALSE. and the TL/AD results are zero.
+    ! A no-data cell (e.g. open water / permanent ice) falls through to the
+    ! NESDIS_LandEM model below.
+    ! ----------------------------------------------------------------------
+    IF ( CRTM_MWlandCoeff_IsLoaded() ) THEN
+      CALL CRTM_GeometryInfo_GetValue( GeometryInfo, &
+                                       Latitude  = lat, &
+                                       Longitude = lon, &
+                                       Month     = month )
+      atlas_valid = .TRUE.
+      DO i = 1, SfcOptics%n_Angles
+        CALL TELSEM2_Emissivity( MWlandC, lat, lon, month, &
+                                 SC(SensorIndex)%Frequency(ChannelIndex), &
+                                 SfcOptics%Angle(i), ev, eh, valid )
+        IF ( .NOT. valid ) THEN
+          atlas_valid = .FALSE.
+          EXIT
+        END IF
+        SfcOptics%Emissivity(i,1) = ev
+        SfcOptics%Emissivity(i,2) = eh
+        ! Assume specular surface
+        SfcOptics%Reflectivity(i,1,i,1) = ONE - ev
+        SfcOptics%Reflectivity(i,2,i,2) = ONE - eh
+      END DO
+      IF ( atlas_valid ) RETURN  ! err_stat=SUCCESS; iVar%Compute stays .FALSE.
+    END IF
+
     ! ...Check the soil type...
     IF ( Surface%Soil_Type < 1 .OR. &
          Surface%Soil_Type > N_VALID_SOIL_TYPES ) THEN

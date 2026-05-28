@@ -526,6 +526,7 @@ CONTAINS
           ! Compute the surface optics
           Error_Status = Compute_MW_Land_SfcOptics( &
                            Surface     , &  ! Input
+                           GeometryInfo, &  ! Input
                            SensorIndex , &  ! Input
                            ChannelIndex, &  ! Input
                            SfcOptics   , &  ! In/Output

@@ -62,8 +62,12 @@ list( APPEND crtm_src_files
       Coefficients/CRTM_IRlandCoeff.f90
       Coefficients/CRTM_IRsnowCoeff.f90
       Coefficients/CRTM_IRwaterCoeff.f90
+      Coefficients/CRTM_MWlandCoeff.f90
       Coefficients/CRTM_MWwaterCoeff.f90
       Coefficients/CRTM_PARMIOCoeff.f90
+      Coefficients/EmisCoeff/MW_Land/TELSEM2/TELSEM2Atlas_Define.f90
+      Coefficients/EmisCoeff/MW_Land/TELSEM2/TELSEM2Atlas_netCDF_IO.f90
+      Coefficients/EmisCoeff/MW_Land/TELSEM2/TELSEM2_Atlas_Module.f90
       Coefficients/EmisCoeff/MW_Water/PARMIOCoeff/PARMIOCoeff_Define.f90
       Coefficients/EmisCoeff/MW_Water/PARMIOCoeff/PARMIOCoeff_netCDF_IO.f90
       Coefficients/CRTM_SpcCoeff.f90
