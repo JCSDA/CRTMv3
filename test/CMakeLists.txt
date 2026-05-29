@@ -505,6 +505,26 @@ target_link_libraries(test_MWSurfEM PRIVATE crtm)
 add_test(NAME test_MWSurfEM
          COMMAND $<TARGET_FILE:test_MWSurfEM>)
 
+# test_CONST_MIXED_Polarization: exercises the CONST_MIXED_POLARIZATION (=13)
+# surface-optics V/H mixing in CRTM_Compute_SfcOptics. Pol type 13 is used only
+# by TMS (TROPICS / tomorrow.io) sensors, none of which are in the common
+# regression suite, so this is the dedicated coverage for that code path. It
+# needs only the TMS SpcCoeff and the (already-staged) FASTEM6 MW-water
+# EmisCoeff; CRTM_Compute_SfcOptics reads no TauCoeff. Registered only when the
+# TMS SpcCoeff is present in the staged fix tree.
+set(_TMS_SPC "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/SpcCoeff/netCDF/tms_tropics-01.SpcCoeff.nc")
+add_executable(test_CONST_MIXED_Polarization mains/unit/Unit_Test/test_CONST_MIXED_Polarization.f90)
+target_link_libraries(test_CONST_MIXED_Polarization PRIVATE crtm)
+if(EXISTS "${_TMS_SPC}")
+  set(TMS_COEFFS_PRESENT TRUE)
+  add_test(NAME test_CONST_MIXED_Polarization
+           COMMAND $<TARGET_FILE:test_CONST_MIXED_Polarization>)
+else()
+  set(TMS_COEFFS_PRESENT FALSE)
+  message(STATUS "TMS SpcCoeff (tms_tropics-01.SpcCoeff.nc) not found; test_CONST_MIXED_Polarization will not be registered.")
+endif()
+unset(_TMS_SPC)
+
 # Check for canonical PARMIO LUT and AWS coefficients inside the staged
 # test_data tree. Tests are registered only when the files are present at
 # their canonical paths; nothing outside build/test_data/** is referenced.
@@ -813,6 +833,11 @@ if(AWS_COEFFS_PRESENT)
   list(APPEND crtm_test_input
        SpcCoeff/netCDF/mwr_aws.SpcCoeff.nc
        TauCoeff/ODPS/netCDF/mwr_aws.TauCoeff.nc)
+endif()
+# TMS SpcCoeff for test_CONST_MIXED_Polarization (polarization type 13).
+if(TMS_COEFFS_PRESENT)
+  list(APPEND crtm_test_input
+       SpcCoeff/netCDF/tms_tropics-01.SpcCoeff.nc)
 endif()
 
 # Symlink all CRTM files
