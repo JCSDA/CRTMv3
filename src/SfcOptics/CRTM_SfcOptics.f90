@@ -21,6 +21,15 @@
 ! Patrick Stegmann 2021-08-31     Added PRA_POLARIZATION scheme for GEMS-1.
 !
 ! Cheng Dang       2022-05-31     Added IRsnowCoeff TL and AD modules
+!
+! B. T. Johnson    2026-05-28     Removed GeometryInfo%Distance_Ratio scaling from
+!                                 the CONST_MIXED_POLARIZATION (=13) emissivity/
+!                                 reflectivity mixing in the FWD/TL/AD routines.
+!                                 PolAngle is the fixed channel polarization angle,
+!                                 not a zenith angle, so the scan-geometry ratio
+!                                 should not be applied. Affects TMS (TROPICS /
+!                                 tomorrow.io) sensors. (per Y. Chen / Y.-K. Lee /
+!                                 J. Zhang investigation)
 
 MODULE CRTM_SfcOptics
 
@@ -745,8 +754,11 @@ CONTAINS
             ! (Personal Communication)
             !
             CASE ( CONST_MIXED_POLARIZATION )
-              SIN2_Angle = (GeometryInfo%Distance_Ratio * &
-                           SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)))**2
+              ! Constant (scan-independent) polarization mixing. PolAngle is the
+              ! fixed channel polarization angle, so it is NOT scaled by
+              ! GeometryInfo%Distance_Ratio (unlike the V/H-mixed cases, where
+              ! Distance_Ratio converts the local zenith angle to the scan angle).
+              SIN2_Angle = SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex))**2
               DO i = 1, nZ
                 SfcOptics%Emissivity(i,1) = (Emissivity(i,1)*(SIN2_Angle)) + &
                                               (Emissivity(i,2)*(ONE-SIN2_Angle))
@@ -1499,8 +1511,11 @@ CONTAINS
 
             ! Polarization mixing with constant offset angle for TROPICS
             CASE ( CONST_MIXED_POLARIZATION )
-              SIN2_Angle = (GeometryInfo%Distance_Ratio * &
-                           SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)))**2
+              ! Constant (scan-independent) polarization mixing. PolAngle is the
+              ! fixed channel polarization angle, so it is NOT scaled by
+              ! GeometryInfo%Distance_Ratio (unlike the V/H-mixed cases, where
+              ! Distance_Ratio converts the local zenith angle to the scan angle).
+              SIN2_Angle = SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex))**2
               DO i = 1, nZ
                 SfcOptics_TL%Emissivity(i,1) = (Emissivity_TL(i,1)*(SIN2_Angle)) + &
                                                   (Emissivity_TL(i,2)*(ONE-SIN2_Angle))
@@ -2038,8 +2053,11 @@ CONTAINS
 
             ! Polarization mixing with constant offset angle for TROPICS
             CASE ( CONST_MIXED_POLARIZATION )
-              SIN2_Angle = (GeometryInfo%Distance_Ratio * &
-                           SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)))**2
+              ! Constant (scan-independent) polarization mixing. PolAngle is the
+              ! fixed channel polarization angle, so it is NOT scaled by
+              ! GeometryInfo%Distance_Ratio (unlike the V/H-mixed cases, where
+              ! Distance_Ratio converts the local zenith angle to the scan angle).
+              SIN2_Angle = SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex))**2
               DO i = 1, nZ
                 ! PS: The adjoint is the transpose of the TL relationship:
                 ! eV_AD = e_AD * SIN^2(theta)
