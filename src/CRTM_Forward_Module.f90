@@ -476,6 +476,16 @@ CONTAINS
       TYPE(RTV_type)             :: RTV_Clear(n_channel_threads)
       ! Component variables
       TYPE(CRTM_GeometryInfo_type) :: GeometryInfo
+      ! Predictor is intentionally a scalar (NOT Predictor(n_channel_threads)
+      ! like the TL/K drivers): it is channel-independent, computed once per
+      ! sensor BEFORE the !$OMP channel loop and only READ inside it, so it is
+      ! deliberately SHARED and read-only across the channel-parallel region.
+      ! This is race-free ONLY because Forward never requests SaveFWV, so
+      ! Predictor%PAFV stays unassociated and the PAFV-guarded writes inside
+      ! CRTM_Compute_AtmAbsorption never fire (every thread only reads it).
+      ! If Forward ever enables SaveFWV, or any AtmAbsorption leaf starts
+      ! writing a non-PAFV Predictor field, this MUST become a per-thread
+      ! Predictor(n_channel_threads) indexed by nt, exactly as TL/K do.
       TYPE(CRTM_Predictor_type)    :: Predictor
       TYPE(CRTM_AtmOptics_type)    :: AtmOptics(n_channel_threads)
       TYPE(CRTM_SfcOptics_type)    :: SfcOptics(n_channel_threads)
@@ -782,6 +792,9 @@ CONTAINS
                                        AncillaryInput, &  ! Input
                                        Predictor     , &  ! Output
                                        PVar             ) ! Internal variable output
+         ! NOTE: Predictor (filled just above, once per sensor) is SHARED and
+         ! read-only across the channel-parallel region below -- do NOT add it
+         ! to PRIVATE. See its declaration for why this is race-free.
          !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
          DO nt = 1, n_channel_threads
 
