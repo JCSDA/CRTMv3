@@ -108,14 +108,19 @@ CONTAINS
       Rv_Mod_AD = (ONE - iVar%Emissivity(Iv_IDX)) * Reflectivity_AD(Iv_IDX)
       Reflectivity_AD(Iv_IDX) = ZERO
 
-      IF (PRESENT(Transmittance_AD) .AND. iVar%Has_Transmittance) THEN
+      ! Transpose of the TL: gate on iVar%Has_Transmittance only. Accumulate the
+      ! transmittance adjoint through a local so an absent optional Transmittance_AD
+      ! does not suppress the wind-speed adjoint of the reflection correction;
+      ! write the local back to the caller's accumulator only when it is present.
+      IF (iVar%Has_Transmittance) THEN
         CALL Reflection_Correction_AD( &
                MWwaterC%RCCoeff, &
                Rv_Mod_AD, &
                Rh_Mod_AD, &
                Wind_Speed_AD, &
-               Transmittance_AD, &
+               transmittance_AD_local, &
                iVar%RC_Var)
+        IF (PRESENT(Transmittance_AD)) Transmittance_AD = transmittance_AD_local
       ELSE
         Rv_Mod_AD = ZERO
         Rh_Mod_AD = ZERO

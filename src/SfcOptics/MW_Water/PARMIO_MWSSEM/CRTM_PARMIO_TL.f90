@@ -87,6 +87,12 @@ CONTAINS
     rdown_TL = ZERO
     transmittance_tl_local = ZERO
     IF (PRESENT(Transmittance_TL)) transmittance_tl_local = Transmittance_TL
+    ! Gate the RC linearization on iVar%Has_Transmittance only, mirroring the
+    ! forward exactly. transmittance_tl_local already defaults to ZERO when the
+    ! optional Transmittance_TL is absent, so the wind-speed sensitivity of the
+    ! reflection correction is still propagated when only the transmittance
+    ! perturbation is missing (previously the whole kernel was skipped, silently
+    ! dropping that term from the Jacobian).
     IF (iVar%Has_Transmittance) THEN
       IF (iVar%Has_PARMIO_RC) THEN
         CALL PARMIO_RC_Interp_TL( &
@@ -100,7 +106,7 @@ CONTAINS
                Transmittance_TL     = transmittance_tl_local, &
                Rdown_TL             = rdown_TL, &
                iVar                 = iVar%PARMIO_RC_Var)
-      ELSE IF (PRESENT(Transmittance_TL)) THEN
+      ELSE
         CALL Reflection_Correction_TL( &
                MWwaterC%RCCoeff, &
                Wind_Speed_TL, &
