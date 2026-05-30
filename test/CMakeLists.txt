@@ -647,6 +647,28 @@ foreach(regtype IN LISTS TLAD_types)
   endforeach()
 endforeach()
 
+#---------------------------------------------------------------------------------
+# >=200 GHz PARMIO default-path stored-reference regression (issue #311)
+#
+# No common-suite sensor reaches the 200 GHz PARMIO dispatch threshold, so the
+# default MW-water ocean-emissivity path for mwr_aws (4 channels at ~325 GHz) is
+# otherwise covered only by self-consistency drivers (test_PARMIO_TLAD, the
+# FASTEM delta sweep) with no stored-reference truth file. Register the ClearSky
+# driver for mwr_aws across forward/k_matrix/adjoint/tangent_linear so a
+# numerical drift in the PARMIO default path is caught by the same
+# RTSolution_Compare truth-file mechanism as every other sensor. ClearSky
+# (n_Clouds = n_Aerosols = 0) isolates the surface/PARMIO contribution. Guarded
+# on AWS_COEFFS_PRESENT AND PARMIO_LUT_PRESENT: without the LUT the dispatch
+# falls back to FASTEM and this would not exercise PARMIO. The
+# test_{regtype}_test_ClearSky executables are already defined by the loops
+# above (ClearSky is in both common_tests and TLAD_tests).
+if(AWS_COEFFS_PRESENT AND PARMIO_LUT_PRESENT)
+  foreach(regtype IN LISTS regression_types TLAD_types)
+    add_test(NAME test_${regtype}_ClearSky_mwr_aws
+             COMMAND $<TARGET_FILE:test_${regtype}_test_ClearSky> "mwr_aws")
+  endforeach()
+endif()
+
 #=================================================================================
 #OpenMP regression tests
 foreach(regtype IN LISTS regression_types)
