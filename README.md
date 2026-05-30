@@ -31,7 +31,7 @@ Basic requirements:
 
 =========================================================
 
-**JEDI NOTE** This release branch is also designed to work directly in a JEDI container or JEDI environment. If you're doing JEDI things, you're probably in the right spot. However, you should stop reading right now and have a look at the README_JEDI.md file.   
+**JEDI NOTE** This release branch is also designed to work directly in a JEDI container or JEDI environment. If you're doing JEDI things, you're probably in the right spot. CRTM is JEDI-ready by default as of v3.2.0 and requires no special activities.   
 
 If you're looking for an older version of CRTM (v2.3.0 or older) you should obtain the appropriate tarball from
 https://bin.ssec.wisc.edu/pub/s4/CRTM/   OR https://github.com/JCSDA/crtm (old versions).   
@@ -68,7 +68,6 @@ The CRTM repository directory structure looks (something) like:
  .
   ├── LICENSE  (Public Domain)
   ├── COPYING  (Public Domain)
-  ├── NOTES
   ├── README.md 
   ├── Get_CRTM_Binary_Files.sh  
   ├── <b>cmake/</b>
