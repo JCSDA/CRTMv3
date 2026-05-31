@@ -364,6 +364,14 @@ target_link_libraries(Unit_Land_Jacobian PRIVATE crtm)
 add_test(NAME test_Unit_Land_Jacobian
          COMMAND $<TARGET_FILE:Unit_Land_Jacobian>)
 
+# Surface netCDF I/O round-trip (REL-3.2.0 baseline-format conversion):
+# write a rank-2 Surface(L x M) with NetCDF=.TRUE., read it back, and verify
+# every field round-trips exactly.
+add_executable(Unit_Surface_netCDF_io mains/unit/Unit_Test/test_Surface_netCDF_io.f90)
+target_link_libraries(Unit_Surface_netCDF_io PRIVATE crtm)
+add_test(NAME test_Unit_Surface_netCDF_io
+         COMMAND $<TARGET_FILE:Unit_Surface_netCDF_io>)
+
 #SpcCoeff utilities
 list (APPEND SCoeff_Utils
   SpcCoeff_Edit

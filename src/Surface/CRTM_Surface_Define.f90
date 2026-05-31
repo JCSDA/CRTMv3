@@ -20,6 +20,7 @@ MODULE CRTM_Surface_Define
   ! Intrinsic modules
   USE ISO_Fortran_Env       , ONLY: OUTPUT_UNIT
   ! Module use
+  USE netcdf
   USE Type_Kinds            , ONLY: fp
   USE Message_Handler       , ONLY: SUCCESS, FAILURE, WARNING, INFORMATION, Display_Message
   USE Compare_Float_Numbers , ONLY: DEFAULT_N_SIGFIG, &
@@ -135,6 +136,57 @@ MODULE CRTM_Surface_Define
   INTEGER, PARAMETER :: ML = 256
   ! File status on close after write error
   CHARACTER(*), PARAMETER :: WRITE_ERROR_STATUS = 'DELETE'
+
+  ! ---------------------------------------------------------------------------
+  ! netCDF I/O schema (used by the *_NetCDF file workers)
+  !
+  ! The Surface object is all-scalar-per-element, so every field is packed into
+  ! a single rank-3 REAL variable Surface_Data(n_Channels, n_Profiles, n_Fields)
+  ! with a fixed field ordering given by the IDX_* parameters below. INTEGER
+  ! surface fields are stored as REAL(fp) and recovered with NINT on read (the
+  ! values are small type codes, so the round-trip is exact). Because these
+  ! files are written and read by the same build (ctest baselines), the only
+  ! requirement is an exact round-trip; the schema is otherwise free.
+  ! ---------------------------------------------------------------------------
+  ! ...Dimension names
+  CHARACTER(*), PARAMETER :: SFC_CHANNEL_DIMNAME = 'n_Channels'
+  CHARACTER(*), PARAMETER :: SFC_PROFILE_DIMNAME = 'n_Profiles'
+  CHARACTER(*), PARAMETER :: SFC_FIELD_DIMNAME   = 'n_Surface_Fields'
+  ! ...Variable names
+  CHARACTER(*), PARAMETER :: SFC_DATA_VARNAME    = 'Surface_Data'
+  ! ...netCDF storage type for REAL(fp) data (fp is double; see Type_Kinds)
+  INTEGER, PARAMETER :: SFC_FLOAT_TYPE = NF90_DOUBLE
+  ! ...Packed field ordering
+  INTEGER, PARAMETER :: IDX_LAND_COVERAGE          =  1
+  INTEGER, PARAMETER :: IDX_WATER_COVERAGE         =  2
+  INTEGER, PARAMETER :: IDX_SNOW_COVERAGE          =  3
+  INTEGER, PARAMETER :: IDX_ICE_COVERAGE           =  4
+  INTEGER, PARAMETER :: IDX_WIND_SPEED             =  5
+  INTEGER, PARAMETER :: IDX_LAND_TEMPERATURE       =  6
+  INTEGER, PARAMETER :: IDX_SOIL_MOISTURE_CONTENT  =  7
+  INTEGER, PARAMETER :: IDX_CANOPY_WATER_CONTENT   =  8
+  INTEGER, PARAMETER :: IDX_VEGETATION_FRACTION    =  9
+  INTEGER, PARAMETER :: IDX_SOIL_TEMPERATURE       = 10
+  INTEGER, PARAMETER :: IDX_LAI                    = 11
+  INTEGER, PARAMETER :: IDX_WATER_TEMPERATURE      = 12
+  INTEGER, PARAMETER :: IDX_WIND_DIRECTION         = 13
+  INTEGER, PARAMETER :: IDX_SALINITY               = 14
+  INTEGER, PARAMETER :: IDX_SNOW_TEMPERATURE       = 15
+  INTEGER, PARAMETER :: IDX_SNOW_DEPTH             = 16
+  INTEGER, PARAMETER :: IDX_SNOW_DENSITY           = 17
+  INTEGER, PARAMETER :: IDX_SNOW_GRAIN_SIZE        = 18
+  INTEGER, PARAMETER :: IDX_ICE_TEMPERATURE        = 19
+  INTEGER, PARAMETER :: IDX_ICE_THICKNESS          = 20
+  INTEGER, PARAMETER :: IDX_ICE_DENSITY            = 21
+  INTEGER, PARAMETER :: IDX_ICE_ROUGHNESS          = 22
+  INTEGER, PARAMETER :: IDX_LAND_TYPE              = 23
+  INTEGER, PARAMETER :: IDX_SOIL_TYPE              = 24
+  INTEGER, PARAMETER :: IDX_VEGETATION_TYPE        = 25
+  INTEGER, PARAMETER :: IDX_WATER_TYPE             = 26
+  INTEGER, PARAMETER :: IDX_SNOW_TYPE              = 27
+  INTEGER, PARAMETER :: IDX_ICE_TYPE               = 28
+  INTEGER, PARAMETER :: IDX_SENSORDATA_N_CHANNELS  = 29
+  INTEGER, PARAMETER :: N_SURFACE_FIELDS           = 29
 
   ! The gross surface types. These are used for
   ! cross-checking with the coverage fractions
@@ -910,12 +962,14 @@ CONTAINS
   FUNCTION CRTM_Surface_InquireFile( &
     Filename   , &  ! Input
     n_Channels , &  ! Optional output
-    n_Profiles ) &  ! Optional output
+    n_Profiles , &  ! Optional output
+    NetCDF     ) &  ! Optional input
   RESULT( err_stat )
     ! Arguments
     CHARACTER(*),           INTENT(IN)  :: Filename
     INTEGER     , OPTIONAL, INTENT(OUT) :: n_Channels
     INTEGER     , OPTIONAL, INTENT(OUT) :: n_Profiles
+    LOGICAL     , OPTIONAL, INTENT(IN)  :: NetCDF
     ! Function result
     INTEGER :: err_stat
     ! Function parameters
@@ -926,9 +980,20 @@ CONTAINS
     INTEGER :: io_stat
     INTEGER :: fid
     INTEGER :: l, m
+    LOGICAL :: binary
 
     ! Set up
     err_stat = SUCCESS
+    ! ...Check output format
+    binary = .TRUE.
+    IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
+    ! ...Dispatch to the netCDF reader if requested
+    IF ( .NOT. binary ) THEN
+      err_stat = CRTM_Surface_InquireFile_NetCDF( Filename, &
+                   n_Channels = n_Channels, &
+                   n_Profiles = n_Profiles  )
+      RETURN
+    END IF
     ! Check that the file exists
     IF ( .NOT. File_Exists( TRIM(Filename) ) ) THEN
       msg = 'File '//TRIM(Filename)//' not found.'
@@ -1061,6 +1126,7 @@ CONTAINS
   FUNCTION Read_Surface_Rank1( &
     Filename  , &  ! Input
     Surface   , &  ! Output
+    NetCDF    , &  ! Optional input
     Quiet     , &  ! Optional input
     n_Channels, &  ! Optional output
     n_Profiles, &  ! Optional output
@@ -1069,6 +1135,7 @@ CONTAINS
     ! Arguments
     CHARACTER(*),                         INTENT(IN)  :: Filename
     TYPE(CRTM_Surface_type), ALLOCATABLE, INTENT(OUT) :: Surface(:)  ! M
+    LOGICAL,       OPTIONAL,              INTENT(IN)  :: NetCDF
     LOGICAL,       OPTIONAL,              INTENT(IN)  :: Quiet
     INTEGER,       OPTIONAL,              INTENT(OUT) :: n_Channels
     INTEGER,       OPTIONAL,              INTENT(OUT) :: n_Profiles
@@ -1084,6 +1151,7 @@ CONTAINS
     INTEGER :: io_stat
     INTEGER :: alloc_stat
     LOGICAL :: noisy
+    LOGICAL :: binary
     INTEGER :: fid
     INTEGER :: n_input_channels
     INTEGER :: m, n_input_profiles
@@ -1096,6 +1164,18 @@ CONTAINS
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
     ! ...Override Quiet settings if debug set.
     IF ( PRESENT(Debug) ) noisy = Debug
+    ! ...Profile-only (rank-1) netCDF I/O is not implemented. It is unused by
+    !    the ctest baselines (which are all rank-2, n_Channels x n_Profiles).
+    !    The NetCDF argument is accepted for generic-interface symmetry only.
+    binary = .TRUE.
+    IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
+    IF ( .NOT. binary ) THEN
+      msg = 'Profile-only (rank-1) Surface netCDF read is not implemented; '//&
+            'use the rank-2 (n_Channels x n_Profiles) interface or binary format.'
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
 
 
     ! Open the file
@@ -1183,6 +1263,7 @@ CONTAINS
   FUNCTION Read_Surface_Rank2( &
     Filename  , &  ! Input
     Surface   , &  ! Output
+    NetCDF    , &  ! Optional input
     Quiet     , &  ! Optional input
     n_Channels, &  ! Optional output
     n_Profiles, &  ! Optional output
@@ -1191,6 +1272,7 @@ CONTAINS
     ! Arguments
     CHARACTER(*),                         INTENT(IN)  :: Filename
     TYPE(CRTM_Surface_type), ALLOCATABLE, INTENT(OUT) :: Surface(:,:)  ! L x M
+    LOGICAL,       OPTIONAL,              INTENT(IN)  :: NetCDF
     LOGICAL,       OPTIONAL,              INTENT(IN)  :: Quiet
     INTEGER,       OPTIONAL,              INTENT(OUT) :: n_Channels
     INTEGER,       OPTIONAL,              INTENT(OUT) :: n_Profiles
@@ -1206,6 +1288,7 @@ CONTAINS
     INTEGER :: io_stat
     INTEGER :: alloc_stat
     LOGICAL :: noisy
+    LOGICAL :: binary
     INTEGER :: fid
     INTEGER :: l, n_input_channels
     INTEGER :: m, n_input_profiles
@@ -1218,6 +1301,15 @@ CONTAINS
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
     ! ...Override Quiet settings if debug set.
     IF ( PRESENT(Debug) ) noisy = Debug
+    ! ...Check output format and dispatch to the netCDF reader if requested
+    binary = .TRUE.
+    IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
+    IF ( .NOT. binary ) THEN
+      err_stat = Read_Surface_Rank2_NetCDF( Filename, Surface, noisy, &
+                   n_Channels = n_Channels, &
+                   n_Profiles = n_Profiles  )
+      RETURN
+    END IF
 
 
     ! Open the file
@@ -1374,12 +1466,14 @@ CONTAINS
   FUNCTION Write_Surface_Rank1( &
     Filename, &  ! Input
     Surface , &  ! Input
+    NetCDF  , &  ! Optional input
     Quiet   , &  ! Optional input
     Debug   ) &  ! Optional input (Debug output control)
   RESULT( err_stat )
     ! Arguments
     CHARACTER(*),            INTENT(IN) :: Filename
     TYPE(CRTM_Surface_type), INTENT(IN) :: Surface(:)  ! M
+    LOGICAL,       OPTIONAL, INTENT(IN) :: NetCDF
     LOGICAL,       OPTIONAL, INTENT(IN) :: Quiet
     LOGICAL,       OPTIONAL, INTENT(IN) :: Debug
     ! Function result
@@ -1390,6 +1484,7 @@ CONTAINS
     CHARACTER(ML) :: msg
     CHARACTER(ML) :: io_msg
     LOGICAL :: noisy
+    LOGICAL :: binary
     INTEGER :: io_stat
     INTEGER :: fid
     INTEGER :: m, n_Output_Profiles
@@ -1402,6 +1497,18 @@ CONTAINS
     ! ...Override Quiet settings if debug set.
     IF ( PRESENT(Debug) ) THEN
       IF ( Debug ) noisy = .TRUE.
+    END IF
+    ! ...Profile-only (rank-1) netCDF I/O is not implemented. It is unused by
+    !    the ctest baselines (which are all rank-2, n_Channels x n_Profiles).
+    !    The NetCDF argument is accepted for generic-interface symmetry only.
+    binary = .TRUE.
+    IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
+    IF ( .NOT. binary ) THEN
+      msg = 'Profile-only (rank-1) Surface netCDF write is not implemented; '//&
+            'use the rank-2 (n_Channels x n_Profiles) interface or binary format.'
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
     END IF
     ! Dimensions
     n_Output_Profiles = SIZE(Surface)
@@ -1468,12 +1575,14 @@ CONTAINS
   FUNCTION Write_Surface_Rank2( &
     Filename, &  ! Input
     Surface , &  ! Input
+    NetCDF  , &  ! Optional input
     Quiet   , &  ! Optional input
     Debug   ) &  ! Optional input (Debug output control)
   RESULT( err_stat )
     ! Arguments
     CHARACTER(*),            INTENT(IN)  :: Filename
     TYPE(CRTM_Surface_type), INTENT(IN)  :: Surface(:,:)  ! L x M
+    LOGICAL,       OPTIONAL, INTENT(IN)  :: NetCDF
     LOGICAL,       OPTIONAL, INTENT(IN)  :: Quiet
     LOGICAL,       OPTIONAL, INTENT(IN)  :: Debug
     ! Function result
@@ -1484,6 +1593,7 @@ CONTAINS
     CHARACTER(ML) :: msg
     CHARACTER(ML) :: io_msg
     LOGICAL :: noisy
+    LOGICAL :: binary
     INTEGER :: io_stat
     INTEGER :: fid
     INTEGER :: l, n_Output_Channels
@@ -1497,6 +1607,13 @@ CONTAINS
     ! ...Override Quiet settings if debug set.
     IF ( PRESENT(Debug) ) THEN
       IF ( Debug ) noisy = .TRUE.
+    END IF
+    ! ...Check output format and dispatch to the netCDF writer if requested
+    binary = .TRUE.
+    IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
+    IF ( .NOT. binary ) THEN
+      err_stat = Write_Surface_Rank2_NetCDF( Filename, Surface, noisy )
+      RETURN
     END IF
     ! Dimensions
     n_Output_Channels = SIZE(Surface,DIM=1)
@@ -2504,5 +2621,525 @@ CONTAINS
     END SUBROUTINE Write_Record_Cleanup
 
   END FUNCTION Write_Record
+
+
+!##############################################################################
+!##############################################################################
+!##                                                                          ##
+!##                       ## netCDF I/O WORKER ROUTINES ##                    ##
+!##                                                                          ##
+!##############################################################################
+!##############################################################################
+
+!------------------------------------------------------------------------------
+!
+! NAME:
+!       CRTM_Surface_InquireFile_NetCDF
+!
+! PURPOSE:
+!       Function to inquire the dimensions of a netCDF CRTM Surface file.
+!       n_Channels is returned as 0 if the file has no channel dimension
+!       (i.e. a profile-only dataset).
+!
+!------------------------------------------------------------------------------
+
+  FUNCTION CRTM_Surface_InquireFile_NetCDF( &
+    Filename   , &  ! Input
+    n_Channels , &  ! Optional output
+    n_Profiles ) &  ! Optional output
+  RESULT( err_stat )
+    ! Arguments
+    CHARACTER(*),           INTENT(IN)  :: Filename
+    INTEGER     , OPTIONAL, INTENT(OUT) :: n_Channels
+    INTEGER     , OPTIONAL, INTENT(OUT) :: n_Profiles
+    ! Function result
+    INTEGER :: err_stat
+    ! Function parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Surface_InquireFile_NetCDF'
+    ! Function variables
+    CHARACTER(ML) :: msg
+    LOGICAL :: Close_File
+    INTEGER :: NF90_Status
+    INTEGER :: FileId, DimId
+    INTEGER :: l, m
+
+    ! Set up
+    err_stat = SUCCESS
+    Close_File = .FALSE.
+    ! ...Check that the file exists
+    IF ( .NOT. File_Exists( TRIM(Filename) ) ) THEN
+      msg = 'File '//TRIM(Filename)//' not found.'
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+
+    ! Open the file
+    NF90_Status = NF90_OPEN( Filename,NF90_NOWRITE,FileId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error opening '//TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+    ! ...Close the file if any error from here on
+    Close_File = .TRUE.
+
+    ! Get the number of profiles (always present)
+    NF90_Status = NF90_INQ_DIMID( FileId,SFC_PROFILE_DIMNAME,DimId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring dimension ID for '//SFC_PROFILE_DIMNAME//' - '// &
+            TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_INQUIRE_DIMENSION( FileId,DimId,Len=m )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error reading dimension value for '//SFC_PROFILE_DIMNAME//' - '// &
+            TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+
+    ! Get the number of channels (absent => profile-only => 0)
+    NF90_Status = NF90_INQ_DIMID( FileId,SFC_CHANNEL_DIMNAME,DimId )
+    IF ( NF90_Status == NF90_NOERR ) THEN
+      NF90_Status = NF90_INQUIRE_DIMENSION( FileId,DimId,Len=l )
+      IF ( NF90_Status /= NF90_NOERR ) THEN
+        msg = 'Error reading dimension value for '//SFC_CHANNEL_DIMNAME//' - '// &
+              TRIM(NF90_STRERROR( NF90_Status ))
+        CALL Inquire_Cleanup(); RETURN
+      END IF
+    ELSE
+      l = 0
+    END IF
+
+    ! Close the file
+    NF90_Status = NF90_CLOSE( FileId ); Close_File = .FALSE.
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error closing '//TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+
+    ! Set the return arguments
+    IF ( PRESENT(n_Channels) ) n_Channels = l
+    IF ( PRESENT(n_Profiles) ) n_Profiles = m
+
+  CONTAINS
+
+    SUBROUTINE Inquire_CleanUp()
+      IF ( Close_File ) THEN
+        NF90_Status = NF90_CLOSE( FileId )
+        IF ( NF90_Status /= NF90_NOERR ) &
+          msg = TRIM(msg)//'; Error closing input file during error cleanup - '//&
+                TRIM(NF90_STRERROR( NF90_Status ))
+      END IF
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+    END SUBROUTINE Inquire_CleanUp
+
+  END FUNCTION CRTM_Surface_InquireFile_NetCDF
+
+
+!------------------------------------------------------------------------------
+!
+! NAME:
+!       CreateFile_Surface_netCDF
+!
+! PURPOSE:
+!       Utility function to create a netCDF Surface file: defines the
+!       dimensions and the single packed Surface_Data variable, leaving the
+!       file open (out of define mode) for the caller to populate.
+!
+!------------------------------------------------------------------------------
+
+  FUNCTION CreateFile_Surface_netCDF( &
+    Filename  , &  ! Input
+    n_Channels, &  ! Input
+    n_Profiles, &  ! Input
+    FileId    ) &  ! Output
+  RESULT( err_stat )
+    ! Arguments
+    CHARACTER(*), INTENT(IN)  :: Filename
+    INTEGER     , INTENT(IN)  :: n_Channels
+    INTEGER     , INTENT(IN)  :: n_Profiles
+    INTEGER     , INTENT(OUT) :: FileId
+    ! Function result
+    INTEGER :: err_stat
+    ! Local parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Surface_WriteFile(netCDF)'
+    ! Local variables
+    CHARACTER(ML) :: msg
+    LOGICAL :: Close_File
+    INTEGER :: NF90_Status
+    INTEGER :: n_Channels_DimID
+    INTEGER :: n_Profiles_DimID
+    INTEGER :: n_Fields_DimID
+    INTEGER :: VarID
+
+    ! Setup
+    err_stat = SUCCESS
+    Close_File = .FALSE.
+
+    ! Create the data file
+    NF90_Status = NF90_CREATE( Filename,NF90_CLOBBER,FileId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error creating '//TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    ! ...Close the file if any error from here on
+    Close_File = .TRUE.
+
+    ! Define the dimensions
+    NF90_Status = NF90_DEF_DIM( FileID,SFC_CHANNEL_DIMNAME,n_Channels,n_Channels_DimID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//SFC_CHANNEL_DIMNAME//' dimension in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_DEF_DIM( FileID,SFC_PROFILE_DIMNAME,n_Profiles,n_Profiles_DimID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//SFC_PROFILE_DIMNAME//' dimension in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_DEF_DIM( FileID,SFC_FIELD_DIMNAME,N_SURFACE_FIELDS,n_Fields_DimID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//SFC_FIELD_DIMNAME//' dimension in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! Define the packed data variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      SFC_DATA_VARNAME, &
+      SFC_FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Profiles_DimID, n_Fields_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//SFC_DATA_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! Take the file out of define mode
+    NF90_Status = NF90_ENDDEF( FileId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error taking file '//TRIM(Filename)// &
+            ' out of define mode - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+  CONTAINS
+
+    SUBROUTINE Create_CleanUp()
+      IF ( Close_File ) THEN
+        NF90_Status = NF90_CLOSE( FileID )
+        IF ( NF90_Status /= NF90_NOERR ) &
+          msg = TRIM(msg)//'; Error closing file during error cleanup - '//&
+                TRIM(NF90_STRERROR( NF90_Status ))
+      END IF
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME,msg,err_stat )
+    END SUBROUTINE Create_CleanUp
+
+  END FUNCTION CreateFile_Surface_netCDF
+
+
+!------------------------------------------------------------------------------
+!
+! NAME:
+!       Write_Surface_Rank2_NetCDF
+!
+! PURPOSE:
+!       Utility function to write a rank-2 (L x M) Surface array to a netCDF
+!       file. Populated SensorData (n_Channels > 0) is not supported and is
+!       rejected (no driver/baseline populates it).
+!
+!------------------------------------------------------------------------------
+
+  FUNCTION Write_Surface_Rank2_NetCDF( &
+    Filename, &  ! Input
+    Surface , &  ! Input
+    noisy   ) &  ! Input
+  RESULT( err_stat )
+    ! Arguments
+    CHARACTER(*),            INTENT(IN) :: Filename
+    TYPE(CRTM_Surface_type), INTENT(IN) :: Surface(:,:)  ! L x M
+    LOGICAL,                 INTENT(IN) :: noisy
+    ! Function result
+    INTEGER :: err_stat
+    ! Function parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Surface_WriteFile_netCDF'
+    ! Function variables
+    CHARACTER(ML) :: msg
+    LOGICAL :: Close_File
+    INTEGER :: NF90_Status, FileId, VarId
+    INTEGER :: l, m, n_Channels, n_Profiles, alloc_stat
+    REAL(fp), ALLOCATABLE :: Surface_Data(:,:,:)
+
+    ! Set up
+    err_stat = SUCCESS
+    Close_File = .FALSE.
+    n_Channels = SIZE(Surface,DIM=1)
+    n_Profiles = SIZE(Surface,DIM=2)
+
+    ! Reject populated SensorData (unsupported by the packed schema)
+    IF ( ANY( Surface%SensorData%n_Channels > 0 ) ) THEN
+      msg = 'Populated SensorData (n_Channels > 0) is not supported by the '//&
+            'Surface netCDF writer.'
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
+
+    ! Pack the per-element data
+    ALLOCATE( Surface_Data( n_Channels, n_Profiles, N_SURFACE_FIELDS ), STAT=alloc_stat )
+    IF ( alloc_stat /= 0 ) THEN
+      msg = 'Error allocating Surface_Data array'
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
+    DO m = 1, n_Profiles
+      DO l = 1, n_Channels
+        Surface_Data(l,m,IDX_LAND_COVERAGE)         = Surface(l,m)%Land_Coverage
+        Surface_Data(l,m,IDX_WATER_COVERAGE)        = Surface(l,m)%Water_Coverage
+        Surface_Data(l,m,IDX_SNOW_COVERAGE)         = Surface(l,m)%Snow_Coverage
+        Surface_Data(l,m,IDX_ICE_COVERAGE)          = Surface(l,m)%Ice_Coverage
+        Surface_Data(l,m,IDX_WIND_SPEED)            = Surface(l,m)%Wind_Speed
+        Surface_Data(l,m,IDX_LAND_TEMPERATURE)      = Surface(l,m)%Land_Temperature
+        Surface_Data(l,m,IDX_SOIL_MOISTURE_CONTENT) = Surface(l,m)%Soil_Moisture_Content
+        Surface_Data(l,m,IDX_CANOPY_WATER_CONTENT)  = Surface(l,m)%Canopy_Water_Content
+        Surface_Data(l,m,IDX_VEGETATION_FRACTION)   = Surface(l,m)%Vegetation_Fraction
+        Surface_Data(l,m,IDX_SOIL_TEMPERATURE)      = Surface(l,m)%Soil_Temperature
+        Surface_Data(l,m,IDX_LAI)                   = Surface(l,m)%LAI
+        Surface_Data(l,m,IDX_WATER_TEMPERATURE)     = Surface(l,m)%Water_Temperature
+        Surface_Data(l,m,IDX_WIND_DIRECTION)        = Surface(l,m)%Wind_Direction
+        Surface_Data(l,m,IDX_SALINITY)              = Surface(l,m)%Salinity
+        Surface_Data(l,m,IDX_SNOW_TEMPERATURE)      = Surface(l,m)%Snow_Temperature
+        Surface_Data(l,m,IDX_SNOW_DEPTH)            = Surface(l,m)%Snow_Depth
+        Surface_Data(l,m,IDX_SNOW_DENSITY)          = Surface(l,m)%Snow_Density
+        Surface_Data(l,m,IDX_SNOW_GRAIN_SIZE)       = Surface(l,m)%Snow_Grain_Size
+        Surface_Data(l,m,IDX_ICE_TEMPERATURE)       = Surface(l,m)%Ice_Temperature
+        Surface_Data(l,m,IDX_ICE_THICKNESS)         = Surface(l,m)%Ice_Thickness
+        Surface_Data(l,m,IDX_ICE_DENSITY)           = Surface(l,m)%Ice_Density
+        Surface_Data(l,m,IDX_ICE_ROUGHNESS)         = Surface(l,m)%Ice_Roughness
+        Surface_Data(l,m,IDX_LAND_TYPE)             = REAL(Surface(l,m)%Land_Type      , fp)
+        Surface_Data(l,m,IDX_SOIL_TYPE)             = REAL(Surface(l,m)%Soil_Type      , fp)
+        Surface_Data(l,m,IDX_VEGETATION_TYPE)       = REAL(Surface(l,m)%Vegetation_Type, fp)
+        Surface_Data(l,m,IDX_WATER_TYPE)            = REAL(Surface(l,m)%Water_Type     , fp)
+        Surface_Data(l,m,IDX_SNOW_TYPE)             = REAL(Surface(l,m)%Snow_Type      , fp)
+        Surface_Data(l,m,IDX_ICE_TYPE)              = REAL(Surface(l,m)%Ice_Type       , fp)
+        Surface_Data(l,m,IDX_SENSORDATA_N_CHANNELS) = REAL(Surface(l,m)%SensorData%n_Channels, fp)
+      END DO
+    END DO
+
+    ! Create the output file (defines dims + variable)
+    err_stat = CreateFile_Surface_netCDF( Filename, n_Channels, n_Profiles, FileId )
+    IF ( err_stat /= SUCCESS ) THEN
+      msg = 'Error creating output file '//TRIM(Filename)
+      CALL Write_Cleanup(); RETURN
+    END IF
+    ! ...Close the file if any error from here on
+    Close_File = .TRUE.
+
+    ! Write the packed data
+    NF90_Status = NF90_INQ_VARID( FileId,SFC_DATA_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//SFC_DATA_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_PUT_VAR( FileId,VarId,Surface_Data )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error writing '//SFC_DATA_VARNAME//' to '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
+
+    ! Close the file
+    NF90_Status = NF90_CLOSE( FileId ); Close_File = .FALSE.
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error closing output file - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
+
+    ! Output an info message
+    IF ( noisy ) THEN
+      WRITE( msg,'("Number of channels and profiles written to ",a,": ",i0,1x,i0 )' ) &
+             TRIM(Filename), n_Channels, n_Profiles
+      CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
+    END IF
+
+  CONTAINS
+
+    SUBROUTINE Write_CleanUp()
+      IF ( Close_File ) THEN
+        NF90_Status = NF90_CLOSE( FileId )
+        IF ( NF90_Status /= NF90_NOERR ) &
+          msg = TRIM(msg)//'; Error closing output file during error cleanup - '//&
+                TRIM(NF90_STRERROR( NF90_Status ))
+      END IF
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+    END SUBROUTINE Write_CleanUp
+
+  END FUNCTION Write_Surface_Rank2_NetCDF
+
+
+!------------------------------------------------------------------------------
+!
+! NAME:
+!       Read_Surface_Rank2_NetCDF
+!
+! PURPOSE:
+!       Utility function to read a rank-2 (L x M) Surface array from a netCDF
+!       file written by Write_Surface_Rank2_NetCDF.
+!
+!------------------------------------------------------------------------------
+
+  FUNCTION Read_Surface_Rank2_NetCDF( &
+    Filename  , &  ! Input
+    Surface   , &  ! Output
+    noisy     , &  ! Input
+    n_Channels, &  ! Optional output
+    n_Profiles) &  ! Optional output
+  RESULT( err_stat )
+    ! Arguments
+    CHARACTER(*),                         INTENT(IN)  :: Filename
+    TYPE(CRTM_Surface_type), ALLOCATABLE, INTENT(OUT) :: Surface(:,:)  ! L x M
+    LOGICAL,                              INTENT(IN)  :: noisy
+    INTEGER,       OPTIONAL,              INTENT(OUT) :: n_Channels
+    INTEGER,       OPTIONAL,              INTENT(OUT) :: n_Profiles
+    ! Function result
+    INTEGER :: err_stat
+    ! Function parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Surface_ReadFile_netCDF'
+    ! Function variables
+    CHARACTER(ML) :: msg
+    LOGICAL :: Close_File
+    INTEGER :: NF90_Status, FileId, VarId
+    INTEGER :: l, m, n_File_Channels, n_File_Profiles, alloc_stat
+    REAL(fp), ALLOCATABLE :: Surface_Data(:,:,:)
+
+    ! Set up
+    err_stat = SUCCESS
+    Close_File = .FALSE.
+    ! ...Check that the file exists
+    IF ( .NOT. File_Exists( TRIM(Filename) ) ) THEN
+      msg = 'File '//TRIM(Filename)//' not found.'
+      CALL Read_Cleanup(); RETURN
+    END IF
+
+    ! Inquire the file for its dimensions
+    err_stat = CRTM_Surface_InquireFile_NetCDF( Filename, &
+                 n_Channels = n_File_Channels, &
+                 n_Profiles = n_File_Profiles  )
+    IF ( err_stat /= SUCCESS ) THEN
+      msg = 'Error obtaining Surface dimensions from '//TRIM(Filename)
+      CALL Read_Cleanup(); RETURN
+    END IF
+    IF ( n_File_Channels < 1 ) THEN
+      msg = 'File '//TRIM(Filename)//' has no channel dimension (profile-only); '//&
+            'a rank-2 read requires one.'
+      CALL Read_Cleanup(); RETURN
+    END IF
+
+    ! Allocate the return structure and the read buffer
+    ALLOCATE( Surface( n_File_Channels, n_File_Profiles ), &
+              Surface_Data( n_File_Channels, n_File_Profiles, N_SURFACE_FIELDS ), &
+              STAT = alloc_stat )
+    IF ( alloc_stat /= 0 ) THEN
+      msg = 'Error allocating Surface/Surface_Data arrays'
+      CALL Read_Cleanup(); RETURN
+    END IF
+
+    ! Open the file for reading
+    NF90_Status = NF90_OPEN( Filename,NF90_NOWRITE,FileId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error opening '//TRIM(Filename)//' for read access - '//&
+            TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    ! ...Close the file if any error from here on
+    Close_File = .TRUE.
+
+    ! Read the packed data
+    NF90_Status = NF90_INQ_VARID( FileId,SFC_DATA_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//SFC_DATA_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_GET_VAR( FileId,VarId,Surface_Data )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error reading '//SFC_DATA_VARNAME//' from '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+
+    ! Close the file
+    NF90_Status = NF90_CLOSE( FileId ); Close_File = .FALSE.
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error closing input file - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+
+    ! Unpack into the return structure (INTEGER fields recovered with NINT)
+    DO m = 1, n_File_Profiles
+      DO l = 1, n_File_Channels
+        Surface(l,m)%Land_Coverage         = Surface_Data(l,m,IDX_LAND_COVERAGE)
+        Surface(l,m)%Water_Coverage        = Surface_Data(l,m,IDX_WATER_COVERAGE)
+        Surface(l,m)%Snow_Coverage         = Surface_Data(l,m,IDX_SNOW_COVERAGE)
+        Surface(l,m)%Ice_Coverage          = Surface_Data(l,m,IDX_ICE_COVERAGE)
+        Surface(l,m)%Wind_Speed            = Surface_Data(l,m,IDX_WIND_SPEED)
+        Surface(l,m)%Land_Temperature      = Surface_Data(l,m,IDX_LAND_TEMPERATURE)
+        Surface(l,m)%Soil_Moisture_Content = Surface_Data(l,m,IDX_SOIL_MOISTURE_CONTENT)
+        Surface(l,m)%Canopy_Water_Content  = Surface_Data(l,m,IDX_CANOPY_WATER_CONTENT)
+        Surface(l,m)%Vegetation_Fraction   = Surface_Data(l,m,IDX_VEGETATION_FRACTION)
+        Surface(l,m)%Soil_Temperature      = Surface_Data(l,m,IDX_SOIL_TEMPERATURE)
+        Surface(l,m)%LAI                   = Surface_Data(l,m,IDX_LAI)
+        Surface(l,m)%Water_Temperature     = Surface_Data(l,m,IDX_WATER_TEMPERATURE)
+        Surface(l,m)%Wind_Direction        = Surface_Data(l,m,IDX_WIND_DIRECTION)
+        Surface(l,m)%Salinity              = Surface_Data(l,m,IDX_SALINITY)
+        Surface(l,m)%Snow_Temperature      = Surface_Data(l,m,IDX_SNOW_TEMPERATURE)
+        Surface(l,m)%Snow_Depth            = Surface_Data(l,m,IDX_SNOW_DEPTH)
+        Surface(l,m)%Snow_Density          = Surface_Data(l,m,IDX_SNOW_DENSITY)
+        Surface(l,m)%Snow_Grain_Size       = Surface_Data(l,m,IDX_SNOW_GRAIN_SIZE)
+        Surface(l,m)%Ice_Temperature       = Surface_Data(l,m,IDX_ICE_TEMPERATURE)
+        Surface(l,m)%Ice_Thickness         = Surface_Data(l,m,IDX_ICE_THICKNESS)
+        Surface(l,m)%Ice_Density           = Surface_Data(l,m,IDX_ICE_DENSITY)
+        Surface(l,m)%Ice_Roughness         = Surface_Data(l,m,IDX_ICE_ROUGHNESS)
+        Surface(l,m)%Land_Type             = NINT(Surface_Data(l,m,IDX_LAND_TYPE))
+        Surface(l,m)%Soil_Type             = NINT(Surface_Data(l,m,IDX_SOIL_TYPE))
+        Surface(l,m)%Vegetation_Type       = NINT(Surface_Data(l,m,IDX_VEGETATION_TYPE))
+        Surface(l,m)%Water_Type            = NINT(Surface_Data(l,m,IDX_WATER_TYPE))
+        Surface(l,m)%Snow_Type             = NINT(Surface_Data(l,m,IDX_SNOW_TYPE))
+        Surface(l,m)%Ice_Type              = NINT(Surface_Data(l,m,IDX_ICE_TYPE))
+        ! SensorData is guaranteed unpopulated (n_Channels == 0); leave default.
+      END DO
+    END DO
+
+    ! Set the return values
+    IF ( PRESENT(n_Channels) ) n_Channels = n_File_Channels
+    IF ( PRESENT(n_Profiles) ) n_Profiles = n_File_Profiles
+
+    ! Output an info message
+    IF ( noisy ) THEN
+      WRITE( msg,'("Number of channels and profiles read from ",a,": ",i0,1x,i0)' ) &
+             TRIM(Filename), n_File_Channels, n_File_Profiles
+      CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
+    END IF
+
+  CONTAINS
+
+    SUBROUTINE Read_CleanUp()
+      IF ( Close_File ) THEN
+        NF90_Status = NF90_CLOSE( FileId )
+        IF ( NF90_Status /= NF90_NOERR ) &
+          msg = TRIM(msg)//'; Error closing input file during error cleanup - '//&
+                TRIM(NF90_STRERROR( NF90_Status ))
+      END IF
+      IF ( ALLOCATED(Surface) ) DEALLOCATE(Surface, STAT=alloc_stat)
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+    END SUBROUTINE Read_CleanUp
+
+  END FUNCTION Read_Surface_Rank2_NetCDF
 
 END MODULE CRTM_Surface_Define
