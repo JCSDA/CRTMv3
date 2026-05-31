@@ -152,6 +152,10 @@ MODULE CRTM_Surface_Define
   CHARACTER(*), PARAMETER :: SFC_CHANNEL_DIMNAME = 'n_Channels'
   CHARACTER(*), PARAMETER :: SFC_PROFILE_DIMNAME = 'n_Profiles'
   CHARACTER(*), PARAMETER :: SFC_FIELD_DIMNAME   = 'n_Surface_Fields'
+  ! ...Global attribute holding the true n_Channels. The channel dimension is
+  !    MAX(n_Channels,1) so that a profile-only (rank-1) Surface, which has
+  !    n_Channels==0, is representable (NF90_DEF_DIM treats 0 as UNLIMITED).
+  CHARACTER(*), PARAMETER :: SFC_NCHANNELS_GATTNAME = 'n_Channels'
   ! ...Variable names
   CHARACTER(*), PARAMETER :: SFC_DATA_VARNAME    = 'Surface_Data'
   ! ...netCDF storage type for REAL(fp) data (fp is double; see Type_Kinds)
@@ -1155,6 +1159,8 @@ CONTAINS
     INTEGER :: fid
     INTEGER :: n_input_channels
     INTEGER :: m, n_input_profiles
+    INTEGER :: nch, nprof
+    TYPE(CRTM_Surface_type), ALLOCATABLE :: tmp2(:,:)
 
 
     ! Set up
@@ -1164,16 +1170,18 @@ CONTAINS
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
     ! ...Override Quiet settings if debug set.
     IF ( PRESENT(Debug) ) noisy = Debug
-    ! ...Profile-only (rank-1) netCDF I/O is not implemented. It is unused by
-    !    the ctest baselines (which are all rank-2, n_Channels x n_Profiles).
-    !    The NetCDF argument is accepted for generic-interface symmetry only.
+    ! ...Profile-only (rank-1) netCDF: read the n_Channels==0 file via the rank-2
+    !    reader (returns a 1 x M array) and collapse the channel axis.
     binary = .TRUE.
     IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
     IF ( .NOT. binary ) THEN
-      msg = 'Profile-only (rank-1) Surface netCDF read is not implemented; '//&
-            'use the rank-2 (n_Channels x n_Profiles) interface or binary format.'
-      err_stat = FAILURE
-      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      err_stat = Read_Surface_Rank2_NetCDF( Filename, tmp2, noisy, &
+                   n_Channels = nch, n_Profiles = nprof )
+      IF ( err_stat == SUCCESS ) THEN
+        Surface = tmp2(1,:)   ! auto-allocates Surface(M)
+        IF ( PRESENT(n_Channels) ) n_Channels = nch
+        IF ( PRESENT(n_Profiles) ) n_Profiles = nprof
+      END IF
       RETURN
     END IF
 
@@ -1498,16 +1506,13 @@ CONTAINS
     IF ( PRESENT(Debug) ) THEN
       IF ( Debug ) noisy = .TRUE.
     END IF
-    ! ...Profile-only (rank-1) netCDF I/O is not implemented. It is unused by
-    !    the ctest baselines (which are all rank-2, n_Channels x n_Profiles).
-    !    The NetCDF argument is accepted for generic-interface symmetry only.
+    ! ...Profile-only (rank-1) netCDF: store as an n_Channels==0 file by reusing
+    !    the rank-2 writer with a 1 x M view (stored n_Channels attribute = 0).
     binary = .TRUE.
     IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
     IF ( .NOT. binary ) THEN
-      msg = 'Profile-only (rank-1) Surface netCDF write is not implemented; '//&
-            'use the rank-2 (n_Channels x n_Profiles) interface or binary format.'
-      err_stat = FAILURE
-      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      err_stat = Write_Surface_Rank2_NetCDF( Filename, &
+                   RESHAPE( Surface, (/ 1, SIZE(Surface) /) ), 0, noisy )
       RETURN
     END IF
     ! Dimensions
@@ -1612,7 +1617,7 @@ CONTAINS
     binary = .TRUE.
     IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
     IF ( .NOT. binary ) THEN
-      err_stat = Write_Surface_Rank2_NetCDF( Filename, Surface, noisy )
+      err_stat = Write_Surface_Rank2_NetCDF( Filename, Surface, SIZE(Surface,DIM=1), noisy )
       RETURN
     END IF
     ! Dimensions
@@ -2695,17 +2700,13 @@ CONTAINS
       CALL Inquire_Cleanup(); RETURN
     END IF
 
-    ! Get the number of channels (absent => profile-only => 0)
-    NF90_Status = NF90_INQ_DIMID( FileId,SFC_CHANNEL_DIMNAME,DimId )
-    IF ( NF90_Status == NF90_NOERR ) THEN
-      NF90_Status = NF90_INQUIRE_DIMENSION( FileId,DimId,Len=l )
-      IF ( NF90_Status /= NF90_NOERR ) THEN
-        msg = 'Error reading dimension value for '//SFC_CHANNEL_DIMNAME//' - '// &
-              TRIM(NF90_STRERROR( NF90_Status ))
-        CALL Inquire_Cleanup(); RETURN
-      END IF
-    ELSE
-      l = 0
+    ! Get the true number of channels from the global attribute (0 for a
+    ! profile-only/rank-1 Surface; the channel dimension is MAX(n_Channels,1))
+    NF90_Status = NF90_GET_ATT( FileId,NF90_GLOBAL,SFC_NCHANNELS_GATTNAME,l )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error reading global attribute '//SFC_NCHANNELS_GATTNAME//' - '// &
+            TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Inquire_Cleanup(); RETURN
     END IF
 
     ! Close the file
@@ -2784,8 +2785,8 @@ CONTAINS
     ! ...Close the file if any error from here on
     Close_File = .TRUE.
 
-    ! Define the dimensions
-    NF90_Status = NF90_DEF_DIM( FileID,SFC_CHANNEL_DIMNAME,n_Channels,n_Channels_DimID )
+    ! Define the dimensions (channel dim is MAX(n_Channels,1); see GATT below)
+    NF90_Status = NF90_DEF_DIM( FileID,SFC_CHANNEL_DIMNAME,MAX(n_Channels,1),n_Channels_DimID )
     IF ( NF90_Status /= NF90_NOERR ) THEN
       msg = 'Error defining '//SFC_CHANNEL_DIMNAME//' dimension in '//&
             TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
@@ -2800,6 +2801,14 @@ CONTAINS
     NF90_Status = NF90_DEF_DIM( FileID,SFC_FIELD_DIMNAME,N_SURFACE_FIELDS,n_Fields_DimID )
     IF ( NF90_Status /= NF90_NOERR ) THEN
       msg = 'Error defining '//SFC_FIELD_DIMNAME//' dimension in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! Write the true n_Channels (0 for a profile-only/rank-1 Surface)
+    NF90_Status = NF90_PUT_ATT( FileId,NF90_GLOBAL,SFC_NCHANNELS_GATTNAME,n_Channels )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error setting '//SFC_NCHANNELS_GATTNAME//' attribute in '//&
             TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Create_Cleanup(); RETURN
     END IF
@@ -2853,13 +2862,15 @@ CONTAINS
 !------------------------------------------------------------------------------
 
   FUNCTION Write_Surface_Rank2_NetCDF( &
-    Filename, &  ! Input
-    Surface , &  ! Input
-    noisy   ) &  ! Input
+    Filename         , &  ! Input
+    Surface          , &  ! Input
+    n_Channels_stored, &  ! Input (true n_Channels; 0 for profile-only rank-1)
+    noisy            ) &  ! Input
   RESULT( err_stat )
     ! Arguments
     CHARACTER(*),            INTENT(IN) :: Filename
     TYPE(CRTM_Surface_type), INTENT(IN) :: Surface(:,:)  ! L x M
+    INTEGER,                 INTENT(IN) :: n_Channels_stored
     LOGICAL,                 INTENT(IN) :: noisy
     ! Function result
     INTEGER :: err_stat
@@ -2929,8 +2940,9 @@ CONTAINS
       END DO
     END DO
 
-    ! Create the output file (defines dims + variable)
-    err_stat = CreateFile_Surface_netCDF( Filename, n_Channels, n_Profiles, FileId )
+    ! Create the output file (defines dims + variable). The stored n_Channels
+    ! is the true value (0 for rank-1); the data array uses SIZE = MAX(.,1).
+    err_stat = CreateFile_Surface_netCDF( Filename, n_Channels_stored, n_Profiles, FileId )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error creating output file '//TRIM(Filename)
       CALL Write_Cleanup(); RETURN
@@ -3014,7 +3026,7 @@ CONTAINS
     CHARACTER(ML) :: msg
     LOGICAL :: Close_File
     INTEGER :: NF90_Status, FileId, VarId
-    INTEGER :: l, m, n_File_Channels, n_File_Profiles, alloc_stat
+    INTEGER :: l, m, n_File_Channels, n_File_Profiles, n_Buf_Channels, alloc_stat
     REAL(fp), ALLOCATABLE :: Surface_Data(:,:,:)
 
     ! Set up
@@ -3026,7 +3038,8 @@ CONTAINS
       CALL Read_Cleanup(); RETURN
     END IF
 
-    ! Inquire the file for its dimensions
+    ! Inquire the file for its dimensions. n_File_Channels is the true value
+    ! (0 for a profile-only/rank-1 file); the stored array has MAX(.,1) channels.
     err_stat = CRTM_Surface_InquireFile_NetCDF( Filename, &
                  n_Channels = n_File_Channels, &
                  n_Profiles = n_File_Profiles  )
@@ -3034,15 +3047,11 @@ CONTAINS
       msg = 'Error obtaining Surface dimensions from '//TRIM(Filename)
       CALL Read_Cleanup(); RETURN
     END IF
-    IF ( n_File_Channels < 1 ) THEN
-      msg = 'File '//TRIM(Filename)//' has no channel dimension (profile-only); '//&
-            'a rank-2 read requires one.'
-      CALL Read_Cleanup(); RETURN
-    END IF
+    n_Buf_Channels = MAX( n_File_Channels, 1 )
 
     ! Allocate the return structure and the read buffer
-    ALLOCATE( Surface( n_File_Channels, n_File_Profiles ), &
-              Surface_Data( n_File_Channels, n_File_Profiles, N_SURFACE_FIELDS ), &
+    ALLOCATE( Surface( n_Buf_Channels, n_File_Profiles ), &
+              Surface_Data( n_Buf_Channels, n_File_Profiles, N_SURFACE_FIELDS ), &
               STAT = alloc_stat )
     IF ( alloc_stat /= 0 ) THEN
       msg = 'Error allocating Surface/Surface_Data arrays'
@@ -3082,7 +3091,7 @@ CONTAINS
 
     ! Unpack into the return structure (INTEGER fields recovered with NINT)
     DO m = 1, n_File_Profiles
-      DO l = 1, n_File_Channels
+      DO l = 1, n_Buf_Channels
         Surface(l,m)%Land_Coverage         = Surface_Data(l,m,IDX_LAND_COVERAGE)
         Surface(l,m)%Water_Coverage        = Surface_Data(l,m,IDX_WATER_COVERAGE)
         Surface(l,m)%Snow_Coverage         = Surface_Data(l,m,IDX_SNOW_COVERAGE)

@@ -454,6 +454,9 @@ MODULE CRTM_Atmosphere_Define
   CHARACTER(*), PARAMETER :: ATM_NABSORBERS_GATTNAME = 'n_Absorbers'
   CHARACTER(*), PARAMETER :: ATM_NCLOUDS_GATTNAME    = 'n_Clouds'
   CHARACTER(*), PARAMETER :: ATM_NAEROSOLS_GATTNAME  = 'n_Aerosols'
+  ! ...True n_Channels (0 for a profile-only/rank-1 Atmosphere). The channel
+  !    dimension is MAX(n_Channels,1) so n_Channels==0 is representable.
+  CHARACTER(*), PARAMETER :: ATM_NCHANNELS_GATTNAME  = 'n_Channels'
   ! ...Variable name
   CHARACTER(*), PARAMETER :: ATM_DATA_VARNAME = 'Atmosphere_Data'
   ! ...netCDF storage type for REAL(fp) data (fp is double; see Type_Kinds)
@@ -1730,6 +1733,8 @@ CONTAINS
     INTEGER :: fid
     INTEGER :: n_input_channels
     INTEGER :: m, n_input_profiles
+    INTEGER :: nch, nprof
+    TYPE(CRTM_Atmosphere_type), ALLOCATABLE :: tmp2(:,:)
 
 
     ! Set up
@@ -1739,16 +1744,18 @@ CONTAINS
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
     ! ...Override Quiet settings if debug set.
     IF ( PRESENT(Debug) ) noisy = Debug
-    ! ...Profile-only (rank-1) netCDF I/O is not implemented. It is unused by
-    !    the ctest baselines (which are all rank-2, n_Channels x n_Profiles).
-    !    The NetCDF argument is accepted for generic-interface symmetry only.
+    ! ...Profile-only (rank-1) netCDF: read the n_Channels==0 file via the rank-2
+    !    reader (returns a 1 x M array) and collapse the channel axis.
     binary = .TRUE.
     IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
     IF ( .NOT. binary ) THEN
-      msg = 'Profile-only (rank-1) Atmosphere netCDF read is not implemented; '//&
-            'use the rank-2 (n_Channels x n_Profiles) interface or binary format.'
-      err_stat = FAILURE
-      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      err_stat = Read_Atmosphere_Rank2_NetCDF( Filename, tmp2, noisy, &
+                   n_Channels = nch, n_Profiles = nprof )
+      IF ( err_stat == SUCCESS ) THEN
+        Atmosphere = tmp2(1,:)   ! auto-allocates Atmosphere(M)
+        IF ( PRESENT(n_Channels) ) n_Channels = nch
+        IF ( PRESENT(n_Profiles) ) n_Profiles = nprof
+      END IF
       RETURN
     END IF
 
@@ -2071,16 +2078,13 @@ CONTAINS
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
     ! ...Override Quiet settings if debug set.
     IF ( PRESENT(Debug) ) noisy = Debug
-    ! ...Profile-only (rank-1) netCDF I/O is not implemented. It is unused by
-    !    the ctest baselines (which are all rank-2, n_Channels x n_Profiles).
-    !    The NetCDF argument is accepted for generic-interface symmetry only.
+    ! ...Profile-only (rank-1) netCDF: store as an n_Channels==0 file by reusing
+    !    the rank-2 writer with a 1 x M view (stored n_Channels attribute = 0).
     binary = .TRUE.
     IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
     IF ( .NOT. binary ) THEN
-      msg = 'Profile-only (rank-1) Atmosphere netCDF write is not implemented; '//&
-            'use the rank-2 (n_Channels x n_Profiles) interface or binary format.'
-      err_stat = FAILURE
-      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      err_stat = Write_Atmosphere_Rank2_NetCDF( Filename, &
+                   RESHAPE( Atmosphere, (/ 1, SIZE(Atmosphere) /) ), 0, noisy )
       RETURN
     END IF
 
@@ -2189,7 +2193,7 @@ CONTAINS
     binary = .TRUE.
     IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
     IF ( .NOT. binary ) THEN
-      err_stat = Write_Atmosphere_Rank2_NetCDF( Filename, Atmosphere, noisy )
+      err_stat = Write_Atmosphere_Rank2_NetCDF( Filename, Atmosphere, SIZE(Atmosphere,DIM=1), noisy )
       RETURN
     END IF
 
@@ -2966,19 +2970,15 @@ CONTAINS
     END IF
     Close_File = .TRUE.
 
-    ! Read the dimensions
-    NF90_Status = NF90_INQ_DIMID( FileId,ATM_CHANNEL_DIMNAME,DimId )
+    ! Read the true n_Channels from the global attribute (0 for profile-only;
+    ! the channel dimension is MAX(n_Channels,1))
+    NF90_Status = NF90_GET_ATT( FileId,NF90_GLOBAL,ATM_NCHANNELS_GATTNAME,l )
     IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error inquiring dimension ID for '//ATM_CHANNEL_DIMNAME//' - '// &
+      msg = 'Error reading global attribute '//ATM_NCHANNELS_GATTNAME//' - '// &
             TRIM(NF90_STRERROR( NF90_Status ))
       CALL Inquire_Cleanup(); RETURN
     END IF
-    NF90_Status = NF90_INQUIRE_DIMENSION( FileId,DimId,Len=l )
-    IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error reading dimension value for '//ATM_CHANNEL_DIMNAME//' - '// &
-            TRIM(NF90_STRERROR( NF90_Status ))
-      CALL Inquire_Cleanup(); RETURN
-    END IF
+    ! Read the n_Profiles dimension
     NF90_Status = NF90_INQ_DIMID( FileId,ATM_PROFILE_DIMNAME,DimId )
     IF ( NF90_Status /= NF90_NOERR ) THEN
       msg = 'Error inquiring dimension ID for '//ATM_PROFILE_DIMNAME//' - '// &
@@ -3085,7 +3085,7 @@ CONTAINS
             TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Create_Cleanup(); RETURN
     END IF
-    NF90_Status = NF90_DEF_DIM( FileID,ATM_CHANNEL_DIMNAME,n_Channels,n_Channels_DimID )
+    NF90_Status = NF90_DEF_DIM( FileID,ATM_CHANNEL_DIMNAME,MAX(n_Channels,1),n_Channels_DimID )
     IF ( NF90_Status /= NF90_NOERR ) THEN
       msg = 'Error defining '//ATM_CHANNEL_DIMNAME//' dimension in '//&
             TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
@@ -3099,6 +3099,11 @@ CONTAINS
     END IF
 
     ! Write the element-dimension global attributes
+    NF90_Status = NF90_PUT_ATT( FileId,NF90_GLOBAL,ATM_NCHANNELS_GATTNAME,n_Channels )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error setting '//ATM_NCHANNELS_GATTNAME//' attribute - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
     NF90_Status = NF90_PUT_ATT( FileId,NF90_GLOBAL,ATM_NLAYERS_GATTNAME,n_Layers )
     IF ( NF90_Status /= NF90_NOERR ) THEN
       msg = 'Error setting '//ATM_NLAYERS_GATTNAME//' attribute - '//TRIM(NF90_STRERROR( NF90_Status ))
@@ -3169,13 +3174,15 @@ CONTAINS
 !------------------------------------------------------------------------------
 
   FUNCTION Write_Atmosphere_Rank2_NetCDF( &
-    Filename  , &  ! Input
-    Atmosphere, &  ! Input
-    noisy     ) &  ! Input
+    Filename         , &  ! Input
+    Atmosphere       , &  ! Input
+    n_Channels_stored, &  ! Input (true n_Channels; 0 for profile-only rank-1)
+    noisy            ) &  ! Input
   RESULT( err_stat )
     ! Arguments
     CHARACTER(*),               INTENT(IN) :: Filename
     TYPE(CRTM_Atmosphere_type), INTENT(IN) :: Atmosphere(:,:)  ! L x M
+    INTEGER,                    INTENT(IN) :: n_Channels_stored
     LOGICAL,                    INTENT(IN) :: noisy
     ! Function result
     INTEGER :: err_stat
@@ -3298,7 +3305,7 @@ CONTAINS
     END DO
 
     ! Create the output file (defines dims/attrs + variable)
-    err_stat = CreateFile_Atmosphere_netCDF( Filename, n_Channels, n_Profiles, n_Record, &
+    err_stat = CreateFile_Atmosphere_netCDF( Filename, n_Channels_stored, n_Profiles, n_Record, &
                                              n_Layers, n_Absorbers, n_Clouds, n_Aerosols, &
                                              FileId )
     IF ( err_stat /= SUCCESS ) THEN
@@ -3384,7 +3391,7 @@ CONTAINS
     LOGICAL :: Close_File
     INTEGER :: NF90_Status, FileId, VarId
     INTEGER :: l, m, c, a, j, k, p, alloc_stat
-    INTEGER :: n_File_Channels, n_File_Profiles
+    INTEGER :: n_File_Channels, n_File_Profiles, n_True_Channels
     INTEGER :: n_Layers, n_Absorbers, n_Clouds, n_Aerosols
     INTEGER :: n_Record, n_File_Record
     REAL(fp), ALLOCATABLE :: Atmosphere_Data(:,:,:)
@@ -3407,11 +3414,14 @@ CONTAINS
     END IF
     Close_File = .TRUE.
 
-    ! Read the dimensions and element-dimension global attributes
+    ! Read the dimensions and element-dimension global attributes. The channel
+    ! dimension is MAX(true n_Channels,1) and sizes the read buffer; the true
+    ! n_Channels (0 for a profile-only file) comes from the global attribute.
     CALL Get_Dim( ATM_CHANNEL_DIMNAME, n_File_Channels )
     CALL Get_Dim( ATM_PROFILE_DIMNAME, n_File_Profiles )
     CALL Get_Dim( ATM_RECORD_DIMNAME , n_File_Record   )
     IF ( err_stat /= SUCCESS ) THEN; CALL Read_Cleanup(); RETURN; END IF
+    CALL Get_Att( ATM_NCHANNELS_GATTNAME , n_True_Channels )
     CALL Get_Att( ATM_NLAYERS_GATTNAME   , n_Layers    )
     CALL Get_Att( ATM_NABSORBERS_GATTNAME, n_Absorbers )
     CALL Get_Att( ATM_NCLOUDS_GATTNAME   , n_Clouds    )
@@ -3525,7 +3535,7 @@ CONTAINS
     END DO
 
     ! Set the return values
-    IF ( PRESENT(n_Channels) ) n_Channels = n_File_Channels
+    IF ( PRESENT(n_Channels) ) n_Channels = n_True_Channels
     IF ( PRESENT(n_Profiles) ) n_Profiles = n_File_Profiles
 
     ! Output an info message
