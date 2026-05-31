@@ -120,6 +120,11 @@ MODULE CRTM_RTSolution_Define
   CHARACTER(*), PARAMETER :: WMO_SAT_ID_GATTNAME = 'WMO_Satellite_ID'
   CHARACTER(*), PARAMETER :: WMO_SEN_ID_GATTNAME = 'WMO_Sensor_ID'
   CHARACTER(*), PARAMETER :: RT_ALGRTHM_GATTNAME = 'RT_Algorithm_Name'
+  ! The true n_Layers is stored as a global attribute (distinct from the
+  ! LAYER dimension, which is forced to MAX(n_Layers,1)) so that n_Layers==0
+  ! is representable: NF90_DEF_DIM treats a length of 0 as NF90_UNLIMITED,
+  ! which the reader cannot round-trip. K-matrix RTSolution_K has n_Layers==0.
+  CHARACTER(*), PARAMETER :: NLAYERS_GATTNAME    = 'n_Layers'
 
   ! Dimension names
   CHARACTER(*), PARAMETER :: LAYER_DIMNAME    = 'n_Layers'
@@ -884,6 +889,7 @@ CONTAINS
     INTEGER :: io_stat
     INTEGER :: fid
     LOGICAL :: binary
+    INTEGER :: l_Profiles, l_Layers, l_Channels, l_Stokes
 
     ! Set up
     err_stat = SUCCESS
@@ -896,27 +902,31 @@ CONTAINS
     binary = .True.
     if ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
 
+    ! Inquire via local (non-optional) variables; the netCDF worker's
+    ! dimension arguments are NOT optional, so passing an absent optional
+    ! directly would associate it with a null pointer and segfault.
+    l_Profiles = 0; l_Layers = 0; l_Channels = 0; l_Stokes = 0
     IF (binary) THEN
       err_stat = CRTM_RTSolution_InquireFile_Binary(Filename   , &
-                                                    n_Channels , &
-                                                    n_Profiles )
+                                                    l_Channels , &
+                                                    l_Profiles )
 
     ELSE
       err_stat = CRTM_RTSolution_InquireFile_NetCDF(Filename   , &
-                                                    n_Profiles , &
-                                                    n_Layers   , &
-                                                    n_Channels , &
-                                                    n_Stokes   )
+                                                    l_Profiles , &
+                                                    l_Layers   , &
+                                                    l_Channels , &
+                                                    l_Stokes   )
     END IF
     IF ( err_stat /= SUCCESS ) THEN
       WRITE( msg,'("Error reading RTSolution into:  ",a)' ) TRIM(Filename)
       RETURN
     END IF
 
-    IF ( PRESENT(n_Profiles) ) n_Profiles = n_Profiles
-    IF ( PRESENT(n_Layers )  ) n_Layers   = n_Layers
-    IF ( PRESENT(n_Channels) ) n_Channels = n_Channels
-    IF ( PRESENT(n_Stokes)   ) n_Stokes   = n_Stokes
+    IF ( PRESENT(n_Profiles) ) n_Profiles = l_Profiles
+    IF ( PRESENT(n_Layers )  ) n_Layers   = l_Layers
+    IF ( PRESENT(n_Channels) ) n_Channels = l_Channels
+    IF ( PRESENT(n_Stokes)   ) n_Stokes   = l_Stokes
 
   CONTAINS
 
@@ -1157,16 +1167,11 @@ CONTAINS
             TRIM(NF90_STRERROR( NF90_Status ))
       CALL Inquire_CleanUp(); RETURN
     END IF
-    ! ...n_Layers dimension
-    NF90_Status = NF90_INQ_DIMID( FileId,LAYER_DIMNAME,DimId )
+    ! ...n_Layers (true value, from the global attribute; the LAYER dimension
+    !    is MAX(n_Layers,1) and so cannot be used to recover n_Layers==0)
+    NF90_Status = NF90_GET_ATT( FileId,NF90_GLOBAL,NLAYERS_GATTNAME,n_Layers )
     IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error inquiring dimension ID for '//LAYER_DIMNAME//' - '// &
-            TRIM(NF90_STRERROR( NF90_Status ))
-      CALL Inquire_CleanUp(); RETURN
-    END IF
-    NF90_Status = NF90_INQUIRE_DIMENSION( FileId,DimId,Len=n_Layers )
-    IF ( NF90_Status /= NF90_NOERR ) THEN
-      msg = 'Error reading dimension value for '//LAYER_DIMNAME//' - '// &
+      msg = 'Error reading global attribute '//NLAYERS_GATTNAME//' - '// &
             TRIM(NF90_STRERROR( NF90_Status ))
       CALL Inquire_CleanUp(); RETURN
     END IF
@@ -1676,13 +1681,13 @@ CONTAINS
               Brightness_Temperature( n_Channels, n_Profiles ), &
               Solar_Irradiance( n_Channels, n_Profiles ), &
               Stokes( n_Channels, n_Stokes, n_Profiles ), &
-              Upwelling_Overcast_Radiance( n_Channels, n_Layers, n_Profiles ), &
-              Upwelling_Radiance( n_Channels, n_Layers, n_Profiles ), &
-              Layer_Optical_Depth( n_Channels, n_Layers, n_Profiles ), &
-              Single_Scatter_Albedo( n_Channels, n_Layers, n_Profiles ), &
-              Reflectivity( n_Channels, n_Layers, n_Profiles ), &
-              Reflectivity_Attenuated( n_Channels, n_Layers, n_Profiles ), &
-              Backscat_Coefficient( n_Channels, n_Layers, n_Profiles ), &
+              Upwelling_Overcast_Radiance( n_Channels, MAX(n_Layers,1), n_Profiles ), &
+              Upwelling_Radiance( n_Channels, MAX(n_Layers,1), n_Profiles ), &
+              Layer_Optical_Depth( n_Channels, MAX(n_Layers,1), n_Profiles ), &
+              Single_Scatter_Albedo( n_Channels, MAX(n_Layers,1), n_Profiles ), &
+              Reflectivity( n_Channels, MAX(n_Layers,1), n_Profiles ), &
+              Reflectivity_Attenuated( n_Channels, MAX(n_Layers,1), n_Profiles ), &
+              Backscat_Coefficient( n_Channels, MAX(n_Layers,1), n_Profiles ), &
               STAT = alloc_stat )
     IF ( alloc_stat /= 0 ) THEN
       msg = 'Error allocating RTSolution output arrays'
@@ -2059,7 +2064,9 @@ CONTAINS
       STOP 1
     END IF
     CALL CRTM_RTSolution_Create( RTSolution, n_Layers )
-    IF ( ANY(.NOT. CRTM_RTSolution_Associated(RTSolution)) ) THEN
+    ! n_Layers==0 leaves the (layer) arrays unallocated by design, so only
+    ! require Associated when there are layers to allocate.
+    IF ( n_Layers > 0 .AND. ANY(.NOT. CRTM_RTSolution_Associated(RTSolution)) ) THEN
       msg = 'Error allocating CRTM RTSolution structures'
       CALL Display_Message( ROUTINE_NAME, msg, FAILURE )
       STOP 1
@@ -2106,10 +2113,16 @@ CONTAINS
   CONTAINS
 
     SUBROUTINE Read_Cleanup()
-      CALL CRTM_RTSolution_Destroy( RTSolution )
-      CLOSE( fid,IOSTAT=io_stat,IOMSG=io_msg )
-      IF ( io_stat /= SUCCESS ) &
-        msg = TRIM(msg)//'; Error closing file during error cleanup - '//TRIM(io_msg)
+      ! Close the netCDF file (not the binary unit) and only destroy the output
+      ! array if it was actually allocated -- on an early error it is not, and
+      ! calling an ELEMENTAL Destroy on an unallocated array segfaults.
+      IF ( Close_File ) THEN
+        NF90_Status = NF90_CLOSE( FileId )
+        IF ( NF90_Status /= NF90_NOERR ) &
+          msg = TRIM(msg)//'; Error closing input file during error cleanup - '//&
+                TRIM(NF90_STRERROR( NF90_Status ))
+      END IF
+      IF ( ALLOCATED(RTSolution) ) CALL CRTM_RTSolution_Destroy( RTSolution )
       err_stat = FAILURE
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
     END SUBROUTINE Read_Cleanup
@@ -2530,18 +2543,33 @@ CONTAINS
               Solar_Irradiance( n_Channels, n_Profiles ), &
               Reflectance( n_Channels, n_Profiles ), &
               Stokes( n_Channels, n_Stokes, n_Profiles ), &
-              Upwelling_Overcast_Radiance( n_Channels, n_Layers, n_Profiles ), &
-              Upwelling_Radiance( n_Channels, n_Layers, n_Profiles ), &
-              Layer_Optical_Depth( n_Channels, n_Layers, n_Profiles ), &
-              Single_Scatter_Albedo( n_Channels, n_Layers, n_Profiles ), &
-              Reflectivity( n_Channels, n_Layers, n_Profiles ), &
-              Reflectivity_Attenuated( n_Channels, n_Layers, n_Profiles ), &
-              Backscat_Coefficient( n_Channels, n_Layers, n_Profiles ), &
+              Upwelling_Overcast_Radiance( n_Channels, MAX(n_Layers,1), n_Profiles ), &
+              Upwelling_Radiance( n_Channels, MAX(n_Layers,1), n_Profiles ), &
+              Layer_Optical_Depth( n_Channels, MAX(n_Layers,1), n_Profiles ), &
+              Single_Scatter_Albedo( n_Channels, MAX(n_Layers,1), n_Profiles ), &
+              Reflectivity( n_Channels, MAX(n_Layers,1), n_Profiles ), &
+              Reflectivity_Attenuated( n_Channels, MAX(n_Layers,1), n_Profiles ), &
+              Backscat_Coefficient( n_Channels, MAX(n_Layers,1), n_Profiles ), &
               STAT = alloc_stat )
       IF ( alloc_stat /= 0 ) THEN
         msg = 'Error allocating RTSolution output arrays'
         CALL Display_Message( ROUTINE_NAME, msg, FAILURE )
         STOP
+      END IF
+
+      ! For n_Layers==0 (e.g. K-matrix RTSolution_K) the LAYER dimension is
+      ! stored as 1; that single record is never read back (the reader uses the
+      ! true n_Layers from the global attribute), but initialise the layer
+      ! buffers so a defined value is written. For n_Layers>0 they are fully
+      ! populated by the loop below.
+      IF ( n_Layers == 0 ) THEN
+        Upwelling_Overcast_Radiance = ZERO
+        Upwelling_Radiance          = ZERO
+        Layer_Optical_Depth         = ZERO
+        Single_Scatter_Albedo       = ZERO
+        Reflectivity                = ZERO
+        Reflectivity_Attenuated     = ZERO
+        Backscat_Coefficient        = ZERO
       END IF
 
 
@@ -3815,7 +3843,7 @@ CONTAINS
       CALL Create_Cleanup(); RETURN
     END IF
     ! ...Number of Layers
-    NF90_Status = NF90_DEF_DIM( FileID,LAYER_DIMNAME,n_Layers,n_Layers_DimID )
+    NF90_Status = NF90_DEF_DIM( FileID,LAYER_DIMNAME,MAX(n_Layers,1),n_Layers_DimID )
     IF ( NF90_Status /= NF90_NOERR ) THEN
       msg = 'Error defining '//LAYER_DIMNAME//' dimension in '//&
             TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
@@ -3858,6 +3886,13 @@ CONTAINS
     NF90_Status = NF90_PUT_ATT( FileId, NF90_GLOBAL,TRIM(RT_ALGRTHM_GATTNAME),RT_Algorithm_Name )
     IF ( NF90_Status /= NF90_NOERR ) THEN
       msg = 'Error setting '//RT_ALGRTHM_GATTNAME//' global attribute in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    ! ...True n_Layers (the LAYER dimension is MAX(n_Layers,1); see NLAYERS_GATTNAME)
+    NF90_Status = NF90_PUT_ATT( FileId, NF90_GLOBAL,TRIM(NLAYERS_GATTNAME),n_Layers )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error setting '//NLAYERS_GATTNAME//' global attribute in '//&
             TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Create_Cleanup(); RETURN
     END IF
