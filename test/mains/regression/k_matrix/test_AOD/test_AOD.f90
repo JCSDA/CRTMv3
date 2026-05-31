@@ -259,13 +259,13 @@ PROGRAM test_AOD
   ! 9a. Create the output file if it does not exist
   ! -----------------------------------------------
   ! ...Generate filename
-  atmk_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.bin'
+  atmk_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.nc'
   ! ...Check if the file exists
   IF ( .NOT. File_Exists(atmk_File) ) THEN
     Message = 'Atmosphere_K save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write Atmosphere_K structure to file
-    Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, Quiet=.TRUE. )
+    Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating Atmosphere_K save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -275,7 +275,7 @@ PROGRAM test_AOD
 
   ! 9b. Inquire the saved file
   ! --------------------------
-  Error_Status = CRTM_Atmosphere_InquireFile( atmk_File, &
+  Error_Status = CRTM_Atmosphere_InquireFile( atmk_File, NetCDF=.TRUE., &
                                               n_Channels = n_l, &
                                               n_Profiles = n_m )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -294,7 +294,7 @@ PROGRAM test_AOD
 
   ! 9d. Read the saved data
   ! -----------------------
-  Error_Status = CRTM_Atmosphere_ReadFile( atmk_File, atm_k, Quiet=.TRUE. )
+  Error_Status = CRTM_Atmosphere_ReadFile( atmk_File, atm_k, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading Atmosphere_K save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -310,8 +310,8 @@ PROGRAM test_AOD
     Message = 'Atmosphere_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     ! Write the current Atmosphere_K results to file
-    atmk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.bin'
-    Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, Quiet=.TRUE. )
+    atmk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.nc'
+    Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary Atmosphere_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )

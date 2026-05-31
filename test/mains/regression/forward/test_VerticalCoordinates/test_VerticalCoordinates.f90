@@ -266,9 +266,9 @@ PROGRAM test_VerticalCoordinates
   ! 8a. Create the output file if necessary
   ! ---------------------------------------
   ! ...Generate filenames
-  rts_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.bin'
-  rts_NAM_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.RTSolution.bin'
-  rts_GFS_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.RTSolution.bin'
+  rts_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.nc'
+  rts_NAM_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.RTSolution.nc'
+  rts_GFS_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.RTSolution.nc'
   ! ------------------------------------
   ! Write CRTM forward output to file if
   ! result files do not already exist
@@ -277,7 +277,7 @@ PROGRAM test_VerticalCoordinates
   IF ( .NOT. File_Exists(rts_File) ) THEN
     Message = 'RTSolution save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
-    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, Quiet=.TRUE. )
+    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating RTSolution save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -288,7 +288,7 @@ PROGRAM test_VerticalCoordinates
   IF ( .NOT. File_Exists(rts_NAM_File) ) THEN
     Message = 'regional RTSolution save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
-    Error_Status = CRTM_RTSolution_WriteFile( rts_NAM_File, RTSolution_NAM, Quiet=.TRUE. )
+    Error_Status = CRTM_RTSolution_WriteFile( rts_NAM_File, RTSolution_NAM, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating regional RTSolution save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -299,7 +299,7 @@ PROGRAM test_VerticalCoordinates
   IF ( .NOT. File_Exists(rts_GFS_File) ) THEN
     Message = 'global RTSolution save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
-    Error_Status = CRTM_RTSolution_WriteFile( rts_GFS_File, RTSolution_GFS, Quiet=.TRUE. )
+    Error_Status = CRTM_RTSolution_WriteFile( rts_GFS_File, RTSolution_GFS, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating global RTSolution save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -310,7 +310,7 @@ PROGRAM test_VerticalCoordinates
   ! 8b. Inquire the saved file
   ! --------------------------
   ! CRTM build atmosphere
-  Error_Status = CRTM_RTSolution_InquireFile( rts_File, &
+  Error_Status = CRTM_RTSolution_InquireFile( rts_File, NetCDF=.TRUE., &
                                               n_Channels = n_l, &
                                               n_Profiles = n_m )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -319,7 +319,7 @@ PROGRAM test_VerticalCoordinates
     STOP 1
   END IF
   ! regional atmosphere
-  Error_Status = CRTM_RTSolution_InquireFile( rts_NAM_File, &
+  Error_Status = CRTM_RTSolution_InquireFile( rts_NAM_File, NetCDF=.TRUE., &
                                               n_Channels = n_NAM_l, &
                                               n_Profiles = n_NAM_m )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -328,7 +328,7 @@ PROGRAM test_VerticalCoordinates
     STOP 1
   END IF
   ! global atmosphere
-  Error_Status = CRTM_RTSolution_InquireFile( rts_GFS_File, &
+  Error_Status = CRTM_RTSolution_InquireFile( rts_GFS_File, NetCDF=.TRUE., &
                                               n_Channels = n_GFS_l, &
                                               n_Profiles = n_GFS_m )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -361,21 +361,21 @@ PROGRAM test_VerticalCoordinates
   ! 8e. Read the saved data
   ! -----------------------
   ! CRTM build atmosphere
-  Error_Status = CRTM_RTSolution_ReadFile( rts_File, rts, Quiet=.TRUE. )
+  Error_Status = CRTM_RTSolution_ReadFile( rts_File, rts, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading RTSolution save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
   ! regional atmosphere
-  Error_Status = CRTM_RTSolution_ReadFile( rts_NAM_File, rts_NAM, Quiet=.TRUE. )
+  Error_Status = CRTM_RTSolution_ReadFile( rts_NAM_File, rts_NAM, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading regional RTSolution save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
   ! global atmosphere
-  Error_Status = CRTM_RTSolution_ReadFile( rts_GFS_File, rts_GFS, Quiet=.TRUE. )
+  Error_Status = CRTM_RTSolution_ReadFile( rts_GFS_File, rts_GFS, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading global RTSolution save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -393,8 +393,8 @@ PROGRAM test_VerticalCoordinates
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     CALL Report_RTSolution_Diff( actual=RTSolution, expected=rts, label=PROGRAM_NAME )
     ! Write the current RTSolution results to file
-    rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.bin'
-    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, Quiet=.TRUE. )
+    rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.nc'
+    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary RTSolution save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -411,8 +411,8 @@ PROGRAM test_VerticalCoordinates
     CALL Report_RTSolution_Diff( actual=RTSolution_NAM, expected=rts_NAM, &
                                  label=TRIM(PROGRAM_NAME)//' (regional)' )
     ! Write the current RTSolution results to file
-    rts_NAM_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.RTSolution.bin'
-    Error_Status = CRTM_RTSolution_WriteFile( rts_NAM_File, RTSolution_NAM, Quiet=.TRUE. )
+    rts_NAM_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.RTSolution.nc'
+    Error_Status = CRTM_RTSolution_WriteFile( rts_NAM_File, RTSolution_NAM, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary regional RTSolution save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -429,8 +429,8 @@ PROGRAM test_VerticalCoordinates
     CALL Report_RTSolution_Diff( actual=RTSolution_GFS, expected=rts_GFS, &
                                  label=TRIM(PROGRAM_NAME)//' (global)' )
     ! Write the current RTSolution results to file
-    rts_GFS_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.RTSolution.bin'
-    Error_Status = CRTM_RTSolution_WriteFile( rts_GFS_File, RTSolution_GFS, Quiet=.TRUE. )
+    rts_GFS_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.RTSolution.nc'
+    Error_Status = CRTM_RTSolution_WriteFile( rts_GFS_File, RTSolution_GFS, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary global RTSolution save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )

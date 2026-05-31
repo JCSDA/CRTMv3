@@ -250,13 +250,13 @@ PROGRAM test_Simple
   ! 9a. Create the output file if it does not exist
   ! -----------------------------------------------
   ! ...Generate a filename
-  rts_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution_TL.bin'
+  rts_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution_TL.nc'
   ! ...Check if the file exists
   IF ( .NOT. File_Exists(rts_File) ) THEN
     Message = 'RTSolution_TL save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write RTSolution_TL structure to file
-    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution_TL, Quiet=.TRUE. )
+    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution_TL, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating RTSolution_TL save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -266,7 +266,7 @@ PROGRAM test_Simple
 
   ! 9b. Inquire the saved file
   ! --------------------------
-  Error_Status = CRTM_RTSolution_InquireFile( rts_File, &
+  Error_Status = CRTM_RTSolution_InquireFile( rts_File, NetCDF=.TRUE., &
                                               n_Channels = n_l, &
                                               n_Profiles = n_m )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -294,7 +294,7 @@ PROGRAM test_Simple
 
   ! 9e. Read the saved data
   ! -----------------------
-  Error_Status = CRTM_RTSolution_ReadFile( rts_File, rts_TL, Quiet=.TRUE. )
+  Error_Status = CRTM_RTSolution_ReadFile( rts_File, rts_TL, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading RTSolution_TL save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -312,8 +312,8 @@ PROGRAM test_Simple
     CALL Report_RTSolution_Diff( actual=RTSolution_TL, expected=rts_TL, &
                                  label=TRIM(PROGRAM_NAME)//' (tangent-linear)' )
     ! Write the current RTSolution results to file
-    rts_File = TRIM(Sensor_Id)//'.RTSolution_TL.bin'
-    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution_TL, Quiet=.TRUE. )
+    rts_File = TRIM(Sensor_Id)//'.RTSolution_TL.nc'
+    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution_TL, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary RTSolution_TL save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )

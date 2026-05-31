@@ -291,13 +291,13 @@ PROGRAM test_Aerosol_Bypass_k_matrix
   ! ------------------------------------------------
   ! 9a.1 Atmosphere file
   ! ...Generate filename
-  atmk_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.bin'
+  atmk_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.nc'
   ! ...Check if the file exists
   IF ( .NOT. File_Exists(atmk_File) ) THEN
     Message = 'Atmosphere_K save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write Atmosphere_K structure to file
-    Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, Quiet=.TRUE. )
+    Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating Atmosphere_K save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -306,13 +306,13 @@ PROGRAM test_Aerosol_Bypass_k_matrix
   END IF
   ! 9a.2 Surface file
   ! ...Generate filename
-  sfck_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.bin'
+  sfck_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.nc'
   ! ...Check if the file exists
   IF ( .NOT. File_Exists(sfck_File) ) THEN
     Message = 'Surface_K save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write Surface_K structure to file
-    Error_Status = CRTM_Surface_WriteFile( sfck_file, Surface_K, Quiet=.TRUE. )
+    Error_Status = CRTM_Surface_WriteFile( sfck_file, Surface_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating Surface_K save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -330,7 +330,7 @@ PROGRAM test_Aerosol_Bypass_k_matrix
   ! 9b. Inquire the saved files
   ! ---------------------------
   ! 9b.1 Atmosphere file
-  Error_Status = CRTM_Atmosphere_InquireFile( atmk_File, &
+  Error_Status = CRTM_Atmosphere_InquireFile( atmk_File, NetCDF=.TRUE., &
                                               n_Channels = n_la, &
                                               n_Profiles = n_ma )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -339,7 +339,7 @@ PROGRAM test_Aerosol_Bypass_k_matrix
     STOP 1
   END IF
   ! 9b.2 Surface file
-  Error_Status = CRTM_Surface_InquireFile( sfck_File, &
+  Error_Status = CRTM_Surface_InquireFile( sfck_File, NetCDF=.TRUE., &
                                            n_Channels = n_ls, &
                                            n_Profiles = n_ms )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -360,14 +360,14 @@ PROGRAM test_Aerosol_Bypass_k_matrix
   ! 9d. Read the saved data
   ! -----------------------
   ! 9d.1 Atmosphere file
-  Error_Status = CRTM_Atmosphere_ReadFile( atmk_File, atm_k, Quiet=.TRUE. )
+  Error_Status = CRTM_Atmosphere_ReadFile( atmk_File, atm_k, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading Atmosphere_K save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
   ! 9d.2 Surface file
-  Error_Status = CRTM_Surface_ReadFile( sfck_File, sfc_k, Quiet=.TRUE. )
+  Error_Status = CRTM_Surface_ReadFile( sfck_File, sfc_k, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading Surface_K save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -384,8 +384,8 @@ PROGRAM test_Aerosol_Bypass_k_matrix
   !   Message = 'Atmosphere_K Jacobians are different!'
   !   CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
   !   ! Write the current Atmosphere_K results to file
-  !   atmk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.bin'
-  !   Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, Quiet=.TRUE. )
+  !   atmk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.nc'
+  !   Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, NetCDF=.TRUE., Quiet=.TRUE. )
   !   IF ( Error_Status /= SUCCESS ) THEN
   !     Message = 'Error creating temporary Atmosphere_K save file for failed comparison'
   !     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -399,8 +399,8 @@ PROGRAM test_Aerosol_Bypass_k_matrix
     Message = 'Surface_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     ! Write the current Surface_K results to file
-    sfck_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.bin'
-    Error_Status = CRTM_Surface_WriteFile( sfck_file, Surface_K, Quiet=.TRUE. )
+    sfck_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.nc'
+    Error_Status = CRTM_Surface_WriteFile( sfck_file, Surface_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary Surface_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
