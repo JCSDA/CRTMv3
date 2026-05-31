@@ -525,6 +525,18 @@ else()
 endif()
 unset(_TMS_SPC)
 
+# A full forward run for TROPICS (used by the >=200 GHz PARMIO delta sweep
+# below) additionally needs the TMS TauCoeff, which CONST_MIXED does not.
+set(_TMS_TAU "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/TauCoeff/ODPS/netCDF/tms_tropics-01.TauCoeff.nc")
+set(_TMS_SPC "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/SpcCoeff/netCDF/tms_tropics-01.SpcCoeff.nc")
+if(EXISTS "${_TMS_SPC}" AND EXISTS "${_TMS_TAU}")
+  set(TMS_TAU_PRESENT TRUE)
+else()
+  set(TMS_TAU_PRESENT FALSE)
+endif()
+unset(_TMS_TAU)
+unset(_TMS_SPC)
+
 # Check for canonical PARMIO LUT and AWS coefficients inside the staged
 # test_data tree. Tests are registered only when the files are present at
 # their canonical paths; nothing outside build/test_data/** is referenced.
@@ -597,6 +609,22 @@ if(PARMIO_LUT_PRESENT)
                      "${_PARMIO_LUT_TESTINPUT}"
                      "mwr_aws")
     set_tests_properties(test_PARMIO_FASTEM_DeltaSweep_AWS
+                         PROPERTIES
+                           WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+  endif()
+
+  # Same target, TROPICS sensor invocation. Its 204.8 GHz channel is the
+  # stronger PARMIO witness: unlike the AWS 325 GHz channels (which sit on the
+  # H2O line and are surface-blind over moist atmospheres, so PARMIO-vs-FASTEM
+  # delta_tb ~ 0.1 K), 204.8 GHz is window-like and PARMIO moves brightness
+  # temperature by ~1-3 K -- a clear, regression-detectable surface signal.
+  if(TMS_TAU_PRESENT)
+    add_test(NAME test_PARMIO_FASTEM_DeltaSweep_TMS
+             COMMAND $<TARGET_FILE:test_PARMIO_FASTEM_DeltaSweep>
+                     "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
+                     "${_PARMIO_LUT_TESTINPUT}"
+                     "tms_tropics-01")
+    set_tests_properties(test_PARMIO_FASTEM_DeltaSweep_TMS
                          PROPERTIES
                            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
   endif()
@@ -860,6 +888,11 @@ endif()
 if(TMS_COEFFS_PRESENT)
   list(APPEND crtm_test_input
        SpcCoeff/netCDF/tms_tropics-01.SpcCoeff.nc)
+endif()
+# TMS TauCoeff for the >=200 GHz PARMIO delta sweep (full forward run).
+if(TMS_TAU_PRESENT)
+  list(APPEND crtm_test_input
+       TauCoeff/ODPS/netCDF/tms_tropics-01.TauCoeff.nc)
 endif()
 
 # Symlink all CRTM files
