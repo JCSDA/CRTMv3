@@ -34,6 +34,7 @@ MODULE CRTM_Atmosphere_Define
   ! Intrinsic modules
   USE ISO_Fortran_Env      , ONLY: OUTPUT_UNIT
   ! Module use
+  USE netcdf
   USE Type_Kinds           , ONLY: fp
   USE Message_Handler      , ONLY: SUCCESS, FAILURE, WARNING, INFORMATION, Display_Message
   USE Compare_Float_Numbers, ONLY: DEFAULT_N_SIGFIG, &
@@ -425,6 +426,38 @@ MODULE CRTM_Atmosphere_Define
   INTEGER, PARAMETER :: ML = 256
   ! File status on close after write error
   CHARACTER(*), PARAMETER :: WRITE_ERROR_STATUS = 'DELETE'
+
+  ! ---------------------------------------------------------------------------
+  ! netCDF I/O schema (used by the *_NetCDF file workers)
+  !
+  ! Every (channel,profile) Atmosphere element is flattened into a fixed-length
+  ! REAL(fp) record and stored in a single rank-3 variable
+  ! Atmosphere_Data(n_Record, n_Channels, n_Profiles). The per-element layout
+  ! (see Pack/Unpack in the workers) mirrors the binary Write_Record field set
+  ! but additionally stores every cloud/aerosol data array (the binary cloud
+  ! format drops Water_Density and the aerosol format is scheme-dependent); a
+  ! superset is safe because these baselines are written and read by the same
+  ! build. INTEGER fields are stored as REAL(fp) and recovered with NINT.
+  !
+  ! The element dimensions (n_Layers, n_Absorbers, n_Clouds, n_Aerosols) are
+  ! uniform across the rank-2 array (the K-matrix drivers allocate it with a
+  ! single CRTM_Atmosphere_Create) and are stored as global attributes rather
+  ! than dimensions so that n_Clouds/n_Aerosols == 0 is representable (netCDF
+  ! forbids zero-length fixed dimensions).
+  ! ---------------------------------------------------------------------------
+  ! ...Dimension names
+  CHARACTER(*), PARAMETER :: ATM_CHANNEL_DIMNAME = 'n_Channels'
+  CHARACTER(*), PARAMETER :: ATM_PROFILE_DIMNAME = 'n_Profiles'
+  CHARACTER(*), PARAMETER :: ATM_RECORD_DIMNAME  = 'n_Record'
+  ! ...Global attribute names (element dimensions, uniform across the array)
+  CHARACTER(*), PARAMETER :: ATM_NLAYERS_GATTNAME    = 'n_Layers'
+  CHARACTER(*), PARAMETER :: ATM_NABSORBERS_GATTNAME = 'n_Absorbers'
+  CHARACTER(*), PARAMETER :: ATM_NCLOUDS_GATTNAME    = 'n_Clouds'
+  CHARACTER(*), PARAMETER :: ATM_NAEROSOLS_GATTNAME  = 'n_Aerosols'
+  ! ...Variable name
+  CHARACTER(*), PARAMETER :: ATM_DATA_VARNAME = 'Atmosphere_Data'
+  ! ...netCDF storage type for REAL(fp) data (fp is double; see Type_Kinds)
+  INTEGER, PARAMETER :: ATM_FLOAT_TYPE = NF90_DOUBLE
 
   ! -------------------------------
   ! Atmosphere structure definition
@@ -1508,12 +1541,14 @@ CONTAINS
   FUNCTION CRTM_Atmosphere_InquireFile( &
     Filename   , &  ! Input
     n_Channels , &  ! Optional output
-    n_Profiles ) &  ! Optional output
+    n_Profiles , &  ! Optional output
+    NetCDF     ) &  ! Optional input
   RESULT( err_stat )
     ! Arguments
     CHARACTER(*),           INTENT(IN)  :: Filename
     INTEGER     , OPTIONAL, INTENT(OUT) :: n_Channels
     INTEGER     , OPTIONAL, INTENT(OUT) :: n_Profiles
+    LOGICAL     , OPTIONAL, INTENT(IN)  :: NetCDF
     ! Function result
     INTEGER :: err_stat
     ! Function parameters
@@ -1524,9 +1559,19 @@ CONTAINS
     INTEGER :: io_stat
     INTEGER :: fid
     INTEGER :: l, m
+    LOGICAL :: binary
 
     ! Set up
     err_stat = SUCCESS
+    ! ...Check output format and dispatch to the netCDF reader if requested
+    binary = .TRUE.
+    IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
+    IF ( .NOT. binary ) THEN
+      err_stat = CRTM_Atmosphere_InquireFile_NetCDF( Filename, &
+                   n_Channels = n_Channels, &
+                   n_Profiles = n_Profiles  )
+      RETURN
+    END IF
 
     ! Open the file
     err_stat = Open_Binary_File( Filename, fid )
@@ -1656,6 +1701,7 @@ CONTAINS
   FUNCTION Read_Atmosphere_Rank1( &
     Filename   , &  ! Input
     Atmosphere , &  ! Output
+    NetCDF     , &  ! Optional input
     Quiet      , &  ! Optional input
     n_Channels , &  ! Optional output
     n_Profiles , &  ! Optional output
@@ -1664,6 +1710,7 @@ CONTAINS
     ! Arguments
     CHARACTER(*),                            INTENT(IN)  :: Filename
     TYPE(CRTM_Atmosphere_type), ALLOCATABLE, INTENT(OUT) :: Atmosphere(:)  ! M
+    LOGICAL,          OPTIONAL,              INTENT(IN)  :: NetCDF
     LOGICAL,          OPTIONAL,              INTENT(IN)  :: Quiet
     INTEGER,          OPTIONAL,              INTENT(OUT) :: n_Channels
     INTEGER,          OPTIONAL,              INTENT(OUT) :: n_Profiles
@@ -1679,6 +1726,7 @@ CONTAINS
     INTEGER :: io_stat
     INTEGER :: alloc_stat
     LOGICAL :: noisy
+    LOGICAL :: binary
     INTEGER :: fid
     INTEGER :: n_input_channels
     INTEGER :: m, n_input_profiles
@@ -1691,6 +1739,18 @@ CONTAINS
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
     ! ...Override Quiet settings if debug set.
     IF ( PRESENT(Debug) ) noisy = Debug
+    ! ...Profile-only (rank-1) netCDF I/O is not implemented. It is unused by
+    !    the ctest baselines (which are all rank-2, n_Channels x n_Profiles).
+    !    The NetCDF argument is accepted for generic-interface symmetry only.
+    binary = .TRUE.
+    IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
+    IF ( .NOT. binary ) THEN
+      msg = 'Profile-only (rank-1) Atmosphere netCDF read is not implemented; '//&
+            'use the rank-2 (n_Channels x n_Profiles) interface or binary format.'
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
 
 
     ! Open the file
@@ -1778,6 +1838,7 @@ CONTAINS
   FUNCTION Read_Atmosphere_Rank2( &
     Filename   , &  ! Input
     Atmosphere , &  ! Output
+    NetCDF     , &  ! Optional input
     Quiet      , &  ! Optional input
     n_Channels , &  ! Optional output
     n_Profiles , &  ! Optional output
@@ -1786,6 +1847,7 @@ CONTAINS
     ! Arguments
     CHARACTER(*),                            INTENT(IN)  :: Filename
     TYPE(CRTM_Atmosphere_type), ALLOCATABLE, INTENT(OUT) :: Atmosphere(:,:)  ! L x M
+    LOGICAL,          OPTIONAL,              INTENT(IN)  :: NetCDF
     LOGICAL,          OPTIONAL,              INTENT(IN)  :: Quiet
     INTEGER,          OPTIONAL,              INTENT(OUT) :: n_Channels
     INTEGER,          OPTIONAL,              INTENT(OUT) :: n_Profiles
@@ -1801,6 +1863,7 @@ CONTAINS
     INTEGER :: io_stat
     INTEGER :: alloc_stat
     LOGICAL :: noisy
+    LOGICAL :: binary
     INTEGER :: fid
     INTEGER :: l, n_input_channels
     INTEGER :: m, n_input_profiles
@@ -1813,6 +1876,15 @@ CONTAINS
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
     ! ...Override Quiet settings if debug set.
     IF ( PRESENT(Debug) ) noisy = Debug
+    ! ...Check output format and dispatch to the netCDF reader if requested
+    binary = .TRUE.
+    IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
+    IF ( .NOT. binary ) THEN
+      err_stat = Read_Atmosphere_Rank2_NetCDF( Filename, Atmosphere, noisy, &
+                   n_Channels = n_Channels, &
+                   n_Profiles = n_Profiles  )
+      RETURN
+    END IF
 
 
     ! Open the file
@@ -1969,12 +2041,14 @@ CONTAINS
   FUNCTION Write_Atmosphere_Rank1( &
     Filename   , &  ! Input
     Atmosphere , &  ! Input
+    NetCDF     , &  ! Optional input
     Quiet      , &  ! Optional input
     Debug      ) &  ! Optional input (Debug output control)
   RESULT( err_stat )
     ! Arguments
     CHARACTER(*),               INTENT(IN) :: Filename
     TYPE(CRTM_Atmosphere_type), INTENT(IN) :: Atmosphere(:)  ! M
+    LOGICAL,          OPTIONAL, INTENT(IN) :: NetCDF
     LOGICAL,          OPTIONAL, INTENT(IN) :: Quiet
     LOGICAL,          OPTIONAL, INTENT(IN) :: Debug
     ! Function result
@@ -1986,6 +2060,7 @@ CONTAINS
     CHARACTER(ML) :: io_msg
     INTEGER :: io_stat
     LOGICAL :: noisy
+    LOGICAL :: binary
     INTEGER :: fid
     INTEGER :: m, n_output_profiles
 
@@ -1996,6 +2071,18 @@ CONTAINS
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
     ! ...Override Quiet settings if debug set.
     IF ( PRESENT(Debug) ) noisy = Debug
+    ! ...Profile-only (rank-1) netCDF I/O is not implemented. It is unused by
+    !    the ctest baselines (which are all rank-2, n_Channels x n_Profiles).
+    !    The NetCDF argument is accepted for generic-interface symmetry only.
+    binary = .TRUE.
+    IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
+    IF ( .NOT. binary ) THEN
+      msg = 'Profile-only (rank-1) Atmosphere netCDF write is not implemented; '//&
+            'use the rank-2 (n_Channels x n_Profiles) interface or binary format.'
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
 
 
     ! Any invalid profiles?
@@ -2067,12 +2154,14 @@ CONTAINS
   FUNCTION Write_Atmosphere_Rank2( &
     Filename   , &  ! Input
     Atmosphere , &  ! Input
+    NetCDF     , &  ! Optional input
     Quiet      , &  ! Optional input
     Debug      ) &  ! Optional input (Debug output control)
   RESULT( err_stat )
     ! Arguments
     CHARACTER(*),               INTENT(IN)  :: Filename
     TYPE(CRTM_Atmosphere_type), INTENT(IN)  :: Atmosphere(:,:)  ! L x M
+    LOGICAL,          OPTIONAL, INTENT(IN)  :: NetCDF
     LOGICAL,          OPTIONAL, INTENT(IN)  :: Quiet
     LOGICAL,          OPTIONAL, INTENT(IN)  :: Debug
     ! Function result
@@ -2084,6 +2173,7 @@ CONTAINS
     CHARACTER(ML) :: io_msg
     INTEGER :: io_stat
     LOGICAL :: noisy
+    LOGICAL :: binary
     INTEGER :: fid
     INTEGER :: l, n_output_channels
     INTEGER :: m, n_output_profiles
@@ -2095,6 +2185,13 @@ CONTAINS
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
     ! ...Override Quiet settings if debug set.
     IF ( PRESENT(Debug) ) noisy = Debug
+    ! ...Check output format and dispatch to the netCDF writer if requested
+    binary = .TRUE.
+    IF ( PRESENT(NetCDF) ) binary = .NOT. NetCDF
+    IF ( .NOT. binary ) THEN
+      err_stat = Write_Atmosphere_Rank2_NetCDF( Filename, Atmosphere, noisy )
+      RETURN
+    END IF
 
 
     ! Any invalid profiles?
@@ -2784,5 +2881,703 @@ CONTAINS
      ! END IF
 
     END SUBROUTINE Compute_Relative_Humidity
+
+
+!##############################################################################
+!##############################################################################
+!##                                                                          ##
+!##                       ## netCDF I/O WORKER ROUTINES ##                    ##
+!##                                                                          ##
+!##############################################################################
+!##############################################################################
+
+!------------------------------------------------------------------------------
+!
+! NAME:
+!       Atmosphere_Record_Length
+!
+! PURPOSE:
+!       Returns the packed-record length (number of REAL(fp) slots) for one
+!       Atmosphere element with the given element dimensions. Must match the
+!       Pack/Unpack ordering in the netCDF write/read workers exactly.
+!
+!------------------------------------------------------------------------------
+
+  PURE FUNCTION Atmosphere_Record_Length( n_Layers, n_Absorbers, n_Clouds, n_Aerosols ) &
+  RESULT( rlen )
+    INTEGER, INTENT(IN) :: n_Layers, n_Absorbers, n_Clouds, n_Aerosols
+    INTEGER :: rlen
+    ! Climatology(1) + Absorber_ID(J) + Absorber_Units(J)
+    ! + Level_Pressure(K+1) + Pressure(K) + Temperature(K) + Relative_Humidity(K)
+    ! + Absorber(K*J) + Cloud_Fraction(K)
+    ! + per cloud  : Type + n_Layers + 4 arrays of K
+    ! + per aerosol: Type + n_Layers + 3 arrays of K
+    rlen = 2 + 2*n_Absorbers + 5*n_Layers + n_Layers*n_Absorbers &
+         + n_Clouds  *(2 + 4*n_Layers) &
+         + n_Aerosols*(2 + 3*n_Layers)
+  END FUNCTION Atmosphere_Record_Length
+
+
+!------------------------------------------------------------------------------
+!
+! NAME:
+!       CRTM_Atmosphere_InquireFile_NetCDF
+!
+! PURPOSE:
+!       Function to inquire the n_Channels/n_Profiles dimensions of a netCDF
+!       CRTM Atmosphere file.
+!
+!------------------------------------------------------------------------------
+
+  FUNCTION CRTM_Atmosphere_InquireFile_NetCDF( &
+    Filename   , &  ! Input
+    n_Channels , &  ! Optional output
+    n_Profiles ) &  ! Optional output
+  RESULT( err_stat )
+    ! Arguments
+    CHARACTER(*),           INTENT(IN)  :: Filename
+    INTEGER     , OPTIONAL, INTENT(OUT) :: n_Channels
+    INTEGER     , OPTIONAL, INTENT(OUT) :: n_Profiles
+    ! Function result
+    INTEGER :: err_stat
+    ! Function parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Atmosphere_InquireFile_NetCDF'
+    ! Function variables
+    CHARACTER(ML) :: msg
+    LOGICAL :: Close_File
+    INTEGER :: NF90_Status
+    INTEGER :: FileId, DimId
+    INTEGER :: l, m
+
+    ! Set up
+    err_stat = SUCCESS
+    Close_File = .FALSE.
+    ! ...Check that the file exists
+    IF ( .NOT. File_Exists( TRIM(Filename) ) ) THEN
+      msg = 'File '//TRIM(Filename)//' not found.'
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+
+    ! Open the file
+    NF90_Status = NF90_OPEN( Filename,NF90_NOWRITE,FileId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error opening '//TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+    Close_File = .TRUE.
+
+    ! Read the dimensions
+    NF90_Status = NF90_INQ_DIMID( FileId,ATM_CHANNEL_DIMNAME,DimId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring dimension ID for '//ATM_CHANNEL_DIMNAME//' - '// &
+            TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_INQUIRE_DIMENSION( FileId,DimId,Len=l )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error reading dimension value for '//ATM_CHANNEL_DIMNAME//' - '// &
+            TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_INQ_DIMID( FileId,ATM_PROFILE_DIMNAME,DimId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring dimension ID for '//ATM_PROFILE_DIMNAME//' - '// &
+            TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_INQUIRE_DIMENSION( FileId,DimId,Len=m )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error reading dimension value for '//ATM_PROFILE_DIMNAME//' - '// &
+            TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+
+    ! Close the file
+    NF90_Status = NF90_CLOSE( FileId ); Close_File = .FALSE.
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error closing '//TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+
+    ! Set the return arguments
+    IF ( PRESENT(n_Channels) ) n_Channels = l
+    IF ( PRESENT(n_Profiles) ) n_Profiles = m
+
+  CONTAINS
+
+    SUBROUTINE Inquire_CleanUp()
+      IF ( Close_File ) THEN
+        NF90_Status = NF90_CLOSE( FileId )
+        IF ( NF90_Status /= NF90_NOERR ) &
+          msg = TRIM(msg)//'; Error closing input file during error cleanup - '//&
+                TRIM(NF90_STRERROR( NF90_Status ))
+      END IF
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+    END SUBROUTINE Inquire_CleanUp
+
+  END FUNCTION CRTM_Atmosphere_InquireFile_NetCDF
+
+
+!------------------------------------------------------------------------------
+!
+! NAME:
+!       CreateFile_Atmosphere_netCDF
+!
+! PURPOSE:
+!       Utility function to create a netCDF Atmosphere file: defines the
+!       dimensions, writes the element-dimension global attributes, and defines
+!       the packed Atmosphere_Data variable, leaving the file open (out of
+!       define mode) for the caller to populate.
+!
+!------------------------------------------------------------------------------
+
+  FUNCTION CreateFile_Atmosphere_netCDF( &
+    Filename   , &  ! Input
+    n_Channels , &  ! Input
+    n_Profiles , &  ! Input
+    n_Record   , &  ! Input
+    n_Layers   , &  ! Input
+    n_Absorbers, &  ! Input
+    n_Clouds   , &  ! Input
+    n_Aerosols , &  ! Input
+    FileId     ) &  ! Output
+  RESULT( err_stat )
+    ! Arguments
+    CHARACTER(*), INTENT(IN)  :: Filename
+    INTEGER     , INTENT(IN)  :: n_Channels
+    INTEGER     , INTENT(IN)  :: n_Profiles
+    INTEGER     , INTENT(IN)  :: n_Record
+    INTEGER     , INTENT(IN)  :: n_Layers
+    INTEGER     , INTENT(IN)  :: n_Absorbers
+    INTEGER     , INTENT(IN)  :: n_Clouds
+    INTEGER     , INTENT(IN)  :: n_Aerosols
+    INTEGER     , INTENT(OUT) :: FileId
+    ! Function result
+    INTEGER :: err_stat
+    ! Local parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Atmosphere_WriteFile(netCDF)'
+    ! Local variables
+    CHARACTER(ML) :: msg
+    LOGICAL :: Close_File
+    INTEGER :: NF90_Status
+    INTEGER :: n_Channels_DimID
+    INTEGER :: n_Profiles_DimID
+    INTEGER :: n_Record_DimID
+    INTEGER :: VarID
+
+    ! Setup
+    err_stat = SUCCESS
+    Close_File = .FALSE.
+
+    ! Create the data file
+    NF90_Status = NF90_CREATE( Filename,NF90_CLOBBER,FileId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error creating '//TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Close_File = .TRUE.
+
+    ! Define the dimensions
+    NF90_Status = NF90_DEF_DIM( FileID,ATM_RECORD_DIMNAME,n_Record,n_Record_DimID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//ATM_RECORD_DIMNAME//' dimension in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_DEF_DIM( FileID,ATM_CHANNEL_DIMNAME,n_Channels,n_Channels_DimID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//ATM_CHANNEL_DIMNAME//' dimension in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_DEF_DIM( FileID,ATM_PROFILE_DIMNAME,n_Profiles,n_Profiles_DimID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//ATM_PROFILE_DIMNAME//' dimension in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! Write the element-dimension global attributes
+    NF90_Status = NF90_PUT_ATT( FileId,NF90_GLOBAL,ATM_NLAYERS_GATTNAME,n_Layers )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error setting '//ATM_NLAYERS_GATTNAME//' attribute - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_PUT_ATT( FileId,NF90_GLOBAL,ATM_NABSORBERS_GATTNAME,n_Absorbers )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error setting '//ATM_NABSORBERS_GATTNAME//' attribute - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_PUT_ATT( FileId,NF90_GLOBAL,ATM_NCLOUDS_GATTNAME,n_Clouds )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error setting '//ATM_NCLOUDS_GATTNAME//' attribute - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_PUT_ATT( FileId,NF90_GLOBAL,ATM_NAEROSOLS_GATTNAME,n_Aerosols )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error setting '//ATM_NAEROSOLS_GATTNAME//' attribute - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! Define the packed data variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      ATM_DATA_VARNAME, &
+      ATM_FLOAT_TYPE, &
+      dimIDs=(/n_Record_DimID, n_Channels_DimID, n_Profiles_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//ATM_DATA_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! Take the file out of define mode
+    NF90_Status = NF90_ENDDEF( FileId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error taking file '//TRIM(Filename)// &
+            ' out of define mode - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+  CONTAINS
+
+    SUBROUTINE Create_CleanUp()
+      IF ( Close_File ) THEN
+        NF90_Status = NF90_CLOSE( FileID )
+        IF ( NF90_Status /= NF90_NOERR ) &
+          msg = TRIM(msg)//'; Error closing file during error cleanup - '//&
+                TRIM(NF90_STRERROR( NF90_Status ))
+      END IF
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME,msg,err_stat )
+    END SUBROUTINE Create_CleanUp
+
+  END FUNCTION CreateFile_Atmosphere_netCDF
+
+
+!------------------------------------------------------------------------------
+!
+! NAME:
+!       Write_Atmosphere_Rank2_NetCDF
+!
+! PURPOSE:
+!       Utility function to write a rank-2 (L x M) Atmosphere array to a netCDF
+!       file. Element dimensions must be uniform across the array (guaranteed by
+!       the K-matrix drivers' single CRTM_Atmosphere_Create call).
+!
+!------------------------------------------------------------------------------
+
+  FUNCTION Write_Atmosphere_Rank2_NetCDF( &
+    Filename  , &  ! Input
+    Atmosphere, &  ! Input
+    noisy     ) &  ! Input
+  RESULT( err_stat )
+    ! Arguments
+    CHARACTER(*),               INTENT(IN) :: Filename
+    TYPE(CRTM_Atmosphere_type), INTENT(IN) :: Atmosphere(:,:)  ! L x M
+    LOGICAL,                    INTENT(IN) :: noisy
+    ! Function result
+    INTEGER :: err_stat
+    ! Function parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Atmosphere_WriteFile_netCDF'
+    ! Function variables
+    CHARACTER(ML) :: msg
+    LOGICAL :: Close_File
+    INTEGER :: NF90_Status, FileId, VarId
+    INTEGER :: l, m, c, a, j, k, p, alloc_stat
+    INTEGER :: n_Channels, n_Profiles
+    INTEGER :: n_Layers, n_Absorbers, n_Clouds, n_Aerosols, n_Record
+    REAL(fp), ALLOCATABLE :: Atmosphere_Data(:,:,:)
+
+    ! Set up
+    err_stat = SUCCESS
+    Close_File = .FALSE.
+    n_Channels = SIZE(Atmosphere,DIM=1)
+    n_Profiles = SIZE(Atmosphere,DIM=2)
+
+    ! All elements must be allocated
+    IF ( ANY( .NOT. CRTM_Atmosphere_Associated(Atmosphere) ) ) THEN
+      msg = 'Unallocated Atmosphere element(s) in input.'
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
+
+    ! Element dimensions (uniform across the array)
+    n_Layers    = Atmosphere(1,1)%n_Layers
+    n_Absorbers = Atmosphere(1,1)%n_Absorbers
+    n_Clouds    = Atmosphere(1,1)%n_Clouds
+    n_Aerosols  = Atmosphere(1,1)%n_Aerosols
+    IF ( n_Layers < 1 .OR. n_Absorbers < 1 ) THEN
+      msg = 'Zero dimension profiles in input!'
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
+    IF ( ANY(Atmosphere%n_Layers    /= n_Layers   ) .OR. &
+         ANY(Atmosphere%n_Absorbers /= n_Absorbers) .OR. &
+         ANY(Atmosphere%n_Clouds    /= n_Clouds   ) .OR. &
+         ANY(Atmosphere%n_Aerosols  /= n_Aerosols ) ) THEN
+      msg = 'Non-uniform element dimensions across the Atmosphere array are '//&
+            'not supported by the netCDF writer.'
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
+    n_Record = Atmosphere_Record_Length( n_Layers, n_Absorbers, n_Clouds, n_Aerosols )
+
+    ! Pack each element into its record
+    ALLOCATE( Atmosphere_Data( n_Record, n_Channels, n_Profiles ), STAT=alloc_stat )
+    IF ( alloc_stat /= 0 ) THEN
+      msg = 'Error allocating Atmosphere_Data array'
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
+    DO m = 1, n_Profiles
+      DO l = 1, n_Channels
+        p = 0
+        p = p+1; Atmosphere_Data(p,l,m) = REAL(Atmosphere(l,m)%Climatology, fp)
+        DO j = 1, n_Absorbers
+          p = p+1; Atmosphere_Data(p,l,m) = REAL(Atmosphere(l,m)%Absorber_ID(j), fp)
+        END DO
+        DO j = 1, n_Absorbers
+          p = p+1; Atmosphere_Data(p,l,m) = REAL(Atmosphere(l,m)%Absorber_Units(j), fp)
+        END DO
+        DO k = 0, n_Layers
+          p = p+1; Atmosphere_Data(p,l,m) = Atmosphere(l,m)%Level_Pressure(k)
+        END DO
+        DO k = 1, n_Layers
+          p = p+1; Atmosphere_Data(p,l,m) = Atmosphere(l,m)%Pressure(k)
+        END DO
+        DO k = 1, n_Layers
+          p = p+1; Atmosphere_Data(p,l,m) = Atmosphere(l,m)%Temperature(k)
+        END DO
+        DO k = 1, n_Layers
+          p = p+1; Atmosphere_Data(p,l,m) = Atmosphere(l,m)%Relative_Humidity(k)
+        END DO
+        DO j = 1, n_Absorbers
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere_Data(p,l,m) = Atmosphere(l,m)%Absorber(k,j)
+          END DO
+        END DO
+        DO k = 1, n_Layers
+          p = p+1; Atmosphere_Data(p,l,m) = Atmosphere(l,m)%Cloud_Fraction(k)
+        END DO
+        DO c = 1, n_Clouds
+          p = p+1; Atmosphere_Data(p,l,m) = REAL(Atmosphere(l,m)%Cloud(c)%Type, fp)
+          p = p+1; Atmosphere_Data(p,l,m) = REAL(Atmosphere(l,m)%Cloud(c)%n_Layers, fp)
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere_Data(p,l,m) = Atmosphere(l,m)%Cloud(c)%Effective_Radius(k)
+          END DO
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere_Data(p,l,m) = Atmosphere(l,m)%Cloud(c)%Effective_Variance(k)
+          END DO
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere_Data(p,l,m) = Atmosphere(l,m)%Cloud(c)%Water_Content(k)
+          END DO
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere_Data(p,l,m) = Atmosphere(l,m)%Cloud(c)%Water_Density(k)
+          END DO
+        END DO
+        DO a = 1, n_Aerosols
+          p = p+1; Atmosphere_Data(p,l,m) = REAL(Atmosphere(l,m)%Aerosol(a)%Type, fp)
+          p = p+1; Atmosphere_Data(p,l,m) = REAL(Atmosphere(l,m)%Aerosol(a)%n_Layers, fp)
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere_Data(p,l,m) = Atmosphere(l,m)%Aerosol(a)%Effective_Radius(k)
+          END DO
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere_Data(p,l,m) = Atmosphere(l,m)%Aerosol(a)%Effective_Variance(k)
+          END DO
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere_Data(p,l,m) = Atmosphere(l,m)%Aerosol(a)%Concentration(k)
+          END DO
+        END DO
+      END DO
+    END DO
+
+    ! Create the output file (defines dims/attrs + variable)
+    err_stat = CreateFile_Atmosphere_netCDF( Filename, n_Channels, n_Profiles, n_Record, &
+                                             n_Layers, n_Absorbers, n_Clouds, n_Aerosols, &
+                                             FileId )
+    IF ( err_stat /= SUCCESS ) THEN
+      msg = 'Error creating output file '//TRIM(Filename)
+      CALL Write_Cleanup(); RETURN
+    END IF
+    Close_File = .TRUE.
+
+    ! Write the packed data
+    NF90_Status = NF90_INQ_VARID( FileId,ATM_DATA_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//ATM_DATA_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_PUT_VAR( FileId,VarId,Atmosphere_Data )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error writing '//ATM_DATA_VARNAME//' to '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
+
+    ! Close the file
+    NF90_Status = NF90_CLOSE( FileId ); Close_File = .FALSE.
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error closing output file - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
+
+    ! Output an info message
+    IF ( noisy ) THEN
+      WRITE( msg,'("Number of channels and profiles written to ",a,": ",i0,1x,i0 )' ) &
+             TRIM(Filename), n_Channels, n_Profiles
+      CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
+    END IF
+
+  CONTAINS
+
+    SUBROUTINE Write_CleanUp()
+      IF ( Close_File ) THEN
+        NF90_Status = NF90_CLOSE( FileId )
+        IF ( NF90_Status /= NF90_NOERR ) &
+          msg = TRIM(msg)//'; Error closing output file during error cleanup - '//&
+                TRIM(NF90_STRERROR( NF90_Status ))
+      END IF
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+    END SUBROUTINE Write_CleanUp
+
+  END FUNCTION Write_Atmosphere_Rank2_NetCDF
+
+
+!------------------------------------------------------------------------------
+!
+! NAME:
+!       Read_Atmosphere_Rank2_NetCDF
+!
+! PURPOSE:
+!       Utility function to read a rank-2 (L x M) Atmosphere array from a netCDF
+!       file written by Write_Atmosphere_Rank2_NetCDF.
+!
+!------------------------------------------------------------------------------
+
+  FUNCTION Read_Atmosphere_Rank2_NetCDF( &
+    Filename  , &  ! Input
+    Atmosphere, &  ! Output
+    noisy     , &  ! Input
+    n_Channels, &  ! Optional output
+    n_Profiles) &  ! Optional output
+  RESULT( err_stat )
+    ! Arguments
+    CHARACTER(*),                            INTENT(IN)  :: Filename
+    TYPE(CRTM_Atmosphere_type), ALLOCATABLE, INTENT(OUT) :: Atmosphere(:,:)  ! L x M
+    LOGICAL,                                 INTENT(IN)  :: noisy
+    INTEGER,          OPTIONAL,              INTENT(OUT) :: n_Channels
+    INTEGER,          OPTIONAL,              INTENT(OUT) :: n_Profiles
+    ! Function result
+    INTEGER :: err_stat
+    ! Function parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Atmosphere_ReadFile_netCDF'
+    ! Function variables
+    CHARACTER(ML) :: msg
+    LOGICAL :: Close_File
+    INTEGER :: NF90_Status, FileId, VarId
+    INTEGER :: l, m, c, a, j, k, p, alloc_stat
+    INTEGER :: n_File_Channels, n_File_Profiles
+    INTEGER :: n_Layers, n_Absorbers, n_Clouds, n_Aerosols
+    INTEGER :: n_Record, n_File_Record
+    REAL(fp), ALLOCATABLE :: Atmosphere_Data(:,:,:)
+
+    ! Set up
+    err_stat = SUCCESS
+    Close_File = .FALSE.
+    ! ...Check that the file exists
+    IF ( .NOT. File_Exists( TRIM(Filename) ) ) THEN
+      msg = 'File '//TRIM(Filename)//' not found.'
+      CALL Read_Cleanup(); RETURN
+    END IF
+
+    ! Open the file for reading
+    NF90_Status = NF90_OPEN( Filename,NF90_NOWRITE,FileId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error opening '//TRIM(Filename)//' for read access - '//&
+            TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    Close_File = .TRUE.
+
+    ! Read the dimensions and element-dimension global attributes
+    CALL Get_Dim( ATM_CHANNEL_DIMNAME, n_File_Channels )
+    CALL Get_Dim( ATM_PROFILE_DIMNAME, n_File_Profiles )
+    CALL Get_Dim( ATM_RECORD_DIMNAME , n_File_Record   )
+    IF ( err_stat /= SUCCESS ) THEN; CALL Read_Cleanup(); RETURN; END IF
+    CALL Get_Att( ATM_NLAYERS_GATTNAME   , n_Layers    )
+    CALL Get_Att( ATM_NABSORBERS_GATTNAME, n_Absorbers )
+    CALL Get_Att( ATM_NCLOUDS_GATTNAME   , n_Clouds    )
+    CALL Get_Att( ATM_NAEROSOLS_GATTNAME , n_Aerosols  )
+    IF ( err_stat /= SUCCESS ) THEN; CALL Read_Cleanup(); RETURN; END IF
+
+    ! Sanity check the record length
+    n_Record = Atmosphere_Record_Length( n_Layers, n_Absorbers, n_Clouds, n_Aerosols )
+    IF ( n_Record /= n_File_Record ) THEN
+      WRITE( msg,'("Record length mismatch in ",a,": computed ",i0," /= file ",i0)' ) &
+             TRIM(Filename), n_Record, n_File_Record
+      CALL Read_Cleanup(); RETURN
+    END IF
+
+    ! Allocate the return structure and the read buffer
+    ALLOCATE( Atmosphere( n_File_Channels, n_File_Profiles ), &
+              Atmosphere_Data( n_File_Record, n_File_Channels, n_File_Profiles ), &
+              STAT = alloc_stat )
+    IF ( alloc_stat /= 0 ) THEN
+      msg = 'Error allocating Atmosphere/Atmosphere_Data arrays'
+      CALL Read_Cleanup(); RETURN
+    END IF
+
+    ! Read the packed data
+    NF90_Status = NF90_INQ_VARID( FileId,ATM_DATA_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//ATM_DATA_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_GET_VAR( FileId,VarId,Atmosphere_Data )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error reading '//ATM_DATA_VARNAME//' from '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+
+    ! Close the file
+    NF90_Status = NF90_CLOSE( FileId ); Close_File = .FALSE.
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error closing input file - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+
+    ! Unpack each record into a freshly-created Atmosphere element
+    DO m = 1, n_File_Profiles
+      DO l = 1, n_File_Channels
+        CALL CRTM_Atmosphere_Create( Atmosphere(l,m), n_Layers, n_Absorbers, n_Clouds, n_Aerosols )
+        IF ( .NOT. CRTM_Atmosphere_Associated( Atmosphere(l,m) ) ) THEN
+          WRITE( msg,'("Error creating Atmosphere element (",i0,",",i0,")")' ) l, m
+          CALL Read_Cleanup(); RETURN
+        END IF
+        p = 0
+        p = p+1; Atmosphere(l,m)%Climatology = NINT(Atmosphere_Data(p,l,m))
+        DO j = 1, n_Absorbers
+          p = p+1; Atmosphere(l,m)%Absorber_ID(j) = NINT(Atmosphere_Data(p,l,m))
+        END DO
+        DO j = 1, n_Absorbers
+          p = p+1; Atmosphere(l,m)%Absorber_Units(j) = NINT(Atmosphere_Data(p,l,m))
+        END DO
+        DO k = 0, n_Layers
+          p = p+1; Atmosphere(l,m)%Level_Pressure(k) = Atmosphere_Data(p,l,m)
+        END DO
+        DO k = 1, n_Layers
+          p = p+1; Atmosphere(l,m)%Pressure(k) = Atmosphere_Data(p,l,m)
+        END DO
+        DO k = 1, n_Layers
+          p = p+1; Atmosphere(l,m)%Temperature(k) = Atmosphere_Data(p,l,m)
+        END DO
+        DO k = 1, n_Layers
+          p = p+1; Atmosphere(l,m)%Relative_Humidity(k) = Atmosphere_Data(p,l,m)
+        END DO
+        DO j = 1, n_Absorbers
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere(l,m)%Absorber(k,j) = Atmosphere_Data(p,l,m)
+          END DO
+        END DO
+        DO k = 1, n_Layers
+          p = p+1; Atmosphere(l,m)%Cloud_Fraction(k) = Atmosphere_Data(p,l,m)
+        END DO
+        DO c = 1, n_Clouds
+          p = p+1; Atmosphere(l,m)%Cloud(c)%Type     = NINT(Atmosphere_Data(p,l,m))
+          p = p+1; Atmosphere(l,m)%Cloud(c)%n_Layers = NINT(Atmosphere_Data(p,l,m))
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere(l,m)%Cloud(c)%Effective_Radius(k) = Atmosphere_Data(p,l,m)
+          END DO
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere(l,m)%Cloud(c)%Effective_Variance(k) = Atmosphere_Data(p,l,m)
+          END DO
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere(l,m)%Cloud(c)%Water_Content(k) = Atmosphere_Data(p,l,m)
+          END DO
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere(l,m)%Cloud(c)%Water_Density(k) = Atmosphere_Data(p,l,m)
+          END DO
+        END DO
+        DO a = 1, n_Aerosols
+          p = p+1; Atmosphere(l,m)%Aerosol(a)%Type     = NINT(Atmosphere_Data(p,l,m))
+          p = p+1; Atmosphere(l,m)%Aerosol(a)%n_Layers = NINT(Atmosphere_Data(p,l,m))
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere(l,m)%Aerosol(a)%Effective_Radius(k) = Atmosphere_Data(p,l,m)
+          END DO
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere(l,m)%Aerosol(a)%Effective_Variance(k) = Atmosphere_Data(p,l,m)
+          END DO
+          DO k = 1, n_Layers
+            p = p+1; Atmosphere(l,m)%Aerosol(a)%Concentration(k) = Atmosphere_Data(p,l,m)
+          END DO
+        END DO
+      END DO
+    END DO
+
+    ! Set the return values
+    IF ( PRESENT(n_Channels) ) n_Channels = n_File_Channels
+    IF ( PRESENT(n_Profiles) ) n_Profiles = n_File_Profiles
+
+    ! Output an info message
+    IF ( noisy ) THEN
+      WRITE( msg,'("Number of channels and profiles read from ",a,": ",i0,1x,i0)' ) &
+             TRIM(Filename), n_File_Channels, n_File_Profiles
+      CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
+    END IF
+
+  CONTAINS
+
+    ! Read a dimension length; sets err_stat/msg on failure (checked by caller)
+    SUBROUTINE Get_Dim( DimName, DimValue )
+      CHARACTER(*), INTENT(IN)  :: DimName
+      INTEGER,      INTENT(OUT) :: DimValue
+      INTEGER :: DimId, stat
+      DimValue = 0
+      IF ( err_stat /= SUCCESS ) RETURN
+      stat = NF90_INQ_DIMID( FileId,DimName,DimId )
+      IF ( stat == NF90_NOERR ) stat = NF90_INQUIRE_DIMENSION( FileId,DimId,Len=DimValue )
+      IF ( stat /= NF90_NOERR ) THEN
+        err_stat = FAILURE
+        msg = 'Error reading dimension '//TRIM(DimName)//' - '//TRIM(NF90_STRERROR( stat ))
+      END IF
+    END SUBROUTINE Get_Dim
+
+    ! Read an integer global attribute; sets err_stat/msg on failure
+    SUBROUTINE Get_Att( AttName, AttValue )
+      CHARACTER(*), INTENT(IN)  :: AttName
+      INTEGER,      INTENT(OUT) :: AttValue
+      INTEGER :: stat
+      AttValue = 0
+      IF ( err_stat /= SUCCESS ) RETURN
+      stat = NF90_GET_ATT( FileId,NF90_GLOBAL,AttName,AttValue )
+      IF ( stat /= NF90_NOERR ) THEN
+        err_stat = FAILURE
+        msg = 'Error reading attribute '//TRIM(AttName)//' - '//TRIM(NF90_STRERROR( stat ))
+      END IF
+    END SUBROUTINE Get_Att
+
+    SUBROUTINE Read_CleanUp()
+      IF ( Close_File ) THEN
+        NF90_Status = NF90_CLOSE( FileId )
+        IF ( NF90_Status /= NF90_NOERR ) &
+          msg = TRIM(msg)//'; Error closing input file during error cleanup - '//&
+                TRIM(NF90_STRERROR( NF90_Status ))
+      END IF
+      IF ( ALLOCATED(Atmosphere) ) DEALLOCATE(Atmosphere, STAT=alloc_stat)
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+    END SUBROUTINE Read_CleanUp
+
+  END FUNCTION Read_Atmosphere_Rank2_NetCDF
 
 END MODULE CRTM_Atmosphere_Define
