@@ -10,7 +10,8 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
 
   USE CRTM_Module
   USE CRTM_MWwaterCoeff, ONLY: CRTM_MWwaterCoeff_Load_FASTEM
-  USE CRTM_PARMIOCoeff, ONLY: CRTM_PARMIOCoeff_Load, CRTM_PARMIOCoeff_Destroy
+  USE CRTM_PARMIOCoeff, ONLY: CRTM_PARMIOCoeff_Load, CRTM_PARMIOCoeff_Destroy, &
+                              CRTM_PARMIOCoeff_IsLoaded
   USE CRTM_SpcCoeff, ONLY: SC
 
   IMPLICIT NONE
@@ -118,6 +119,11 @@ PROGRAM test_PARMIO_FASTEM_DeltaSweep
   CALL Load_ECMWF84_Atm_Data()
 
   ! ---- Phase 1: FASTEM-only sweep (PARMIO LUT not loaded) ----
+  ! CRTM_Init auto-loads the PARMIO LUT from File_Path when present (commit
+  ! 13c7d23), so it is already active here. Destroy it first to get a genuine
+  ! FASTEM-only baseline; otherwise both phases run PARMIO and every delta is
+  ! identically zero (the test would pass even if PARMIO were broken).
+  IF (CRTM_PARMIOCoeff_IsLoaded()) CALL CRTM_PARMIOCoeff_Destroy()
   CALL Run_Grid_Sweep(tb_fastem_grid)
 
   ! ---- Phase 2: PARMIO sweep (LUT loaded, dispatcher routes >=200 GHz channels) ----
