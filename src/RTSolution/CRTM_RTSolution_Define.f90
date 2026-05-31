@@ -131,8 +131,14 @@ MODULE CRTM_RTSolution_Define
   CHARACTER(*), PARAMETER :: CHANNEL_DIMNAME  = 'n_Channels'
   CHARACTER(*), PARAMETER :: STOKE_DIMNAME    = 'n_Stokes'
   CHARACTER(*), PARAMETER :: PROFILE_DIMNAME  = 'n_Profiles'
+  ! String length of the per-element RT_Algorithm_Name variable. That name is
+  ! NOT uniform across channels/profiles (scattering channels use a different
+  ! RT solver than emission ones, e.g. MW sounders), so it is stored as a
+  ! per-(channel,profile) character variable, not (only) a global attribute.
+  CHARACTER(*), PARAMETER :: RTALG_STRLEN_DIMNAME = 'rt_algorithm_name_strlen'
 
   ! Variable names
+  CHARACTER(*), PARAMETER :: RT_ALGRTHM_VARNAME = 'RT_Algorithm_Name'
   CHARACTER(*), PARAMETER :: CHANNEL_VARNAME    = 'Sensor_Channel'
   !... FLOAT, ALL VARIABLES ARE IN DIMENSION (n_Channels * n_Profiles)
   CHARACTER(*), PARAMETER :: STREAM_VARNAME     = 'n_Full_Streams'
@@ -1614,6 +1620,7 @@ CONTAINS
     INTEGER :: NF90_Status, FileId, VarId, Allocate_Status
     CHARACTER(ML) :: GAttName
     CHARACTER(ML) :: Sensor_ID, RT_Algorithm_Name
+    CHARACTER(STRLEN), ALLOCATABLE :: RT_Algorithm_Name_arr(:,:)
     INTEGER :: WMO_Satellite_ID, WMO_Sensor_ID
     INTEGER :: n_Profiles, n_Channels, n_Layers, n_Stokes
     INTEGER, ALLOCATABLE :: Sensor_Channel(:)
@@ -1629,9 +1636,11 @@ CONTAINS
     REAL(fp), ALLOCATABLE :: Total_Cloud_Cover(:,:)
     REAL(fp), ALLOCATABLE :: R_clear(:,:)
     REAL(fp), ALLOCATABLE :: Tb_clear(:,:)
+    REAL(fp), ALLOCATABLE :: Reflectance_clear(:,:)
     REAL(fp), ALLOCATABLE :: Radiance(:,:)
     REAL(fp), ALLOCATABLE :: Brightness_Temperature(:,:)
     REAL(fp), ALLOCATABLE :: Solar_Irradiance(:,:)
+    REAL(fp), ALLOCATABLE :: Reflectance(:,:)
     REAL(fp), ALLOCATABLE :: Stokes(:,:,:)
     REAL(fp), ALLOCATABLE :: Upwelling_Overcast_Radiance(:,:,:)
     REAL(fp), ALLOCATABLE :: Upwelling_Radiance(:,:,:)
@@ -1665,6 +1674,7 @@ CONTAINS
 
     ! Allocate the input structures
     ALLOCATE( Sensor_Channel( n_Channels ), &
+              RT_Algorithm_Name_arr( n_Channels, n_Profiles ), &
               n_Full_Streams( n_Channels, n_Profiles ), &
               SSA_Max( n_Channels, n_Profiles ), &
               SOD( n_Channels, n_Profiles ), &
@@ -1677,9 +1687,11 @@ CONTAINS
               Total_Cloud_Cover( n_Channels, n_Profiles ), &
               R_clear( n_Channels, n_Profiles ), &
               Tb_clear( n_Channels, n_Profiles ), &
+              Reflectance_clear( n_Channels, n_Profiles ), &
               Radiance( n_Channels, n_Profiles ), &
               Brightness_Temperature( n_Channels, n_Profiles ), &
               Solar_Irradiance( n_Channels, n_Profiles ), &
+              Reflectance( n_Channels, n_Profiles ), &
               Stokes( n_Channels, n_Stokes, n_Profiles ), &
               Upwelling_Overcast_Radiance( n_Channels, MAX(n_Layers,1), n_Profiles ), &
               Upwelling_Radiance( n_Channels, MAX(n_Layers,1), n_Profiles ), &
@@ -1739,6 +1751,19 @@ CONTAINS
     NF90_Status = NF90_GET_VAR( FileId,VarId,Sensor_Channel)
     IF ( NF90_Status /= NF90_NOERR ) THEN
       msg = 'Error reading '//CHANNEL_VARNAME//' from '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    ! ...RT_Algorithm_Name variable (per element)
+    NF90_Status = NF90_INQ_VARID( FileId,RT_ALGRTHM_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//RT_ALGRTHM_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_GET_VAR( FileId,VarId,RT_Algorithm_Name_arr)
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error reading '//RT_ALGRTHM_VARNAME//' from '//TRIM(Filename)//&
             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Read_Cleanup(); RETURN
     END IF
@@ -1898,6 +1923,19 @@ CONTAINS
             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Read_Cleanup(); RETURN
     END IF
+    ! ...Reflectance_clear variable
+    NF90_Status = NF90_INQ_VARID( FileId,RFCLEAR_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//RFCLEAR_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_GET_VAR( FileId,VarId,Reflectance_clear)
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error reading '//RFCLEAR_VARNAME//' from '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
     ! ...Radiance variable
     NF90_Status = NF90_INQ_VARID( FileId,RADIANCE_VARNAME,VarId )
     IF ( NF90_Status /= NF90_NOERR ) THEN
@@ -1934,6 +1972,19 @@ CONTAINS
     NF90_Status = NF90_GET_VAR( FileId,VarId,Solar_Irradiance)
     IF ( NF90_Status /= NF90_NOERR ) THEN
       msg = 'Error reading '//SI_VARNAME//' from '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    ! ...Reflectance variable
+    NF90_Status = NF90_INQ_VARID( FileId,RF_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//RF_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_GET_VAR( FileId,VarId,Reflectance)
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error reading '//RF_VARNAME//' from '//TRIM(Filename)//&
             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Read_Cleanup(); RETURN
     END IF
@@ -2078,7 +2129,7 @@ CONTAINS
         RTSolution(l,m)%Sensor_ID                = Sensor_ID
         RTSolution(l,m)%WMO_Satellite_ID         = WMO_Satellite_ID
         RTSolution(l,m)%WMO_Sensor_ID            = WMO_Sensor_ID
-        RTSolution(l,m)%RT_Algorithm_Name        = RT_Algorithm_Name
+        RTSolution(l,m)%RT_Algorithm_Name        = RT_Algorithm_Name_arr(l,m)
         RTSolution(l,m)%Sensor_Channel           = Sensor_Channel(l)
         RTSolution(l,m)%n_Full_Streams           = n_Full_Streams(l,m)
         RTSolution(l,m)%SSA_Max                  = SSA_Max(l,m)
@@ -2092,9 +2143,11 @@ CONTAINS
         RTSolution(l,m)%Total_Cloud_Cover        = Total_Cloud_Cover(l,m)
         RTSolution(l,m)%R_clear                  = R_clear(l,m)
         RTSolution(l,m)%Tb_clear                 = Tb_clear(l,m)
+        RTSolution(l,m)%Reflectance_clear        = Reflectance_clear(l,m)
         RTSolution(l,m)%Radiance                 = Radiance(l,m)
         RTSolution(l,m)%Brightness_Temperature   = Brightness_Temperature(l,m)
         RTSolution(l,m)%Solar_Irradiance         = Solar_Irradiance(l,m)
+        RTSolution(l,m)%Reflectance              = Reflectance(l,m)
         DO s = 1, n_Stokes
           RTSolution(l,m)%Stokes(s) = Stokes(l,s,m)
         END DO
@@ -2477,6 +2530,7 @@ CONTAINS
 
     ! Output variables
     CHARACTER(ML) :: Sensor_ID, RT_Algorithm_Name
+    CHARACTER(STRLEN), ALLOCATABLE :: RT_Algorithm_Name_arr(:,:)
     INTEGER :: WMO_Satellite_ID, WMO_Sensor_ID
     INTEGER :: n_Profiles, n_Channels, n_Layers, n_Stokes
     INTEGER, ALLOCATABLE :: Sensor_Channel(:)
@@ -2519,12 +2573,14 @@ CONTAINS
     WMO_Sensor_ID     = RTSolution(1,1)%WMO_Sensor_ID
     RT_Algorithm_Name = RTSolution(1,1)%RT_Algorithm_Name
 
-    ! Number of layers/stokes in all profiles are the same
+    ! Number of layers/stokes in all profiles are the same. n_Stokes is stored
+    ! as RTSolution%n_Stokes+1 (the driver dimension checks rely on this).
     n_Layers = RTSolution(1,1)%n_Layers
     n_Stokes = RTSolution(1,1)%n_Stokes + 1
 
     ! Allocate the output structures
     ALLOCATE( Sensor_Channel( n_Channels ), &
+              RT_Algorithm_Name_arr( n_Channels, n_Profiles ), &
               n_Full_Streams( n_Channels, n_Profiles ), &
               SSA_Max( n_Channels, n_Profiles ), &
               SOD( n_Channels, n_Profiles ), &
@@ -2577,6 +2633,7 @@ CONTAINS
       Profile_Loop: DO m = 1, n_Profiles
         Channel_Loop: DO l = 1, n_Channels
           Sensor_Channel(l)            = RTSolution(l,m)%Sensor_Channel
+          RT_Algorithm_Name_arr(l,m)   = RTSolution(l,m)%RT_Algorithm_Name
           n_Full_Streams(l,m)          = RTSolution(l,m)%n_Full_Streams
           SSA_Max(l,m)                 = RTSolution(l,m)%SSA_Max
           SOD(l,m)                     = RTSolution(l,m)%SOD
@@ -2642,6 +2699,19 @@ CONTAINS
      NF90_Status = NF90_PUT_VAR( FileId,VarID,Sensor_Channel )
      IF ( NF90_Status /= NF90_NOERR ) THEN
        msg = 'Error writing '//CHANNEL_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ...RT_Algorithm_Name variable (per element)
+     NF90_Status = NF90_INQ_VARID( FileId,RT_ALGRTHM_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//RT_ALGRTHM_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID,RT_Algorithm_Name_arr )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//RT_ALGRTHM_VARNAME//' to '//TRIM(Filename)//&
              ' - '//TRIM(NF90_STRERROR( NF90_Status ))
        CALL Write_Cleanup(); RETURN
      END IF
@@ -3818,6 +3888,7 @@ CONTAINS
     INTEGER :: n_Layers_DimID
     INTEGER :: n_Channels_DimID
     INTEGER :: n_Stokes_DimID
+    INTEGER :: n_strlen_DimID
     INTEGER :: varID
     INTEGER :: Put_Status(2)
 
@@ -3863,6 +3934,13 @@ CONTAINS
             TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Create_Cleanup(); RETURN
     END IF
+    ! ...RT_Algorithm_Name string length
+    NF90_Status = NF90_DEF_DIM( FileID,RTALG_STRLEN_DIMNAME,STRLEN,n_strlen_DimID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//RTALG_STRLEN_DIMNAME//' dimension in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
 
     ! Write the global attributes
     NF90_Status = NF90_PUT_ATT( FileId, NF90_GLOBAL,TRIM(SENSOR_ID_GATTNAME),SENSOR_ID )
@@ -3893,6 +3971,18 @@ CONTAINS
     NF90_Status = NF90_PUT_ATT( FileId, NF90_GLOBAL,TRIM(NLAYERS_GATTNAME),n_Layers )
     IF ( NF90_Status /= NF90_NOERR ) THEN
       msg = 'Error setting '//NLAYERS_GATTNAME//' global attribute in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...RT_Algorithm_Name (per-element; not uniform across channels/profiles)
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      RT_ALGRTHM_VARNAME, &
+      CHAR_TYPE, &
+      dimIDs=(/n_strlen_DimID, n_Channels_DimID, n_Profiles_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//RT_ALGRTHM_VARNAME//' variable in '//&
             TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Create_Cleanup(); RETURN
     END IF
