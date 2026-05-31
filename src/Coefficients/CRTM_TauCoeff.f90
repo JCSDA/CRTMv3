@@ -235,6 +235,7 @@ CONTAINS
     LOGICAL :: use_netCDF
     LOGICAL :: alt_available
     LOGICAL :: zeeman_use_netCDF
+    LOGICAL :: zeeman_nc_exists, zeeman_bin_exists
     CHARACTER(16) :: zeeman_ext
 
     ! Set up
@@ -609,15 +610,29 @@ CONTAINS
     TC%n_ODZeeman = 0
     i = 1
 
-    ! Batch-level format probe: prefer NetCDF when every Zeeman candidate has a
-    ! .nc sibling on disk; otherwise fall back to .bin for the whole Zeeman batch.
-    ! ODZeeman_Load_TauCoeff takes a single netCDF flag, so per-sensor mixed
-    ! formats are not supported.
+    ! Batch-level format probe. ODZeeman_Load_TauCoeff takes a single netCDF
+    ! flag, so the whole Zeeman batch must use one format; this picks it.
+    !
+    ! Prefer NetCDF. A Zeeman-candidate sensor only forces the batch to Binary
+    ! when it genuinely has a Binary coeff but NOT the NetCDF one (a real
+    ! mixed-format set). A sensor that has NEITHER format (e.g. AMSU-A in a
+    ! NetCDF-only deployment that ships no zamsua*.TauCoeff at all) has no
+    ! Zeeman coefficient to load and must NOT drag the batch to Binary: doing
+    ! so would make a NetCDF-only SSMIS set (which ships zssmis*.TauCoeff.nc
+    ! and no .bin) silently lose its Zeeman correction, because the per-file
+    ! existence guard below would then find no zssmis*.TauCoeff.bin. Sensors
+    ! with no Zeeman file in either format are simply skipped by that guard.
     zeeman_use_netCDF = .TRUE.
     DO n = 1, n_Sensors
       IF ( TC%WMO_Sensor_ID(n) == WMO_SSMIS .OR. TC%WMO_Sensor_ID(n) == WMO_AMSUA ) THEN
-        IF ( .NOT. File_Exists( TRIM(local_path) // 'z' // TRIM(TC%Sensor_ID(n)) // '.TauCoeff.nc' ) ) THEN
+        zeeman_nc_exists  = File_Exists( TRIM(local_path) // 'z' // TRIM(TC%Sensor_ID(n)) // '.TauCoeff.nc'  )
+        zeeman_bin_exists = File_Exists( TRIM(local_path) // 'z' // TRIM(TC%Sensor_ID(n)) // '.TauCoeff.bin' )
+        IF ( ( .NOT. zeeman_nc_exists ) .AND. zeeman_bin_exists ) THEN
           zeeman_use_netCDF = .FALSE.
+          CALL Display_Message( ROUTINE_NAME, &
+            'NetCDF Zeeman TauCoeff missing for '//TRIM(TC%Sensor_ID(n))// &
+            '; using Binary for the whole Zeeman batch', &
+            INFORMATION )
           EXIT
         END IF
       END IF
@@ -626,9 +641,6 @@ CONTAINS
       zeeman_ext = '.TauCoeff.nc'
     ELSE
       zeeman_ext = '.TauCoeff.bin'
-      CALL Display_Message( ROUTINE_NAME, &
-        'NetCDF Zeeman TauCoeff incomplete; falling back to Binary for the whole Zeeman batch', &
-        INFORMATION )
     END IF
 
     DO n = 1, n_Sensors
