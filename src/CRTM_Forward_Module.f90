@@ -237,7 +237,7 @@ CONTAINS
     Options    ) &  ! Optional input, M
   RESULT( Error_Status )
     ! Arguments
-    USE CRTM_CloudCoeff,          ONLY: CloudC
+    USE CRTM_CloudCoeff,          ONLY: CloudC, Active_Cloud_Scheme, CRTM_EXP_CLOUDCOEFF
     USE CRTM_AerosolCoeff,        ONLY: AeroC
     TYPE(CRTM_Atmosphere_type),        INTENT(IN OUT) :: Atmosphere(:)     ! M
     TYPE(CRTM_Surface_type),           INTENT(IN)     :: Surface(:)        ! M
@@ -635,7 +635,10 @@ CONTAINS
          RETURN
       END IF
 
-      IF ( CRTM_CloudCoeff_IsLoaded() .AND. CRTM_AerosolCoeff_IsLoaded() .AND. &
+      ! (The experimental scheme may use more cloud phase elements than the legacy
+      !  aerosol LUT; aerosol contributes to element 1 only. v1 assumes scalar use.)
+      IF ( Active_Cloud_Scheme /= CRTM_EXP_CLOUDCOEFF .AND. &
+           CRTM_CloudCoeff_IsLoaded() .AND. CRTM_AerosolCoeff_IsLoaded() .AND. &
            (CloudC%N_PHASE_ELEMENTS /= AeroC%N_PHASE_ELEMENTS) ) THEN
          Error_Status = FAILURE
          WRITE( Message,'("N_PHASE_ELEMENTS OF CLOUD AND AEROSOL LUTS DO NOT MATCH")' )

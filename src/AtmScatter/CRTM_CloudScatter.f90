@@ -45,7 +45,10 @@ MODULE CRTM_CloudScatter
   USE CRTM_CloudCoeff,          ONLY: CloudC, &
                                       INVALID_CLOUDCOEFF, &
                                       MIE_TAMU_CLOUDCOEFF, &
-                                      DDA_ARTS_CLOUDCOEFF
+                                      DDA_ARTS_CLOUDCOEFF, &
+                                      CloudC_Exp, &
+                                      Active_Cloud_Scheme, &
+                                      CRTM_EXP_CLOUDCOEFF
 
   USE CRTM_Atmosphere_Define,   ONLY: CRTM_Atmosphere_type, &
                                       WATER_CLOUD, &
@@ -238,6 +241,7 @@ CONTAINS
     ! Local variables
     CHARACTER(ML) :: Message
     INTEGER  :: k, kc, l, m, n, j
+    INTEGER  :: Le                       ! experimental-scheme effective truncation order
     REAL(fp) :: Frequency_MW, Frequency_IR
     LOGICAL  :: Layer_Mask(Atm%n_Layers)
     INTEGER  :: Layer_Index(Atm%n_Layers)
@@ -254,6 +258,14 @@ CONTAINS
     ! Spectral variables
     Frequency_MW = SC(SensorIndex)%Frequency(ChannelIndex)
     Frequency_IR = SC(SensorIndex)%Wavenumber(ChannelIndex)
+    ! Determine the phase-function truncation order.
+    IF ( Active_Cloud_Scheme == CRTM_EXP_CLOUDCOEFF ) THEN
+      ! Experimental scheme: truncation order is taken from the LUT (running
+      ! maximum accumulated in the cloud loop below), DECOUPLED from the RT
+      ! stream count. The legacy {4,6,8,16} lOffset block packing is not used.
+      CScat%n_Legendre_Terms = 0
+      CScat%lOffset          = 0
+    ELSE
     ! Determine offset for Legendre coefficients in
     ! the CloudC lookup table corresponding to the
     ! number of streams
@@ -275,6 +287,7 @@ CONTAINS
           RETURN
         END IF
     END SELECT
+    END IF
 
     ! ---------------------------------------------
     ! Loop over the different clouds in the profile
@@ -295,7 +308,28 @@ CONTAINS
         kc = Layer_Index(k)
 
         ! Call sensor specific routines
-        IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
+        IF ( Active_Cloud_Scheme == CRTM_EXP_CLOUDCOEFF ) THEN
+          ! Experimental 'CRTM-Exp' scheme (microwave only in v1)
+          IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
+            CALL Get_Cloud_Opt_MW_Exp(CScat                            , & ! Input
+                                      Frequency_MW                     , & ! Input
+                                      Atm%Cloud(n)%Type                , & ! Input
+                                      Atm%Cloud(n)%Effective_Radius(kc), & ! Input (mapped to Dm)
+                                      Atm%Temperature(kc)              , & ! Input
+                                      CSV%ke(kc,n)                     , & ! Output
+                                      CSV%kb(kc,n)                     , & ! Output
+                                      CSV%w(kc,n)                      , & ! Output
+                                      CSV%pcoeff(:,:,kc,n)             , & ! Output
+                                      Le                               , & ! Output (effective truncation)
+                                      CSV%csi(kc,n)                      ) ! Interpolation
+            CScat%n_Legendre_Terms = MAX( CScat%n_Legendre_Terms, Le )
+          ELSE
+            CSV%ke(kc,n)         = ZERO
+            CSV%kb(kc,n)         = ZERO
+            CSV%w(kc,n)          = ZERO
+            CSV%pcoeff(:,:,kc,n) = ZERO
+          END IF
+        ELSE IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
           CALL Get_Cloud_Opt_MW(CScat                            , & ! Input
                                 Frequency_MW                     , & ! Input
                                 Atm%Cloud(n)%Type                , & ! Input
@@ -1411,6 +1445,93 @@ CONTAINS
     END SELECT
 
   END SUBROUTINE Get_Cloud_Opt_MW
+
+
+  ! ---------------------------------------------
+  ! Experimental ('CRTM-Exp') MW cloud optics.
+  ! Interpolates CloudC_Exp over (Frequency, Dm, Temperature) for the given
+  ! habit (cloud_type). The phase-function truncation order (Le) is taken from
+  ! the LUT (n_Legendre_Eff) and is DECOUPLED from the RT stream count.
+  ! v1: host Effective_Radius is used directly as Dm (identity map); n_Mu=1.
+  ! pcoeff convention matches the legacy reader: pcoeff(l,m)=0.5*chi_l, with the
+  ! (2l+1) carried in the normalized Legendre polynomials and pcoeff(0,1)=0.5.
+  ! ---------------------------------------------
+  SUBROUTINE Get_Cloud_Opt_MW_Exp( CloudScatter , &  ! Input
+                                   Frequency    , &  ! Input  (GHz)
+                                   cloud_type   , &  ! Input
+                                   Dm_in        , &  ! Input  Dm proxy (microns)
+                                   Temperature  , &  ! Input  (K)
+                                   ke           , &  ! Output mass extinction (m^2/kg)
+                                   kb           , &  ! Output mass backscatter (m^2/kg)
+                                   w            , &  ! Output single-scatter albedo
+                                   pcoeff       , &  ! Output phase coefficients
+                                   Le           , &  ! Output effective truncation order
+                                   csi            )  ! Interpolation
+    TYPE(CRTM_AtmOptics_type), INTENT(IN)     :: CloudScatter
+    REAL(fp),                  INTENT(IN)     :: Frequency, Dm_in, Temperature
+    INTEGER,                   INTENT(IN)     :: cloud_type
+    REAL(fp),                  INTENT(OUT)    :: ke, kb, w
+    REAL(fp),                  INTENT(IN OUT) :: pcoeff(0:,:)
+    INTEGER,                   INTENT(OUT)    :: Le
+    TYPE(CSinterp_type),       INTENT(IN OUT) :: csi
+    ! Local
+    INTEGER  :: h, l, m, np, nfill
+    REAL(fp) :: ka, tmp
+
+    ke = ZERO; ka = ZERO; kb = ZERO; w = ZERO; Le = 0
+    pcoeff = ZERO
+
+    ! Habit index in the LUT (match the CRTM cloud-type integer)
+    h = 0
+    DO l = 1, INT(CloudC_Exp%n_Habit)
+      IF ( INT(CloudC_Exp%Habit_Id(l)) == cloud_type ) THEN ; h = l ; EXIT ; END IF
+    END DO
+    IF ( h < 1 ) RETURN     ! habit not in this LUT -> no contribution
+
+    ! Interpolation indices/polynomials: Frequency (wlp), Dm (xlp), Temperature (ylp)
+    csi%f_int = MAX(MIN(CloudC_Exp%Frequency(CloudC_Exp%n_Frequency),Frequency),CloudC_Exp%Frequency(1))
+    CALL find_index( CloudC_Exp%Frequency, csi%f_int, csi%i1, csi%i2, csi%f_outbound )
+    csi%f = CloudC_Exp%Frequency(csi%i1:csi%i2)
+
+    csi%r_int = MAX(MIN(CloudC_Exp%Dm(CloudC_Exp%n_Dm),Dm_in),CloudC_Exp%Dm(1))
+    CALL find_index( CloudC_Exp%Dm, csi%r_int, csi%j1, csi%j2, csi%r_outbound )
+    csi%r = CloudC_Exp%Dm(csi%j1:csi%j2)
+
+    csi%t_int = MAX(MIN(CloudC_Exp%Temperature(CloudC_Exp%n_Temperature),Temperature),CloudC_Exp%Temperature(1))
+    CALL find_index( CloudC_Exp%Temperature, csi%t_int, csi%k1, csi%k2, csi%t_outbound )
+    csi%t = CloudC_Exp%Temperature(csi%k1:csi%k2)
+
+    CALL LPoly( csi%f, csi%f_int, csi%wlp )   ! Frequency
+    CALL LPoly( csi%r, csi%r_int, csi%xlp )   ! Dm
+    CALL LPoly( csi%t, csi%t_int, csi%ylp )   ! Temperature
+
+    ! Bulk optics (mu index = 1 in v1). Cubes are (Freq,T,Dm) -> (wlp,ylp,xlp).
+    CALL interp_3D( CloudC_Exp%ke(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), csi%wlp, csi%ylp, csi%xlp, ke )
+    CALL interp_3D( CloudC_Exp%ka(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), csi%wlp, csi%ylp, csi%xlp, ka )
+    CALL interp_3D( CloudC_Exp%kb(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), csi%wlp, csi%ylp, csi%xlp, kb )
+    IF ( ke > ZERO ) w = MAX( MIN( (ke-ka)/ke, ONE ), ZERO )
+
+    IF ( CloudScatter%n_Phase_Elements > 0 .AND. CloudScatter%Include_Scattering ) THEN
+      ! n_Legendre_Eff is a COUNT incl. order 0, so the max significant physical
+      ! order is (count-1). Output pcoeff index = physical order; the LUT Fortran
+      ! Legendre index = physical order + 1 (1-based vs 0-based). Cap so the LUT
+      ! read (l+1) and the output index stay in bounds.
+      nfill = MAXVAL( CloudC_Exp%n_Legendre_Eff(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h) ) - 1
+      nfill = MIN( nfill, INT(CloudC_Exp%n_Legendre)-1, MAX_N_LEGENDRE_TERMS-1 )
+      nfill = MAX( nfill, 0 )
+      np = MIN( CloudScatter%n_Phase_Elements, INT(CloudC_Exp%n_Phase_Elements) )
+      pcoeff(0,1) = POINT_5
+      DO m = 1, np
+        DO l = 1, nfill
+          CALL interp_3D( CloudC_Exp%pcoeff(m,l+1,csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), &
+                          csi%wlp, csi%ylp, csi%xlp, tmp )
+          pcoeff(l,m) = POINT_5 * tmp
+        END DO
+      END DO
+      Le = nfill + 1     ! n_Legendre_Terms: RT sums physical orders 0..nfill
+    END IF
+
+  END SUBROUTINE Get_Cloud_Opt_MW_Exp
 
 
   ! ---------------------------------------------

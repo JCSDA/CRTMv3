@@ -27,7 +27,7 @@ MODULE CRTM_CloudCoeff
   ! Environment set up
   ! ------------------
   ! Module use
-  USE Message_Handler,      ONLY: SUCCESS, FAILURE, Display_Message
+  USE Message_Handler,      ONLY: SUCCESS, FAILURE, INFORMATION, Display_Message
   USE CloudCoeff_Define,    ONLY: CloudCoeff_type, &
                                   CloudCoeff_Associated, &
                                   CloudCoeff_Destroy, &
@@ -35,6 +35,12 @@ MODULE CRTM_CloudCoeff
                                   MIE_TAMU_CLOUDCOEFF, &
                                   DDA_ARTS_CLOUDCOEFF
   USE CloudCoeff_IO       , ONLY: CloudCoeff_ReadFile
+  ! Experimental ('CRTM-Exp') opt-in scheme
+  USE CloudCoeff_Exp_Define   , ONLY: CloudCoeff_Exp_type, &
+                                      CloudCoeff_Exp_Destroy, &
+                                      CloudCoeff_Exp_Associated, &
+                                      CRTM_EXP_CLOUDCOEFF
+  USE CloudCoeff_Exp_netCDF_IO, ONLY: CloudCoeff_Exp_netCDF_ReadFile
   ! Disable all implicit typing
   IMPLICIT NONE
 
@@ -51,6 +57,10 @@ MODULE CRTM_CloudCoeff
 
   ! The shared data
   PUBLIC :: CloudC
+  PUBLIC :: CloudC_Exp
+  PUBLIC :: Active_Cloud_Scheme
+  PUBLIC :: CRTM_EXP_CLOUDCOEFF
+  PUBLIC :: SCHEME_LEGACY
   ! Procedures
   PUBLIC :: CRTM_CloudCoeff_Load
   PUBLIC :: CRTM_CloudCoeff_Destroy
@@ -64,10 +74,18 @@ MODULE CRTM_CloudCoeff
   INTEGER, PARAMETER :: ML = 256
 
 
+  ! Active cloud-optics scheme selector (set by CRTM_CloudCoeff_Load).
+  ! Legacy (MIE_TAMU / DDA_ARTS, auto-detected from CloudC) is the default.
+  INTEGER, PARAMETER :: SCHEME_LEGACY = 0
+
+
   ! ---------------------------------
   ! The shared cloud coefficient data
   ! ---------------------------------
   TYPE(CloudCoeff_type), TARGET, SAVE :: CloudC
+  ! Experimental 'CRTM-Exp' shared data + which scheme is active
+  TYPE(CloudCoeff_Exp_type), TARGET, SAVE :: CloudC_Exp
+  INTEGER, SAVE :: Active_Cloud_Scheme = SCHEME_LEGACY
 
 
 CONTAINS
@@ -238,17 +256,41 @@ CONTAINS
     IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
 
-    ! Read the CloudCoeff data file
-    err_stat = CloudCoeff_ReadFile( &
-                 CloudCoeff_File, &
-                 CloudC, &
-                 netCDF = .NOT. Binary, &
-                 Quiet  = .NOT. noisy )
-     IF ( err_stat /= SUCCESS ) THEN
-       WRITE( msg,'("Error reading CloudCoeff file ",a)') TRIM(CloudCoeff_File)
-       CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-       RETURN
-     END IF
+    ! Read the CloudCoeff data file.
+    ! The experimental scheme is selected EXPLICITLY via Cloud_Model=='CRTM-Exp'
+    ! (never auto-detected from file contents) so a black-box user cannot trip
+    ! into it by swapping a coefficient file. Default => legacy, unchanged.
+    IF ( TRIM(ADJUSTL(Cloud_Model)) == 'CRTM-Exp' ) THEN
+      err_stat = CloudCoeff_Exp_netCDF_ReadFile( &
+                   CloudCoeff_File, &
+                   CloudC_Exp, &
+                   Quiet = .NOT. noisy )
+      IF ( err_stat /= SUCCESS ) THEN
+        WRITE( msg,'("Error reading experimental CloudCoeff file ",a)') TRIM(CloudCoeff_File)
+        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+        RETURN
+      END IF
+      Active_Cloud_Scheme = CRTM_EXP_CLOUDCOEFF
+      ! Mirror the phase-element count onto the (otherwise empty) legacy CloudC
+      ! scalar so the existing AtmOptics/CSvar allocations (sized from
+      ! CloudC%n_Phase_Elements) are correct for the experimental scheme. The
+      ! legacy CloudC arrays remain unallocated and unused.
+      CloudC%n_Phase_Elements = CloudC_Exp%n_Phase_Elements
+      IF ( noisy ) CALL Display_Message( ROUTINE_NAME, &
+        'Active cloud-optics scheme: CRTM-Exp (experimental)'//TRIM(pid_msg), INFORMATION )
+    ELSE
+      err_stat = CloudCoeff_ReadFile( &
+                   CloudCoeff_File, &
+                   CloudC, &
+                   netCDF = .NOT. Binary, &
+                   Quiet  = .NOT. noisy )
+      IF ( err_stat /= SUCCESS ) THEN
+        WRITE( msg,'("Error reading CloudCoeff file ",a)') TRIM(CloudCoeff_File)
+        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+        RETURN
+      END IF
+      Active_Cloud_Scheme = SCHEME_LEGACY
+    END IF
 
   CONTAINS
 
@@ -319,7 +361,9 @@ CONTAINS
       pid_msg = ''
     END IF
 
-    ! Destroy the structure
+    ! Destroy the structures (both schemes) and reset the active-scheme flag
+    CALL CloudCoeff_Exp_Destroy( CloudC_Exp )
+    Active_Cloud_Scheme = SCHEME_LEGACY
     CALL CloudCoeff_Destroy( CloudC )
     IF ( CloudCoeff_Associated( CloudC ) ) THEN
       err_stat = FAILURE
@@ -349,7 +393,9 @@ CONTAINS
 
   FUNCTION CRTM_CloudCoeff_IsLoaded() RESULT( IsLoaded )
     LOGICAL :: IsLoaded
-    IsLoaded = CloudCoeff_Associated( CloudC )
+    ! Loaded if EITHER the legacy or the experimental scheme data is present
+    IsLoaded = CloudCoeff_Associated( CloudC ) .OR. &
+               CloudCoeff_Exp_Associated( CloudC_Exp )
   END FUNCTION CRTM_CloudCoeff_IsLoaded
 
 END MODULE CRTM_CloudCoeff
