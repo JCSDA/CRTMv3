@@ -60,6 +60,15 @@ n_Phase_Elements = 6       // full Mueller (random orientation); 1 collapses to 
 
 ## 4. netCDF variables (CDL sketch)
 
+> **Array ordering.** The canonical **Fortran** order (fastest index first) is
+> `bulk(Frequency,Temperature,Mu,Dm,Habit)` and
+> `pcoeff(Phase_Elements,Legendre,Frequency,Temperature,Mu,Dm,Habit)`. The netCDF file stores
+> dims in the **reverse** (C/CDL) order, so `ncdump` shows e.g.
+> `ke(n_Habit,n_Dm,n_Mu,n_Temperature,n_Frequency)` and
+> `pcoeff(n_Habit,n_Dm,n_Mu,n_Temperature,n_Frequency,n_Legendre,n_Phase_Elements)`. The builder
+> writes the reversed order and the Fortran IO reads the canonical order directly (same convention
+> as the legacy file). The CDL below is shown in Fortran order for readability.
+
 ```
 // --- scheme identity ---
 :Scheme        = "CRTM-Exp" ;     // explicit; loader matches Cloud_Model
