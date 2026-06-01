@@ -385,3 +385,42 @@ Caveats / remaining work:
 rebuilt (legacy default fully restored, per Design contract #1). The permanent home for "use the
 full expansion, truncation LUT-driven" is the experimental scheme — see
 **`CloudCoeff_Experimental_Schema_v1.md`** for the v1 format + dispatch design.
+
+## 8. Implementation status — experimental scheme (branch `feature/btj_exp_cloud_optics`, 2026-06-01)
+
+Forward path is implemented end-to-end and validated; **legacy is byte-identical** throughout
+(verified by re-running the §7.2 map after every shared-file change).
+
+**CRTM side (Fortran), all opt-in behind `Cloud_Model='CRTM-Exp'`:**
+- `CloudCoeff_Exp_Define.f90` + `CloudCoeff_Exp_netCDF_IO.f90` — type + netCDF4 reader (round-trip
+  validated: writer↔reader α₁ match, dim-ordering confirmed).
+- `CRTM_CloudCoeff.f90` — explicit dispatch (load `CloudC_Exp`, set `Active_Cloud_Scheme`); `IsLoaded`
+  recognizes exp; phase-element count mirrored so existing allocations size correctly.
+- `CRTM_CloudScatter.f90` — `Get_Cloud_Opt_MW_Exp` interpolates `(Freq, D_eq, T)` per habit; sets
+  `n_Legendre_Terms` from the LUT (`n_Legendre_Eff`), **decoupled from the stream count**; `lOffset`
+  bypassed.
+- `CRTM_Parameters.f90` — `MAX_N_LEGENDRE_TERMS` 16→64; `CRTM_Forward_Module.f90` — cloud/aerosol
+  phase-match guard relaxed for exp (scalar v1).
+
+**Builder (Python, `tools/cloudcoeff_exp/`):** `dda_parse.py` (geom + `.avg`), `dda_build.py`
+(sample → parse → normalized-gamma PSD over `(Dm,μ)` in D_eq → Mätzler ε(T) absorption rescaling →
+Legendre projection → netCDF4). A 20-shape **physical aggregate LUT** loaded via `CRTM-Exp` and run
+through GMI forward gives realistic scattering (depression 0.7 K @10 GHz → 160 K @183 GHz), real
+T-sensitivity (`ka` ~2× over 233→273 K), and `n_Legendre_Eff` 3 (Rayleigh) → 64 (forward-peaked)
+vs. auto streams 6–8.
+
+**Truncation re-measurement on physical optics (preliminary):** at a *very thick* snow column
+(WC=0.5/layer, TB≈70 K, ω≈0.99) the full-LUT (64 terms) vs. cap-8 difference is only **~0.01 K** at
+166–183 GHz — the column is **scattering-saturated**, where deep multiple scattering washes out
+phase-function detail, so truncation barely matters there. The decoupling benefit is expected to be
+largest at **intermediate optical depth** (single/few-scattering, forward-peak-dominated); a
+water-content sweep to locate and quantify that regime is the immediate next measurement. *Useful
+finding in itself: the benefit is optical-depth-dependent — thick clouds are phase-insensitive.*
+
+**v1 limits:** 20-shape subset; **α₁/scalar only** (archive Mueller lacks S₃₃/S₃₄/S₄₄ → full GSF
+needs DDSCAT re-runs); single-T DDA + Mätzler rescaling (multi-T re-runs later); **sub-mm forward
+peak under-resolved** by the 1° angular grid (325/874 GHz truncate to ~13 terms — needs finer DDSCAT
+output + δ-fit); **forward-only** (TL/AD/K pending).
+
+**Remaining:** quantify truncation benefit vs optical depth (WC sweep); scale-up build + pristine
+habit; TL/AD/K integration; per-habit multi-file loader; full Mueller (re-runs); vector RT.

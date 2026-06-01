@@ -172,9 +172,11 @@ showed that's adequate; only the truncation order is freed.
 
 ## 8. Decisions — LOCKED 2026-06-01
 
-1. **Size coordinate = `Dm`** (mass-weighted mean diameter). Runtime maps the host `Effective_Radius`
-   → `Dm` internally (per habit/μ), so v1 is host-transparent and the file is 2-moment-ready. Reff
-   as the axis was rejected (conflates PSD scale with moment definition).
+1. **Size coordinate = `D_eq`** (volume-equivalent diameter = 2·aeff; exact mass proxy
+   `m = ρ_ice·(π/6)·D_eq³`, so m–D is verifiable against Thompson/HB via `geom_param` D_max).
+   Single-particle integration is over `D_eq`; the LUT axis stores the **mass-weighted mean `D_eq`
+   (`Dm`)** of the PSD. Both `D_eq` and mass come directly from the `.avg` `aeff` (no dependence on
+   `geom_param` or the unreliable shape CSV masses). Runtime maps host `Effective_Radius`→`Dm`.
 2. **`MAX_N_LEGENDRE_TERMS = 64`.** The archive spans to 874 GHz (ICI/sub-mm), where size parameters
    give convergence orders ~40–60; 64 is safe headroom. Runtime cost is negligible (`Pleg`,
    `Phase_Coefficient` working sets are ~100s of KB); only the LUT grows, and the near-zero
@@ -190,10 +192,19 @@ showed that's adequate; only the truncation order is freed.
    carry `Habit_Name` string for provenance/validation.
 
 Additional locked points:
-- **`n_Phase_Elements = 6` stored and populated** from the DDA Mueller matrices (the archive has
-  them). v1 scalar-RT validation consumes element 1 only; elements 2–6 light up with the vector-RT
-  polarization work — no format change to flip on.
+- **`n_Phase_Elements = 6` in the format**, but **v1 populates only element 1 (α₁) physically** —
+  this archive's `.avg` Mueller columns are `S_11,S_12,S_21,S_22,S_31,S_41` (no S₃₃/S₃₄/S₄₄), so
+  only the scalar phase function is buildable. Elements 2–6 (full vector RT) need DDSCAT re-runs with
+  more `S_ij`. No format change to add them later.
+- **Temperature via Mätzler ε(T) absorption rescaling (option 2).** The archive is single-T
+  (`ior_266K`); v1 scales `ka` (hence `ke`, `w`) by `ε″_ice(T,f)/ε″_ice(266,f)` (Mätzler 2006),
+  with `kb`/phase ~T-independent. Real, correctly-signed T-sensitivity now; multi-T DDA re-runs are
+  the production path. (Owner will run multi-T DDA later.)
+- **One habit/type per netCDF file** (don't force all hydrometeor types onto shared grids — keeps
+  each LUT unconstrained). The in-file `n_Habit` axis stays for genuinely-related habits. Loader
+  extension to a habit→file manifest / multi-file load is a follow-up; v1 loads one file.
+- **netCDF4 only** (no binary anywhere in the experimental scheme — CRTM v3.2.x+ doesn't require it).
+  deflate enabled on `pcoeff`.
 - **`n_Mu = 1`** in v1 (single assumed shape, host-transparent). 2-moment (`n_Mu>1`) is a data-only
   upgrade that additionally needs a `CRTM_Cloud_type` shape field — deferred to v1.1.
-- **netCDF deflate enabled** on `pcoeff` (crushes the near-zero high-order tails).
 ```
