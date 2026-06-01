@@ -409,13 +409,27 @@ through GMI forward gives realistic scattering (depression 0.7 K @10 GHz → 160
 T-sensitivity (`ka` ~2× over 233→273 K), and `n_Legendre_Eff` 3 (Rayleigh) → 64 (forward-peaked)
 vs. auto streams 6–8.
 
-**Truncation re-measurement on physical optics (preliminary):** at a *very thick* snow column
-(WC=0.5/layer, TB≈70 K, ω≈0.99) the full-LUT (64 terms) vs. cap-8 difference is only **~0.01 K** at
-166–183 GHz — the column is **scattering-saturated**, where deep multiple scattering washes out
-phase-function detail, so truncation barely matters there. The decoupling benefit is expected to be
-largest at **intermediate optical depth** (single/few-scattering, forward-peak-dominated); a
-water-content sweep to locate and quantify that regime is the immediate next measurement. *Useful
-finding in itself: the benefit is optical-depth-dependent — thick clouds are phase-insensitive.*
+**Truncation re-measurement on physical optics (COMPLETE — important, sobering result):**
+swept water content (0.002–0.5 kg/m²/layer) and ran a 2-D (Legendre truncation × quadrature streams)
+matrix on the physical aggregate LUT. At every optical depth, and at both `auto` (4 hemispheric) and
+forced-16 (9 hemispheric) streams, **TB at 166/183 GHz changes by ≤ ~0.04 K** across cap-4 → full
+(≤64 terms) AND across auto → 16 streams. The whole (truncation × streams) space spans ~0.04 K; the
+differences are non-monotonic (noise-level). i.e. **for MW aggregate snow, the radiances are
+insensitive to both the phase-function truncation and the stream count.**
+
+This corrects the earlier §7.3/§7.4 narrative: those used **forced streams `{4,8,16}`** (legacy
+couples streams↔Legendre), so the multi-Kelvin numbers were the *combined* stream+truncation change
+on the **Mie** and **Moradi-DDA** LUTs — whose phase functions are more forward-peaked than these
+aggregates. For aggregates (g≈0.6, moderately peaked), the asymmetry (χ₁) carries the effect and
+cap-4 already captures it; higher moments are a ≤0.04 K correction.
+
+**Implication:** the "decoupled truncation" is **correct and necessary for format flexibility**
+(and a prerequisite for vector RT / full phase matrix), but it buys **negligible scalar-intensity
+accuracy for MW aggregates**. Its radiative payoff is expected only where the phase function is
+sharply peaked — **sub-mm frequencies** and **pristine/rosette habits** — neither of which can be
+demonstrated with this archive yet (1° angular grid under-resolves the sub-mm forward peak; only the
+aggregate habit was built). Caveats on the negative result: 20-shape LUT (smoothed/noisy bulk phase
+function), aggregate habit only, PSD-averaging smooths structure, MW channels ≤183 GHz only.
 
 **v1 limits:** 20-shape subset; **α₁/scalar only** (archive Mueller lacks S₃₃/S₃₄/S₄₄ → full GSF
 needs DDSCAT re-runs); single-T DDA + Mätzler rescaling (multi-T re-runs later); **sub-mm forward
