@@ -111,8 +111,10 @@ def build_synthetic(path, L_max=64, n_dm=40, n_mu=1, n_t=5):
     write_netcdf(path, dm, mu, temp, ke, ka, kb, gg, neff, pcoeff, L_max, synthetic=True)
 
 
-def write_netcdf(path, dm, mu, temp, ke, ka, kb, gg, neff, pcoeff, L_max, synthetic):
-    NH = len(HABITS)
+def write_netcdf(path, dm, mu, temp, ke, ka, kb, gg, neff, pcoeff, L_max, synthetic, habits=None):
+    if habits is None:
+        habits = HABITS
+    NH = len(habits)
     nc = Dataset(path, "w", format="NETCDF4")
     # dimensions
     nc.createDimension("n_Frequency", len(FREQ_GHZ))
@@ -142,14 +144,14 @@ def write_netcdf(path, dm, mu, temp, ke, ka, kb, gg, neff, pcoeff, L_max, synthe
     cvar("Mu", ("n_Mu",), mu).units = "1"
     cvar("Temperature", ("n_Temperature",), temp).units = "K"
     # habit metadata
-    ids   = np.array([h[0] for h in HABITS], dtype="i4")
-    phase = np.array([h[2] for h in HABITS], dtype="i4")
-    mda   = np.array([h[3] for h in HABITS]); mdb = np.array([h[4] for h in HABITS])
+    ids   = np.array([h[0] for h in habits], dtype="i4")
+    phase = np.array([h[2] for h in habits], dtype="i4")
+    mda   = np.array([h[3] for h in habits]); mdb = np.array([h[4] for h in habits])
     nc.createVariable("Habit_Id", "i4", ("n_Habit",))[:] = ids
     nc.createVariable("Habit_Phase", "i4", ("n_Habit",))[:] = phase
     cvar("mD_a", ("n_Habit",), mda); cvar("mD_b", ("n_Habit",), mdb)
     names = nc.createVariable("Habit_Name", "S1", ("n_Habit", "nchar"))
-    names[:] = stringtochar(np.array([h[1].ljust(32) for h in HABITS], dtype="S32"))
+    names[:] = stringtochar(np.array([h[1].ljust(32) for h in habits], dtype="S32"))
     # bulk optics  (netCDF dims reversed from Fortran (Frequency,Temperature,Mu,Dm,Habit))
     bdims = ("n_Habit", "n_Dm", "n_Mu", "n_Temperature", "n_Frequency")
     cvar("ke", bdims, ke, zlib=True, complevel=4).units = "m^2/kg"
