@@ -431,6 +431,32 @@ demonstrated with this archive yet (1° angular grid under-resolves the sub-mm f
 aggregate habit was built). Caveats on the negative result: 20-shape LUT (smoothed/noisy bulk phase
 function), aggregate habit only, PSD-averaging smooths structure, MW channels ≤183 GHz only.
 
+### 8.1 What DOES matter: cloud-optics temperature sensitivity (the payoff)
+
+Same harness, isolating the optical-property T-dependence: froze the LUT to its coldest (233 K) and
+warmest (273 K) optics and ran both through the *identical* atmosphere. ΔTB = TB(273 K-optics) −
+TB(233 K-optics):
+
+| GMI band | WC=0.02/layer | WC=0.1/layer |
+|----------|--------------:|-------------:|
+| 10.65 GHz | 0.004 K | 0.02 K |
+| 23.8 GHz | 0.02 K | 0.10 K |
+| 89 GHz | 0.25 K | **2.35 K** |
+| 166 GHz | 1.37 K | **10.76 K** |
+| 183 GHz | 1.57 K | **11.36 K** |
+
+**Temperature beats truncation/streams by ~250×** (≤0.04 K vs up to ~11 K). And the **legacy
+solid-MW LUT has no temperature axis at all** — so the experimental scheme captures a multi-Kelvin
+effect the current paradigm misses entirely. Physics: multiple scattering washes out phase-function
+*angular detail* (→ truncation negligible), but the *absorption magnitude* — which the T-dependence
+controls (ε″_ice roughly doubles 233→273 K) — directly sets the emission/scattering balance over the
+long scattering path, so it moves TB strongly. **Takeaway for LUT effort: get the absorption and its
+T-dependence right; phase-function angular detail barely matters for MW ice/snow.**
+
+Caveat: magnitude is from the Mätzler ε(T) *rescaling* (option 2); the ~11 K shows it's a first-order
+effect that justifies the production **multi-T DDA re-runs**. 233↔273 K is the full plausible range;
+realistic intra-cloud T spreads give a fraction of this, but the legacy "no-T" error is of this order.
+
 **v1 limits:** 20-shape subset; **α₁/scalar only** (archive Mueller lacks S₃₃/S₃₄/S₄₄ → full GSF
 needs DDSCAT re-runs); single-T DDA + Mätzler rescaling (multi-T re-runs later); **sub-mm forward
 peak under-resolved** by the 1° angular grid (325/874 GHz truncate to ~13 terms — needs finer DDSCAT
