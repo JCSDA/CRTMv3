@@ -739,7 +739,8 @@ CONTAINS
          END IF
        ENDDO
 
-       IF( RTV%mth_Azi == 0 ) THEN
+       ! Unpolarized thermal source: intensity (I) slot only (see full-MOM branch).
+       IF( RTV%mth_Azi == 0 .AND. MOD(i-1,RTV%n_Stokes) == 0 ) THEN
          RTV%s_Layer_Source_UP(i,KL) = ( ONE - RTV%Thermal_C(i,KL) ) * Planck_Func
          RTV%s_Layer_Source_DOWN(i,KL) = RTV%s_Layer_Source_UP(i,KL)
        END IF
@@ -786,14 +787,29 @@ CONTAINS
    IF( RTV%mth_Azi == 0 ) THEN
      DO i = 1, nZ
        RTV%Thermal_C(i,KL) = ZERO
-       DO j = 1, n_Streams, RTV%n_Stokes
+       ! Energy-conservation (Kirchhoff) sum over the INTENSITY stream columns
+       ! (every n_Stokes-th column, across all n_Streams quadrature streams).
+       ! The previous bound (n_Streams) dropped the high-angle intensity columns
+       ! for n_Stokes>1 -- including each high-angle row's own diagonal self-
+       ! transmission -- inflating those I slots.  Reduces to the scalar bound
+       ! (n_Streams) when n_Stokes==1.
+       DO j = 1, n_Streams*RTV%n_Stokes, RTV%n_Stokes
          RTV%Thermal_C(i,KL) = RTV%Thermal_C(i,KL) + (trans(i,j) + refl(i,j) )
        END DO
-       IF ( i == nZ .AND. nZ == (n_Streams+1) ) THEN
-         RTV%Thermal_C(i,KL) = RTV%Thermal_C(i,KL) + trans(nZ,nZ)
+       ! Append the satellite-angle diagonal transmission for the sat intensity
+       ! row (the extra zero-weight stream added for the view angle).  Reduces to
+       ! the scalar "i==nZ .AND. nZ==n_Streams+1 -> trans(nZ,nZ)" form.
+       IF ( i == (nZ - RTV%n_Stokes + 1) .AND. RTV%n_Angles == (n_Streams+1) ) THEN
+         RTV%Thermal_C(i,KL) = RTV%Thermal_C(i,KL) + trans(i,i)
        END IF
-       RTV%s_Layer_Source_UP(i,KL) = ( ONE - RTV%Thermal_C(i,KL) ) * Planck_Func
-       RTV%s_Layer_Source_DOWN(i,KL) = RTV%s_Layer_Source_UP(i,KL)
+       ! Thermal emission is UNPOLARIZED: only the intensity (I) Stokes slot
+       ! carries a thermal source.  Emitting (1-Thermal_C)*Planck into the
+       ! Q/U/V slots (where Thermal_C~0) injects a spurious ~full-Planck source
+       ! in every layer -> the n_Stokes>1 cloudy radiance inflation.
+       IF( MOD(i-1,RTV%n_Stokes) == 0 ) THEN
+         RTV%s_Layer_Source_UP(i,KL) = ( ONE - RTV%Thermal_C(i,KL) ) * Planck_Func
+         RTV%s_Layer_Source_DOWN(i,KL) = RTV%s_Layer_Source_UP(i,KL)
+       END IF
      END DO
 
    END IF
