@@ -1577,8 +1577,14 @@ CONTAINS
           ! Coupled polarization from atmosphere
           ! considered. Simply copy the data
           ! ------------------------------------
-          SfcOptics_TL%Emissivity   = Emissivity_TL(1:nZ,1:nL)
-          SfcOptics_TL%Reflectivity = Reflectivity_TL(1:nZ,1:nL,1:nZ,1:nL)
+          ! NOTE: index the LHS sub-blocks (matching the forward model, L812-813)
+          ! so the allocatable target keeps its (MAX_N_ANGLES,MAX_N_STOKES) size.
+          ! A whole-array assignment here reallocates the target to (nZ,nL), which
+          ! shrinks SfcOptics_TL%Emissivity below MAX_N_STOKES and causes a
+          ! subsequent FASTEM-X surface TL write (Iv/Ih/U/V => 4 Stokes) to run
+          ! out of bounds for n_Stokes>1.
+          SfcOptics_TL%Emissivity(1:nZ,1:nL)             = Emissivity_TL(1:nZ,1:nL)
+          SfcOptics_TL%Reflectivity(1:nZ,1:nL,1:nZ,1:nL) = Reflectivity_TL(1:nZ,1:nL,1:nZ,1:nL)
 
         END IF Decoupled_Polarization
 
