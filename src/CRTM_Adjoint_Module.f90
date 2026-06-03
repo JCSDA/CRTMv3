@@ -308,7 +308,7 @@ CONTAINS
     Options      ) &  ! Optional FWD input,  M
   RESULT( Error_Status )
     USE CRTM_AerosolCoeff,        ONLY: AeroC
-    USE CRTM_CloudCoeff,          ONLY: CloudC
+    USE CRTM_CloudCoeff,          ONLY: CloudC, Active_Cloud_Scheme, CRTM_EXP_CLOUDCOEFF
     ! Arguments
     TYPE(CRTM_Atmosphere_type)       , INTENT(IN)     :: Atmosphere(:)      ! M
     TYPE(CRTM_Surface_type)          , INTENT(IN)     :: Surface(:)         ! M
@@ -992,6 +992,16 @@ CONTAINS
             END IF
           END IF
 
+
+          ! The experimental cloud scheme sets AtmOptics%n_Legendre_Terms dynamically
+          ! (decoupled from streams) in the forward CloudScatter above, overwriting the
+          ! L882 stream-count value.  Propagate it to the AD/clear-AD structures so the
+          ! adjoint RT/Combine/clear-sky-copy run the SAME operator as the forward/TL
+          ! (required for the adjoint to be the exact transpose).
+          IF ( Active_Cloud_Scheme == CRTM_EXP_CLOUDCOEFF ) THEN
+            AtmOptics_AD%n_Legendre_Terms       = AtmOptics%n_Legendre_Terms
+            AtmOptics_Clear_AD%n_Legendre_Terms = AtmOptics%n_Legendre_Terms
+          END IF
 
           ! Compute the combined atmospheric optical properties
           IF( AtmOptics%Include_Scattering ) THEN

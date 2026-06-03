@@ -559,6 +559,15 @@ CONTAINS
     ! ------
     Error_Status = SUCCESS
     IF (Atm%n_Clouds == 0) RETURN
+    ! Experimental cloud-optics scheme: TL of the cloud optical properties is not yet
+    ! implemented -> hold cloud optics fixed (zero TL).  Propagate the (dynamically
+    ! set) forward Legendre count so AtmOptics_TL stays congruent with AtmOptics for
+    ! the downstream RT/Combine/clear-sky-copy TL.  (Avoids the legacy MW interp on
+    ! the empty mirrored legacy CloudC.)
+    IF ( Active_Cloud_Scheme == CRTM_EXP_CLOUDCOEFF ) THEN
+      CScat_TL%n_Legendre_Terms = CScat%n_Legendre_Terms
+      RETURN
+    END IF
     ! Spectral variables
     Frequency_MW = SC(SensorIndex)%Frequency(ChannelIndex)
     Frequency_IR = SC(SensorIndex)%Wavenumber(ChannelIndex)
@@ -804,6 +813,11 @@ CONTAINS
     ! ------
     Error_Status = SUCCESS
     IF ( Atm%n_Clouds == 0 ) RETURN
+    ! Experimental cloud-optics scheme: AD of the cloud optical properties is not yet
+    ! implemented (transpose of the zero-TL stub).  No cloud-optics adjoint is
+    ! back-propagated.  (The n_Legendre congruence is handled in the AD driver right
+    ! after the forward cloud scatter, since this routine runs late in the reverse pass.)
+    IF ( Active_Cloud_Scheme == CRTM_EXP_CLOUDCOEFF ) RETURN
     ! Spectral variables
     Frequency_MW = SC(SensorIndex)%Frequency(ChannelIndex)
     Frequency_IR = SC(SensorIndex)%Wavenumber(ChannelIndex)
