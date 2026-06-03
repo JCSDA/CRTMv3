@@ -1,0 +1,4 @@
+# Regenerable artifacts — rebuild LUTs with ren_build.py from the Ren dataset,
+# figures with plot_exp_lut.py / plot_exp_pol.py. Keep source + docs only.
+*.nc
+*.png
