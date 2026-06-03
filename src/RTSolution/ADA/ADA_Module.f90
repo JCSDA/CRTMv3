@@ -1864,7 +1864,12 @@ CONTAINS
 
        ENDDO
 
-         DO i = nZ, 1, -RTV%n_Stokes
+         ! Thermal source lives in the INTENSITY slots only (forward/TL use
+         ! DO i=1,nZ,n_Stokes).  The adjoint must walk the same slots; the previous
+         ! bound (nZ,1,-n_Stokes) started at nZ -> the POLARIZED slots for n_Stokes>1,
+         ! so Planck_Atmosphere_AD/T_OD_AD for clear layers came out ~0.  Start at the
+         ! last intensity slot (reduces to nZ,1,-1 when n_Stokes==1).
+         DO i = nZ-RTV%n_Stokes+1, 1, -RTV%n_Stokes
            s_source_up_AD(i) = s_source_up_AD(i) +  s_source_down_AD(i)
            s_trans_AD(i,i) = s_trans_AD(i,i) - RTV%Planck_Atmosphere(k) * s_source_up_AD(i)
            Planck_Atmosphere_AD(k) = Planck_Atmosphere_AD(k) + s_source_up_AD(i) * (ONE - RTV%s_Layer_Trans(i,i,k) )
@@ -2183,7 +2188,11 @@ CONTAINS
            trans_AD(i,i) = trans_AD(i,i) + Thermal_C_AD
          END IF
 
-         DO j = n_Streams*RTV%n_Stokes, 1, -RTV%n_Stokes
+         ! Intensity stream columns (1,1+ns,...) -- the transpose of the forward
+         ! DO j=1,n_Streams*n_Stokes,n_Stokes.  (Reverse-stride from n_Streams*n_Stokes
+         ! would land on the polarized columns for n_Stokes>1; accumulation is
+         ! per-j independent so forward order is fine.)
+         DO j = 1, n_Streams*RTV%n_Stokes, RTV%n_Stokes
            trans_AD(i,j) = trans_AD(i,j) + Thermal_C_AD
            refl_AD(i,j) = refl_AD(i,j) + Thermal_C_AD
          ENDDO
