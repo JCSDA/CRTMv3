@@ -101,7 +101,18 @@ def build_habit(root, csv_path, habit, habit_id, habit_name, n_shapes,
         raise RuntimeError("no particles parsed")
     print(f"  parsed {len(parts)}/{len(leaves)} shapes")
 
-    freqs = np.array(sorted(set(int(x) for p in parts for x in p["f"])))
+    # Keep only frequencies with adequate shape coverage (the archive's DDA runs
+    # are complete to ~190 GHz; >=205 GHz is only partially computed). Building a
+    # frequency from a handful of shapes gives a biased/extrapolated PSD integral.
+    all_freqs = sorted(set(int(x) for p in parts for x in p["f"]))
+    fcount = {f: sum(1 for p in parts if f in set(int(x) for x in p["f"])) for f in all_freqs}
+    min_keep = max(8, int(0.7 * len(parts)))
+    freqs = np.array([f for f in all_freqs if fcount[f] >= min_keep])
+    dropped = [(f, fcount[f]) for f in all_freqs if fcount[f] < min_keep]
+    if dropped:
+        print("  WARNING undersampled freqs dropped (need >=%d shapes): %s"
+              % (min_keep, ", ".join("%dGHz(%d)" % (f, c) for f, c in dropped)))
+    print("  kept %d freqs: %d-%d GHz" % (len(freqs), freqs[0], freqs[-1]))
     NF = len(freqs)
     ntheta = len(parts[0]["theta"]); theta = parts[0]["theta"]
     f_index = {f: i for i, f in enumerate(freqs)}

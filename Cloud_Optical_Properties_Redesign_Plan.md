@@ -427,9 +427,9 @@ cap-4 already captures it; higher moments are a ≤0.04 K correction.
 (and a prerequisite for vector RT / full phase matrix), but it buys **negligible scalar-intensity
 accuracy for MW aggregates**. Its radiative payoff is expected only where the phase function is
 sharply peaked — **sub-mm frequencies** and **pristine/rosette habits** — neither of which can be
-demonstrated with this archive yet (1° angular grid under-resolves the sub-mm forward peak; only the
+demonstrated with this archive yet (the DDA runs are only complete to ~190 GHz — see §8.2; only the
 aggregate habit was built). Caveats on the negative result: 20-shape LUT (smoothed/noisy bulk phase
-function), aggregate habit only, PSD-averaging smooths structure, MW channels ≤183 GHz only.
+function), aggregate habit only, PSD-averaging smooths structure, MW channels ≤190 GHz only.
 
 ### 8.1 What DOES matter: cloud-optics temperature sensitivity (the payoff)
 
@@ -458,9 +458,22 @@ effect that justifies the production **multi-T DDA re-runs**. 233↔273 K is the
 realistic intra-cloud T spreads give a fraction of this, but the legacy "no-T" error is of this order.
 
 **v1 limits:** 20-shape subset; **α₁/scalar only** (archive Mueller lacks S₃₃/S₃₄/S₄₄ → full GSF
-needs DDSCAT re-runs); single-T DDA + Mätzler rescaling (multi-T re-runs later); **sub-mm forward
-peak under-resolved** by the 1° angular grid (325/874 GHz truncate to ~13 terms — needs finer DDSCAT
-output + δ-fit); **forward-only** (TL/AD/K pending).
+needs DDSCAT re-runs); single-T DDA + Mätzler rescaling (multi-T re-runs later); **valid 3–190 GHz
+only** — the archive's DDA runs are incomplete above 190 GHz (see §8.2); **forward-only** (TL/AD/K pending).
+
+### 8.2 Data-completeness gotcha found via visualization (2026-06-03)
+
+The first overview plot of the physical LUT showed a non-physical V-shaped dip in `ke`, `g`, and the
+truncation order at **205–240 GHz**. Root cause: the archive's DDSCAT runs are **only complete to
+~190 GHz** — at ≥205 GHz only **~3 of 40 shapes** have `w000r000.avg` output. The builder had used all
+25 frequency folders, so everything ≥205 GHz was integrated from ~3 shapes (with silent `np.interp`
+extrapolation over the missing size range) → garbage. **Fix:** `dda_build.py` now requires adequate
+per-frequency shape coverage (≥ max(8, 0.7·N_shapes)) and **drops undersampled frequencies** with a
+warning. The rebuilt LUT spans a clean **3–190 GHz** (15 frequencies) and the dip is gone.
+
+Implication: completing the **≥205 GHz DDA runs** (sub-mm, ICI) is a prerequisite for the high-frequency
+LUT — and is also where the phase-function truncation *might* finally pay off. Overview figure:
+`tools/cloudcoeff_exp/cloudcoeff_exp_overview.png` (plotter: `plot_exp_lut.py`).
 
 **Remaining:** quantify truncation benefit vs optical depth (WC sweep); scale-up build + pristine
 habit; TL/AD/K integration; per-habit multi-file loader; full Mueller (re-runs); vector RT.
