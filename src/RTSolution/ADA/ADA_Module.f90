@@ -730,7 +730,10 @@ CONTAINS
            RTV%s_Layer_Trans(i,i,KL) = RTV%s_Layer_Trans(i,i,KL) + &
              ONE - optical_depth/COS_Angle(i)
          END IF
-         IF( RTV%mth_Azi == 0 ) THEN
+         ! Energy-conservation (Kirchhoff) factor: sum only over the intensity
+         ! columns (every n_Stokes-th), matching the doubling/MOM branch below;
+         ! the polarized Q/U/V columns must not enter the thermal balance.
+         IF( RTV%mth_Azi == 0 .AND. MOD(j-1,RTV%n_Stokes) == 0 ) THEN
            RTV%Thermal_C(i,KL) = RTV%Thermal_C(i,KL) + &
            ( RTV%s_Layer_Refl(i,j,KL) + RTV%s_Layer_Trans(i,j,KL) )
          END IF
