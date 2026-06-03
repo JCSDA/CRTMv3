@@ -58,7 +58,7 @@ ax[1,1].set(xlabel="Frequency (GHz)", ylabel="n_Legendre_Eff", title="Phase-fn t
 for f_t in (89, 166, 183):
     jf = int(np.argmin(np.abs(freq - f_t)))
     ax[1,2].plot(T, ka[0,idm,0,:,jf]/ka[0,idm,0,itc,jf], "-o", ms=4, label=f"{round(freq[jf])} GHz")
-ax[1,2].set(xlabel="Temperature (K)", ylabel="ka(T) / ka(263 K)", title="Absorption T-sensitivity (ε(T) rescaling)"); ax[1,2].grid(True, alpha=.3); ax[1,2].legend(fontsize=8)
+ax[1,2].set(xlabel="Temperature (K)", ylabel=f"ka(T) / ka({int(round(T[itc]))} K)", title="Absorption temperature sensitivity"); ax[1,2].grid(True, alpha=.3); ax[1,2].legend(fontsize=8)
 
 fig.tight_layout(rect=[0,0,1,0.97])
 fig.savefig(out, dpi=110)
