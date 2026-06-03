@@ -2898,7 +2898,7 @@ CONTAINS
     INTEGER,        INTENT(IN)     :: k
     TYPE(RTV_type), INTENT(IN OUT) :: RTV
     ! Local variables
-    INTEGER :: i, j, nZ, i1, j1
+    INTEGER :: i, j, nZ, i1, j1, ii, jj
 
     nZ = RTV%n_Angles
 
@@ -2957,6 +2957,19 @@ CONTAINS
         j1 = (j-1)*RTV%n_Stokes + 1
         RTV%Pff(i1,j1,k)=RTV%Pff(i1,j1,k)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k))
         RTV%Pbb(i1,j1,k)=RTV%Pbb(i1,j1,k)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k))
+      END DO
+      ! D2: scale this row's polarized off-diagonal block elements by the same
+      ! intensity-normalization factor (polarized blocks are pre-built for all
+      ! columns j; the (1,1) elements were scaled just above).
+      DO j = 1, nZ
+        j1 = (j-1)*RTV%n_Stokes + 1
+        DO jj = 0, RTV%n_Stokes-1
+          DO ii = 0, RTV%n_Stokes-1
+            IF( ii == 0 .AND. jj == 0 ) CYCLE
+            RTV%Pff(i1+ii,j1+jj,k)=RTV%Pff(i1+ii,j1+jj,k)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k))
+            RTV%Pbb(i1+ii,j1+jj,k)=RTV%Pbb(i1+ii,j1+jj,k)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k))
+          END DO
+        END DO
       END DO
       RTV%Sum_Fac(i,k)=ZERO
       IF( i < nZ ) THEN
