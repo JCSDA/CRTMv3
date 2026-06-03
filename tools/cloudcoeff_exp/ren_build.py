@@ -106,11 +106,16 @@ def build(root, scheme, out, mu_val=0.0, n_dm=30, L_max=64, tol=1e-3, freqs=None
                 KB[0, idm, 0, it, jf] = np.trapz(Nd*sb, Dg)/M
                 w = Nd*sc                                  # sca-weighted bulk P11 -> alpha1
                 P11b = np.trapz(w[:, None]*p11g, Dg, axis=0) / max(np.trapz(w, Dg), 1e-30)
-                a1 = legendre_alpha1(s["ang"], P11b, L_max)
-                GG[0, idm, 0, it, jf] = a1[1]
-                sig = np.where(np.abs(a1) >= tol)[0]
+                chi = legendre_alpha1(s["ang"], P11b, L_max)          # bare chi_l (chi_1 = g)
+                GG[0, idm, 0, it, jf] = chi[1]
+                # CRTM phase-coefficient convention: coeff(l) = (2l+1)/2 * chi_l, and the
+                # reader multiplies the stored value by 0.5 -> store (2l+1)*chi_l.
+                # (Verified vs legacy CloudCoeff: pcoeff(l=1)/g = 1.5 = (2*1+1)/2.)
+                coeff = (2*np.arange(L_max) + 1) * chi
+                amax = np.abs(coeff).max()
+                sig = np.where(np.abs(coeff) >= tol*amax)[0] if amax > 0 else np.array([], int)
                 NEFF[0, idm, 0, it, jf] = int(sig[-1]+1) if sig.size else 1
-                PCO[0, idm, 0, it, jf, :, 0] = a1
+                PCO[0, idm, 0, it, jf, :, 0] = coeff
 
     write_netcdf(out, freqs, Dm_grid*1e6, np.array([mu_val]), np.array(TEMPS, float),
                  KE, KA, KB, GG, NEFF, PCO, L_max, scheme)
