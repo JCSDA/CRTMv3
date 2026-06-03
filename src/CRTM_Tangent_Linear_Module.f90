@@ -690,21 +690,10 @@ CONTAINS
          RETURN
       END IF
 
-      IF ( Atm%n_Aerosols > 0 .AND. CRTM_AerosolCoeff_IsLoaded() .AND. &
-           (RTV(1)%n_Stokes > 1 .AND. AeroC%N_PHASE_ELEMENTS < 6 )) THEN
-         Error_Status = FAILURE
-         WRITE( Message,'("N_PHASE_ELEMENTS OF AEROSOL LUT NOT RIGHT ",i0)' ) AeroC%N_PHASE_ELEMENTS
-         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-         RETURN
-      END IF
-
-      IF ( CRTM_CloudCoeff_IsLoaded() .AND. CRTM_AerosolCoeff_IsLoaded() .AND. &
-           (CloudC%N_PHASE_ELEMENTS /= AeroC%N_PHASE_ELEMENTS) ) THEN
-         Error_Status = FAILURE
-         WRITE( Message,'("N_PHASE_ELEMENTS OF CLOUD AND AEROSOL LUTS DO NOT MATCH")' )
-         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-         RETURN
-      END IF
+      ! Clouds and aerosols are independent scatterers; aerosols are unpolarized
+      ! (scalar LUT) and must not block a polarized run, and the cloud/aerosol
+      ! phase-element counts need not match.  AtmOptics is sized by n_Stokes below
+      ! and each scatter routine fills only its own elements (see CRTM_Forward_Module).
 
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads) PRIVATE(Message)
       DO nt = 1, n_channel_threads
@@ -713,11 +702,11 @@ CONTAINS
         CALL CRTM_AtmOptics_Create( AtmOptics(nt), &
                                     Atm%n_Layers        , &
                                     MAX_N_LEGENDRE_TERMS, &
-                                    CloudC%N_PHASE_ELEMENTS  )
+                                    MERGE(MAX_N_PHASE_ELEMENTS, 1, Opt%n_Stokes > 1)  )
         CALL CRTM_AtmOptics_Create( AtmOptics_TL(nt), &
                                     Atm%n_Layers        , &
                                     MAX_N_LEGENDRE_TERMS, &
-                                    CloudC%N_PHASE_ELEMENTS  )
+                                    MERGE(MAX_N_PHASE_ELEMENTS, 1, Opt%n_Stokes > 1)  )
 
       IF ( Options_Present ) THEN
         AtmOptics(nt)%depolarization = Opt%depolarization
