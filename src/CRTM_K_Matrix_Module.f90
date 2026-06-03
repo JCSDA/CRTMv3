@@ -726,8 +726,9 @@ CONTAINS
         RETURN
       END IF
 
-      ! Check n_Stokes and number of phase elements
-      IF ( CRTM_CloudCoeff_IsLoaded() .AND. &
+      ! Check n_Stokes and number of phase elements.  Only enforce the polarized
+      ! (>=6 element) requirement when the species is actually present in the profile.
+      IF ( Atm%n_Clouds > 0 .AND. CRTM_CloudCoeff_IsLoaded() .AND. &
            (RTV(1)%n_Stokes > 1 .AND. CloudC%N_PHASE_ELEMENTS < 6 )) THEN
         Error_Status = FAILURE
         WRITE( Message,'("N_PHASE_ELEMENTS OF CLOUD LUT NOT RIGHT ",i0)' ) CloudC%N_PHASE_ELEMENTS
@@ -735,7 +736,7 @@ CONTAINS
         RETURN
       END IF
 
-      IF ( CRTM_AerosolCoeff_IsLoaded() .AND. &
+      IF ( Atm%n_Aerosols > 0 .AND. CRTM_AerosolCoeff_IsLoaded() .AND. &
            (RTV(1)%n_Stokes > 1 .AND. AeroC%N_PHASE_ELEMENTS < 6 )) THEN
         Error_Status = FAILURE
         WRITE( Message,'("N_PHASE_ELEMENTS OF AEROSOL LUT NOT RIGHT ",i0)' ) AeroC%N_PHASE_ELEMENTS
