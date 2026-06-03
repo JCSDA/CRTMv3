@@ -1498,6 +1498,9 @@ CONTAINS
      IF( optical_depth < DELTA_OPTICAL_DEPTH ) THEN
        s = optical_depth * single_albedo
        s_TL = optical_depth_TL * single_albedo + optical_depth * single_albedo_TL
+       ! Polarized (Q/U/V) slots carry no thermal source -> source TL is zero there.
+       source_up_TL(:)   = ZERO
+       source_down_TL(:) = ZERO
        DO i = 1, nZ
          Thermal_C_TL = ZERO
          c = s/COS_Angle(i)
@@ -1509,11 +1512,13 @@ CONTAINS
              trans_TL(i,j) = trans_TL(i,j) - optical_depth_TL/COS_Angle(i)
            END IF
 
-         IF( RTV%mth_Azi == 0 .and. (RTV%n_Stokes == 1 .or. mod(j,RTV%n_Stokes)==0) ) THEN
+         ! Kirchhoff sum over the INTENSITY columns only (matches FWD/AD).
+         IF( RTV%mth_Azi == 0 .and. MOD(j-1,RTV%n_Stokes) == 0 ) THEN
              Thermal_C_TL = Thermal_C_TL + refl_TL(i,j) + trans_TL(i,j)
            END IF
          ENDDO
-         IF( RTV%mth_Azi == 0 ) THEN
+         ! Unpolarized thermal source: intensity (I) slot only.
+         IF( RTV%mth_Azi == 0 .and. MOD(i-1,RTV%n_Stokes) == 0 ) THEN
            source_up_TL(i) = -Thermal_C_TL * Planck_Func + &
              ( ONE - RTV%Thermal_C(i,KL) ) * Planck_Func_TL
            source_down_TL(i) = source_up_TL(i)
@@ -1566,15 +1571,18 @@ CONTAINS
      IF( RTV%mth_Azi == 0 ) THEN
        DO i = 1, nZ
          Thermal_C_TL = ZERO
-         DO j = 1, n_Streams, RTV%n_Stokes
+         DO j = 1, n_Streams*RTV%n_Stokes, RTV%n_Stokes
            Thermal_C_TL = Thermal_C_TL + (trans_TL(i,j) + refl_TL(i,j))
          ENDDO
-         IF(i == nZ .AND. nZ == (n_Streams+1)) THEN
-           Thermal_C_TL = Thermal_C_TL + trans_TL(nZ,nZ)
+         IF( i == (nZ - RTV%n_Stokes + 1) .AND. RTV%n_Angles == (n_Streams+1) ) THEN
+           Thermal_C_TL = Thermal_C_TL + trans_TL(i,i)
          ENDIF
-         thermal_up_TL(i) = -Thermal_C_TL * Planck_Func  &
-           + ( ONE - RTV%Thermal_C(i,KL) ) * Planck_Func_TL
-         thermal_down_TL(i) = thermal_up_TL(i)
+         ! Unpolarized thermal source: intensity (I) slot only.
+         IF( MOD(i-1,RTV%n_Stokes) == 0 ) THEN
+           thermal_up_TL(i) = -Thermal_C_TL * Planck_Func  &
+             + ( ONE - RTV%Thermal_C(i,KL) ) * Planck_Func_TL
+           thermal_down_TL(i) = thermal_up_TL(i)
+         END IF
        ENDDO
      END IF
      !
@@ -1973,7 +1981,9 @@ CONTAINS
        s = optical_depth * single_albedo
        DO i = 1, nZ
          c = s/COS_Angle(i)
-         IF( RTV%mth_Azi == 0 ) THEN
+         ! Polarized rows have no thermal-source sensitivity (FWD source there is 0).
+         Thermal_C_AD = ZERO
+         IF( RTV%mth_Azi == 0 .AND. MOD(i-1,RTV%n_Stokes) == 0 ) THEN
            source_up_AD(i) = source_up_AD(i) + source_down_AD(i)
            source_down_AD(i) = ZERO
            Planck_Func_AD = Planck_Func_AD + (ONE - RTV%Thermal_C(i,KL))*source_up_AD(i)
@@ -1995,7 +2005,8 @@ CONTAINS
            bb_AD(i,j) = bb_AD(i,j) + c * refl_AD(i,j) * COS_Weight(j)
          ENDDO
 
-         source_up_AD(i) = ZERO
+         source_up_AD(i)   = ZERO
+         source_down_AD(i) = ZERO   ! consume polarized-row source adjoint
          s_AD = s_AD + c_AD/COS_Angle(i)
          c_AD = ZERO
        ENDDO
@@ -2161,14 +2172,18 @@ CONTAINS
        DO i = nZ, 1, -1
          thermal_up_AD(i) = thermal_up_AD(i) + thermal_down_AD(i)
          thermal_down_AD(i) = ZERO
-         Planck_Func_AD = Planck_Func_AD + ( ONE - RTV%Thermal_C(i,KL) ) * thermal_up_AD(i)
-         Thermal_C_AD = -thermal_up_AD(i) * Planck_Func
-
-         IF ( i == nZ .AND. nZ == (n_Streams+1) ) THEN
-           trans_AD(nZ,nZ) = trans_AD(nZ,nZ) + Thermal_C_AD
+         ! Unpolarized thermal source: intensity (I) slot only.
+         Thermal_C_AD = ZERO
+         IF( MOD(i-1,RTV%n_Stokes) == 0 ) THEN
+           Planck_Func_AD = Planck_Func_AD + ( ONE - RTV%Thermal_C(i,KL) ) * thermal_up_AD(i)
+           Thermal_C_AD = -thermal_up_AD(i) * Planck_Func
          END IF
 
-         DO j = n_Streams, 1, -RTV%n_Stokes
+         IF ( i == (nZ - RTV%n_Stokes + 1) .AND. RTV%n_Angles == (n_Streams+1) ) THEN
+           trans_AD(i,i) = trans_AD(i,i) + Thermal_C_AD
+         END IF
+
+         DO j = n_Streams*RTV%n_Stokes, 1, -RTV%n_Stokes
            trans_AD(i,j) = trans_AD(i,j) + Thermal_C_AD
            refl_AD(i,j) = refl_AD(i,j) + Thermal_C_AD
          ENDDO
