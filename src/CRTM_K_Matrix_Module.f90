@@ -774,6 +774,14 @@ CONTAINS
           IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
           AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
           AtmOptics_K(nt)%n_Stokes = RTV(nt)%n_Stokes
+          ! Re-sync SfcOptics%n_Stokes here: it was set from RTV(nt)%n_Stokes at
+          ! structure-allocation time (above), BEFORE RTV%n_Stokes was assigned from
+          ! Opt%n_Stokes on the line above -- so it held the default (1) and drove
+          ! CRTM_Compute_SfcOptics down the scalar per-channel-polarization path,
+          ! inconsistent with CRTM_Forward / CRTM_Adjoint (which set RTV%n_Stokes
+          ! before SfcOptics%n_Stokes and so use the coupled n_Stokes>1 surface).
+          SfcOptics(nt)%n_Stokes   = RTV(nt)%n_Stokes
+          SfcOptics_K(nt)%n_Stokes = RTV(nt)%n_Stokes
         END IF
 
         IF ( .NOT. CRTM_AtmOptics_Associated( Atmoptics(nt)   ) .OR. &
