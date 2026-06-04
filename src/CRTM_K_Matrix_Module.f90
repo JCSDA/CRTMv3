@@ -1848,6 +1848,14 @@ CONTAINS
              rts_K%Radiance    , &  ! Input
              NLTE_Predictor_K    )  ! Output
       END IF
+      ! For vector RT (n_Stokes>1) the RT-solver adjoint ingests the radiance
+      ! adjoint seed from Stokes(1) (Common_RTSolution.f90 Assign_Common_Input_AD),
+      ! NOT from %Radiance -- BT depends only on Stokes(1)=I=Radiance.  Mirror the
+      ! Planck-temperature adjoint into Stokes(1) so the seed reaches the solver;
+      ! without this the n_Stokes>1 Jacobians come out identically zero.  %Radiance
+      ! is left intact for the scalar-style fractional-cloud clear/cloudy combine
+      ! (a full Stokes-space fractional combine for n_Stokes>1 remains separate).
+      IF ( Opt%n_Stokes > 1 ) rts_K%Stokes(1) = rts_K%Stokes(1) + rts_K%Radiance
     END SUBROUTINE Pre_Process_RTSolution_K
   END FUNCTION CRTM_K_Matrix
 END MODULE CRTM_K_Matrix_Module
