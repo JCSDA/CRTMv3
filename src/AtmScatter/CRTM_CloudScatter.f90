@@ -1380,7 +1380,12 @@ CONTAINS
            END IF ! Cloud scatter
         ENDIF !Cloud_Type
       CASE (FROZEN)
-        IF (Cloud_Type .EQ. ICE_CLOUD) THEN
+        ! ICE_CLOUD's legacy MW shortcut (single non-scattering bin j=1, w=0) is appropriate only for
+        ! the Mie-TAMU coeff, which has no submm reff/albedo data for cloud ice. With the DDA-ARTS
+        ! database ICE_CLOUD maps to a full habit (IceSphere) that DOES carry scattering data, so route
+        ! it through the scattering ELSE branch below -- exactly as IR/VIS (Get_Cloud_Opt_IR) and all
+        ! other frozen habits already do. (Gate on the Mie-TAMU discriminator ALL(Reff_MW>0).)
+        IF (Cloud_Type .EQ. ICE_CLOUD .AND. ALL(CloudC%Reff_MW .GT. ZERO)) THEN
            j = 1
            CALL interp_1D( CloudC%ke_S_MW(csi%i1:csi%i2,j,k), csi%wlp, ke )
            CALL interp_1D( CloudC%kb_S_MW(csi%i1:csi%i2,j,k), csi%wlp, kb )
@@ -1588,7 +1593,9 @@ CONTAINS
            END IF
         END IF ! Cloud_Type
      CASE (FROZEN)
-        IF (Cloud_Type .EQ. ICE_CLOUD) THEN
+        ! DDA-ARTS ICE_CLOUD scatters (see FWD Get_Cloud_Opt_MW); gate the Mie-TAMU-only non-scattering
+        ! shortcut so DDA cloud ice uses the same 2-D TL interpolation as the other frozen habits.
+        IF (Cloud_Type .EQ. ICE_CLOUD .AND. ALL(CloudC%Reff_MW .GT. ZERO)) THEN
             ! No TL interpolation of extinction coefficient as it
             ! is only a fn. of frequency for ice cloud
             ke_TL = ZERO
@@ -1851,7 +1858,9 @@ CONTAINS
            END IF
         END IF
      CASE (FROZEN)
-        IF (Cloud_Type .EQ. ICE_CLOUD) THEN
+        ! DDA-ARTS ICE_CLOUD scatters (see FWD Get_Cloud_Opt_MW); gate the Mie-TAMU-only non-scattering
+        ! shortcut so DDA cloud ice uses the same 2-D AD interpolation as the other frozen habits.
+        IF (Cloud_Type .EQ. ICE_CLOUD .AND. ALL(CloudC%Reff_MW .GT. ZERO)) THEN
            ! No AD interpolation as it is only a fn.
            ! of frequency for ice cloud
            ! ---------------------------------------
