@@ -50,20 +50,29 @@ def main():
     src_attr = getattr(ref, "Source", "")
     ref.close()
 
+    # Strict value-match only on the axes the reader interpolates (Frequency, Dm, Temperature).
+    # Mu is NOT value-matched: the reader uses n_Mu=1 and the optics are pre-integrated, so each
+    # habit may be BAKED at its own mu (e.g. a PSD-shape sweep on one habit). Only n_Mu shape must agree.
+    STRICT = ("Frequency", "Dm", "Temperature")
+    nMu = axes["Mu"].size
+
     ke = []; ka = []; kb = []; g = []; neff = []; pco = []
-    ids = []; names = []; phase = []; mda = []; mdb = []
+    ids = []; names = []; phase = []; mda = []; mdb = []; mus = []
     for hid, name, fn in specs:
         d = Dataset(fn)
-        for v in AXIS_VARS:
+        for v in STRICT:
             if not np.allclose(d[v][:].astype(float), axes[v]):
                 raise SystemExit("FATAL: %s axis %s mismatches reference %s" % (fn, v, specs[0][2]))
+        if d.dimensions["n_Mu"].size != nMu:
+            raise SystemExit("FATAL: %s n_Mu shape mismatch" % fn)
         if d.dimensions["n_Legendre"].size != L or d.dimensions["n_Phase_Elements"].size != NP:
             raise SystemExit("FATAL: %s Legendre/Phase dims mismatch" % fn)
         ke.append(d["ke"][0]); ka.append(d["ka"][0]); kb.append(d["kb"][0]); g.append(d["g"][0])
         neff.append(d["n_Legendre_Eff"][0]); pco.append(d["pcoeff"][0])
         ids.append(hid); names.append(name); phase.append(int(d["Habit_Phase"][0]))
         mda.append(float(d["mD_a"][0])); mdb.append(float(d["mD_b"][0]))
-        print("  habit %2d <- %-32s %s" % (hid, name, fn))
+        mus.append(float(d["Mu"][0]))
+        print("  habit %2d <- %-32s %s  (baked mu=%g)" % (hid, name, fn, mus[-1]))
         d.close()
 
     NH = len(specs)
@@ -79,7 +88,7 @@ def main():
     nc.PSD = "normalized_gamma"; nc.Orientation = "random"
     nc.Source = src_attr
     nc.Note = ("multi-habit assembly via ren_assemble.py; habits: "
-               + ", ".join("%d=%s" % (i, n) for i, n in zip(ids, names)))
+               + ", ".join("%d=%s(mu=%g)" % (i, n, mu) for i, n, mu in zip(ids, names, mus)))
 
     def cv(nm, dims, data, **k):
         x = nc.createVariable(nm, "f8", dims, **k); x[:] = data; return x

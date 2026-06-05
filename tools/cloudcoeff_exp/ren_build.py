@@ -130,28 +130,34 @@ def self_test(Lmax=64, nang=498):
 
 
 # ---------------------------------------------------------------- data reading
-def read_scheme_T(root, scheme, T):
-    hits = glob.glob(os.path.join(root, "**", "Scheme%d" % scheme, "T%d" % T, "isca.dat"),
-                     recursive=True)
+def read_node_T(root, node, T):
+    """Read one (habit-node, temperature) folder. `node` is the directory name that varies by
+    database: 'Scheme{N}' for the Ren snow DB (doi:10.18738/T8/LGJ9SA), 'massR_{R}' for the
+    conical-graupel DB (doi:10.18738/T8/DWZXZX). Both share the isca.dat (wl,Dmax,vol,area,
+    Qext,ssa,g) + 6 Pxx.dat (498-angle) format. N_SIZE is auto-detected (Ren=131, graupel=70;
+    particle size is the inner loop, so it = #leading rows sharing the first wavelength)."""
+    hits = glob.glob(os.path.join(root, "**", node, "T%d" % T, "isca.dat"), recursive=True)
     if not hits:
-        raise FileNotFoundError("Scheme%d/T%d/isca.dat not found under %s" % (scheme, T, root))
+        raise FileNotFoundError("%s/T%d/isca.dat not found under %s" % (node, T, root))
     base = os.path.dirname(hits[0])
     isca = np.loadtxt(os.path.join(base, "isca.dat"))
-    nf = isca.shape[0] // N_SIZE
-    isca = isca.reshape(nf, N_SIZE, 7)
+    wl0 = isca[:, 0]
+    nsize = int(np.argmax(wl0 != wl0[0])) or isca.shape[0]      # inner-loop particle-size count
+    nf = isca.shape[0] // nsize
+    isca = isca.reshape(nf, nsize, 7)
     P = {}
     for nm in PHASE_FILES:
         with open(os.path.join(base, nm + ".dat")) as fh:
             ang = np.array(fh.readline().split(), dtype=float)
-        P[nm] = np.loadtxt(os.path.join(base, nm + ".dat"), skiprows=1).reshape(nf, N_SIZE, ang.size)
+        P[nm] = np.loadtxt(os.path.join(base, nm + ".dat"), skiprows=1).reshape(nf, nsize, ang.size)
     return dict(nf=nf, ang=ang, wl=isca[..., 0], Dmax=isca[..., 1], vol=isca[..., 2],
                 area=isca[..., 3], qext=isca[..., 4], ssa=isca[..., 5], g=isca[..., 6], P=P)
 
 
-def build(root, scheme, out, mu_val=0.0, n_dm=30, L_max=64, tol=1e-3, dm_max_um=10000.0,
-          habit_id=4, habit_name=None):
+def build(root, node, out, mu_val=0.0, n_dm=30, L_max=64, tol=1e-3, dm_max_um=10000.0,
+          habit_id=4, habit_name=None, prov="Snow", source=""):
     print("self-test:"); self_test(L_max)
-    s0 = read_scheme_T(root, scheme, TEMPS[0])
+    s0 = read_node_T(root, node, TEMPS[0])
     NF = s0["nf"]; nang = s0["ang"].size; theta = s0["ang"]; NT = len(TEMPS)
     freqs = np.round(C_LIGHT/(s0["wl"][:, 0]*1e-6)/1e9, 3)
     pr = Projector(theta, L_max)
@@ -167,7 +173,7 @@ def build(root, scheme, out, mu_val=0.0, n_dm=30, L_max=64, tol=1e-3, dm_max_um=
     PCO = np.zeros((1, n_dm, 1, NT, NF, L_max, 6))
 
     for it, T in enumerate(TEMPS):
-        s = read_scheme_T(root, scheme, T)
+        s = read_node_T(root, node, T)
         sext = (s["qext"]*s["area"]*1e-12)[:, order]
         ssca = sext*s["ssa"][:, order]; sabs = sext - ssca
         # per-particle F-matrix elements (P12.. are ratios; F34 = -F43)
@@ -199,14 +205,14 @@ def build(root, scheme, out, mu_val=0.0, n_dm=30, L_max=64, tol=1e-3, dm_max_um=
                 PCO[0, idm, 0, it, jf, :, :] = A.T            # (L_max, 6)
 
     write_netcdf(out, freqs, Dm_grid*1e6, np.array([mu_val]), np.array(TEMPS, float),
-                 KE, KA, KB, GG, NEFF, PCO, L_max, scheme,
+                 KE, KA, KB, GG, NEFF, PCO, L_max, prov=prov, source=source,
                  habit_id=habit_id, habit_name=habit_name)
-    print("wrote %s  (scheme=%s, habit_id=%d, %d freq %g-%g GHz, %d T, %d Dm, n_Legendre_Eff %d-%d, 6 phase elements)"
-          % (out, SCHEME_NAME[scheme], habit_id, NF, freqs.min(), freqs.max(), NT, n_dm, NEFF.min(), NEFF.max()))
+    print("wrote %s  (material=%s, habit_id=%d, %d freq %g-%g GHz, %d T, %d Dm, n_Legendre_Eff %d-%d, 6 phase elements)"
+          % (out, prov, habit_id, NF, freqs.min(), freqs.max(), NT, n_dm, NEFF.min(), NEFF.max()))
 
 
-def write_netcdf(path, freq, dm, mu, temp, ke, ka, kb, g, neff, pcoeff, L_max, scheme,
-                 habit_id=4, habit_name=None):
+def write_netcdf(path, freq, dm, mu, temp, ke, ka, kb, g, neff, pcoeff, L_max, prov="Snow",
+                 source="", habit_id=4, habit_name=None):
     nc = Dataset(path, "w", format="NETCDF4")
     for n, v in [("n_Frequency", len(freq)), ("n_Dm", len(dm)), ("n_Mu", len(mu)),
                  ("n_Temperature", len(temp)), ("n_Habit", 1), ("n_Legendre", L_max),
@@ -214,7 +220,7 @@ def write_netcdf(path, freq, dm, mu, temp, ke, ka, kb, g, neff, pcoeff, L_max, s
         nc.createDimension(n, v)
     nc.Scheme = "CRTM-Exp"; nc.Release = np.int32(1); nc.Version = np.int32(2)
     nc.PSD = "normalized_gamma"; nc.Orientation = "random"
-    nc.Source = "Ren et al. 2022 snow II-TM/IGOM, doi:10.18738/T8/LGJ9SA, %s" % SCHEME_NAME[scheme]
+    nc.Source = source or ("Ren et al. 2022 snow II-TM/IGOM, doi:10.18738/T8/LGJ9SA, %s" % prov)
     nc.Note = "v2: full 6-element GSF (a1,a2,a3,a4,b1,b2); coeff=(2l+1)*chi_l (reader x0.5); real 5-T"
 
     def cv(nm, dims, data, **k):
@@ -223,7 +229,7 @@ def write_netcdf(path, freq, dm, mu, temp, ke, ka, kb, g, neff, pcoeff, L_max, s
     cv("Dm", ("n_Dm",), dm).units = "microns"
     cv("Mu", ("n_Mu",), mu); cv("Temperature", ("n_Temperature",), temp).units = "K"
     if habit_name is None:
-        habit_name = "Snow_%s" % SCHEME_NAME[scheme]
+        habit_name = prov
     nc.createVariable("Habit_Id", "i4", ("n_Habit",))[:] = [habit_id]  # CRTM cloud-type integer
     nc.createVariable("Habit_Phase", "i4", ("n_Habit",))[:] = [1]      # frozen
     cv("mD_a", ("n_Habit",), [0.0]); cv("mD_b", ("n_Habit",), [0.0])
@@ -241,17 +247,32 @@ def write_netcdf(path, freq, dm, mu, temp, ke, ka, kb, g, neff, pcoeff, L_max, s
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", required=True)
-    ap.add_argument("--scheme", type=int, default=2, choices=[1, 2, 3, 4])
+    ap.add_argument("--scheme", type=int, default=2, choices=[1, 2, 3, 4],
+                    help="Ren snow m-D scheme (ignored if --massr is given)")
+    ap.add_argument("--massr", default=None,
+                    help="conical-graupel mass ratio, e.g. 0.500 (doi:10.18738/T8/DWZXZX); "
+                         "selects folder massR_<massr> and switches DB from Ren-snow to graupel")
     ap.add_argument("-o", "--output", default=None)
     ap.add_argument("--mu", type=float, default=0.0)
     ap.add_argument("--n-dm", type=int, default=30)
-    ap.add_argument("--habit-id", type=int, default=4,
-                    help="CRTM cloud-type integer for this habit (2=ICE,4=SNOW,5=GRAUPEL)")
-    ap.add_argument("--habit-name", default=None, help="provenance string (default Snow_<scheme>)")
+    ap.add_argument("--habit-id", type=int, default=None,
+                    help="CRTM cloud-type integer (2=ICE,4=SNOW,5=GRAUPEL); default 4 snow / 5 graupel")
+    ap.add_argument("--habit-name", default=None, help="provenance string")
     ap.add_argument("--selftest-only", action="store_true")
     a = ap.parse_args()
     if a.selftest_only:
         self_test(); raise SystemExit
-    out = a.output or "CloudCoeff_Exp_RenSnow_%s.nc" % SCHEME_NAME[a.scheme]
-    build(a.root, a.scheme, out, mu_val=a.mu, n_dm=a.n_dm,
-          habit_id=a.habit_id, habit_name=a.habit_name)
+    if a.massr is not None:
+        node   = "massR_%s" % a.massr
+        prov   = "ConicalGraupel_massR%s" % a.massr
+        source = "Tang et al. 2017 conical graupel, doi:10.18738/T8/DWZXZX, massR %s" % a.massr
+        hid    = a.habit_id if a.habit_id is not None else 5
+        out    = a.output or "CloudCoeff_Exp_Graupel_massR%s.nc" % a.massr
+    else:
+        node   = "Scheme%d" % a.scheme
+        prov   = "Snow_%s" % SCHEME_NAME[a.scheme]
+        source = "Ren et al. 2022 snow II-TM/IGOM, doi:10.18738/T8/LGJ9SA, %s" % SCHEME_NAME[a.scheme]
+        hid    = a.habit_id if a.habit_id is not None else 4
+        out    = a.output or "CloudCoeff_Exp_RenSnow_%s.nc" % SCHEME_NAME[a.scheme]
+    build(a.root, node, out, mu_val=a.mu, n_dm=a.n_dm,
+          habit_id=hid, habit_name=a.habit_name, prov=prov, source=source)

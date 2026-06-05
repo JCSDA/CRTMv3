@@ -17,7 +17,7 @@ PROGRAM exp_aws_scatter
   CHARACTER(*), PARAMETER :: PROGRAM_NAME = 'exp_aws_scatter'
   CHARACTER(*), PARAMETER :: PATH    = './testinput/'
   CHARACTER(*), PARAMETER :: SENSOR  = 'mwr_aws'
-  CHARACTER(*), PARAMETER :: LUT     = 'CloudCoeff_Exp_RenSnow_isg.nc'
+  CHARACTER(*), PARAMETER :: LUT     = 'CloudCoeff_Exp_Full6.nc'
 
   INTEGER, PARAMETER :: N_PROFILES = 2          ! 1 = clear, 2 = cloudy
   INTEGER, PARAMETER :: N_LAYERS   = 100
@@ -26,8 +26,8 @@ PROGRAM exp_aws_scatter
   INTEGER, PARAMETER :: N_AEROSOLS = 0
   REAL(fp), PARAMETER :: ZENITH = 53.0_fp       ! AWS conical scan ~53 deg
 
-  ! cloud vertical band (layer indices; ~300-450 hPa in this profile -> T~230-255 K)
-  INTEGER, PARAMETER :: KC1 = 58, KC2 = 70
+  ! cloud vertical band (warm-ish band so liquid habits are realistic; frozen still valid)
+  INTEGER, PARAMETER :: KC1 = 78, KC2 = 86
 
   TYPE(CRTM_ChannelInfo_type)             :: chinfo(1)
   TYPE(CRTM_Geometry_type)                :: geo(N_PROFILES)
@@ -41,11 +41,14 @@ PROGRAM exp_aws_scatter
   INTEGER, PARAMETER :: NSHOW = 4
   INTEGER, PARAMETER :: SHOW_CH(NSHOW) = (/ 9, 10, 11, 16 /)
 
-  ! experiment sweep
+  ! experiment sweep — all 6 habits of the complete LUT
   INTEGER  :: hk, wk
-  INTEGER,  PARAMETER :: HID(3)  = (/ ICE_CLOUD, SNOW_CLOUD, GRAUPEL_CLOUD /)
-  CHARACTER(6), PARAMETER :: HNM(3) = (/ 'ICE   ','SNOW  ','GRAUP '/)
-  REAL(fp), PARAMETER :: REFF(3) = (/ 60.0_fp, 500.0_fp, 500.0_fp /)   ! microns -> Dm
+  INTEGER,  PARAMETER :: NHAB = 6
+  INTEGER,  PARAMETER :: HID(NHAB)  = (/ WATER_CLOUD, ICE_CLOUD, RAIN_CLOUD, &
+                                         SNOW_CLOUD, GRAUPEL_CLOUD, HAIL_CLOUD /)
+  CHARACTER(6), PARAMETER :: HNM(NHAB) = (/ 'WATER ','ICE   ','RAIN  ','SNOW  ','GRAUP ','HAIL  '/)
+  REAL(fp), PARAMETER :: REFF(NHAB) = (/ 15.0_fp, 60.0_fp, 1000.0_fp, &
+                                         500.0_fp, 500.0_fp, 4000.0_fp /)   ! microns -> Dm
   REAL(fp), PARAMETER :: WC(3)   = (/ 0.05_fp, 0.2_fp, 0.5_fp /)       ! kg/m^2 per layer
 
   ! --------------------------------------------------------------------------
@@ -93,7 +96,7 @@ PROGRAM exp_aws_scatter
   WRITE(*,'(a)')  '  habit   Reff   WC/lyr |   89.0   165.5   176.3   325.2 GHz   | TBclr@89'
   WRITE(*,'(a)')  '  -----   ----   ------ | ------  ------  ------  ------       | --------'
 
-  DO hk = 1, 3
+  DO hk = 1, NHAB
     DO wk = 1, 3
       ! reset cloudy profile = clear profile + a frozen cloud in the band
       atm(2)            = atm(1)
