@@ -75,12 +75,12 @@ else() # Download CRTM coefficients
   set( CRTM_COEFFS_BRANCH_PREFIX "" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
   set( CRTM_COEFFS_BRANCH "fix_REL-3.2.0.0" )  #Note switch to 3.2.0 when tarball ready
 
-  set(CRTM_COEFFS_PATH ${CMAKE_BINARY_DIR}/test_data/${PROJECT_VERSION})
+  set(CRTM_COEFFS_PATH ${CMAKE_SOURCE_DIR}/test-data-release)
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
 
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
   set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz)
-  set(checksum "056d34c0fadfd67444e69907b013a30a") # MD5SUM of fix_REL-3.2.0.0.tgz
+  set(checksum "7386f5003071ab5075ac2644bfff786a") # MD5SUM of fix_REL-3.2.0.0.tgz
   
   # Check if the CRTM binary tarball is already present otherwise download it.
   if (DEFINED ENV{CRTM_BINARY_FILES_TARBALL})
@@ -102,7 +102,7 @@ else() # Download CRTM coefficients
   # -- UNTAR -- 
   
   # Define the directory to untar into
-  set(UNTAR_DEST "${CMAKE_BINARY_DIR}/test_data/${PROJECT_VERSION}")
+  set(UNTAR_DEST "${CMAKE_SOURCE_DIR}/test-data-release")
     message(STATUS "Checking if ${UNTAR_DEST}/${CRTM_COEFFS_BRANCH} already exists...")
   # Only untar if the CHECK_PATH does not exist
   if(NOT EXISTS ${UNTAR_DEST}/${CRTM_COEFFS_BRANCH}/)
@@ -121,7 +121,9 @@ else() # Download CRTM coefficients
   endif()
 endif()
 
-
+  set (CRTM_TESTFILES_PATH ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH}/fix)
+  message(STATUS "Downloaded CRTM files are placed at ${CRTM_TESTFILES_PATH} ")
+  set_property (GLOBAL PROPERTY CRTM_TESTFILES_PATH ${CRTM_TESTFILES_PATH})
 
 # Create list of sensor ids for testing
 list( APPEND Simple_Sensor_Ids
@@ -552,6 +554,26 @@ else()
 endif()
 unset(_TMS_TAU)
 unset(_TMS_SPC)
+
+# test_TELSEM2_MWland
+# Stage the TELSEM2 atlas under a test-only name (NOT the default
+# TELSEM2.MWland.EmisCoeff.nc) so the drop-in default behaviour of the other
+# land tests, which use NESDIS_LandEM, is left unchanged. The test loads it
+# explicitly via the MWlandCoeff_File argument. Registered only when the atlas
+# is present in the staged fix tree.
+set(_TELSEM2_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/EmisCoeff/MW_Land/netCDF/TELSEM2.MWland.EmisCoeff.nc")
+add_executable(test_TELSEM2_MWland mains/unit/Unit_Test/test_TELSEM2_MWland.f90)
+target_link_libraries(test_TELSEM2_MWland PRIVATE crtm)
+if(EXISTS "${_TELSEM2_FIX}")
+  execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                   "${_TELSEM2_FIX}"
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/TELSEM2.MWland.test.nc" )
+  add_test(NAME test_TELSEM2_MWland
+           COMMAND $<TARGET_FILE:test_TELSEM2_MWland>)
+else()
+  message(STATUS "TELSEM2 atlas not found at ${_TELSEM2_FIX}; test_TELSEM2_MWland will not be registered.")
+endif()
+unset(_TELSEM2_FIX)
 
 # Check for canonical PARMIO LUT and AWS coefficients inside the staged
 # test_data tree. Tests are registered only when the files are present at

@@ -81,6 +81,9 @@ MODULE CRTM_LifeCycle
   USE CRTM_PARMIOCoeff       , ONLY: CRTM_PARMIOCoeff_Load, &
                                      CRTM_PARMIOCoeff_Destroy, &
                                      CRTM_PARMIOCoeff_IsLoaded
+  USE CRTM_MWlandCoeff       , ONLY: CRTM_MWlandCoeff_Load, &
+                                     CRTM_MWlandCoeff_Destroy, &
+                                     CRTM_MWlandCoeff_IsLoaded
   ! ...OpenMP API
 #ifdef _OPENMP
   USE OMP_LIB
@@ -549,6 +552,7 @@ CONTAINS
     MWwaterCoeff_File   , &  ! Optional input
     MWwaterCoeff_Scheme , &  ! Optional input
     PARMIOCoeff_File    , &  ! Optional input
+    MWlandCoeff_File    , &  ! Optional input
     IRwaterCoeff_Format , &  ! Optional input
     IRlandCoeff_Format  , &  ! Optional input
     IRsnowCoeff_Format  , &  ! Optional input
@@ -589,6 +593,7 @@ CONTAINS
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: MWwaterCoeff_File
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: MWwaterCoeff_Scheme
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: PARMIOCoeff_File
+    CHARACTER(*),      OPTIONAL, INTENT(IN)  :: MWlandCoeff_File
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRwaterCoeff_Format
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRlandCoeff_Format
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRsnowCoeff_Format
@@ -631,6 +636,7 @@ CONTAINS
     CHARACTER(SL) :: Default_MWwaterCoeff_File
     CHARACTER(SL) :: Default_MWwaterCoeff_Scheme
     CHARACTER(SL) :: Resolved_PARMIOCoeff_File
+    CHARACTER(SL) :: Resolved_MWlandCoeff_File
     CHARACTER(SL) :: Default_IRwaterCoeff_Format
     CHARACTER(SL) :: Default_IRlandCoeff_Format
     CHARACTER(SL) :: Default_IRsnowCoeff_Format
@@ -652,6 +658,7 @@ CONTAINS
     LOGICAL :: netCDF, isSEcategory
     LOGICAL :: Quiet_
     LOGICAL :: parmio_explicit, parmio_present
+    LOGICAL :: mwland_explicit, mwland_present
     INTEGER :: iQuiet ! TODO: iQuiet should be removed once load routine interfaces have been modified
     Quiet_ = .TRUE.
     IF ( PRESENT(Quiet) ) Quiet_ = Quiet
@@ -1135,6 +1142,45 @@ CONTAINS
         CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
         RETURN
       END IF
+
+      ! ...TELSEM2 MW land emissivity atlas. Same "drop-in when present" policy
+      !    as PARMIO: by default CRTM_Init auto-loads
+      !    File_Path/TELSEM2.MWland.EmisCoeff.nc when present, otherwise the MW
+      !    land surface optics fall back to the NESDIS_LandEM model. Passing
+      !    MWlandCoeff_File explicitly points at a non-default location and a
+      !    missing file is then treated as an error.
+      mwland_explicit = .FALSE.
+      IF ( PRESENT(MWlandCoeff_File) ) THEN
+        Resolved_MWlandCoeff_File = TRIM(ADJUSTL(MWlandCoeff_File))
+        IF ( LEN_TRIM(Resolved_MWlandCoeff_File) > 0 ) mwland_explicit = .TRUE.
+      END IF
+      IF ( .NOT. mwland_explicit ) THEN
+        Resolved_MWlandCoeff_File = 'TELSEM2.MWland.EmisCoeff.nc'
+      END IF
+      IF ( PRESENT(File_Path) ) THEN
+        Resolved_MWlandCoeff_File = TRIM(ADJUSTL(File_Path)) // TRIM(Resolved_MWlandCoeff_File)
+      END IF
+      INQUIRE(FILE=TRIM(Resolved_MWlandCoeff_File), EXIST=mwland_present)
+      IF ( mwland_present ) THEN
+        IF ( .NOT. Quiet_ ) THEN
+          WRITE(*, '("Loading TELSEM2 MW land emissivity atlas: ", a)') TRIM(Resolved_MWlandCoeff_File)
+        END IF
+        err_stat = CRTM_MWlandCoeff_Load( &
+                     TRIM(Resolved_MWlandCoeff_File), &
+                     Quiet             = Quiet            , &
+                     Process_ID        = Process_ID       , &
+                     Output_Process_ID = Output_Process_ID  )
+        IF ( err_stat /= SUCCESS ) THEN
+          msg = 'Error loading MWlandCoeff data from '//TRIM(Resolved_MWlandCoeff_File)
+          CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+          RETURN
+        END IF
+      ELSE IF ( mwland_explicit ) THEN
+        msg = 'MWlandCoeff_File explicitly supplied but file not found: '//TRIM(Resolved_MWlandCoeff_File)
+        err_stat = FAILURE
+        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+        RETURN
+      END IF
     END IF Microwave_Sensor
 
 
@@ -1340,6 +1386,16 @@ CONTAINS
     END IF
 
     IF ( CRTM_PARMIOCoeff_IsLoaded() ) CALL CRTM_PARMIOCoeff_Destroy()
+
+    ! ...TELSEM2 MW land emissivity atlas
+    IF ( CRTM_MWlandCoeff_IsLoaded() ) THEN
+      Destroy_Status = CRTM_MWlandCoeff_Destroy( Process_ID = Process_ID )
+      IF ( Destroy_Status /= SUCCESS ) THEN
+        err_stat = Destroy_Status
+        msg = 'Error deallocating shared MWlandCoeff data structure'//TRIM(pid_msg)
+        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+      END IF
+    END IF
 
   END FUNCTION CRTM_Destroy
 

@@ -1369,7 +1369,7 @@ CONTAINS
 
     ! If all Reff_MW existed in the CloudCoeff then  CloudC%Reff_MW should be greater than zero and
     ! will use Reff for interpolation otherwise will use the water content
-    IF (ALL(CloudC%Reff_MW .GT. ZERO)) THEN
+    IF (CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
        csi%r_int = MAX(MIN(CloudC%Reff_MW(CloudC%n_MW_Radii),Reff),CloudC%Reff_MW(1))
        CALL find_index(CloudC%Reff_MW, csi%r_int, csi%j1,csi%j2, csi%r_outbound)
        csi%r = CloudC%Reff_MW(csi%j1:csi%j2)
@@ -1438,7 +1438,12 @@ CONTAINS
            END IF ! Cloud scatter
         ENDIF !Cloud_Type
       CASE (FROZEN)
-        IF (Cloud_Type .EQ. ICE_CLOUD) THEN
+        ! ICE_CLOUD's legacy MW shortcut (single non-scattering bin j=1, w=0) is appropriate only for
+        ! the Mie-TAMU coeff, which has no submm reff/albedo data for cloud ice. With the DDA-ARTS
+        ! database ICE_CLOUD maps to a full habit (IceSphere) that DOES carry scattering data, so route
+        ! it through the scattering ELSE branch below -- exactly as IR/VIS (Get_Cloud_Opt_IR) and all
+        ! other frozen habits already do. (Gate on the Mie-TAMU discriminator ALL(Reff_MW>0).)
+        IF (Cloud_Type .EQ. ICE_CLOUD .AND. CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
            j = 1
            CALL interp_1D( CloudC%ke_S_MW(csi%i1:csi%i2,j,k), csi%wlp, ke )
            CALL interp_1D( CloudC%kb_S_MW(csi%i1:csi%i2,j,k), csi%wlp, kb )
@@ -1770,7 +1775,7 @@ CONTAINS
 
      ! If all Reff_MW existed in the CloudCoeff then  CloudC%Reff_MW should be greater than zero and
     ! will use Reff for interpolation otherwise will use the water content
-    IF (ALL(CloudC%Reff_MW .GT. ZERO)) THEN
+    IF (CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
        ! Find the index of the given cloud type (k) in CloudCoeff
        ! The array index starts from zero but findloc starts from 1
        cloud_loc = FINDLOC(CLOUD_TYPE_MIE_TAMU, Cloud_Type, DIM=1) - 1
@@ -1876,7 +1881,9 @@ CONTAINS
            END IF
         END IF ! Cloud_Type
      CASE (FROZEN)
-        IF (Cloud_Type .EQ. ICE_CLOUD) THEN
+        ! DDA-ARTS ICE_CLOUD scatters (see FWD Get_Cloud_Opt_MW); gate the Mie-TAMU-only non-scattering
+        ! shortcut so DDA cloud ice uses the same 2-D TL interpolation as the other frozen habits.
+        IF (Cloud_Type .EQ. ICE_CLOUD .AND. CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
             ! No TL interpolation of extinction coefficient as it
             ! is only a fn. of frequency for ice cloud
             ke_TL = ZERO
@@ -2004,7 +2011,7 @@ CONTAINS
 
     ! If all Reff_MW existed in the CloudCoeff then  CloudC%Reff_MW should be greater than zero and
     ! will use Reff for interpolation otherwise will use the water content
-    IF (ALL(CloudC%Reff_MW .GT. ZERO)) THEN
+    IF (CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
        ! Find the index of the given cloud type (k) in CloudCoeff
        ! The array index starts from zero but findloc starts from 1
        cloud_loc = FINDLOC(CLOUD_TYPE_MIE_TAMU, Cloud_Type, DIM=1) - 1
@@ -2132,14 +2139,16 @@ CONTAINS
                           f_AD, f_int_AD    ) ! AD  Output
            ! The AD outputs
            Temperature_AD = Temperature_AD + t_int_AD
-           IF (ALL(CloudC%Reff_MW .GT. ZERO)) THEN
+           IF (CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
               Reff_AD = Reff_AD + r_int_AD
            ELSE
               Water_Density_AD = Water_Density_AD + r_int_AD
            END IF
         END IF
      CASE (FROZEN)
-        IF (Cloud_Type .EQ. ICE_CLOUD) THEN
+        ! DDA-ARTS ICE_CLOUD scatters (see FWD Get_Cloud_Opt_MW); gate the Mie-TAMU-only non-scattering
+        ! shortcut so DDA cloud ice uses the same 2-D AD interpolation as the other frozen habits.
+        IF (Cloud_Type .EQ. ICE_CLOUD .AND. CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
            ! No AD interpolation as it is only a fn.
            ! of frequency for ice cloud
            ! ---------------------------------------
@@ -2210,7 +2219,7 @@ CONTAINS
                           wlp_AD,           & ! AD  Input
                           f_AD, f_int_AD    ) ! AD  Output
            ! The AD outputs
-           IF (ALL(CloudC%Reff_MW .GT. ZERO)) THEN
+           IF (CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
               Reff_AD = Reff_AD + r_int_AD
            ELSE
               Water_Density_AD = Water_Density_AD + r_int_AD
