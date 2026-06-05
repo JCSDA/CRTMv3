@@ -2,3 +2,10 @@
 # figures with plot_exp_lut.py / plot_exp_pol.py. Keep source + docs only.
 *.nc
 *.png
+
+# Ren snow database: keep nothing of the bulk data in git.
+# Tarballs (re-download with download_ren_snow.sh) and the extracted ASCII tree.
+ren_snow/*.tar.gz
+ren_snow/SnowflakeModel_MW_part*/
+ren_snow/SnowflakeModel_UVIR_part*/
+__pycache__/

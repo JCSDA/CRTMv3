@@ -148,7 +148,8 @@ def read_scheme_T(root, scheme, T):
                 area=isca[..., 3], qext=isca[..., 4], ssa=isca[..., 5], g=isca[..., 6], P=P)
 
 
-def build(root, scheme, out, mu_val=0.0, n_dm=30, L_max=64, tol=1e-3, dm_max_um=10000.0):
+def build(root, scheme, out, mu_val=0.0, n_dm=30, L_max=64, tol=1e-3, dm_max_um=10000.0,
+          habit_id=4, habit_name=None):
     print("self-test:"); self_test(L_max)
     s0 = read_scheme_T(root, scheme, TEMPS[0])
     NF = s0["nf"]; nang = s0["ang"].size; theta = s0["ang"]; NT = len(TEMPS)
@@ -198,12 +199,14 @@ def build(root, scheme, out, mu_val=0.0, n_dm=30, L_max=64, tol=1e-3, dm_max_um=
                 PCO[0, idm, 0, it, jf, :, :] = A.T            # (L_max, 6)
 
     write_netcdf(out, freqs, Dm_grid*1e6, np.array([mu_val]), np.array(TEMPS, float),
-                 KE, KA, KB, GG, NEFF, PCO, L_max, scheme)
-    print("wrote %s  (scheme=%s, %d freq %g-%g GHz, %d T, %d Dm, n_Legendre_Eff %d-%d, 6 phase elements)"
-          % (out, SCHEME_NAME[scheme], NF, freqs.min(), freqs.max(), NT, n_dm, NEFF.min(), NEFF.max()))
+                 KE, KA, KB, GG, NEFF, PCO, L_max, scheme,
+                 habit_id=habit_id, habit_name=habit_name)
+    print("wrote %s  (scheme=%s, habit_id=%d, %d freq %g-%g GHz, %d T, %d Dm, n_Legendre_Eff %d-%d, 6 phase elements)"
+          % (out, SCHEME_NAME[scheme], habit_id, NF, freqs.min(), freqs.max(), NT, n_dm, NEFF.min(), NEFF.max()))
 
 
-def write_netcdf(path, freq, dm, mu, temp, ke, ka, kb, g, neff, pcoeff, L_max, scheme):
+def write_netcdf(path, freq, dm, mu, temp, ke, ka, kb, g, neff, pcoeff, L_max, scheme,
+                 habit_id=4, habit_name=None):
     nc = Dataset(path, "w", format="NETCDF4")
     for n, v in [("n_Frequency", len(freq)), ("n_Dm", len(dm)), ("n_Mu", len(mu)),
                  ("n_Temperature", len(temp)), ("n_Habit", 1), ("n_Legendre", L_max),
@@ -219,11 +222,13 @@ def write_netcdf(path, freq, dm, mu, temp, ke, ka, kb, g, neff, pcoeff, L_max, s
     cv("Frequency", ("n_Frequency",), freq).units = "GHz"
     cv("Dm", ("n_Dm",), dm).units = "microns"
     cv("Mu", ("n_Mu",), mu); cv("Temperature", ("n_Temperature",), temp).units = "K"
-    nc.createVariable("Habit_Id", "i4", ("n_Habit",))[:] = [4]        # SNOW_CLOUD
-    nc.createVariable("Habit_Phase", "i4", ("n_Habit",))[:] = [1]
+    if habit_name is None:
+        habit_name = "Snow_%s" % SCHEME_NAME[scheme]
+    nc.createVariable("Habit_Id", "i4", ("n_Habit",))[:] = [habit_id]  # CRTM cloud-type integer
+    nc.createVariable("Habit_Phase", "i4", ("n_Habit",))[:] = [1]      # frozen
     cv("mD_a", ("n_Habit",), [0.0]); cv("mD_b", ("n_Habit",), [0.0])
     nc.createVariable("Habit_Name", "S1", ("n_Habit", "nchar"))[:] = \
-        stringtochar(np.array([("Snow_%s" % SCHEME_NAME[scheme]).ljust(32)], dtype="S32"))
+        stringtochar(np.array([habit_name.ljust(32)], dtype="S32"))
     bd = ("n_Habit", "n_Dm", "n_Mu", "n_Temperature", "n_Frequency")
     for nm, arr in (("ke", ke), ("ka", ka), ("kb", kb), ("g", g)):
         cv(nm, bd, arr, zlib=True, complevel=4)
@@ -240,9 +245,13 @@ if __name__ == "__main__":
     ap.add_argument("-o", "--output", default=None)
     ap.add_argument("--mu", type=float, default=0.0)
     ap.add_argument("--n-dm", type=int, default=30)
+    ap.add_argument("--habit-id", type=int, default=4,
+                    help="CRTM cloud-type integer for this habit (2=ICE,4=SNOW,5=GRAUPEL)")
+    ap.add_argument("--habit-name", default=None, help="provenance string (default Snow_<scheme>)")
     ap.add_argument("--selftest-only", action="store_true")
     a = ap.parse_args()
     if a.selftest_only:
         self_test(); raise SystemExit
     out = a.output or "CloudCoeff_Exp_RenSnow_%s.nc" % SCHEME_NAME[a.scheme]
-    build(a.root, a.scheme, out, mu_val=a.mu, n_dm=a.n_dm)
+    build(a.root, a.scheme, out, mu_val=a.mu, n_dm=a.n_dm,
+          habit_id=a.habit_id, habit_name=a.habit_name)
