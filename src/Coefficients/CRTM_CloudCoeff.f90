@@ -290,16 +290,17 @@ CONTAINS
         RETURN
       END IF
       Active_Cloud_Scheme = SCHEME_LEGACY
+      ! Derive the cloud-optics scheme from the loaded data, once, so the MW cloud-scatter dispatch is
+      ! explicit. The Mie-TAMU tables carry a positive MW effective-radius axis (Reff_MW); the DDA-ARTS
+      ! database has none (it interpolates on water content), so Reff_MW is left zero on read.
+      ! NOTE: this MUST stay inside the legacy branch -- the CRTM-Exp path never loads the legacy
+      ! CloudC, so CloudC%Reff_MW is unallocated there and ALL(...) on it would segfault.
+      IF ( ALL(CloudC%Reff_MW > 0.0) ) THEN
+        CloudC%Data_Type = MIE_TAMU_CLOUDCOEFF
+      ELSE
+        CloudC%Data_Type = DDA_ARTS_CLOUDCOEFF
+      END IF
     END IF
-
-     ! Derive the cloud-optics scheme from the loaded data, once, so the MW cloud-scatter dispatch is
-     ! explicit. The Mie-TAMU tables carry a positive MW effective-radius axis (Reff_MW); the DDA-ARTS
-     ! database has none (it interpolates on water content), so Reff_MW is left zero on read.
-     IF ( ALL(CloudC%Reff_MW > 0.0) ) THEN
-       CloudC%Data_Type = MIE_TAMU_CLOUDCOEFF
-     ELSE
-       CloudC%Data_Type = DDA_ARTS_CLOUDCOEFF
-     END IF
 
   CONTAINS
 
