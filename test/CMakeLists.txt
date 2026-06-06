@@ -620,6 +620,22 @@ else()
   message(STATUS "test_CloudCoeff_Exp_Forward not registered (needs mwr_aws coeffs + CloudCoeff_Exp_Full6.nc).")
 endif()
 
+# test_Grazing_SfcOptics: regression test for the catastrophic-reflectivity
+# guard in the MW-water surface optics (CRTM_FastemX and CRTM_PARMIO). Drives
+# both backends directly at grazing zenith angles + 325 GHz (where the reflection
+# correction extrapolates to ~1e35 without the guard) and asserts reflectivity
+# stays bounded and the guard fires. Uses the AWS coeffs (mwr_aws init loads the
+# FASTEM and PARMIO surface coefficients). Registered only when both the AWS
+# coeffs and the PARMIO LUT are present.
+add_executable(test_Grazing_SfcOptics mains/unit/Unit_Test/test_Grazing_SfcOptics.f90)
+target_link_libraries(test_Grazing_SfcOptics PRIVATE crtm)
+if(AWS_COEFFS_PRESENT AND PARMIO_LUT_PRESENT)
+  add_test(NAME test_Grazing_SfcOptics
+           COMMAND $<TARGET_FILE:test_Grazing_SfcOptics>)
+else()
+  message(STATUS "test_Grazing_SfcOptics not registered (needs mwr_aws coeffs + PARMIO LUT).")
+endif()
+
 set(_PARMIO_LUT_TESTINPUT "${CMAKE_CURRENT_BINARY_DIR}/testinput/PARMIO.MWwater.EmisCoeff.nc")
 
 # test_PARMIO_TLAD
