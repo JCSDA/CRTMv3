@@ -237,7 +237,7 @@ CONTAINS
     Options    ) &  ! Optional input, M
   RESULT( Error_Status )
     ! Arguments
-    USE CRTM_CloudCoeff,          ONLY: CloudC
+    USE CRTM_CloudCoeff,          ONLY: CloudC, Active_Cloud_Scheme, CRTM_EXP_CLOUDCOEFF
     USE CRTM_AerosolCoeff,        ONLY: AeroC
     TYPE(CRTM_Atmosphere_type),        INTENT(IN OUT) :: Atmosphere(:)     ! M
     TYPE(CRTM_Surface_type),           INTENT(IN)     :: Surface(:)        ! M
@@ -630,21 +630,13 @@ CONTAINS
          RETURN
       END IF
 
-      IF ( Atm%n_Aerosols > 0 .AND. CRTM_AerosolCoeff_IsLoaded() .AND. &
-           (RTV(1)%n_Stokes > 1 .AND. AeroC%N_PHASE_ELEMENTS < 6 )) THEN
-         Error_Status = FAILURE
-         WRITE( Message,'("N_PHASE_ELEMENTS OF AEROSOL LUT NOT RIGHT ",i0)' ) AeroC%N_PHASE_ELEMENTS
-         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-         RETURN
-      END IF
-
-      IF ( CRTM_CloudCoeff_IsLoaded() .AND. CRTM_AerosolCoeff_IsLoaded() .AND. &
-           (CloudC%N_PHASE_ELEMENTS /= AeroC%N_PHASE_ELEMENTS) ) THEN
-         Error_Status = FAILURE
-         WRITE( Message,'("N_PHASE_ELEMENTS OF CLOUD AND AEROSOL LUTS DO NOT MATCH")' )
-         CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
-         RETURN
-      END IF
+      ! Clouds and aerosols are INDEPENDENT scatterers.  AtmOptics is sized by the
+      ! RT polarization order (n_Stokes) below, and each scatter routine fills only
+      ! its own phase elements, so: (a) a scalar aerosol LUT (aerosols are unpolarized,
+      ! contributing only to phase element 1) must NOT block a polarized run, and
+      ! (b) the cloud and aerosol phase-element counts need not match.  The former
+      ! "aerosol LUT must be 6-element" and "cloud/aerosol must match" guards (and the
+      ! experimental-scheme exemption to the latter) are therefore removed.
 
       ! Calculate cloud water density
       CALL Calculate_Cloud_Water_Density(Atm)
@@ -653,10 +645,14 @@ CONTAINS
       DO nt = 1, n_channel_threads
          ! Prepare the atmospheric optics structures
          ! ...Allocate the AtmOptics structure based on Atm extension
+         ! Phase-element count is the RT polarization requirement (a function of
+         ! n_Stokes), NOT a property of any species LUT: 1 for scalar, the full
+         ! 6-element Mueller set for vector.  Each scatter routine fills only the
+         ! elements it has (up to this), keeping clouds and aerosols independent.
          CALL CRTM_AtmOptics_Create( AtmOptics(nt)  , &
                               Atm%n_Layers          , &
                               MAX_N_LEGENDRE_TERMS  , &
-                              CloudC%N_PHASE_ELEMENTS  )
+                              MERGE(MAX_N_PHASE_ELEMENTS, 1, Opt%n_Stokes > 1)  )
 
          IF ( .NOT. CRTM_AtmOptics_Associated( Atmoptics(nt) ) ) THEN
             Error_Status = FAILURE

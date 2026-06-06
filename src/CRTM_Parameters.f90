@@ -261,7 +261,11 @@ MODULE CRTM_Parameters
   REAL(fp), PUBLIC, PARAMETER :: SCATTERING_ALBEDO_THRESHOLD = BS_THRESHOLD  ! Eventually replace this with BS_THRESHOLD
   REAL(fp), PUBLIC, PARAMETER :: Transmittance_THRESHOLD   = 0.000000001_fp
 
-  INTEGER, PUBLIC, PARAMETER :: MAX_N_LEGENDRE_TERMS = 16
+  ! Raised 16->64 for the experimental 'CRTM-Exp' cloud-optics scheme, whose
+  ! phase-function Legendre truncation is decoupled from the RT stream count and
+  ! can require many terms for forward-peaked DDA habits at sub-mm frequencies.
+  ! Legacy schemes request <=16 terms and are unaffected (only array headroom grows).
+  INTEGER, PUBLIC, PARAMETER :: MAX_N_LEGENDRE_TERMS = 64
   INTEGER, PUBLIC, PARAMETER :: MAX_N_PHASE_ELEMENTS = 6
   INTEGER, PUBLIC, PARAMETER :: MAX_N_STREAMS = 16 
   INTEGER, PUBLIC, PARAMETER :: MAX_N_ANGLES = 16
