@@ -6,20 +6,19 @@
 ! Initializes CRTM with Cloud_Model='CRTM-Exp' and the complete 6-habit
 ! experimental LUT (CloudCoeff_Exp_Full6.nc), then runs the mwr_aws microwave
 ! sensor over an ocean US-Standard column for three profiles:
-!     1 = clear, 2 = moderate graupel, 3 = heavy graupel
+!     1 = clear, 2 = thin graupel, 3 = heavy graupel
 ! and asserts that the experimental scattering path is physical:
-!     * the forward model runs and returns physical TBs for every channel,
+!     * the forward model runs and returns physical TBs for EVERY channel and
+!       profile (incl. optically THIN frozen cloud, WC = 0.05 kg/m^2/layer),
 !     * a graupel cloud produces a brightness-temperature DEPRESSION, and
 !     * that depression GROWS with water content.
 !
-! KNOWN LIMITATION (intentionally not exercised here):
-!   For optically THIN frozen cloud (per-layer WC <~ 0.2 kg/m^2) the scheme
-!   returns nonphysical (large-negative) TBs at the 325 GHz AWS sideband
-!   channels 18-19 -- an RT-solver conditioning failure tied to the exp
-!   scheme's high Legendre count at small scattering optical depth. This test
-!   therefore uses precipitating-graupel loadings (>= 0.5 kg/m^2/layer), where
-!   all channels are well-behaved. See the project notes / the test that
-!   reported this for the thin-cloud regime.
+! The thin profile is included deliberately: it is the regime that exposed a
+! surface-reflectivity bug (the FASTEM-fit reflection correction extrapolating
+! to a non-physical value at the near-grazing Gaussian quadrature angles the
+! scattering RT uses, >= 200 GHz / PARMIO) which produced -1e15 K TBs at the
+! 325 GHz AWS sideband channels. Guarded in CRTM_PARMIO (reflectivity clamped
+! to [0,1]); this test locks that in.
 !
 ! STOP 0 on success, STOP 1 on failure.
 !
@@ -39,7 +38,7 @@ PROGRAM test_CloudCoeff_Exp_Forward
   CHARACTER(*), PARAMETER :: LUT    = 'CloudCoeff_Exp_Full6.nc'
 
   ! Profile / column setup
-  INTEGER,  PARAMETER :: N_PROFILES  = 3       ! 1=clear, 2=moderate graupel, 3=heavy graupel
+  INTEGER,  PARAMETER :: N_PROFILES  = 3       ! 1=clear, 2=thin graupel, 3=heavy graupel
   INTEGER,  PARAMETER :: N_LAYERS    = 100
   INTEGER,  PARAMETER :: N_ABSORBERS = 6
   INTEGER,  PARAMETER :: N_CLOUDS    = 1
@@ -47,7 +46,7 @@ PROGRAM test_CloudCoeff_Exp_Forward
   REAL(fp), PARAMETER :: ZENITH      = 53.0_fp  ! AWS conical scan ~53 deg
   INTEGER,  PARAMETER :: KC1 = 78, KC2 = 86     ! cloud vertical band (layers)
   REAL(fp), PARAMETER :: REFF_G      = 500.0_fp ! graupel effective radius (microns)
-  REAL(fp), PARAMETER :: WC_MOD      = 0.50_fp  ! kg/m^2 per layer (moderate)
+  REAL(fp), PARAMETER :: WC_THIN      = 0.05_fp  ! kg/m^2 per layer (optically thin)
   REAL(fp), PARAMETER :: WC_HEAVY    = 1.00_fp  ! kg/m^2 per layer (heavy)
 
   ! Pass/fail thresholds (conservative; the path saturates well above these)
@@ -61,7 +60,7 @@ PROGRAM test_CloudCoeff_Exp_Forward
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rts(:,:)
 
   INTEGER  :: err, nch, m
-  REAL(fp) :: dep_mod, dep_heavy, tb_min, tb_max
+  REAL(fp) :: dep_thin, dep_heavy, tb_min, tb_max
   LOGICAL  :: ok
 
   ok = .TRUE.
@@ -103,8 +102,8 @@ PROGRAM test_CloudCoeff_Exp_Forward
   ! Profile 1: clear sky
   atm(1)%n_Clouds       = 0
   atm(1)%Cloud_Fraction = ZERO
-  ! Profiles 2 & 3: graupel cloud in the band (moderate / heavy loading)
-  CALL Set_Graupel( atm(2), WC_MOD )
+  ! Profiles 2 & 3: graupel cloud in the band (thin / heavy loading)
+  CALL Set_Graupel( atm(2), WC_THIN )
   CALL Set_Graupel( atm(3), WC_HEAVY )
 
   ! Ocean surface + geometry, identical for all profiles
@@ -133,13 +132,13 @@ PROGRAM test_CloudCoeff_Exp_Forward
   tb_min = MINVAL( rts%Brightness_Temperature )
   tb_max = MAXVAL( rts%Brightness_Temperature )
   ! Max TB depression (clear - cloudy) over all channels, per loading
-  dep_mod   = MAXVAL( rts(:,1)%Brightness_Temperature - rts(:,2)%Brightness_Temperature )
+  dep_thin   = MAXVAL( rts(:,1)%Brightness_Temperature - rts(:,2)%Brightness_Temperature )
   dep_heavy = MAXVAL( rts(:,1)%Brightness_Temperature - rts(:,3)%Brightness_Temperature )
 
   WRITE(*,'(/a)')       ' CRTM-Exp forward scattering check (mwr_aws, graupel over ocean):'
   WRITE(*,'(a,i0)')     '   channels                 : ', nch
   WRITE(*,'(a,2f8.2)')  '   all-profile TB range (K) : ', tb_min, tb_max
-  WRITE(*,'(a,f8.3)')   '   max depression, moderate : ', dep_mod
+  WRITE(*,'(a,f8.3)')   '   max depression, thin     : ', dep_thin
   WRITE(*,'(a,f8.3)')   '   max depression, heavy    : ', dep_heavy
 
   ! 1) all radiances physical (forward model produced sensible TBs everywhere)
@@ -154,7 +153,7 @@ PROGRAM test_CloudCoeff_Exp_Forward
     ok = .FALSE.
   END IF
   ! 3) depression grows with water content (monotonic scattering response)
-  IF ( dep_heavy <= dep_mod ) THEN
+  IF ( dep_heavy <= dep_thin ) THEN
     WRITE(*,'(a)') ' FAIL: depression did not increase with water content'
     ok = .FALSE.
   END IF

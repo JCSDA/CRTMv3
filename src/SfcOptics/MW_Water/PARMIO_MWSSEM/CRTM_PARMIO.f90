@@ -68,6 +68,11 @@ MODULE CRTM_PARMIO
     REAL(fp) :: Rv_Mod = ONE
     REAL(fp) :: Rh_Mod = ONE
     LOGICAL  :: Has_PARMIO_RC = .FALSE.
+    ! Per-Stokes flag: the V/H reflection correction was clamped to the bare
+    ! (1 - emissivity) because it left [0,1] (near-grazing quadrature angles).
+    ! TL/AD read this to drop the (blown-up) correction derivative for that
+    ! component and use the bare d(1 - emissivity) instead.
+    LOGICAL  :: Reflectivity_Clamped(N_STOKES) = .FALSE.
     TYPE(RC_iVar_type) :: RC_Var
     TYPE(PARMIO_RC_iVar_type) :: PARMIO_RC_Var
   END TYPE iVar_type
@@ -185,6 +190,26 @@ CONTAINS
         iVar%Reflectivity(Iv_IDX) = iVar%Rv_Mod * (ONE - iVar%Emissivity(Iv_IDX))
         iVar%Reflectivity(Ih_IDX) = iVar%Rh_Mod * (ONE - iVar%Emissivity(Ih_IDX))
       END IF
+    END IF
+
+    ! Physical-bounds guard. The V/H reflection correction above is a FASTEM-fit
+    ! polynomial valid only for typical view angles; the scattering RT evaluates
+    ! the surface optics at Gaussian quadrature angles up to ~86 deg (near
+    ! grazing), where it can extrapolate to a wildly non-physical reflectivity
+    ! (observed: V-pol ~ -1e35 at za=86 deg). A reflectivity must lie in [0,1];
+    ! where the correction leaves that range, fall back to the bare
+    ! (1 - emissivity), which is physical by construction. Without this the
+    ! garbage reflectivity propagates into the adding-doubling surface boundary
+    ! and blows the radiance up (only reachable on the cloudy/scattering path at
+    ! >= 200 GHz, i.e. the PARMIO regime).
+    iVar%Reflectivity_Clamped = .FALSE.
+    IF ( iVar%Reflectivity(Iv_IDX) < ZERO .OR. iVar%Reflectivity(Iv_IDX) > ONE ) THEN
+      iVar%Reflectivity(Iv_IDX) = MIN( MAX( ONE - iVar%Emissivity(Iv_IDX), ZERO ), ONE )
+      iVar%Reflectivity_Clamped(Iv_IDX) = .TRUE.
+    END IF
+    IF ( iVar%Reflectivity(Ih_IDX) < ZERO .OR. iVar%Reflectivity(Ih_IDX) > ONE ) THEN
+      iVar%Reflectivity(Ih_IDX) = MIN( MAX( ONE - iVar%Emissivity(Ih_IDX), ZERO ), ONE )
+      iVar%Reflectivity_Clamped(Ih_IDX) = .TRUE.
     END IF
 
     ! Write outputs

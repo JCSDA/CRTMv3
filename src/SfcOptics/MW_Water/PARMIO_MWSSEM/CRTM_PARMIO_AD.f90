@@ -80,6 +80,18 @@ CONTAINS
     Emissivity_AD(V_IDX) = Emissivity_AD(V_IDX) - Reflectivity_AD(V_IDX)
     Reflectivity_AD(V_IDX) = ZERO
 
+    ! V/H components the forward clamped to the bare (1 - emissivity): apply that
+    ! transpose and zero the seed, so the (blown-up) correction adjoint below is
+    ! skipped for them. Transpose of the TL's "leave the base term" branch.
+    IF (iVar%Reflectivity_Clamped(Iv_IDX)) THEN
+      Emissivity_AD(Iv_IDX) = Emissivity_AD(Iv_IDX) - Reflectivity_AD(Iv_IDX)
+      Reflectivity_AD(Iv_IDX) = ZERO
+    END IF
+    IF (iVar%Reflectivity_Clamped(Ih_IDX)) THEN
+      Emissivity_AD(Ih_IDX) = Emissivity_AD(Ih_IDX) - Reflectivity_AD(Ih_IDX)
+      Reflectivity_AD(Ih_IDX) = ZERO
+    END IF
+
     IF (iVar%Has_PARMIO_RC) THEN
       rdown_AD(2) = Reflectivity_AD(Ih_IDX)
       Reflectivity_AD(Ih_IDX) = ZERO

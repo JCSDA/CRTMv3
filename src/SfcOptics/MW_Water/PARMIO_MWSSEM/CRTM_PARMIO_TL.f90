@@ -117,15 +117,21 @@ CONTAINS
       END IF
     END IF
 
+    ! Base: d(1 - emissivity). The V/H correction overrides this UNLESS the
+    ! forward clamped that component (the correction left [0,1] at a near-grazing
+    ! quadrature angle), in which case the forward used the bare (1 - emissivity)
+    ! and its derivative IS the base term -- so leave it.
     Reflectivity_TL(1:N_STOKES) = -Emissivity_TL(1:N_STOKES)
     IF (iVar%Has_PARMIO_RC) THEN
-      Reflectivity_TL(Iv_IDX) = rdown_TL(1)
-      Reflectivity_TL(Ih_IDX) = rdown_TL(2)
+      IF (.NOT. iVar%Reflectivity_Clamped(Iv_IDX)) Reflectivity_TL(Iv_IDX) = rdown_TL(1)
+      IF (.NOT. iVar%Reflectivity_Clamped(Ih_IDX)) Reflectivity_TL(Ih_IDX) = rdown_TL(2)
     ELSE
-      Reflectivity_TL(Iv_IDX) = (ONE - iVar%Emissivity(Iv_IDX)) * Rv_Mod_TL &
-                              - iVar%Rv_Mod * Emissivity_TL(Iv_IDX)
-      Reflectivity_TL(Ih_IDX) = (ONE - iVar%Emissivity(Ih_IDX)) * Rh_Mod_TL &
-                              - iVar%Rh_Mod * Emissivity_TL(Ih_IDX)
+      IF (.NOT. iVar%Reflectivity_Clamped(Iv_IDX)) &
+        Reflectivity_TL(Iv_IDX) = (ONE - iVar%Emissivity(Iv_IDX)) * Rv_Mod_TL &
+                                - iVar%Rv_Mod * Emissivity_TL(Iv_IDX)
+      IF (.NOT. iVar%Reflectivity_Clamped(Ih_IDX)) &
+        Reflectivity_TL(Ih_IDX) = (ONE - iVar%Emissivity(Ih_IDX)) * Rh_Mod_TL &
+                                - iVar%Rh_Mod * Emissivity_TL(Ih_IDX)
     END IF
   END SUBROUTINE Compute_PARMIO_TL
 
