@@ -596,6 +596,30 @@ else()
 endif()
 unset(_PARMIO_FIX)
 
+# test_CloudCoeff_Exp_Forward: end-to-end coverage of the experimental
+# ('CRTM-Exp') cloud-optics scheme. Runs the mwr_aws MW sensor with
+# Cloud_Model='CRTM-Exp' and the complete 6-habit experimental LUT
+# (CloudCoeff_Exp_Full6.nc), asserting a physical graupel-scattering TB
+# depression that grows with water content. The legacy cloud schemes have no
+# such coverage. Registered only when both the AWS coeffs and the experimental
+# LUT are present in the staged fix tree.
+set(_CC_EXP_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/CloudCoeff/netCDF/CloudCoeff_Exp_Full6.nc")
+if(EXISTS "${_CC_EXP_FIX}")
+  set(CLOUDCOEFF_EXP_PRESENT TRUE)
+else()
+  set(CLOUDCOEFF_EXP_PRESENT FALSE)
+  message(STATUS "Experimental LUT (CloudCoeff_Exp_Full6.nc) not found at ${_CC_EXP_FIX}; test_CloudCoeff_Exp_Forward will not be registered.")
+endif()
+unset(_CC_EXP_FIX)
+add_executable(test_CloudCoeff_Exp_Forward mains/unit/Unit_Test/test_CloudCoeff_Exp_Forward.f90)
+target_link_libraries(test_CloudCoeff_Exp_Forward PRIVATE crtm)
+if(AWS_COEFFS_PRESENT AND CLOUDCOEFF_EXP_PRESENT)
+  add_test(NAME test_CloudCoeff_Exp_Forward
+           COMMAND $<TARGET_FILE:test_CloudCoeff_Exp_Forward>)
+else()
+  message(STATUS "test_CloudCoeff_Exp_Forward not registered (needs mwr_aws coeffs + CloudCoeff_Exp_Full6.nc).")
+endif()
+
 set(_PARMIO_LUT_TESTINPUT "${CMAKE_CURRENT_BINARY_DIR}/testinput/PARMIO.MWwater.EmisCoeff.nc")
 
 # test_PARMIO_TLAD
@@ -921,6 +945,12 @@ if(AWS_COEFFS_PRESENT)
   list(APPEND crtm_test_input
        SpcCoeff/netCDF/mwr_aws.SpcCoeff.nc
        TauCoeff/ODPS/netCDF/mwr_aws.TauCoeff.nc)
+endif()
+# Experimental cloud-optics LUT for test_CloudCoeff_Exp_Forward; staged from the
+# tarball's fix tree so testinput/CloudCoeff_Exp_Full6.nc resolves there.
+if(CLOUDCOEFF_EXP_PRESENT)
+  list(APPEND crtm_test_input
+       CloudCoeff/netCDF/CloudCoeff_Exp_Full6.nc)
 endif()
 # TMS SpcCoeff for test_CONST_MIXED_Polarization (polarization type 13).
 if(TMS_COEFFS_PRESENT)
