@@ -42,6 +42,12 @@ MODULE CRTM_PARMIO
   REAL(fp), PARAMETER :: ONE  = 1.0_fp
   REAL(fp), PARAMETER :: PI   = 3.141592653589793238462643383279_fp
   REAL(fp), PARAMETER :: DEGREES_TO_RADIANS = PI / 180.0_fp
+  ! Generous physical band for the catastrophic-reflectivity guard (see the
+  ! clamp in Compute_PARMIO). Reflectivity is physically in [0,1]; the band is
+  ! wide enough to leave a small RT-tolerated grazing overshoot untouched but
+  ! catches the gross blow-up. Matches CRTM_FastemX.
+  REAL(fp), PARAMETER :: R_PHYS_LO = -0.5_fp
+  REAL(fp), PARAMETER :: R_PHYS_HI =  1.5_fp
 
   ! ---------------------------------------------------------------
   ! Internal-state carrier: hands forward results into TL/AD.
@@ -192,22 +198,24 @@ CONTAINS
       END IF
     END IF
 
-    ! Physical-bounds guard. The V/H reflection correction above is a FASTEM-fit
-    ! polynomial valid only for typical view angles; the scattering RT evaluates
-    ! the surface optics at Gaussian quadrature angles up to ~86 deg (near
-    ! grazing), where it can extrapolate to a wildly non-physical reflectivity
-    ! (observed: V-pol ~ -1e35 at za=86 deg). A reflectivity must lie in [0,1];
-    ! where the correction leaves that range, fall back to the bare
-    ! (1 - emissivity), which is physical by construction. Without this the
-    ! garbage reflectivity propagates into the adding-doubling surface boundary
-    ! and blows the radiance up (only reachable on the cloudy/scattering path at
+    ! Catastrophic-reflectivity guard. The V/H reflection correction above is a
+    ! FASTEM-fit polynomial valid only for typical view angles; the scattering RT
+    ! evaluates the surface optics at Gaussian quadrature angles up to ~86 deg
+    ! (near grazing), where it can extrapolate to a wildly non-physical
+    ! reflectivity (observed: V-pol ~ -1e35 at za=86 deg). Clamp only GROSSLY
+    ! out-of-range values (a generous [R_PHYS_LO,R_PHYS_HI] band), falling back to
+    ! the bare (1 - emissivity), which is physical by construction; a small
+    ! RT-tolerated overshoot is left alone so validated results are unchanged.
+    ! Without this the garbage reflectivity propagates into the adding-doubling
+    ! surface boundary and blows the radiance up (only reachable on the
+    ! cloudy/scattering path at
     ! >= 200 GHz, i.e. the PARMIO regime).
     iVar%Reflectivity_Clamped = .FALSE.
-    IF ( iVar%Reflectivity(Iv_IDX) < ZERO .OR. iVar%Reflectivity(Iv_IDX) > ONE ) THEN
+    IF ( iVar%Reflectivity(Iv_IDX) < R_PHYS_LO .OR. iVar%Reflectivity(Iv_IDX) > R_PHYS_HI ) THEN
       iVar%Reflectivity(Iv_IDX) = MIN( MAX( ONE - iVar%Emissivity(Iv_IDX), ZERO ), ONE )
       iVar%Reflectivity_Clamped(Iv_IDX) = .TRUE.
     END IF
-    IF ( iVar%Reflectivity(Ih_IDX) < ZERO .OR. iVar%Reflectivity(Ih_IDX) > ONE ) THEN
+    IF ( iVar%Reflectivity(Ih_IDX) < R_PHYS_LO .OR. iVar%Reflectivity(Ih_IDX) > R_PHYS_HI ) THEN
       iVar%Reflectivity(Ih_IDX) = MIN( MAX( ONE - iVar%Emissivity(Ih_IDX), ZERO ), ONE )
       iVar%Reflectivity_Clamped(Ih_IDX) = .TRUE.
     END IF

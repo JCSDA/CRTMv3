@@ -127,6 +127,13 @@ MODULE CRTM_FastemX
   REAL(fp), PARAMETER :: INVALID_AZIMUTH_ANGLE = -999.0_fp
   REAL(fp), PARAMETER :: INVALID_TRANSMITTANCE = -999.0_fp  ! Disable non-specular correction
 
+  ! Generous physical band for the catastrophic-reflectivity guard (see the
+  ! clamp in Compute_FastemX). Reflectivity is physically in [0,1]; the band is
+  ! wide enough to leave the small grazing-angle overshoot the RT tolerates
+  ! (max ~1.07 across the suite) untouched, but catches the gross blow-up.
+  REAL(fp), PARAMETER :: R_PHYS_LO = -0.5_fp
+  REAL(fp), PARAMETER :: R_PHYS_HI =  1.5_fp
+
 
   ! --------------------------------------
   ! Structure definition to hold internal
@@ -175,6 +182,12 @@ MODULE CRTM_FastemX
     REAL(fp) :: Rh_Mod = ZERO
     ! The final emissivity
     REAL(fp) :: e(N_STOKES) = ZERO
+    ! Per-Stokes flag: the V/H reflection correction was clamped to the bare
+    ! (1 - emissivity) because Rv/Rh_Mod*(1-e) left [0,1] (the FASTEM-fit
+    ! reflection correction extrapolates at the near-grazing quadrature angles
+    ! the scattering RT uses). TL/AD read this to drop the (blown-up) correction
+    ! derivative for that component and use d(1 - emissivity) instead.
+    LOGICAL  :: Reflectivity_Clamped(N_STOKES) = .FALSE.
     ! Internal variables for subcomponents
     TYPE(pVar_type)    :: pVar
     TYPE(fVar_type)    :: fVar
@@ -454,6 +467,27 @@ CONTAINS
     Reflectivity(Iv_IDX)      = iVar%Rv_Mod * (ONE-Emissivity(Iv_IDX))
     Reflectivity(Ih_IDX)      = iVar%Rh_Mod * (ONE-Emissivity(Ih_IDX))
     Reflectivity(U_IDX:V_IDX) = ZERO   ! 3rd, 4th Stokes from atmosphere are not included.
+
+    ! Catastrophic-reflectivity guard. The reflection correction (Rv/Rh_Mod) is a
+    ! FASTEM-fit polynomial valid only for typical view angles; the scattering RT
+    ! evaluates the surface optics at Gaussian quadrature angles up to ~86 deg
+    ! (near grazing), where it can drive Rv/Rh_Mod*(1-e) WILDLY out of range
+    ! (observed ~1e35 in the PARMIO sibling), which blows the adding-doubling up.
+    ! Clamp only GROSSLY non-physical values (outside a generous band), falling
+    ! back to the bare (1 - emissivity): this catches the blow-up while leaving
+    ! the small, RT-tolerated grazing overshoot (max ~1.07 across the test suite)
+    ! untouched, so validated results are unchanged. Flag the component so TL/AD
+    ! drop the (blown-up) correction term. Matches the guard in CRTM_PARMIO.
+    iVar%Reflectivity_Clamped = .FALSE.
+    IF ( Reflectivity(Iv_IDX) < R_PHYS_LO .OR. Reflectivity(Iv_IDX) > R_PHYS_HI ) THEN
+      Reflectivity(Iv_IDX) = MIN( MAX( ONE-Emissivity(Iv_IDX), ZERO ), ONE )
+      iVar%Reflectivity_Clamped(Iv_IDX) = .TRUE.
+    END IF
+    IF ( Reflectivity(Ih_IDX) < R_PHYS_LO .OR. Reflectivity(Ih_IDX) > R_PHYS_HI ) THEN
+      Reflectivity(Ih_IDX) = MIN( MAX( ONE-Emissivity(Ih_IDX), ZERO ), ONE )
+      iVar%Reflectivity_Clamped(Ih_IDX) = .TRUE.
+    END IF
+
     ! ...save the emissivity for TL and AD reflectivity calculations
     iVar%e = Emissivity
 
@@ -693,8 +727,18 @@ CONTAINS
     Emissivity_TL(U_IDX)  = e_Azimuth_TL(U_IDX)
     Emissivity_TL(V_IDX)  = e_Azimuth_TL(V_IDX)
     ! ...reflectivities
-    Reflectivity_TL(Iv_IDX)      = (ONE-iVar%e(Iv_IDX))*Rv_Mod_TL - iVar%Rv_Mod*Emissivity_TL(Iv_IDX)
-    Reflectivity_TL(Ih_IDX)      = (ONE-iVar%e(Ih_IDX))*Rh_Mod_TL - iVar%Rh_Mod*Emissivity_TL(Ih_IDX)
+    ! Where the forward clamped a component to the bare (1 - emissivity), its
+    ! derivative is d(1 - emissivity); otherwise use the reflection-correction TL.
+    IF ( iVar%Reflectivity_Clamped(Iv_IDX) ) THEN
+      Reflectivity_TL(Iv_IDX)    = -Emissivity_TL(Iv_IDX)
+    ELSE
+      Reflectivity_TL(Iv_IDX)    = (ONE-iVar%e(Iv_IDX))*Rv_Mod_TL - iVar%Rv_Mod*Emissivity_TL(Iv_IDX)
+    END IF
+    IF ( iVar%Reflectivity_Clamped(Ih_IDX) ) THEN
+      Reflectivity_TL(Ih_IDX)    = -Emissivity_TL(Ih_IDX)
+    ELSE
+      Reflectivity_TL(Ih_IDX)    = (ONE-iVar%e(Ih_IDX))*Rh_Mod_TL - iVar%Rh_Mod*Emissivity_TL(Ih_IDX)
+    END IF
     Reflectivity_TL(U_IDX:V_IDX) = ZERO  ! 3rd, 4th Stokes from atmosphere are not included.
 
   END SUBROUTINE Compute_FastemX_TL
@@ -846,12 +890,25 @@ CONTAINS
     ! ...reflectivities
     Reflectivity_AD(U_IDX:V_IDX) = ZERO  ! 3rd, 4th Stokes from atmosphere are not included.
 
-    Emissivity_AD(Ih_IDX)   = Emissivity_AD(Ih_IDX) - iVar%Rh_Mod*Reflectivity_AD(Ih_IDX)
-    Rh_Mod_AD               = (ONE-iVar%e(Ih_IDX))*Reflectivity_AD(Ih_IDX)
+    ! Components the forward clamped to the bare (1 - emissivity) take that
+    ! transpose and contribute no reflection-correction adjoint (Rv/Rh_Mod_AD=0);
+    ! transpose of the TL's "use d(1 - emissivity)" branch.
+    IF ( iVar%Reflectivity_Clamped(Ih_IDX) ) THEN
+      Emissivity_AD(Ih_IDX)   = Emissivity_AD(Ih_IDX) - Reflectivity_AD(Ih_IDX)
+      Rh_Mod_AD               = ZERO
+    ELSE
+      Emissivity_AD(Ih_IDX)   = Emissivity_AD(Ih_IDX) - iVar%Rh_Mod*Reflectivity_AD(Ih_IDX)
+      Rh_Mod_AD               = (ONE-iVar%e(Ih_IDX))*Reflectivity_AD(Ih_IDX)
+    END IF
     Reflectivity_AD(Ih_IDX) = ZERO
 
-    Emissivity_AD(Iv_IDX)   = Emissivity_AD(Iv_IDX) - iVar%Rv_Mod*Reflectivity_AD(Iv_IDX)
-    Rv_Mod_AD               = (ONE-iVar%e(Iv_IDX))*Reflectivity_AD(Iv_IDX)
+    IF ( iVar%Reflectivity_Clamped(Iv_IDX) ) THEN
+      Emissivity_AD(Iv_IDX)   = Emissivity_AD(Iv_IDX) - Reflectivity_AD(Iv_IDX)
+      Rv_Mod_AD               = ZERO
+    ELSE
+      Emissivity_AD(Iv_IDX)   = Emissivity_AD(Iv_IDX) - iVar%Rv_Mod*Reflectivity_AD(Iv_IDX)
+      Rv_Mod_AD               = (ONE-iVar%e(Iv_IDX))*Reflectivity_AD(Iv_IDX)
+    END IF
     Reflectivity_AD(Iv_IDX) = ZERO
 
     ! ...emissivities
