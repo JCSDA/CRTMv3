@@ -563,6 +563,7 @@ CONTAINS
          IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
          RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
          RTV(nt)%Compute_Down_Radiance = Opt%Compute_Down_Radiance
+         RTV(nt)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
       END IF
 
         CALL CRTM_SfcOptics_Create( SfcOptics(nt)  , MAX_N_ANGLES, MAX_N_STOKES )
@@ -889,6 +890,7 @@ CONTAINS
           ! Assign algorithm selector
             RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
             RTV(nt)%Compute_Down_Radiance = Opt%Compute_Down_Radiance
+            RTV(nt)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
             CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
 
             IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN

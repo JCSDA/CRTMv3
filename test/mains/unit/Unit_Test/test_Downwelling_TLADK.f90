@@ -33,6 +33,7 @@ PROGRAM test_Downwelling_TLADK
   REAL(fp), PARAMETER :: ZENITH_ANGLE = 30.0_fp
   REAL(fp), PARAMETER :: SCAN_ANGLE   = 26.37293341421_fp
   INTEGER,  PARAMETER :: PERT_LAYER = 85          ! perturbed temperature layer (within the low cloud)
+  INTEGER,  PARAMETER :: PROF_LEVEL = 85          ! interior level for Downwelling_Radiance(:) profile checks
 
   REAL(fp), PARAMETER :: TOL_FD  = 1.0e-3_fp      ! TL vs finite difference
   REAL(fp), PARAMETER :: TOL_ADJ = 1.0e-9_fp      ! adjoint dot-product
@@ -41,7 +42,9 @@ PROGRAM test_Downwelling_TLADK
   CHARACTER(256) :: Version, Sensor_Id
   INTEGER :: Error_Status, Allocate_Status, n_Channels
   INTEGER :: l, m
+  INTEGER :: g_prof_lvl = 0                       ! >0 selects Downwelling_Radiance(g_prof_lvl) as the output
   LOGICAL :: ok_toa, ok_dwn, ok_toa_s, ok_dwn_s, ok_toa_a, ok_dwn_a
+  LOGICAL :: ok_dwn_p, ok_dwn_sp, ok_dwn_ap, ok_dwn_cp
 
   TYPE(CRTM_ChannelInfo_type) :: ChannelInfo(N_SENSORS)
   TYPE(CRTM_Geometry_type)    :: Geometry(N_PROFILES)
@@ -75,6 +78,14 @@ PROGRAM test_Downwelling_TLADK
             STAT=Allocate_Status )
   IF ( Allocate_Status /= 0 ) THEN; WRITE(*,*) 'Alloc error'; STOP 1; END IF
 
+  ! Create the RTSolution structures (allocates the level-resolved profile arrays,
+  ! incl. Downwelling_Radiance(:), required for the profile-mode checks).
+  CALL CRTM_RTSolution_Create( RTSolution,      N_LAYERS )
+  CALL CRTM_RTSolution_Create( RTSolution_pert, N_LAYERS )
+  CALL CRTM_RTSolution_Create( RTSolution_TL,   N_LAYERS )
+  CALL CRTM_RTSolution_Create( RTSolution_AD,   N_LAYERS )
+  CALL CRTM_RTSolution_Create( RTSolution_K,    N_LAYERS )
+
   CALL CRTM_Atmosphere_Create( Atm,    N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
   CALL CRTM_Atmosphere_Create( Atm_TL, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
   CALL CRTM_Atmosphere_Create( Atm_AD, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
@@ -100,23 +111,35 @@ PROGRAM test_Downwelling_TLADK
                                Sensor_Zenith_Angle = ZENITH_ANGLE, &
                                Sensor_Scan_Angle   = SCAN_ANGLE )
 
-  CALL verify( .FALSE., .FALSE., RT_ADA, ZERO,   ok_toa   )  ! clear-sky: TOA radiance (control)
-  CALL verify( .TRUE. , .FALSE., RT_ADA, ZERO,   ok_dwn   )  ! clear-sky: surface Down_Radiance (emission)
-  CALL verify( .FALSE., .TRUE. , RT_SOI, 0.5_fp, ok_toa_s )  ! SOI scattering (fractional: + combine)
-  CALL verify( .TRUE. , .TRUE. , RT_SOI, 0.5_fp, ok_dwn_s )  ! SOI Down_Radiance (fractional: + combine)
-  CALL verify( .FALSE., .TRUE. , RT_ADA, ONE,    ok_toa_a )  ! ADA scattering (overcast: isolate solver)
-  CALL verify( .TRUE. , .TRUE. , RT_ADA, ONE,    ok_dwn_a )  ! ADA Down_Radiance (overcast: isolate solver)
+  ! --- surface scalar Down_Radiance (and TOA control) ---
+  CALL verify( .FALSE., .FALSE., RT_ADA, ZERO,   0, ok_toa   )  ! clear-sky: TOA radiance (control)
+  CALL verify( .TRUE. , .FALSE., RT_ADA, ZERO,   0, ok_dwn   )  ! clear-sky: surface Down_Radiance (emission)
+  CALL verify( .FALSE., .TRUE. , RT_SOI, 0.5_fp, 0, ok_toa_s )  ! SOI scattering (fractional: + combine)
+  CALL verify( .TRUE. , .TRUE. , RT_SOI, 0.5_fp, 0, ok_dwn_s )  ! SOI Down_Radiance (fractional: + combine)
+  CALL verify( .FALSE., .TRUE. , RT_ADA, ONE,    0, ok_toa_a )  ! ADA scattering (overcast: isolate solver)
+  CALL verify( .TRUE. , .TRUE. , RT_ADA, ONE,    0, ok_dwn_a )  ! ADA Down_Radiance (overcast: isolate solver)
+
+  ! --- level-resolved Downwelling_Radiance(:) profile, interior level PROF_LEVEL ---
+  CALL verify( .TRUE. , .FALSE., RT_ADA, ZERO,   PROF_LEVEL, ok_dwn_p  )  ! clear-sky profile (emission)
+  CALL verify( .TRUE. , .TRUE. , RT_SOI, ONE,    PROF_LEVEL, ok_dwn_sp )  ! SOI profile (overcast: isolate solver)
+  CALL verify( .TRUE. , .TRUE. , RT_ADA, ONE,    PROF_LEVEL, ok_dwn_ap )  ! ADA profile (overcast: isolate solver)
+  CALL verify( .TRUE. , .TRUE. , RT_ADA, 0.5_fp, PROF_LEVEL, ok_dwn_cp )  ! ADA profile (fractional: + combine)
 
   Error_Status = CRTM_Destroy( ChannelInfo )
 
   WRITE(*,'(/5x,a)') '====================================================='
-  WRITE(*,'(5x,"clear-sky TOA control       : ",a)') MERGE('PASS','FAIL',ok_toa)
-  WRITE(*,'(5x,"clear-sky Down_Radiance     : ",a)') MERGE('PASS','FAIL',ok_dwn)
-  WRITE(*,'(5x,"SOI scattering TOA control  : ",a)') MERGE('PASS','FAIL',ok_toa_s)
-  WRITE(*,'(5x,"SOI scattering Down_Radiance: ",a)') MERGE('PASS','FAIL',ok_dwn_s)
-  WRITE(*,'(5x,"ADA scattering TOA control  : ",a)') MERGE('PASS','FAIL',ok_toa_a)
-  WRITE(*,'(5x,"ADA scattering Down_Radiance: ",a)') MERGE('PASS','FAIL',ok_dwn_a)
-  IF ( ok_toa .AND. ok_dwn .AND. ok_toa_s .AND. ok_dwn_s .AND. ok_toa_a .AND. ok_dwn_a ) THEN
+  WRITE(*,'(5x,"clear-sky TOA control          : ",a)') MERGE('PASS','FAIL',ok_toa)
+  WRITE(*,'(5x,"clear-sky Down_Radiance        : ",a)') MERGE('PASS','FAIL',ok_dwn)
+  WRITE(*,'(5x,"SOI scattering TOA control     : ",a)') MERGE('PASS','FAIL',ok_toa_s)
+  WRITE(*,'(5x,"SOI scattering Down_Radiance   : ",a)') MERGE('PASS','FAIL',ok_dwn_s)
+  WRITE(*,'(5x,"ADA scattering TOA control     : ",a)') MERGE('PASS','FAIL',ok_toa_a)
+  WRITE(*,'(5x,"ADA scattering Down_Radiance   : ",a)') MERGE('PASS','FAIL',ok_dwn_a)
+  WRITE(*,'(5x,"clear-sky Downwelling profile  : ",a)') MERGE('PASS','FAIL',ok_dwn_p)
+  WRITE(*,'(5x,"SOI Downwelling profile        : ",a)') MERGE('PASS','FAIL',ok_dwn_sp)
+  WRITE(*,'(5x,"ADA Downwelling profile        : ",a)') MERGE('PASS','FAIL',ok_dwn_ap)
+  WRITE(*,'(5x,"ADA Downwelling profile combine: ",a)') MERGE('PASS','FAIL',ok_dwn_cp)
+  IF ( ok_toa .AND. ok_dwn .AND. ok_toa_s .AND. ok_dwn_s .AND. ok_toa_a .AND. ok_dwn_a .AND. &
+       ok_dwn_p .AND. ok_dwn_sp .AND. ok_dwn_ap .AND. ok_dwn_cp ) THEN
     WRITE(*,'(5x,a)') 'ALL CHECKS PASSED'
     STOP 0
   ELSE
@@ -126,27 +149,42 @@ PROGRAM test_Downwelling_TLADK
 
 CONTAINS
 
-  ! Read the selected output (TOA radiance or surface downwelling) from an RTSolution
+  ! Read the selected output from an RTSolution: a profile level
+  ! Downwelling_Radiance(g_prof_lvl) when g_prof_lvl>0, else the surface scalar
+  ! Down_Radiance (downwelling) or the TOA Radiance (control).
   REAL(fp) FUNCTION get_out( rts, downwelling )
     TYPE(CRTM_RTSolution_type), INTENT(IN) :: rts
     LOGICAL, INTENT(IN) :: downwelling
-    IF ( downwelling ) THEN ; get_out = rts%Down_Radiance ; ELSE ; get_out = rts%Radiance ; END IF
+    IF ( g_prof_lvl > 0 ) THEN
+      get_out = rts%Downwelling_Radiance(g_prof_lvl)
+    ELSE IF ( downwelling ) THEN
+      get_out = rts%Down_Radiance
+    ELSE
+      get_out = rts%Radiance
+    END IF
   END FUNCTION get_out
 
-  ! Seed the selected adjoint/K output to a value
+  ! Seed the selected adjoint/K output to a value (matching get_out's selection)
   SUBROUTINE set_seed( rts, downwelling, val )
     TYPE(CRTM_RTSolution_type), INTENT(INOUT) :: rts
     LOGICAL,  INTENT(IN) :: downwelling
     REAL(fp), INTENT(IN) :: val
-    IF ( downwelling ) THEN ; rts%Down_Radiance = val ; ELSE ; rts%Radiance = val ; END IF
+    IF ( g_prof_lvl > 0 ) THEN
+      rts%Downwelling_Radiance(g_prof_lvl) = val
+    ELSE IF ( downwelling ) THEN
+      rts%Down_Radiance = val
+    ELSE
+      rts%Radiance = val
+    END IF
   END SUBROUTINE set_seed
 
-  SUBROUTINE verify( downwelling, scattering, rt_alg, cfrac, all_ok )
+  SUBROUTINE verify( downwelling, scattering, rt_alg, cfrac, prof_lvl, all_ok )
     LOGICAL,  INTENT(IN)  :: downwelling, scattering
     INTEGER,  INTENT(IN)  :: rt_alg
     REAL(fp), INTENT(IN)  :: cfrac
+    INTEGER,  INTENT(IN)  :: prof_lvl     ! >0 => verify Downwelling_Radiance(prof_lvl) profile output
     LOGICAL,  INTENT(OUT) :: all_ok
-    CHARACTER(48) :: tag
+    CHARACTER(64) :: tag
     REAL(fp) :: tl, fd, R0, Rp, Rm, ratio, best, delta, T0
     REAL(fp) :: LHS, RHS, rel_adj, dy
     REAL(fp) :: maxdiff, scal, rel_k
@@ -154,11 +192,15 @@ CONTAINS
     INTEGER  :: ii, kk, ch, l0, m0, nscat
     LOGICAL  :: ok1, ok2, ok3
 
+    ! Select the output: profile level (prof_lvl>0) or surface/TOA scalar.
+    g_prof_lvl = prof_lvl
+
     ! Configure the scene: clear-sky (emission) or SOI scattering (opt-in downwelling)
     DO m = 1, N_PROFILES
       IF ( scattering ) THEN
-        Options(m)%RT_Algorithm_Id       = rt_alg
-        Options(m)%Compute_Down_Radiance = .TRUE.
+        Options(m)%RT_Algorithm_Id               = rt_alg
+        Options(m)%Compute_Down_Radiance         = .TRUE.
+        Options(m)%Compute_Down_Radiance_Profile = ( prof_lvl > 0 )
         Atm(m)%n_Clouds                  = 1
         ! Thick low cloud so the cloudy (scattering) contribution dominates the
         ! SURFACE downwelling for the sensitive channels (not masked by clear emission).
@@ -170,14 +212,18 @@ CONTAINS
         Atm(m)%Cloud(1)%Effective_Radius(70:90) = 500.0_fp
         Atm(m)%Cloud(1)%Water_Content(70:90)    = 5.0_fp
       ELSE
-        Options(m)%RT_Algorithm_Id       = RT_ADA
-        Options(m)%Compute_Down_Radiance = .FALSE.
+        Options(m)%RT_Algorithm_Id               = RT_ADA
+        Options(m)%Compute_Down_Radiance         = .FALSE.
+        Options(m)%Compute_Down_Radiance_Profile = ( prof_lvl > 0 )
         Atm(m)%n_Clouds                  = 0
         Atm(m)%Cloud(1)%Water_Content    = ZERO
       END IF
     END DO
 
-    IF ( downwelling ) THEN ; tag = 'Down_Radiance' ; ELSE ; tag = 'TOA Radiance' ; END IF
+    IF ( g_prof_lvl > 0 ) THEN
+      WRITE(tag,'("Downwelling_Radiance(",i0,")")') g_prof_lvl
+    ELSE IF ( downwelling ) THEN ; tag = 'Down_Radiance'
+    ELSE ; tag = 'TOA Radiance' ; END IF
     IF ( scattering ) THEN
       IF ( rt_alg == RT_SOI ) THEN ; tag = TRIM(tag)//' [SOI scattering]' ; ELSE ; tag = TRIM(tag)//' [ADA scattering]' ; END IF
     ELSE ; tag = TRIM(tag)//' [clear-sky]' ; END IF

@@ -141,6 +141,13 @@ MODULE CRTM_Options_Define
     ! always computed regardless of this flag.
     LOGICAL :: Compute_Down_Radiance = .FALSE.
 
+    ! Compute the level-resolved downwelling radiance PROFILE
+    ! (RTSolution%Downwelling_Radiance(:), surface->TOA) for all solvers, fully
+    ! differentiated (TL/AD/K). OFF by default: the per-level adjoint (seeding every
+    ! level) is materially more expensive than the surface scalar above. Setting this
+    ! also drives the scattering downward sweep.
+    LOGICAL :: Compute_Down_Radiance_Profile = .FALSE.
+
     ! RT Algorithm is set to ADA by default
     INTEGER(Long) :: RT_Algorithm_Id = RT_ADA
 

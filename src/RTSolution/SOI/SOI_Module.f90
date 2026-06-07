@@ -279,11 +279,13 @@ CONTAINS
 
       RTV%Number_SOI_Iter = niter
 
-      ! Surface downwelling radiance (Stokes I at the sensor angle), opt-in: total over
-      ! all orders of interaction. SOI is n_Stokes==1, so the downstream n1 == Index_Sat_Angle.
-      IF ( RTV%Compute_Down_Radiance ) THEN
-        RTV%s_Level_Rad_DOWN( Index_Sat_Angle, n_Layers ) = &
-             SUM( RTV%s_Level_IterRad_DOWN( Index_Sat_Angle, n_Layers, 1:RTV%Number_SOI_Iter ) )
+      ! Downwelling radiance (Stokes I at the sensor angle), opt-in: total over all
+      ! orders of interaction. SOI is n_Stokes==1, so the downstream n1 == Index_Sat_Angle.
+      ! Fill the full level profile (surface->TOA) when either the surface scalar or the
+      ! level-resolved profile output is requested; the surface value is at n_Layers.
+      IF ( RTV%Compute_Down_Radiance .OR. RTV%Compute_Down_Radiance_Profile ) THEN
+        RTV%s_Level_Rad_DOWN( Index_Sat_Angle, 0:n_Layers ) = &
+             SUM( RTV%s_Level_IterRad_DOWN( Index_Sat_Angle, 0:n_Layers, 1:RTV%Number_SOI_Iter ), DIM=2 )
       END IF
 
       RETURN

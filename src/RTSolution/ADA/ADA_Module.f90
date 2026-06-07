@@ -257,9 +257,10 @@ CONTAINS
 
      !!  write(6,'(ES15.6)') RTV%s_Level_Rad_UP(1,0)
     ! Compute the downward radiance profile when the aircraft observer needs it or
-    ! when the surface downwelling radiance output is requested via
-    ! Options%Compute_Down_Radiance (opt-in; adds the downward-sweep cost).
-    IF(RTV%aircraft%rt .or. RTV%Compute_Down_Radiance) THEN
+    ! when the surface downwelling radiance (Compute_Down_Radiance) or the
+    ! level-resolved downwelling profile (Compute_Down_Radiance_Profile) output is
+    ! requested (opt-in; adds the downward-sweep cost).
+    IF(RTV%aircraft%rt .or. RTV%Compute_Down_Radiance .or. RTV%Compute_Down_Radiance_Profile) THEN
     !
     ! Added, May 20, 2024
     !  except at TOA, RTV%s_Level_Rad_UP is "intermediate" value, the following part for final vertical profiles of radiance

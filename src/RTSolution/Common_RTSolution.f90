@@ -1196,6 +1196,21 @@ CONTAINS
         END IF
       END IF
 
+      ! Level-resolved downwelling radiance PROFILE (Stokes I at the sensor angle),
+      ! opt-in via Options%Compute_Down_Radiance_Profile. SOI stores the finalized
+      ! profile in s_Level_Rad_DOWN; ADA/VMOM in s_Level_Rad_DOWNT (s_Level_Rad_DOWN
+      ! holds the intermediate adding-down values for the TL/AD).
+      IF ( RTV%Compute_Down_Radiance_Profile .AND. CRTM_RTSolution_Associated(RTSolution) ) THEN
+        no = RTSolution%n_Layers
+        na = RTV%n_Added_Layers
+        nt = RTV%n_Layers
+        IF ( RTV%RT_Algorithm_Id == RT_SOI ) THEN
+          RTSolution%Downwelling_Radiance(1:no) = RTV%s_Level_Rad_DOWN(n1, na+1:nt)
+        ELSE
+          RTSolution%Downwelling_Radiance(1:no) = RTV%s_Level_Rad_DOWNT(n1, na+1:nt)
+        END IF
+      END IF
+
     ! Emission specific assignments
     ELSE
 
@@ -1220,6 +1235,10 @@ CONTAINS
         ! defined by the user input layering
         RTSolution%Upwelling_Radiance(1:no) = RTV%e_Level_Rad_UP(na+1:nt)
         RTSolution%Upwelling_Overcast_Radiance(1:no) = RTV%e_Cloud_Radiance_UP(na+1:nt)
+        ! Level-resolved downwelling radiance profile (opt-in). Surface value
+        ! (level nt) equals the Down_Radiance scalar.
+        IF ( RTV%Compute_Down_Radiance_Profile ) &
+          RTSolution%Downwelling_Radiance(1:no) = RTV%e_Level_Rad_DOWN(na+1:nt)
       END IF
     END IF
 

@@ -946,6 +946,7 @@ CONTAINS
                 AtmOptics(nt)%Include_Scattering ) THEN
             RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
             RTV(nt)%Compute_Down_Radiance = Opt%Compute_Down_Radiance
+            RTV(nt)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
             CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
             IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
               Error_Status=FAILURE
