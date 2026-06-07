@@ -366,6 +366,14 @@ target_link_libraries(Unit_Land_Jacobian PRIVATE crtm)
 add_test(NAME test_Unit_Land_Jacobian
          COMMAND $<TARGET_FILE:Unit_Land_Jacobian>)
 
+# Surface downwelling radiance (RTSolution%Down_Radiance) TL/AD/K correctness:
+# baseline-independent finite-difference, adjoint dot-product, and K-vs-AD checks
+# for a TOA-radiance control plus the surface downwelling output.
+add_executable(Unit_Downwelling_TLADK mains/unit/Unit_Test/test_Downwelling_TLADK.f90)
+target_link_libraries(Unit_Downwelling_TLADK PRIVATE crtm)
+add_test(NAME test_Unit_Downwelling_TLADK
+         COMMAND $<TARGET_FILE:Unit_Downwelling_TLADK>)
+
 # Surface netCDF I/O round-trip (REL-3.2.0 baseline-format conversion):
 # write a rank-2 Surface(L x M) with NetCDF=.TRUE., read it back, and verify
 # every field round-trips exactly.

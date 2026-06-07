@@ -571,6 +571,7 @@ CONTAINS
                          Atmosphere%n_Layers ) :: Pbb_TL ! Backward scattering TL phase matrix
     REAL(fp), DIMENSION( RTV%n_Angles * RTV%n_Stokes ) :: Scattering_Radiance_TL
     REAL(fp) :: Radiance_TL
+    REAL(fp) :: Down_Radiance_TL
 
     ! ------
     ! Set up
@@ -607,6 +608,7 @@ CONTAINS
     END IF
 
     nZ = RTV%n_Angles * RTV%n_Stokes
+    Down_Radiance_TL = ZERO
     IF( RTV%n_Stokes > 1 ) THEN
        CALL Reshape_Surf_Opt(RTV%n_Angles, RTV%n_Stokes, SfcOptics_TL%Emissivity, SfcOptics_TL%Direct_Reflectivity, &
         SfcOptics_TL%Reflectivity, SfcOptics_TL%S_Emissivity, SfcOptics_TL%S_Direct_Ref, SfcOptics_TL%S_Reflectivity)
@@ -653,7 +655,8 @@ CONTAINS
              SfcOptics_TL%S_Emissivity(1:nZ),          & ! Input, TL surface emissivity
              SfcOptics_TL%S_Reflectivity(1:nZ,1:nZ), & ! Input, TL surface reflectivity
              SfcOptics_TL%S_Direct_Ref(1:nZ), & ! Input, TL surface reflectivity for a point source
-             Radiance_TL                               ) ! Output, TL radiances    
+             Radiance_TL,                              & ! Output, TL radiances
+             down_rad_TL_out=Down_Radiance_TL          ) ! Output, TL surface downwelling radiance
       END IF
 
    ELSE IF( RTV%Scattering_RT ) THEN
@@ -729,7 +732,8 @@ CONTAINS
              SfcOptics_TL%Emissivity(1:nZ,1),          & ! Input, TL surface emissivity
              SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1), & ! Input, TL surface reflectivity
              SfcOptics_TL%Direct_Reflectivity(1:nZ,1), & ! Input, TL surface reflectivity for a point source
-             Radiance_TL                               ) ! Output, TL radiances
+             Radiance_TL,                              & ! Output, TL radiances
+             down_rad_TL_out=Down_Radiance_TL          ) ! Output, TL surface downwelling radiance
     END IF
 
     Error_Status = Assign_Common_Output_TL( SfcOptics             , &
@@ -746,6 +750,10 @@ CONTAINS
       CALL Display_Message( ROUTINE_NAME, TRIM(Message), Error_Status )
       RETURN
     END IF
+
+    ! Surface downwelling radiance tangent-linear (always-on output). Nonzero on the
+    ! emission path; zero for scattering until implemented there (Phase 2).
+    RTSolution_TL%Down_Radiance = Down_Radiance_TL
 
   END FUNCTION CRTM_Compute_RTSolution_TL
 !--------------------------------------------------------------------------------
@@ -944,6 +952,7 @@ CONTAINS
                          Atmosphere%n_Layers ) :: Pbb_AD ! Backward scattering AD phase matrix
     REAL (fp),DIMENSION( RTV%n_Angles * RTV%n_Stokes ) :: Scattering_Radiance_AD
     REAL (fp) :: Radiance_AD(MAX_N_STOKES)
+    REAL (fp) :: Down_Radiance_AD
 
 
     ! -----
@@ -974,6 +983,11 @@ CONTAINS
       CALL Display_Message( ROUTINE_NAME, TRIM(Message), Error_Status )
       RETURN
     END IF
+
+    ! Surface downwelling radiance adjoint seed (always-on output). Consumed by the
+    ! emission path below; harmlessly ignored on scattering paths until Phase 2.
+    Down_Radiance_AD = RTSolution_AD%Down_Radiance
+    RTSolution_AD%Down_Radiance = ZERO
 
     ! --------------------------------------
     ! Perform the adjoint radiative transfer
@@ -1030,7 +1044,8 @@ CONTAINS
              Planck_Surface_AD,                        & ! Output, AD surface radiance
              SfcOptics_AD%S_Emissivity(1:nZ),          & ! Output, AD surface emissivity
              SfcOptics_AD%S_Reflectivity(1:nZ,1:nZ), & ! Output, AD surface reflectivity
-             SfcOptics_AD%S_Direct_Ref(1:nZ)  ) ! Output, AD surface reflectivity for a point source      
+             SfcOptics_AD%S_Direct_Ref(1:nZ),  & ! Output, AD surface reflectivity for a point source
+             down_rad_AD_in=Down_Radiance_AD   ) ! Input, AD surface downwelling radiance
       END IF
       CALL Reshape_Surf_Opt_AD(RTV%n_Angles, RTV%n_Stokes, SfcOptics_AD%Emissivity, SfcOptics_AD%Direct_Reflectivity, &
         SfcOptics_AD%Reflectivity, SfcOptics_AD%S_Emissivity, SfcOptics_AD%S_Direct_Ref, SfcOptics_AD%S_Reflectivity)
@@ -1112,7 +1127,8 @@ CONTAINS
              Planck_Surface_AD,                        & ! Output, AD surface radiance
              SfcOptics_AD%Emissivity(1:nZ,1),          & ! Output, AD surface emissivity
              SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1), & ! Output, AD surface reflectivity
-             SfcOptics_AD%Direct_Reflectivity(1:nZ,1)  ) ! Output, AD surface reflectivity for a point source
+             SfcOptics_AD%Direct_Reflectivity(1:nZ,1), & ! Output, AD surface reflectivity for a point source
+             down_rad_AD_in=Down_Radiance_AD           ) ! Input, AD surface downwelling radiance
     END IF
 
     Error_Status = Assign_Common_Output_AD( Atmosphere           , & ! Input

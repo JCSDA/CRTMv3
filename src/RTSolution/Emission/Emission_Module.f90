@@ -191,7 +191,8 @@ CONTAINS
                          emissivity_TL, & ! Input  TL surface emissivity
                        reflectivity_TL, & ! Input  TL surface reflectivity matrix
                 direct_reflectivity_TL, & ! Input  TL surface ditrct reflectivity
-                             up_rad_TL)   ! Output TL TOA radiance
+                             up_rad_TL, & ! Output TL TOA radiance
+                       down_rad_TL_out)   ! Output TL surface downwelling radiance (OPTIONAL)
 ! --------------------------------------------------------------------------- !
 !  FUNCTION: Compute tangent-linear upward radiance at the top of the         !
 !    atmosphere using carried results in RTV structure from forward           !
@@ -208,8 +209,9 @@ CONTAINS
       REAL (fp), INTENT(IN), DIMENSION( 0: ) :: Planck_Atmosphere,Planck_Atmosphere_TL
       REAL (fp), INTENT(IN) :: Planck_Surface,u,Planck_Surface_TL
       REAL (fp), INTENT(INOUT) :: up_rad_TL
+      REAL (fp), INTENT(OUT), OPTIONAL :: down_rad_TL_out
 
-    !   Structure RTV carried in variables from forward calculation. 
+    !   Structure RTV carried in variables from forward calculation.
       TYPE(RTV_type), INTENT( IN) :: RTV
     !  internal variables
       REAL (fp) :: layer_source_up_TL, layer_source_down_TL,a_TL,down_rad_TL
@@ -239,6 +241,10 @@ CONTAINS
        down_rad_TL = down_rad_TL*RTV%e_Layer_Trans_DOWN(k)  &
        +RTV%e_Level_Rad_DOWN(k-1)*RTV%e_Layer_Trans_DOWN(k)*a_TL+layer_source_down_TL
       ENDDO
+
+      ! Surface downwelling tangent-linear radiance (always-on output).
+      ! At this point down_rad_TL holds TL of e_Level_Rad_DOWN(n_Layers).
+      IF ( PRESENT(down_rad_TL_out) ) down_rad_TL_out = down_rad_TL
 
     !#--------------------------------------------------------------------------#
     !#                -- at surface   --                                        #
@@ -295,7 +301,8 @@ CONTAINS
                          Planck_Surface_AD, & ! Output AD surface Planck radiance
                              emissivity_AD, & ! Output AD surface emissivity
                            reflectivity_AD, & ! Output AD surface reflectivity matrix
-                    direct_reflectivity_AD)   ! Output AD surface direct reflectivity
+                    direct_reflectivity_AD, & ! Output AD surface direct reflectivity
+                            down_rad_AD_in)   ! Input  AD surface downwelling radiance (OPTIONAL)
 ! --------------------------------------------------------------------------- !
 !  FUNCTION: Compute adjoint upward radiance at the top of the                !
 !    atmosphere using carried results in RTV structure from forward           !
@@ -312,6 +319,7 @@ CONTAINS
       REAL (fp), INTENT(IN), DIMENSION( 0: ) ::  Planck_Atmosphere
       REAL (fp), INTENT(IN) :: Planck_Surface,u
       REAL (fp), INTENT(IN) :: up_rad_AD_in
+      REAL (fp), INTENT(IN), OPTIONAL :: down_rad_AD_in
       REAL (fp), INTENT(IN OUT), DIMENSION( : ) ::  T_OD_AD,emissivity_AD
       REAL (fp), INTENT(IN OUT), DIMENSION( :,: ) :: reflectivity_AD
       REAL (fp), INTENT(IN OUT), DIMENSION( : ) :: direct_reflectivity_AD
@@ -369,6 +377,9 @@ CONTAINS
       Planck_Surface_AD = emissivity(n_Angles)*up_rad_AD
       reflectivity_AD(1,1)=up_rad_AD*RTV%e_Level_Rad_DOWN(n_Layers)
       down_rad_AD = reflectivity(1,1)*up_rad_AD
+      ! Inject adjoint of the surface downwelling radiance output (always-on).
+      ! e_Level_Rad_DOWN(n_Layers) feeds both the surface reflection and Down_Radiance.
+      IF ( PRESENT(down_rad_AD_in) ) down_rad_AD = down_rad_AD + down_rad_AD_in
 !
     !#--------------------------------------------------------------------------#
     !#                -- Downward adjoint radiance   --                         #
