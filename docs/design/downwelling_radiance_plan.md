@@ -122,7 +122,7 @@ downwelling via `%Down_Radiance`. Clear-sky + (later) scattering + grazing cases
   baselines are intentionally NOT regenerated here — see the clear/cloudy combine in Phase 2.
   Forward / adjoint / k_matrix Simple all still pass.
 
-### Phase 2 — ADA + SOI surface `Down_Radiance`, differentiated  *(high effort — IN PROGRESS)*
+### Phase 2 — ADA + SOI surface `Down_Radiance`, differentiated  *(high effort — DONE & VERIFIED)*
 - ADA FWD: **DONE** (commit 64b17db). Un-gated the downward sweep so `s_Level_Rad_DOWN` is always
   computed; scattering branch of `Assign_Common_Output` sets `Down_Radiance` from the finalized
   surface value; clear/cloudy `Total_Cloud_Cover` combine added. Verified TOA upwelling unchanged
@@ -146,22 +146,35 @@ downwelling via `%Down_Radiance`. Clear-sky + (later) scattering + grazing cases
   values differ from clear-sky (cloud effect confirmed, 22/22 channels scattering). Full suite 212/212.
   - Harness note: scattering scenes use Cloud_Fraction=1 (overcast, TCC=1) so the missing fractional
     TL/AD `Down_Radiance` combine doesn't bite; TL/AD/K cloud structures made congruent with FWD.
-- ADA TL/AD: **IN PROGRESS** — dense adjoint of the downward recursion (matmul + matinv).
-  - Test gate READY (uncommitted harness): the FD-vs-TL channel selection now uses a finite-
-    difference PROBE (max|FD|, not max|TL|) so a broken/zero TL can't hide; scenes use a strongly-
-    scattering SNOW cloud (Reff=500um) so the cloudy sub-call actually routes through the scattering
-    solver. Confirmed: SOI Down passes (TL=-2.4e-6, FD-converges) and ADA Down FAILS exactly as
-    expected (TL=0 vs FD=4.55e-6) — the unimplemented ADA downward-sweep TL.
-  - Full derivation in hand (subagent). KEY facts: the output is the FINALIZED
-    s_Level_Rad_DOWNT(n1,n_Layers) (line "s_Level_Rad_DOWN = s_Level_Rad_DOWNT"), so the Inv_Gamma3
-    finalization MUST be differentiated (can restrict to k=n_Layers); the finalization's
-    s_Level_Rad_UP(:,n_Layers) is the INTERMEDIATE surface-boundary radiance whose TL must be
-    captured before DO 10 overwrites it; and the surface-AD block (ADA_Module ~1899-1902) uses "="
-    (not "+=") for emissivity_AD/Planck_Surface_AD/reflectivity_AD — the downward-AD surface
-    contribution must be added AFTER DO 10 or those will clobber it.
-  - Implementation interface is identical to Emission/SOI: optional down_rad_TL_out (CRTM_ADA_TL) /
-    down_rad_AD_in (CRTM_ADA_AD), passed at the four ADA call sites in CRTM_RTSolution.f90
-    (TL n_Stokes>1 & ==1; AD n_Stokes>1 & ==1); add Index_Sat_Angle to the ADA signatures.
+- ADA TL/AD: **DONE & VERIFIED.** Dense TL/AD of the downward adding recursion (matmul + matinv)
+  + Inv_Gamma3 finalization. Verified by `test_Unit_Downwelling_TLADK` on a strongly-scattering
+  overcast SNOW scene (Reff=500um, TCC=1, RT_ADA): FD-vs-TL best |FD/TL-1| = 3.2e-10, adjoint
+  dot-product = 0 (exact transpose), K-vs-AD = 0 (exact). All six harness cases green; full suite
+  212/212.
+  - Interface mirrors Emission/SOI: optional `down_rad_TL_out` (CRTM_ADA_TL) / `down_rad_AD_in`
+    (CRTM_ADA_AD) + optional `Index_Sat_Angle`, wired at the four ADA call sites in
+    CRTM_RTSolution.f90 (TL n_Stokes>1 & ==1; AD n_Stokes>1 & ==1). Both gated on
+    `RTV%Compute_Down_Radiance .AND. PRESENT(...)` (ADA's downward RTV intermediates are only
+    populated when the flag is on, unlike SOI which always iterates downward).
+  - **FWD bug found & fixed (was latent):** `CRTM_ADA` copied the finalized profiles back into the
+    working arrays (`s_Level_Rad_DOWN = s_Level_Rad_DOWNT; s_Level_Rad_UP = s_Level_Rad_UPT`)
+    unconditionally inside the downward-sweep `IF`. With `Compute_Down_Radiance` on this CLOBBERED
+    the INTERMEDIATE `s_Level_Rad_UP` that the existing upward TL/AD read → corrupted the **TOA**
+    Jacobian (FD/TL≈0.345), not just the downwelling one. The adjoint dot-product still passed (TL &
+    AD consistently wrong) so only the FD check caught it. Fix: gate the copy-back on
+    `aircraft%rt .or. obs_4_downward%rt` (the only forward-only observers that read the finalized
+    full profiles); `Compute_Down_Radiance` now leaves `s_Level_Rad_DOWN`/`_UP` as intermediates for
+    TL/AD. Output extraction reads `s_Level_Rad_DOWNT` directly for ADA/VMOM — but **solver-specific**:
+    SOI stores its final surface value in `s_Level_Rad_DOWN` (no DOWNT), so Common_RTSolution branches
+    on `RTV%RT_Algorithm_Id == RT_SOI`.
+  - Implementation facts (mirror the FWD DO 20 + finalization): output is the FINALIZED
+    `s_Level_Rad_DOWNT(n1,n_Layers)`; the TL re-runs the downward adding recursion using the saved
+    RTV intermediates (Inv_Gamma2/2T, Refl_Trans_DOWN, s_Level_Refl_DOWN, Inv_Gamma3, layer matrices)
+    and re-calls CRTM_AMOM_layer_TL/_AD per scattering layer (layer-indexed, so reproduces the FWD
+    exactly; redundant w/ the upward call but correctness-first); the surface-boundary `s_rad_up_TL` /
+    `s_refl_up_TL` are CAPTURED before DO 10 (which overwrites them); the AD surface contributions are
+    added AFTER the upward DO 10 "=" surface block (so they `+=`) and before the total_opt_AD→T_OD_AD
+    propagation (the downward AMOM_layer_AD calls accumulate total_opt_AD too).
 - Clear/cloudy `Down_Radiance` combine in FWD/TL/AD/K: **DONE & VERIFIED.** Mirrors the existing
   Radiance/Stokes combine including the cloud-fraction (TCC) sensitivity term; all gated on
   `Opt%Compute_Down_Radiance` (so flag-off scattering scenes keep the original Down_Radiance=0,

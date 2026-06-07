@@ -634,7 +634,9 @@ CONTAINS
                  SfcOptics_TL%S_Direct_Ref(1:nZ), & ! Input, TL surface direct reflectivity
                  Pff_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer forward phase matrix
                  Pbb_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer backward phase matrix
-                 Scattering_Radiance_TL(1:nZ)              ) ! Output, TL radiances
+                 Scattering_Radiance_TL(1:nZ),             & ! Output, TL radiances
+                 Index_Sat_Angle=SfcOptics%Index_Sat_Ang,  & ! Input, sensor zenith angle index
+                 down_rad_TL_out=Down_Radiance_TL          ) ! Output, TL surface downwelling radiance
       ELSE
         CALL CRTM_Emission_TL( &
              Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
@@ -681,7 +683,9 @@ CONTAINS
                  SfcOptics_TL%Direct_Reflectivity(1:nZ,1), & ! Input, TL surface direct reflectivity
                  Pff_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer forward phase matrix
                  Pbb_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer backward phase matrix
-                 Scattering_Radiance_TL(1:nZ)              ) ! Output, TL radiances
+                 Scattering_Radiance_TL(1:nZ),             & ! Output, TL radiances
+                 Index_Sat_Angle=SfcOptics%Index_Sat_Ang,  & ! Input, sensor zenith angle index
+                 down_rad_TL_out=Down_Radiance_TL          ) ! Output, TL surface downwelling radiance
 
         CASE (RT_SOI)
           ! UW SOI RT solver
@@ -1024,7 +1028,9 @@ CONTAINS
              SfcOptics_AD%S_Reflectivity(1:nZ,1:nZ), & ! Output, AD surface reflectivity
              SfcOptics_AD%S_Direct_Ref(1:nZ), & ! Output, AD surface reflectivity for a point source
              Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
-             Pbb_AD(1:nZ,1:(nZ+1),:)                   ) ! Output, AD layer backward phase matrix      
+             Pbb_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer backward phase matrix
+             Index_Sat_Angle=SfcOptics%Index_Sat_Ang,  & ! Input, sensor zenith angle index
+             down_rad_AD_in=Down_Radiance_AD           ) ! Input, AD surface downwelling radiance
       ELSE
         CALL CRTM_Emission_AD( &
              Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
@@ -1075,7 +1081,9 @@ CONTAINS
              SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1), & ! Output, AD surface reflectivity
              SfcOptics_AD%Direct_Reflectivity(1:nZ,1), & ! Output, AD surface reflectivity for a point source
              Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
-             Pbb_AD(1:nZ,1:(nZ+1),:)                   ) ! Output, AD layer backward phase matrix
+             Pbb_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer backward phase matrix
+             Index_Sat_Angle=SfcOptics%Index_Sat_Ang,  & ! Input, sensor zenith angle index
+             down_rad_AD_in=Down_Radiance_AD           ) ! Input, AD surface downwelling radiance
 
         CASE (RT_SOI)
         ! UW SOI RT solver

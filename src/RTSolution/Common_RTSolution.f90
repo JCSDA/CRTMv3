@@ -19,7 +19,8 @@ MODULE Common_RTSolution
   USE CRTM_Parameters,           ONLY: ONE, ZERO, TWO, PI, &
                                        DEGREES_TO_RADIANS, &
                                        SECANT_DIFFUSIVITY, &
-                                       SCATTERING_ALBEDO_THRESHOLD
+                                       SCATTERING_ALBEDO_THRESHOLD, &
+                                       RT_SOI
   USE Message_Handler,           ONLY: SUCCESS, Display_Message
   USE CRTM_Atmosphere_Define,    ONLY: CRTM_Atmosphere_type
   USE CRTM_Surface_Define,       ONLY: CRTM_Surface_type
@@ -1191,7 +1192,16 @@ CONTAINS
       ! obs_4_downward observers (they use the %Radiance overwrite), so their existing
       ! outputs are unchanged.
       IF ( RTV%Compute_Down_Radiance ) THEN
-        RTSolution%Down_Radiance = RTV%s_Level_Rad_DOWN(n1, Atmosphere%n_Layers)
+        IF ( RTV%RT_Algorithm_Id == RT_SOI ) THEN
+          ! SOI stores the finalized surface downwelling directly in s_Level_Rad_DOWN.
+          RTSolution%Down_Radiance = RTV%s_Level_Rad_DOWN(n1, Atmosphere%n_Layers)
+        ELSE
+          ! ADA/VMOM: s_Level_Rad_DOWN now retains the INTERMEDIATE (adding-down)
+          ! values so the TL/AD downward sweeps can reuse them (the FWD copy-back is
+          ! gated on aircraft/obs_4_downward); the finalized surface value is in
+          ! s_Level_Rad_DOWNT.
+          RTSolution%Down_Radiance = RTV%s_Level_Rad_DOWNT(n1, Atmosphere%n_Layers)
+        END IF
       END IF
 
     ! Emission specific assignments
