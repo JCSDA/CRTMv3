@@ -135,6 +135,12 @@ MODULE CRTM_Options_Define
     ! NLTE radiance correction is ON by default
     LOGICAL :: Apply_NLTE_Correction = .TRUE.
 
+    ! Compute the surface downwelling radiance (RTSolution%Down_Radiance) for the
+    ! scattering solvers (ADA/SOI). OFF by default because it adds the adding-doubling
+    ! downward sweep / per-order accumulation cost. Clear-sky (emission) downwelling is
+    ! always computed regardless of this flag.
+    LOGICAL :: Compute_Down_Radiance = .FALSE.
+
     ! RT Algorithm is set to ADA by default
     INTEGER(Long) :: RT_Algorithm_Id = RT_ADA
 

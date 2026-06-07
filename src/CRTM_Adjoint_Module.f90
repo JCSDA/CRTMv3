@@ -802,6 +802,7 @@ CONTAINS
             AtmOptics%Include_Scattering ) THEN
           ! Assign algorithm selector
           RTV%RT_Algorithm_Id = Opt%RT_Algorithm_Id
+          RTV%Compute_Down_Radiance = Opt%Compute_Down_Radiance
           CALL RTV_Create( RTV, MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
           IF ( .NOT. RTV_Associated(RTV) ) THEN
             Error_Status=FAILURE

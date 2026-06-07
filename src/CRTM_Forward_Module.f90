@@ -511,6 +511,7 @@ CONTAINS
             RTV_Clear(:)%n_Stokes = Opt%n_Stokes
          END IF
          RTV(:)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
+         RTV(:)%Compute_Down_Radiance = Opt%Compute_Down_Radiance
          !         IF( Opt%RT_Algorithm_Id == RT_VMOM .and. RTV(1)%n_Stokes == 1) THEN
          !          Error_Status = FAILURE
          !          Message = 'Error of using RT_VMOM not allowed for n_Stokes = 1'

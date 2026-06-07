@@ -1186,8 +1186,13 @@ CONTAINS
         Radiance = RTV%s_Level_Rad_DOWN(n1:n1-1+RTV%n_Stokes, RTV%obs_4_downward%idx)
       END IF
 
-      ! Always-on surface downwelling radiance output (Stokes I at the sensor angle)
-      RTSolution%Down_Radiance = RTV%s_Level_Rad_DOWN(n1, Atmosphere%n_Layers)
+      ! Surface downwelling radiance output (Stokes I at the sensor angle), opt-in
+      ! for scattering via Options%Compute_Down_Radiance. Not set for the aircraft/
+      ! obs_4_downward observers (they use the %Radiance overwrite), so their existing
+      ! outputs are unchanged.
+      IF ( RTV%Compute_Down_Radiance ) THEN
+        RTSolution%Down_Radiance = RTV%s_Level_Rad_DOWN(n1, Atmosphere%n_Layers)
+      END IF
 
     ! Emission specific assignments
     ELSE

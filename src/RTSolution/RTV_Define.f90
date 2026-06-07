@@ -173,6 +173,9 @@ MODULE RTV_Define
     ! Downwelling radiance
     TYPE(obs_4_downward_type) :: obs_4_downward
 
+    ! Opt-in switch: compute surface downwelling radiance in the scattering solvers
+    LOGICAL :: Compute_Down_Radiance = .FALSE.
+
     ! Scattering, visible model variables
     INTEGER :: n_Streams         = 0       ! Number of *hemispheric* stream angles used in RT
     INTEGER :: mth_Azi                     ! mth fourier component

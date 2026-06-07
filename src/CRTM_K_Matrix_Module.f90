@@ -944,6 +944,7 @@ CONTAINS
                 SpcCoeff_IsVisibleSensor(SC(SensorIndex)).OR.SpcCoeff_IsUltravioletSensor(SC(SensorIndex)) ) .AND. &
                 AtmOptics(nt)%Include_Scattering ) THEN
             RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
+            RTV(nt)%Compute_Down_Radiance = Opt%Compute_Down_Radiance
             CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
             IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
               Error_Status=FAILURE

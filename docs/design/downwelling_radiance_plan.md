@@ -58,7 +58,10 @@ The AD/K **seed** for the downwelling Jacobian is `RTSolution_{AD,K}%Down_Radian
 ## 4. Design decisions
 
 - **D1** Output via RTSolution fields, not an option, not a second structure. Symmetric with upwelling.
-- **D2** Always-on. Surface `Down_Radiance` computed in every solver; no gating/sentinel.
+- **D2** Emission (clear-sky) `Down_Radiance` is always-on (cheap). Scattering (ADA/SOI)
+  `Down_Radiance` is **opt-in** via `Options%Compute_Down_Radiance` (default .FALSE.) because the
+  adding-doubling downward sweep adds real per-call cost. (Revised after the perf finding; the
+  earlier "always-on for all solvers" intent is kept only for the cheap emission path.)
 - **D3** AD/K seed via `%Down_Radiance` uniformly (resolves today's K-vs-AD seed inconsistency).
   `%Radiance` stays TOA upwelling.
 - **D4** Differentiate by exposing existing intermediates, not new physics.
@@ -128,10 +131,17 @@ downwelling via `%Down_Radiance`. Clear-sky + (later) scattering + grazing cases
     Inv_Gamma3) on EVERY scattering RT call. Acceptable per "always-on", but a surface-only
     optimization (full per-layer Inv_Gamma2 recursion, Inv_Gamma3 finalization only at the surface
     level) would roughly halve the added cost. Deferred; correctness first.
-- ADA TL/AD: **PENDING** — the dense adjoint of the downward recursion (matmul + matinv chains),
-  reusing the layer TL/AD quantities already computed by `CRTM_ADA_TL/_AD`, honoring C1 clamp flags.
-  This is the bulk of the remaining effort/risk; gate every step on the cloudy FD/adjoint harness.
-- SOI FWD: accumulate per-order downwelling. SOI TL/AD: accumulate over orders. **PENDING**.
+- Opt-in flag: **DONE**. `Options%Compute_Down_Radiance` + `RTV%Compute_Down_Radiance`, plumbed in
+  all four drivers (FWD/TL/AD/K), gates the ADA downward sweep and the scattering `Down_Radiance`
+  assignment. Default off → existing scattering results unchanged. Full suite green (212/212);
+  emission TL baselines regenerated (clear-sky, FD-verified). (A stale aerosol baseline from a
+  cross-branch shared build/ was also regenerated — not a regression; this branch has no
+  scatter/aerosol source changes.)
+- SOI TL/AD: **NEXT** (chosen warm-up). FWD accumulate per-order downwelling (flag-gated); SOI
+  TL/AD accumulate over orders (the per-order down sweep is already differentiated in
+  `CRTM_SOI_TL/_AD`). Verify with a cloudy-SOI FD/adjoint harness case.
+- ADA TL/AD: **PENDING after SOI** — dense adjoint of the downward recursion (matmul + matinv),
+  reusing `CRTM_ADA_TL/_AD` layer quantities, honoring C1 clamp flags. Bulk of remaining risk.
 - **Clear/cloudy combine:** for fractional-cloud scenes the driver combines `%Radiance`/`%Stokes`
   from the clear (emission) and cloudy (scattering) sub-calls but NOT `%Down_Radiance`. Add the
   same cloud-fraction combine for `Down_Radiance` (FWD/TL/AD/K). This is what makes cloudy
