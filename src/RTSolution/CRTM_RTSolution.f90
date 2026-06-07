@@ -572,6 +572,8 @@ CONTAINS
     REAL(fp), DIMENSION( RTV%n_Angles * RTV%n_Stokes ) :: Scattering_Radiance_TL
     REAL(fp) :: Radiance_TL
     REAL(fp) :: Down_Radiance_TL
+    REAL(fp), DIMENSION( Atmosphere%n_Layers ) :: Down_Radiance_Prof_TL  ! TL downwelling profile (internal levels)
+    INTEGER :: no_d, na_d, nt_d
 
     ! ------
     ! Set up
@@ -609,6 +611,7 @@ CONTAINS
 
     nZ = RTV%n_Angles * RTV%n_Stokes
     Down_Radiance_TL = ZERO
+    Down_Radiance_Prof_TL = ZERO
     IF( RTV%n_Stokes > 1 ) THEN
        CALL Reshape_Surf_Opt(RTV%n_Angles, RTV%n_Stokes, SfcOptics_TL%Emissivity, SfcOptics_TL%Direct_Reflectivity, &
         SfcOptics_TL%Reflectivity, SfcOptics_TL%S_Emissivity, SfcOptics_TL%S_Direct_Ref, SfcOptics_TL%S_Reflectivity)
@@ -658,7 +661,8 @@ CONTAINS
              SfcOptics_TL%S_Reflectivity(1:nZ,1:nZ), & ! Input, TL surface reflectivity
              SfcOptics_TL%S_Direct_Ref(1:nZ), & ! Input, TL surface reflectivity for a point source
              Radiance_TL,                              & ! Output, TL radiances
-             down_rad_TL_out=Down_Radiance_TL          ) ! Output, TL surface downwelling radiance
+             down_rad_TL_out=Down_Radiance_TL,         & ! Output, TL surface downwelling radiance
+             down_rad_prof_TL_out=Down_Radiance_Prof_TL ) ! Output, TL downwelling radiance profile
       END IF
 
    ELSE IF( RTV%Scattering_RT ) THEN
@@ -738,7 +742,8 @@ CONTAINS
              SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1), & ! Input, TL surface reflectivity
              SfcOptics_TL%Direct_Reflectivity(1:nZ,1), & ! Input, TL surface reflectivity for a point source
              Radiance_TL,                              & ! Output, TL radiances
-             down_rad_TL_out=Down_Radiance_TL          ) ! Output, TL surface downwelling radiance
+             down_rad_TL_out=Down_Radiance_TL,         & ! Output, TL surface downwelling radiance
+             down_rad_prof_TL_out=Down_Radiance_Prof_TL ) ! Output, TL downwelling radiance profile
     END IF
 
     Error_Status = Assign_Common_Output_TL( SfcOptics             , &
@@ -757,8 +762,18 @@ CONTAINS
     END IF
 
     ! Surface downwelling radiance tangent-linear (always-on output). Nonzero on the
-    ! emission path; zero for scattering until implemented there (Phase 2).
+    ! emission path; for scattering it is the opt-in Compute_Down_Radiance output.
     RTSolution_TL%Down_Radiance = Down_Radiance_TL
+
+    ! Level-resolved downwelling radiance profile TL (opt-in). Map the solver's
+    ! internal-level output (1:nt) onto the user layering (1:no), mirroring the FWD
+    ! Common_RTSolution assignment Downwelling_Radiance(1:no)=...(na+1:nt).
+    IF ( RTV%Compute_Down_Radiance_Profile .AND. ALLOCATED(RTSolution_TL%Downwelling_Radiance) ) THEN
+      no_d = RTSolution_TL%n_Layers
+      na_d = RTV%n_Added_Layers
+      nt_d = Atmosphere%n_Layers
+      RTSolution_TL%Downwelling_Radiance(1:no_d) = Down_Radiance_Prof_TL(na_d+1:nt_d)
+    END IF
 
   END FUNCTION CRTM_Compute_RTSolution_TL
 !--------------------------------------------------------------------------------
@@ -958,6 +973,8 @@ CONTAINS
     REAL (fp),DIMENSION( RTV%n_Angles * RTV%n_Stokes ) :: Scattering_Radiance_AD
     REAL (fp) :: Radiance_AD(MAX_N_STOKES)
     REAL (fp) :: Down_Radiance_AD
+    REAL (fp), DIMENSION( Atmosphere%n_Layers ) :: Down_Radiance_Prof_AD  ! AD downwelling profile seed (internal levels)
+    INTEGER :: no_d, na_d, nt_d
 
 
     ! -----
@@ -990,9 +1007,21 @@ CONTAINS
     END IF
 
     ! Surface downwelling radiance adjoint seed (always-on output). Consumed by the
-    ! emission path below; harmlessly ignored on scattering paths until Phase 2.
+    ! emission path below; for scattering it is the opt-in Compute_Down_Radiance seed.
     Down_Radiance_AD = RTSolution_AD%Down_Radiance
     RTSolution_AD%Down_Radiance = ZERO
+
+    ! Level-resolved downwelling radiance profile adjoint seed (opt-in). Map the user
+    ! layering (1:no) back onto the solver's internal levels (na+1:nt), mirroring the
+    ! FWD/TL profile assignment.
+    Down_Radiance_Prof_AD = ZERO
+    IF ( RTV%Compute_Down_Radiance_Profile .AND. ALLOCATED(RTSolution_AD%Downwelling_Radiance) ) THEN
+      no_d = RTSolution_AD%n_Layers
+      na_d = RTV%n_Added_Layers
+      nt_d = Atmosphere%n_Layers
+      Down_Radiance_Prof_AD(na_d+1:nt_d) = RTSolution_AD%Downwelling_Radiance(1:no_d)
+      RTSolution_AD%Downwelling_Radiance(1:no_d) = ZERO
+    END IF
 
     ! --------------------------------------
     ! Perform the adjoint radiative transfer
@@ -1052,7 +1081,8 @@ CONTAINS
              SfcOptics_AD%S_Emissivity(1:nZ),          & ! Output, AD surface emissivity
              SfcOptics_AD%S_Reflectivity(1:nZ,1:nZ), & ! Output, AD surface reflectivity
              SfcOptics_AD%S_Direct_Ref(1:nZ),  & ! Output, AD surface reflectivity for a point source
-             down_rad_AD_in=Down_Radiance_AD   ) ! Input, AD surface downwelling radiance
+             down_rad_AD_in=Down_Radiance_AD,  & ! Input, AD surface downwelling radiance
+             down_rad_prof_AD_in=Down_Radiance_Prof_AD ) ! Input, AD downwelling radiance profile
       END IF
       CALL Reshape_Surf_Opt_AD(RTV%n_Angles, RTV%n_Stokes, SfcOptics_AD%Emissivity, SfcOptics_AD%Direct_Reflectivity, &
         SfcOptics_AD%Reflectivity, SfcOptics_AD%S_Emissivity, SfcOptics_AD%S_Direct_Ref, SfcOptics_AD%S_Reflectivity)
@@ -1138,7 +1168,8 @@ CONTAINS
              SfcOptics_AD%Emissivity(1:nZ,1),          & ! Output, AD surface emissivity
              SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1), & ! Output, AD surface reflectivity
              SfcOptics_AD%Direct_Reflectivity(1:nZ,1), & ! Output, AD surface reflectivity for a point source
-             down_rad_AD_in=Down_Radiance_AD           ) ! Input, AD surface downwelling radiance
+             down_rad_AD_in=Down_Radiance_AD,          & ! Input, AD surface downwelling radiance
+             down_rad_prof_AD_in=Down_Radiance_Prof_AD ) ! Input, AD downwelling radiance profile
     END IF
 
     Error_Status = Assign_Common_Output_AD( Atmosphere           , & ! Input

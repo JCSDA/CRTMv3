@@ -761,6 +761,11 @@ CONTAINS
         IF ( Options_Present ) THEN
           AtmOptics(nt)%depolarization = Opt%depolarization
           AtmOptics_K(nt)%depolarization = Opt%depolarization
+          ! Downwelling-radiance output switches on RTV for ALL solver paths (the
+          ! scattering block below only runs for scattering; the emission/clear path
+          ! needs the profile switch too).
+          RTV(nt)%Compute_Down_Radiance = Opt%Compute_Down_Radiance
+          RTV(nt)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
           IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
           AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
           AtmOptics_K(nt)%n_Stokes = RTV(nt)%n_Stokes

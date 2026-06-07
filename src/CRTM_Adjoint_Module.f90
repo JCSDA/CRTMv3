@@ -795,6 +795,12 @@ CONTAINS
                                       PVar            )  ! Internal variable output
 
 
+        ! Downwelling-radiance output switches must be on RTV for ALL solver paths
+        ! (the scattering block below only runs for scattering; the emission/clear path
+        ! needs the profile switch too, and the FWD sets it unconditionally).
+        RTV%Compute_Down_Radiance = Opt%Compute_Down_Radiance
+        RTV%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+
         ! Allocate the RTV structure if necessary
         IF( ( Atm%n_Clouds   > 0 .OR. &
               Atm%n_Aerosols > 0 .OR. &
