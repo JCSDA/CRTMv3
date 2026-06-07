@@ -1282,7 +1282,8 @@ CONTAINS
                             Pbb_TL, & ! Input  TL backward phase matrix
                          s_rad_up_TL, & ! Output TL upward radiance
                      Index_Sat_Angle, & ! Optional Input  sensor zenith angle index
-                     down_rad_TL_out)   ! Optional Output TL surface downwelling radiance
+                     down_rad_TL_out, & ! Optional Output TL surface downwelling radiance
+                down_rad_prof_TL_out)   ! Optional Output TL downwelling radiance PROFILE
 ! ------------------------------------------------------------------------- !
 ! FUNCTION:                                                                 !
 !   This subroutine calculates IR/MW tangent-linear radiance at the top of  !
@@ -1313,6 +1314,7 @@ CONTAINS
       REAL (fp),INTENT(INOUT),DIMENSION( : ) :: direct_reflectivity_TL
       INTEGER,  INTENT(IN),  OPTIONAL :: Index_Sat_Angle
       REAL (fp),INTENT(OUT), OPTIONAL :: down_rad_TL_out
+      REAL (fp),INTENT(OUT), OPTIONAL, DIMENSION(:) :: down_rad_prof_TL_out
    ! -------------- internal variables --------------------------------- !
    !  Abbreviations:                                                     !
    !      s: scattering, rad: radiance, trans: transmission,             !
@@ -1332,8 +1334,10 @@ CONTAINS
       REAL (fp), DIMENSION( RTV%n_Angles*RTV%n_Stokes, RTV%n_Angles*RTV%n_Stokes ) :: refl_dn_TL, refl_dn_new_TL
       REAL (fp), DIMENSION( RTV%n_Angles*RTV%n_Stokes, RTV%n_Angles*RTV%n_Stokes ) :: refl_up_surf_TL
       REAL (fp), DIMENSION( RTV%n_Angles*RTV%n_Stokes, RTV%n_Angles*RTV%n_Stokes ) :: IG2_TL, IG2T_TL, IG3_TL, tm_dn_TL, RT_dn_TL
-      LOGICAL :: do_down
+      LOGICAL :: do_down, do_prof, do_scal
       INTEGER :: n1d
+   ! ---- per-level upward-sweep TL (profile output): captured during DO 10 ---- !
+      REAL (fp), ALLOCATABLE :: s_rad_up_lev_TL(:,:), s_refl_up_lev_TL(:,:,:)
 !
        nZ = RTV%n_Angles*RTV%n_Stokes
        total_opt(0) = ZERO
@@ -1358,12 +1362,17 @@ CONTAINS
                      * total_opt_TL(n_Layers) * exp(-total_opt(n_Layers)/RTV%COS_SUN)
        END IF
 
-       ! Surface Down_Radiance TL is opt-in: only valid when the FWD ran the
-       ! downward sweep (RTV%Compute_Down_Radiance), which populates the RTV
-       ! downward intermediates the TL reuses.  Default the output to ZERO.
-       do_down = PRESENT(down_rad_TL_out)
-       IF( do_down ) down_rad_TL_out = ZERO
-       do_down = do_down .AND. RTV%Compute_Down_Radiance
+       ! Downwelling-radiance TL output is opt-in and only valid when the FWD ran the
+       ! downward sweep (Compute_Down_Radiance for the surface scalar,
+       ! Compute_Down_Radiance_Profile for the level profile), which populates the RTV
+       ! downward intermediates the TL reuses.  Default the outputs to ZERO.
+       do_scal = PRESENT(down_rad_TL_out)
+       IF( do_scal ) down_rad_TL_out = ZERO
+       do_scal = do_scal .AND. RTV%Compute_Down_Radiance
+       do_prof = PRESENT(down_rad_prof_TL_out)
+       IF( do_prof ) down_rad_prof_TL_out = ZERO
+       do_prof = do_prof .AND. RTV%Compute_Down_Radiance_Profile
+       do_down = do_scal .OR. do_prof
        ! Capture the TL of the surface-boundary radiance s_Level_Rad_UP(:,n_Layers)
        ! and reflectivity s_Level_Refl_UP(:,:,n_Layers) BEFORE the upward sweep
        ! overwrites the running s_rad_up_TL / s_refl_up_TL.  The downward-sweep
@@ -1371,6 +1380,14 @@ CONTAINS
        IF( do_down ) THEN
          rad_up_surf_TL  = s_rad_up_TL
          refl_up_surf_TL = s_refl_up_TL
+       END IF
+       ! For the level profile, capture the per-level upward intermediate TLs across
+       ! the whole upward sweep (the interior-level finalization needs them).
+       IF( do_prof ) THEN
+         ALLOCATE( s_rad_up_lev_TL(nZ,0:n_Layers), s_refl_up_lev_TL(nZ,nZ,0:n_Layers) )
+         s_rad_up_lev_TL  = ZERO ; s_refl_up_lev_TL = ZERO
+         s_rad_up_lev_TL(1:nZ,n_Layers)        = s_rad_up_TL(1:nZ)
+         s_refl_up_lev_TL(1:nZ,1:nZ,n_Layers)  = s_refl_up_TL(1:nZ,1:nZ)
        END IF
 
        DO 10 k = n_Layers, 1, -1
@@ -1453,6 +1470,11 @@ CONTAINS
         ENDDO
 
       ENDIF
+      ! Capture the per-level upward intermediate TLs (level k-1 just computed).
+      IF( do_prof ) THEN
+        s_rad_up_lev_TL(1:nZ,k-1)       = s_rad_up_TL(1:nZ)
+        s_refl_up_lev_TL(1:nZ,1:nZ,k-1) = s_refl_up_TL(1:nZ,1:nZ)
+      END IF
    10     CONTINUE
 !
 !  Adding reflected cosmic background radiation
@@ -1547,31 +1569,59 @@ CONTAINS
           END DO
           END DO
         END IF
+
+        ! Per-level finalization (Inv_Gamma3) for the downwelling PROFILE output, using
+        ! the just-computed level-k downward TL (rad_dn_new_TL / refl_dn_new_TL) and the
+        ! captured per-level upward intermediate TLs.  Same branch as the FWD.
+        IF( do_prof ) THEN
+          IF (maxval(abs(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k))) > ZERO) THEN
+            tm_dn_TL = -matmul(refl_dn_new_TL, RTV%s_Level_Refl_UP(1:nZ,1:nZ,k))             &
+                       -matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k), s_refl_up_lev_TL(1:nZ,1:nZ,k))
+            IG3_TL = -matmul(RTV%Inv_Gamma3(1:nZ,1:nZ,k),                                    &
+                              matmul(tm_dn_TL, RTV%Inv_Gamma3(1:nZ,1:nZ,k)))
+            downt_TL = matmul(IG3_TL,                                                        &
+                          matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k),                         &
+                                 RTV%s_Level_Rad_UP(1:nZ,k))                                 &
+                          + RTV%s_Level_Rad_DOWN(1:nZ,k))                                    &
+                     + matmul(RTV%Inv_Gamma3(1:nZ,1:nZ,k),                                   &
+                          matmul(refl_dn_new_TL, RTV%s_Level_Rad_UP(1:nZ,k))                 &
+                          + matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k), s_rad_up_lev_TL(1:nZ,k)) &
+                          + rad_dn_new_TL)
+          ELSE
+            downt_TL = rad_dn_new_TL
+          END IF
+          down_rad_prof_TL_out(k) = downt_TL(n1d)
+        END IF
+
         rad_dn_TL  = rad_dn_new_TL
         refl_dn_TL = refl_dn_new_TL
       END DO
 
-      ! Finalize the surface downwelling (k = n_Layers); same branch as FWD.
-      IF (maxval(abs(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,n_Layers))) > ZERO) THEN
-        ! Inv_Gamma3 = inv( I - s_Level_Refl_DOWN(nL).s_Level_Refl_UP(nL) )
-        tm_dn_TL = -matmul(refl_dn_TL, RTV%s_Level_Refl_UP(1:nZ,1:nZ,n_Layers))            &
-                   -matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,n_Layers), refl_up_surf_TL)
-        IG3_TL = -matmul(RTV%Inv_Gamma3(1:nZ,1:nZ,n_Layers),                               &
-                          matmul(tm_dn_TL, RTV%Inv_Gamma3(1:nZ,1:nZ,n_Layers)))
-        ! DOWNT = Inv_Gamma3.( s_Level_Refl_DOWN(nL).s_Level_Rad_UP(nL) + s_Level_Rad_DOWN(nL) )
-        downt_TL = matmul(IG3_TL,                                                          &
-                      matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,n_Layers),                    &
-                             RTV%s_Level_Rad_UP(1:nZ,n_Layers))                            &
-                      + RTV%s_Level_Rad_DOWN(1:nZ,n_Layers))                               &
-                 + matmul(RTV%Inv_Gamma3(1:nZ,1:nZ,n_Layers),                              &
-                      matmul(refl_dn_TL, RTV%s_Level_Rad_UP(1:nZ,n_Layers))                &
-                      + matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,n_Layers), rad_up_surf_TL)  &
-                      + rad_dn_TL)
-      ELSE
-        downt_TL = rad_dn_TL
+      ! Surface scalar Down_Radiance: take it from the profile when available, else run
+      ! the surface-only finalization (k = n_Layers); same branch as FWD.
+      IF( do_prof ) THEN
+        IF( do_scal ) down_rad_TL_out = down_rad_prof_TL_out(n_Layers)
+      ELSE IF( do_scal ) THEN
+        IF (maxval(abs(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,n_Layers))) > ZERO) THEN
+          tm_dn_TL = -matmul(refl_dn_TL, RTV%s_Level_Refl_UP(1:nZ,1:nZ,n_Layers))            &
+                     -matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,n_Layers), refl_up_surf_TL)
+          IG3_TL = -matmul(RTV%Inv_Gamma3(1:nZ,1:nZ,n_Layers),                               &
+                            matmul(tm_dn_TL, RTV%Inv_Gamma3(1:nZ,1:nZ,n_Layers)))
+          downt_TL = matmul(IG3_TL,                                                          &
+                        matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,n_Layers),                    &
+                               RTV%s_Level_Rad_UP(1:nZ,n_Layers))                            &
+                        + RTV%s_Level_Rad_DOWN(1:nZ,n_Layers))                               &
+                   + matmul(RTV%Inv_Gamma3(1:nZ,1:nZ,n_Layers),                              &
+                        matmul(refl_dn_TL, RTV%s_Level_Rad_UP(1:nZ,n_Layers))                &
+                        + matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,n_Layers), rad_up_surf_TL)  &
+                        + rad_dn_TL)
+        ELSE
+          downt_TL = rad_dn_TL
+        END IF
+        down_rad_TL_out = downt_TL(n1d)
       END IF
 
-      down_rad_TL_out = downt_TL(n1d)
+      IF( do_prof ) DEALLOCATE( s_rad_up_lev_TL, s_refl_up_lev_TL )
     END IF
 
       RETURN
@@ -1863,7 +1913,8 @@ CONTAINS
                             Pff_AD, & ! Output AD forward phase matrix
                             Pbb_AD, & ! Output AD backward phase matrix
                      Index_Sat_Angle, & ! Optional Input  sensor zenith angle index
-                       down_rad_AD_in)  ! Optional Input  AD surface downwelling radiance
+                       down_rad_AD_in, & ! Optional Input  AD surface downwelling radiance
+                  down_rad_prof_AD_in)   ! Optional Input  AD downwelling radiance PROFILE
 ! ------------------------------------------------------------------------- !
 ! FUNCTION:                                                                 !
 !   This subroutine calculates IR/MW adjoint radiance at the top of         !
@@ -1893,6 +1944,7 @@ CONTAINS
       REAL (fp),INTENT(INOUT),DIMENSION( : ) :: s_rad_up_AD
       INTEGER,  INTENT(IN), OPTIONAL :: Index_Sat_Angle
       REAL (fp),INTENT(IN), OPTIONAL :: down_rad_AD_in
+      REAL (fp),INTENT(IN), OPTIONAL, DIMENSION(:) :: down_rad_prof_AD_in
    ! -------------- internal variables --------------------------------- !
    !  Abbreviations:                                                     !
    !      s: scattering, rad: radiance, trans: transmission,             !
@@ -1917,8 +1969,10 @@ CONTAINS
       REAL (fp), DIMENSION( RTV%n_Angles*RTV%n_Stokes, RTV%n_Angles*RTV%n_Stokes ) :: refl_up_surf_AD
       REAL (fp), DIMENSION( RTV%n_Angles*RTV%n_Stokes, RTV%n_Angles*RTV%n_Stokes ) :: IG2_AD, IG2T_AD, IG3_AD, tm_dn_AD, RT_dn_AD
       REAL (fp), DIMENSION( RTV%n_Angles*RTV%n_Stokes ) :: s_trans_diag_AD
-      LOGICAL :: do_down
+      LOGICAL :: do_down, do_prof, do_scal
       INTEGER :: n1d
+   ! ---- per-level upward-sweep AD (profile seed): injected into the upward DO 10 ---- !
+      REAL (fp), ALLOCATABLE :: s_rad_up_lev_AD(:,:), s_refl_up_lev_AD(:,:,:)
 !
 
        s_trans_AD = ZERO
@@ -1933,11 +1987,139 @@ CONTAINS
          total_opt(k) = total_opt(k-1) + T_OD(k)
        END DO
 
-       ! Surface Down_Radiance AD is opt-in (mirrors the FWD/TL gate).
-       do_down = PRESENT(down_rad_AD_in)
-       do_down = do_down .AND. RTV%Compute_Down_Radiance
+       ! Downwelling-radiance AD is opt-in (mirrors the FWD/TL gate): surface scalar
+       ! via Compute_Down_Radiance, level profile via Compute_Down_Radiance_Profile.
+       do_scal = PRESENT(down_rad_AD_in)      .AND. RTV%Compute_Down_Radiance
+       do_prof = PRESENT(down_rad_prof_AD_in) .AND. RTV%Compute_Down_Radiance_Profile
+       do_down = do_scal .OR. do_prof
        n1d = 1
        IF( PRESENT(Index_Sat_Angle) ) n1d = (Index_Sat_Angle-1)*RTV%n_Stokes + 1
+
+    ! =================================================================
+    ! Downward-sweep ADJOINT (per level) -> seeds the surface/level downwelling.
+    ! Exact transpose of the CRTM_ADA_TL downward sweep + per-level Inv_Gamma3
+    ! finalization.  Runs BEFORE the upward DO 10 so the per-level upward adjoints
+    ! it produces (s_rad_up_lev_AD / s_refl_up_lev_AD) can be injected into the
+    ! upward sweep (the interior-level finalization reads the per-level upward
+    ! intermediates, coupling the two sweeps).  Layer ADs accumulate (+=) into the
+    ! upward sweep's contributions.
+    ! =================================================================
+    IF( do_down ) THEN
+      ALLOCATE( s_rad_up_lev_AD(nZ,0:n_Layers), s_refl_up_lev_AD(nZ,nZ,0:n_Layers) )
+      s_rad_up_lev_AD = ZERO ; s_refl_up_lev_AD = ZERO
+      rad_dn_AD = ZERO ; refl_dn_AD = ZERO
+
+      DO k = n_Layers, 1, -1
+        ! ---- reverse of the finalization at level k (seed = adj of DOWNT(n1d,k)) ----
+        downt_AD = ZERO
+        IF( do_prof ) downt_AD(n1d) = down_rad_prof_AD_in(k)
+        IF( do_scal .AND. k == n_Layers ) downt_AD(n1d) = downt_AD(n1d) + down_rad_AD_in
+        IF (maxval(abs(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k))) > ZERO) THEN
+          vvec = matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k), RTV%s_Level_Rad_UP(1:nZ,k)) &
+               + RTV%s_Level_Rad_DOWN(1:nZ,k)
+          DO i = 1, nZ
+            DO j = 1, nZ
+              IG3_AD(i,j) = downt_AD(i)*vvec(j)
+            END DO
+          END DO
+          tmpvec_AD = matmul(transpose(RTV%Inv_Gamma3(1:nZ,1:nZ,k)), downt_AD)   ! u_AD
+          DO i = 1, nZ
+            DO j = 1, nZ
+              refl_dn_AD(i,j) = refl_dn_AD(i,j) + tmpvec_AD(i)*RTV%s_Level_Rad_UP(j,k)
+            END DO
+          END DO
+          s_rad_up_lev_AD(1:nZ,k) = s_rad_up_lev_AD(1:nZ,k) &
+            + matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k)), tmpvec_AD)
+          rad_dn_AD = rad_dn_AD + tmpvec_AD
+          tm_dn_AD = -matmul(transpose(RTV%Inv_Gamma3(1:nZ,1:nZ,k)), &
+                              matmul(IG3_AD, transpose(RTV%Inv_Gamma3(1:nZ,1:nZ,k))))
+          refl_dn_AD = refl_dn_AD &
+            - matmul(tm_dn_AD, transpose(RTV%s_Level_Refl_UP(1:nZ,1:nZ,k)))
+          s_refl_up_lev_AD(1:nZ,1:nZ,k) = s_refl_up_lev_AD(1:nZ,1:nZ,k) &
+            - matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k)), tm_dn_AD)
+        ELSE
+          rad_dn_AD = rad_dn_AD + downt_AD
+        END IF
+
+        ! ---- reverse of the adding-down recursion at level k ----
+        s_trans_AD = ZERO ; s_refl_AD = ZERO
+        s_source_up_AD = ZERO ; s_source_down_AD = ZERO
+        rad_dn_prev_AD = ZERO ; refl_dn_prev_AD = ZERO
+
+        IF(w(k) > SCATTERING_ALBEDO_THRESHOLD .and. maxval(abs(RTV%Pff(1:nZ,1:nZ,k))) > ZERO) THEN
+          IG2_AD = ZERO ; IG2T_AD = ZERO
+          refl_down(1:nZ,k) = matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1), RTV%s_Layer_Source_UP(1:nZ,k))
+
+          s_refl_AD = s_refl_AD + refl_dn_AD
+          IG2T_AD = IG2T_AD + matmul(refl_dn_AD, transpose(RTV%Refl_Trans_DOWN(1:nZ,1:nZ,k)))
+          RT_dn_AD = matmul(transpose(RTV%Inv_Gamma2T(1:nZ,1:nZ,k)), refl_dn_AD)
+          refl_dn_prev_AD = refl_dn_prev_AD + matmul(RT_dn_AD, transpose(RTV%s_Layer_Trans(1:nZ,1:nZ,k)))
+          s_trans_AD = s_trans_AD + matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1)), RT_dn_AD)
+          s_source_down_AD = s_source_down_AD + rad_dn_AD
+          DO i = 1, nZ
+            DO j = 1, nZ
+              IG2T_AD(i,j) = IG2T_AD(i,j) + rad_dn_AD(i)*(refl_down(j,k)+RTV%s_Level_Rad_DOWN(j,k-1))
+            END DO
+          END DO
+          tmpvec_AD = matmul(transpose(RTV%Inv_Gamma2T(1:nZ,1:nZ,k)), rad_dn_AD)
+          refl_dn_src_AD = tmpvec_AD
+          rad_dn_prev_AD = rad_dn_prev_AD + tmpvec_AD
+          DO i = 1, nZ
+            DO j = 1, nZ
+              refl_dn_prev_AD(i,j) = refl_dn_prev_AD(i,j) + refl_dn_src_AD(i)*RTV%s_Layer_Source_UP(j,k)
+            END DO
+          END DO
+          s_source_up_AD = s_source_up_AD &
+            + matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1)), refl_dn_src_AD)
+          s_trans_AD = s_trans_AD + matmul(IG2T_AD, transpose(RTV%Inv_Gamma2(1:nZ,1:nZ,k)))
+          IG2_AD = IG2_AD + matmul(transpose(RTV%s_Layer_Trans(1:nZ,1:nZ,k)), IG2T_AD)
+          tm_dn_AD = -matmul(transpose(RTV%Inv_Gamma2(1:nZ,1:nZ,k)), &
+                              matmul(IG2_AD, transpose(RTV%Inv_Gamma2(1:nZ,1:nZ,k))))
+          refl_dn_prev_AD = refl_dn_prev_AD - matmul(tm_dn_AD, transpose(RTV%s_Layer_Refl(1:nZ,1:nZ,k)))
+          s_refl_AD = s_refl_AD - matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1)), tm_dn_AD)
+
+          call CRTM_AMOM_layer_AD(RTV%n_Streams,nZ,k,w(k),T_OD(k),total_opt(k-1),       &
+             RTV%COS_AngleS,RTV%COS_WeightS,RTV%Pff(:,:,k),RTV%Pbb(:,:,k),RTV%Planck_Atmosphere(k), &
+             s_trans_AD,s_refl_AD,s_source_up_AD,s_source_down_AD,RTV,w_AD(k),T_OD_AD(k),  &
+             total_opt_AD(k-1),Pff_AD(:,:,k),Pbb_AD(:,:,k),Planck_Atmosphere_AD(k))
+        ELSE
+          s_trans_diag_AD = ZERO
+          DO i = 1, nZ
+            DO j = 1, nZ
+              s_trans_diag_AD(i) = s_trans_diag_AD(i) &
+                + refl_dn_AD(i,j)*RTV%s_Level_Refl_DOWN(i,j,k-1)*RTV%s_Layer_Trans(j,j,k)
+              refl_dn_prev_AD(i,j) = refl_dn_prev_AD(i,j) &
+                + RTV%s_Layer_Trans(i,i,k)*refl_dn_AD(i,j)*RTV%s_Layer_Trans(j,j,k)
+              s_trans_diag_AD(j) = s_trans_diag_AD(j) &
+                + RTV%s_Layer_Trans(i,i,k)*RTV%s_Level_Refl_DOWN(i,j,k-1)*refl_dn_AD(i,j)
+            END DO
+          END DO
+          DO i = 1, nZ
+            s_source_down_AD(i) = s_source_down_AD(i) + rad_dn_AD(i)
+            s_trans_diag_AD(i) = s_trans_diag_AD(i) + rad_dn_AD(i) * &
+              ( sum(RTV%s_Level_Refl_DOWN(i,1:nZ,k-1)*RTV%s_Layer_Source_UP(1:nZ,k)) &
+                + RTV%s_Level_Rad_DOWN(i,k-1) )
+            rad_dn_prev_AD(i) = rad_dn_prev_AD(i) + RTV%s_Layer_Trans(i,i,k)*rad_dn_AD(i)
+            sum_s_AD = RTV%s_Layer_Trans(i,i,k)*rad_dn_AD(i)
+            DO j = 1, nZ
+              refl_dn_prev_AD(i,j) = refl_dn_prev_AD(i,j) + sum_s_AD*RTV%s_Layer_Source_UP(j,k)
+              s_source_up_AD(j) = s_source_up_AD(j) + sum_s_AD*RTV%s_Level_Refl_DOWN(i,j,k-1)
+            END DO
+          END DO
+          DO i = 1, nZ, RTV%n_Stokes
+            su_AD(i) = s_source_up_AD(i) + s_source_down_AD(i)
+            Planck_Atmosphere_AD(k) = Planck_Atmosphere_AD(k) + su_AD(i)*(ONE - RTV%s_Layer_Trans(i,i,k))
+            s_trans_diag_AD(i) = s_trans_diag_AD(i) - RTV%Planck_Atmosphere(k)*su_AD(i)
+          END DO
+          DO i = 1, nZ
+            T_OD_AD(k) = T_OD_AD(k) - s_trans_diag_AD(i)/RTV%COS_AngleS(i)*RTV%s_Layer_Trans(i,i,k)
+          END DO
+        END IF
+
+        rad_dn_AD  = rad_dn_prev_AD
+        refl_dn_AD = refl_dn_prev_AD
+      END DO
+    END IF
 
 !  Adding reflected cosmic background radiation
 
@@ -1953,6 +2135,13 @@ CONTAINS
        s_source_up_AD = ZERO
        s_source_down_AD = ZERO
        s_trans_AD = ZERO
+       ! Inject the per-level downwelling adjoints: at the start of AD iteration k,
+       ! s_rad_up_AD / s_refl_up_AD are the adjoints of the level-(k-1) upward
+       ! intermediates (which the level-(k-1) finalization teed off).
+       IF( do_down ) THEN
+         s_rad_up_AD(1:nZ)        = s_rad_up_AD(1:nZ)        + s_rad_up_lev_AD(1:nZ,k-1)
+         s_refl_up_AD(1:nZ,1:nZ)  = s_refl_up_AD(1:nZ,1:nZ)  + s_refl_up_lev_AD(1:nZ,1:nZ,k-1)
+       END IF
 !
 !      Compute tranmission and reflection matrices for a layer
       IF(w(k) > SCATTERING_ALBEDO_THRESHOLD .and. maxval(abs(RTV%Pff(1:nZ,1:nZ,k))) > ZERO) THEN
@@ -2053,6 +2242,15 @@ CONTAINS
       ENDIF
    10     CONTINUE
 
+       ! Inject the surface-boundary (level n_Layers) downwelling adjoints into the
+       ! upward-sweep adjoints, so the surface block below distributes them to
+       ! emissivity / Planck_Surface / reflectivity / solar via its "=" assignments.
+       IF( do_down ) THEN
+         s_rad_up_AD(1:nZ)       = s_rad_up_AD(1:nZ)       + s_rad_up_lev_AD(1:nZ,n_Layers)
+         s_refl_up_AD(1:nZ,1:nZ) = s_refl_up_AD(1:nZ,1:nZ) + s_refl_up_lev_AD(1:nZ,1:nZ,n_Layers)
+         DEALLOCATE( s_rad_up_lev_AD, s_refl_up_lev_AD )
+       END IF
+
 !
        IF( RTV%Solar_Flag_true ) THEN
          xx = RTV%Solar_irradiance/PI * exp(-total_opt(n_Layers)/RTV%COS_SUN)
@@ -2071,168 +2269,6 @@ CONTAINS
        s_rad_up_AD = ZERO
        s_refl_up_AD = ZERO
 
-    ! =================================================================
-    ! Downward-sweep ADJOINT -> distribute the surface Down_Radiance seed.
-    ! Exact transpose of the CRTM_ADA_TL downward sweep + Inv_Gamma3
-    ! finalization.  Accumulates (+=) into the layer/surface AD outputs the
-    ! upward sweep already set, so it MUST run after the upward surface-AD block
-    ! (emissivity_AD/Planck_Surface_AD/reflectivity_AD use "=") and before the
-    ! total_opt_AD -> T_OD_AD propagation below.
-    ! =================================================================
-    IF( do_down ) THEN
-      rad_dn_AD       = ZERO
-      refl_dn_AD      = ZERO
-      rad_up_surf_AD  = ZERO
-      refl_up_surf_AD = ZERO
-
-      ! Reverse of  down_rad_TL_out = downt_TL(n1d)
-      downt_AD = ZERO
-      downt_AD(n1d) = down_rad_AD_in
-
-      ! Reverse of the finalization at k = n_Layers (same branch as FWD).
-      IF (maxval(abs(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,n_Layers))) > ZERO) THEN
-        ! FWD bracket  v = s_Level_Refl_DOWN(nL).s_Level_Rad_UP(nL) + s_Level_Rad_DOWN(nL)
-        vvec = matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,n_Layers), RTV%s_Level_Rad_UP(1:nZ,n_Layers)) &
-             + RTV%s_Level_Rad_DOWN(1:nZ,n_Layers)
-        ! downt_TL = IG3_TL.v + IG3.u  ->  IG3_AD = outer(downt_AD,v) ; u_AD = IG3^T.downt_AD
-        DO i = 1, nZ
-          DO j = 1, nZ
-            IG3_AD(i,j) = downt_AD(i)*vvec(j)
-          END DO
-        END DO
-        tmpvec_AD = matmul(transpose(RTV%Inv_Gamma3(1:nZ,1:nZ,n_Layers)), downt_AD)   ! u_AD
-        ! u = refl_dn_TL.Rup_nL + Fd_nL.rad_up_surf_TL + rad_dn_TL
-        DO i = 1, nZ
-          DO j = 1, nZ
-            refl_dn_AD(i,j) = refl_dn_AD(i,j) + tmpvec_AD(i)*RTV%s_Level_Rad_UP(j,n_Layers)
-          END DO
-        END DO
-        rad_up_surf_AD = rad_up_surf_AD &
-          + matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,n_Layers)), tmpvec_AD)
-        rad_dn_AD = rad_dn_AD + tmpvec_AD
-        ! IG3_TL = -IG3.tm_TL.IG3  ->  tm_AD = -IG3^T.IG3_AD.IG3^T
-        tm_dn_AD = -matmul(transpose(RTV%Inv_Gamma3(1:nZ,1:nZ,n_Layers)), &
-                            matmul(IG3_AD, transpose(RTV%Inv_Gamma3(1:nZ,1:nZ,n_Layers))))
-        ! tm_TL = -(refl_dn_TL.Fup_nL + Fd_nL.refl_up_surf_TL)
-        refl_dn_AD = refl_dn_AD &
-          - matmul(tm_dn_AD, transpose(RTV%s_Level_Refl_UP(1:nZ,1:nZ,n_Layers)))
-        refl_up_surf_AD = refl_up_surf_AD &
-          - matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,n_Layers)), tm_dn_AD)
-      ELSE
-        rad_dn_AD = rad_dn_AD + downt_AD
-      END IF
-
-      ! Reverse of the adding-down recursion (k = n_Layers .. 1).
-      DO k = n_Layers, 1, -1
-        s_trans_AD = ZERO ; s_refl_AD = ZERO
-        s_source_up_AD = ZERO ; s_source_down_AD = ZERO
-        rad_dn_prev_AD = ZERO ; refl_dn_prev_AD = ZERO
-
-        IF(w(k) > SCATTERING_ALBEDO_THRESHOLD .and. maxval(abs(RTV%Pff(1:nZ,1:nZ,k))) > ZERO) THEN
-          IG2_AD = ZERO ; IG2T_AD = ZERO
-          refl_down(1:nZ,k) = matmul(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1), RTV%s_Layer_Source_UP(1:nZ,k))
-
-          ! reverse (g): refl_dn_new = s_refl + IG2T_TL.RT + IG2T.RT_dn_TL
-          s_refl_AD = s_refl_AD + refl_dn_AD
-          IG2T_AD = IG2T_AD + matmul(refl_dn_AD, transpose(RTV%Refl_Trans_DOWN(1:nZ,1:nZ,k)))
-          RT_dn_AD = matmul(transpose(RTV%Inv_Gamma2T(1:nZ,1:nZ,k)), refl_dn_AD)
-          ! reverse (f): RT_dn_TL = refl_dn_TL.Lt + Fd_prev.s_trans_TL
-          refl_dn_prev_AD = refl_dn_prev_AD + matmul(RT_dn_AD, transpose(RTV%s_Layer_Trans(1:nZ,1:nZ,k)))
-          s_trans_AD = s_trans_AD + matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1)), RT_dn_AD)
-          ! reverse (e): rad_dn_new = s_source_down + IG2T_TL.(rd+Rd_prev) + IG2T.(refl_dn_src_TL+rad_dn_TL)
-          s_source_down_AD = s_source_down_AD + rad_dn_AD
-          DO i = 1, nZ
-            DO j = 1, nZ
-              IG2T_AD(i,j) = IG2T_AD(i,j) + rad_dn_AD(i)*(refl_down(j,k)+RTV%s_Level_Rad_DOWN(j,k-1))
-            END DO
-          END DO
-          tmpvec_AD = matmul(transpose(RTV%Inv_Gamma2T(1:nZ,1:nZ,k)), rad_dn_AD)
-          refl_dn_src_AD = tmpvec_AD
-          rad_dn_prev_AD = rad_dn_prev_AD + tmpvec_AD
-          ! reverse (d): refl_dn_src_TL = refl_dn_TL.Su + Fd_prev.s_source_up_TL
-          DO i = 1, nZ
-            DO j = 1, nZ
-              refl_dn_prev_AD(i,j) = refl_dn_prev_AD(i,j) + refl_dn_src_AD(i)*RTV%s_Layer_Source_UP(j,k)
-            END DO
-          END DO
-          s_source_up_AD = s_source_up_AD &
-            + matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1)), refl_dn_src_AD)
-          ! reverse (c): IG2T_TL = s_trans_TL.IG2 + Lt.IG2_TL
-          s_trans_AD = s_trans_AD + matmul(IG2T_AD, transpose(RTV%Inv_Gamma2(1:nZ,1:nZ,k)))
-          IG2_AD = IG2_AD + matmul(transpose(RTV%s_Layer_Trans(1:nZ,1:nZ,k)), IG2T_AD)
-          ! reverse (b): IG2_TL = -IG2.tm_TL.IG2  ->  tm_AD = -IG2^T.IG2_AD.IG2^T
-          tm_dn_AD = -matmul(transpose(RTV%Inv_Gamma2(1:nZ,1:nZ,k)), &
-                              matmul(IG2_AD, transpose(RTV%Inv_Gamma2(1:nZ,1:nZ,k))))
-          ! reverse (a): tm_TL = -refl_dn_TL.Lr - Fd_prev.s_refl_TL
-          refl_dn_prev_AD = refl_dn_prev_AD - matmul(tm_dn_AD, transpose(RTV%s_Layer_Refl(1:nZ,1:nZ,k)))
-          s_refl_AD = s_refl_AD - matmul(transpose(RTV%s_Level_Refl_DOWN(1:nZ,1:nZ,k-1)), tm_dn_AD)
-
-          ! Accumulate layer AD (adds to the upward-sweep contributions).
-          call CRTM_AMOM_layer_AD(RTV%n_Streams,nZ,k,w(k),T_OD(k),total_opt(k-1),       &
-             RTV%COS_AngleS,RTV%COS_WeightS,RTV%Pff(:,:,k),RTV%Pbb(:,:,k),RTV%Planck_Atmosphere(k), &
-             s_trans_AD,s_refl_AD,s_source_up_AD,s_source_down_AD,RTV,w_AD(k),T_OD_AD(k),  &
-             total_opt_AD(k-1),Pff_AD(:,:,k),Pbb_AD(:,:,k),Planck_Atmosphere_AD(k))
-        ELSE
-          ! Non-scattering layer: transpose of the analytic layer TL.
-          s_trans_diag_AD = ZERO
-          ! reverse (G2): refl_dn_new(i,j) = s_trans(i,i).Fd_prev(i,j).Lt(j,j)
-          !                                + Lt(i,i).refl_dn(i,j).Lt(j,j) + Lt(i,i).Fd_prev(i,j).s_trans(j,j)
-          DO i = 1, nZ
-            DO j = 1, nZ
-              s_trans_diag_AD(i) = s_trans_diag_AD(i) &
-                + refl_dn_AD(i,j)*RTV%s_Level_Refl_DOWN(i,j,k-1)*RTV%s_Layer_Trans(j,j,k)
-              refl_dn_prev_AD(i,j) = refl_dn_prev_AD(i,j) &
-                + RTV%s_Layer_Trans(i,i,k)*refl_dn_AD(i,j)*RTV%s_Layer_Trans(j,j,k)
-              s_trans_diag_AD(j) = s_trans_diag_AD(j) &
-                + RTV%s_Layer_Trans(i,i,k)*RTV%s_Level_Refl_DOWN(i,j,k-1)*refl_dn_AD(i,j)
-            END DO
-          END DO
-          ! reverse (G1): rad_dn_new(i) = source_down(i) + s_trans(i,i).A(i)
-          !   + Lt(i,i).( sum_j[refl_dn(i,j).Su(j)+Fd_prev(i,j).source_up(j)] + rad_dn(i) )
-          DO i = 1, nZ
-            s_source_down_AD(i) = s_source_down_AD(i) + rad_dn_AD(i)
-            s_trans_diag_AD(i) = s_trans_diag_AD(i) + rad_dn_AD(i) * &
-              ( sum(RTV%s_Level_Refl_DOWN(i,1:nZ,k-1)*RTV%s_Layer_Source_UP(1:nZ,k)) &
-                + RTV%s_Level_Rad_DOWN(i,k-1) )
-            rad_dn_prev_AD(i) = rad_dn_prev_AD(i) + RTV%s_Layer_Trans(i,i,k)*rad_dn_AD(i)
-            sum_s_AD = RTV%s_Layer_Trans(i,i,k)*rad_dn_AD(i)
-            DO j = 1, nZ
-              refl_dn_prev_AD(i,j) = refl_dn_prev_AD(i,j) + sum_s_AD*RTV%s_Layer_Source_UP(j,k)
-              s_source_up_AD(j) = s_source_up_AD(j) + sum_s_AD*RTV%s_Level_Refl_DOWN(i,j,k-1)
-            END DO
-          END DO
-          ! reverse source_down_TL = source_up_TL, then the analytic source_up_TL.
-          DO i = 1, nZ, RTV%n_Stokes
-            su_AD(i) = s_source_up_AD(i) + s_source_down_AD(i)
-            Planck_Atmosphere_AD(k) = Planck_Atmosphere_AD(k) + su_AD(i)*(ONE - RTV%s_Layer_Trans(i,i,k))
-            s_trans_diag_AD(i) = s_trans_diag_AD(i) - RTV%Planck_Atmosphere(k)*su_AD(i)
-          END DO
-          ! reverse s_trans(i,i) = -T_OD_TL(k)/COS(i).Lt(i,i)
-          DO i = 1, nZ
-            T_OD_AD(k) = T_OD_AD(k) - s_trans_diag_AD(i)/RTV%COS_AngleS(i)*RTV%s_Layer_Trans(i,i,k)
-          END DO
-        END IF
-
-        rad_dn_AD  = rad_dn_prev_AD
-        refl_dn_AD = refl_dn_prev_AD
-      END DO
-
-      ! Distribute the surface-boundary adjoints captured by the finalization
-      ! (s_Level_Rad_UP(:,nL) and s_Level_Refl_UP(:,:,nL)); these ADD to the
-      ! upward-sweep surface contributions.
-      IF( RTV%Solar_Flag_true ) THEN
-        xx = RTV%Solar_irradiance/PI * exp(-total_opt(n_Layers)/RTV%COS_SUN)
-        total_opt_AD(n_Layers) = total_opt_AD(n_Layers) &
-          - xx*sum(direct_reflectivity(1:nZ)*rad_up_surf_AD(1:nZ))
-        direct_reflectivity_AD(1:nZ) = direct_reflectivity_AD(1:nZ) &
-          + rad_up_surf_AD(1:nZ)*RTV%COS_SUN*xx
-      END IF
-      IF( RTV%mth_Azi == 0 ) THEN
-        emissivity_AD(1:nZ) = emissivity_AD(1:nZ) + rad_up_surf_AD(1:nZ)*RTV%Planck_Surface
-        Planck_Surface_AD   = Planck_Surface_AD + sum(emissivity(1:nZ)*rad_up_surf_AD(1:nZ))
-      END IF
-      reflectivity_AD(1:nZ,1:nZ) = reflectivity_AD(1:nZ,1:nZ) + refl_up_surf_AD(1:nZ,1:nZ)
-    END IF
 
 
        DO k = n_Layers, 1, -1
