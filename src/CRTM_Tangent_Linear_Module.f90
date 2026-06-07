@@ -516,7 +516,7 @@ CONTAINS
       INTEGER :: ln, nc, ks
       INTEGER :: n_Full_Streams, mth_Azi
       INTEGER :: cloud_coverage_flag
-      REAL(fp) :: Source_ZA, r_cloudy
+      REAL(fp) :: Source_ZA, r_cloudy, r_cloudy_dn
       REAL(fp) :: Wavenumber
       REAL(fp) :: transmittance, transmittance_clear
       REAL(fp) :: transmittance_TL, transmittance_clear_TL
@@ -1337,6 +1337,19 @@ CONTAINS
             RTSolution(ln,m)%Total_Cloud_Cover    =    CloudCover%Total_Cloud_Cover
             RTSolution_TL(ln,m)%Total_Cloud_Cover = CloudCover_TL%Total_Cloud_Cover
             END DO
+
+            ! ...Surface downwelling radiance (scalar) cloudy/clear combine (opt-in).
+            !    Includes the cloud-fraction (TCC) sensitivity term, like the Stokes combine.
+            IF ( Opt%Compute_Down_Radiance ) THEN
+              r_cloudy_dn = RTSolution(ln,m)%Down_Radiance
+              RTSolution(ln,m)%Down_Radiance = &
+                  ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Down_Radiance) + &
+                  (CloudCover%Total_Cloud_Cover * r_cloudy_dn)
+              RTSolution_TL(ln,m)%Down_Radiance = &
+                  ((r_cloudy_dn - RTSolution_Clear(nt)%Down_Radiance) * CloudCover_TL%Total_Cloud_Cover) + &
+                  ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear_TL(nt)%Down_Radiance) + &
+                  (CloudCover%Total_Cloud_Cover * RTSolution_TL(ln,m)%Down_Radiance)
+            END IF
 
             RTSolution(ln,m)%Radiance = RTSolution(ln,m)%Stokes(1)
             RTSolution_TL(ln,m)%Radiance = RTSolution_TL(ln,m)%Stokes(1)

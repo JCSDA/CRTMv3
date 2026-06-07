@@ -575,6 +575,7 @@ CONTAINS
       REAL(fp) :: transmittance, transmittance_K
       REAL(fp) :: transmittance_clear, transmittance_clear_K
       REAL(fp) :: r_cloudy(4)
+      REAL(fp) :: r_cloudy_dn
       INTEGER :: nt, start_ch, end_ch, chunk_ch, n_sensor_channels, ks
       INTEGER :: n_inactive_channels(n_channel_threads+1)
 
@@ -1013,7 +1014,7 @@ CONTAINS
         END IF
 #else
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
-!$OMP    FIRSTPRIVATE(ln, r_cloudy)                                     &
+!$OMP    FIRSTPRIVATE(ln, r_cloudy, r_cloudy_dn)                        &
 !$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, Err_Thread,     &
 !$OMP            start_ch, end_ch, Wavenumber, Status_FWD, Status_K,    &
 !$OMP            transmittance, transmittance_K, transmittance_clear,   &
@@ -1382,6 +1383,16 @@ CONTAINS
                   RTSolution(ln,m)%Total_Cloud_Cover = CloudCover%Total_Cloud_Cover
                 END IF
 
+                ! Surface downwelling radiance (scalar) cloudy/clear forward combine (opt-in).
+                ! Save pre-combine cloudy value for the TCC adjoint term below.
+                IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) .AND. &
+                     Opt%Compute_Down_Radiance ) THEN
+                  r_cloudy_dn = RTSolution(ln,m)%Down_Radiance
+                  RTSolution(ln,m)%Down_Radiance = &
+                      ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Down_Radiance) + &
+                      (CloudCover%Total_Cloud_Cover * r_cloudy_dn)
+                END IF
+
                 ! The radiance post-processing
                 CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), &
                                              NLTE_Predictor, &
@@ -1427,6 +1438,16 @@ CONTAINS
                     CloudCover_K(nt)%Total_Cloud_Cover = CloudCover_K(nt)%Total_Cloud_Cover + &
                                ((r_cloudy(1) - RTSolution_Clear(nt)%Radiance) * RTSolution_K(ln,m)%Radiance)
                     RTSolution_K(ln,m)%Radiance    = CloudCover%Total_Cloud_Cover * RTSolution_K(ln,m)%Radiance
+                    ! Adjoint of the surface downwelling radiance (scalar) combine (opt-in),
+                    ! mirroring the Radiance combine adjoint above (including the TCC term).
+                    IF ( Opt%Compute_Down_Radiance ) THEN
+                      RTSolution_Clear_K(nt)%Down_Radiance = &
+                          (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_K(ln,m)%Down_Radiance
+                      CloudCover_K(nt)%Total_Cloud_Cover = CloudCover_K(nt)%Total_Cloud_Cover + &
+                          ((r_cloudy_dn - RTSolution_Clear(nt)%Down_Radiance) * RTSolution_K(ln,m)%Down_Radiance)
+                      RTSolution_K(ln,m)%Down_Radiance = &
+                          CloudCover%Total_Cloud_Cover * RTSolution_K(ln,m)%Down_Radiance
+                    END IF
                  END IF
                 END IF
 

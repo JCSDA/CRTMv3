@@ -148,8 +148,15 @@ downwelling via `%Down_Radiance`. Clear-sky + (later) scattering + grazing cases
     TL/AD `Down_Radiance` combine doesn't bite; TL/AD/K cloud structures made congruent with FWD.
 - ADA TL/AD: **PENDING** — dense adjoint of the downward recursion (matmul + matinv),
   reusing `CRTM_ADA_TL/_AD` layer quantities, honoring C1 clamp flags. Bulk of remaining risk.
-- Clear/cloudy `Down_Radiance` combine in TL/AD/K: **PENDING** (FWD combine done). Needed for
-  fractional (0<TCC<1) cloudy downwelling; until then fractional scenes give clear-part-only TL/AD.
+- Clear/cloudy `Down_Radiance` combine in FWD/TL/AD/K: **DONE & VERIFIED.** Mirrors the existing
+  Radiance/Stokes combine including the cloud-fraction (TCC) sensitivity term; all gated on
+  `Opt%Compute_Down_Radiance` (so flag-off scattering scenes keep the original Down_Radiance=0,
+  matching baseline). Verified with a fractional (Cloud_Fraction=0.5) SOI scene in
+  test_Unit_Downwelling_TLADK: FD-vs-TL 6.3e-11, adjoint 2.4e-16, K-vs-AD exact. Full suite 212/212.
+  KEY ADA TAKEAWAY (why this was done first): the fractional/TCC coupling lives entirely in the
+  driver combine, and both clear & cloudy sub-solves receive their Down_Radiance seed via the same
+  Assign_Common_Input_AD extraction — so the ADA solver only needs the SAME optional
+  down_rad_TL_out / down_rad_AD_in interface as Emission/SOI; nothing ADA-combine-specific.
 - **Clear/cloudy combine:** for fractional-cloud scenes the driver combines `%Radiance`/`%Stokes`
   from the clear (emission) and cloudy (scattering) sub-calls but NOT `%Down_Radiance`. Add the
   same cloud-fraction combine for `Down_Radiance` (FWD/TL/AD/K). This is what makes cloudy

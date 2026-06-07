@@ -154,7 +154,7 @@ CONTAINS
         Options(m)%Compute_Down_Radiance = .TRUE.
         Atm(m)%n_Clouds                  = 1
         Atm(m)%Cloud_Fraction            = ZERO
-        Atm(m)%Cloud_Fraction(40:65)     = ONE    ! overcast (TCC=1): cloudy-only; clear combine weight = 0
+        Atm(m)%Cloud_Fraction(40:65)     = 0.5_fp ! fractional (0<TCC<1): exercises the clear/cloudy combine
         Atm(m)%Cloud(1)%Type             = ICE_CLOUD
         Atm(m)%Cloud(1)%Effective_Radius = ZERO
         Atm(m)%Cloud(1)%Water_Content    = ZERO

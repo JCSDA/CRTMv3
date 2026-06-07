@@ -471,6 +471,7 @@ CONTAINS
       REAL(fp) :: transmittance, transmittance_AD
       REAL(fp) :: transmittance_clear, transmittance_clear_AD
       REAL(fp) :: r_cloudy(4)
+      REAL(fp) :: r_cloudy_dn
 
       ! Local atmosphere structure for extra layering
       TYPE(CRTM_Atmosphere_type) :: Atm, Atm_AD
@@ -1161,6 +1162,16 @@ CONTAINS
               RTSolution(ln,m)%Total_Cloud_Cover = CloudCover%Total_Cloud_Cover
             END IF
 
+            ! Surface downwelling radiance (scalar) cloudy/clear forward combine (opt-in).
+            ! Save pre-combine cloudy value for the TCC adjoint term below.
+            IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) .AND. &
+                 Opt%Compute_Down_Radiance ) THEN
+              r_cloudy_dn = RTSolution(ln,m)%Down_Radiance
+              RTSolution(ln,m)%Down_Radiance = &
+                  ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear%Down_Radiance) + &
+                  (CloudCover%Total_Cloud_Cover * r_cloudy_dn)
+            END IF
+
             ! The radiance post-processing
             CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), &
                                          NLTE_Predictor, &
@@ -1203,6 +1214,16 @@ CONTAINS
               CloudCover_AD%Total_Cloud_Cover = CloudCover_AD%Total_Cloud_Cover + &
                               ((r_cloudy(1) - RTSolution_Clear%Radiance) * RTSolution_AD(ln,m)%Radiance)
               RTSolution_AD(ln,m)%Radiance    = CloudCover%Total_Cloud_Cover * RTSolution_AD(ln,m)%Radiance
+              ! Adjoint of the surface downwelling radiance (scalar) combine (opt-in),
+              ! mirroring the Radiance combine adjoint above (including the TCC term).
+              IF ( Opt%Compute_Down_Radiance ) THEN
+                RTSolution_Clear_AD%Down_Radiance = &
+                    (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_AD(ln,m)%Down_Radiance
+                CloudCover_AD%Total_Cloud_Cover = CloudCover_AD%Total_Cloud_Cover + &
+                    ((r_cloudy_dn - RTSolution_Clear%Down_Radiance) * RTSolution_AD(ln,m)%Down_Radiance)
+                RTSolution_AD(ln,m)%Down_Radiance = &
+                    CloudCover%Total_Cloud_Cover * RTSolution_AD(ln,m)%Down_Radiance
+              END IF
           END IF
 
        END IF
