@@ -146,8 +146,22 @@ downwelling via `%Down_Radiance`. Clear-sky + (later) scattering + grazing cases
   values differ from clear-sky (cloud effect confirmed, 22/22 channels scattering). Full suite 212/212.
   - Harness note: scattering scenes use Cloud_Fraction=1 (overcast, TCC=1) so the missing fractional
     TL/AD `Down_Radiance` combine doesn't bite; TL/AD/K cloud structures made congruent with FWD.
-- ADA TL/AD: **PENDING** — dense adjoint of the downward recursion (matmul + matinv),
-  reusing `CRTM_ADA_TL/_AD` layer quantities, honoring C1 clamp flags. Bulk of remaining risk.
+- ADA TL/AD: **IN PROGRESS** — dense adjoint of the downward recursion (matmul + matinv).
+  - Test gate READY (uncommitted harness): the FD-vs-TL channel selection now uses a finite-
+    difference PROBE (max|FD|, not max|TL|) so a broken/zero TL can't hide; scenes use a strongly-
+    scattering SNOW cloud (Reff=500um) so the cloudy sub-call actually routes through the scattering
+    solver. Confirmed: SOI Down passes (TL=-2.4e-6, FD-converges) and ADA Down FAILS exactly as
+    expected (TL=0 vs FD=4.55e-6) — the unimplemented ADA downward-sweep TL.
+  - Full derivation in hand (subagent). KEY facts: the output is the FINALIZED
+    s_Level_Rad_DOWNT(n1,n_Layers) (line "s_Level_Rad_DOWN = s_Level_Rad_DOWNT"), so the Inv_Gamma3
+    finalization MUST be differentiated (can restrict to k=n_Layers); the finalization's
+    s_Level_Rad_UP(:,n_Layers) is the INTERMEDIATE surface-boundary radiance whose TL must be
+    captured before DO 10 overwrites it; and the surface-AD block (ADA_Module ~1899-1902) uses "="
+    (not "+=") for emissivity_AD/Planck_Surface_AD/reflectivity_AD — the downward-AD surface
+    contribution must be added AFTER DO 10 or those will clobber it.
+  - Implementation interface is identical to Emission/SOI: optional down_rad_TL_out (CRTM_ADA_TL) /
+    down_rad_AD_in (CRTM_ADA_AD), passed at the four ADA call sites in CRTM_RTSolution.f90
+    (TL n_Stokes>1 & ==1; AD n_Stokes>1 & ==1); add Index_Sat_Angle to the ADA signatures.
 - Clear/cloudy `Down_Radiance` combine in FWD/TL/AD/K: **DONE & VERIFIED.** Mirrors the existing
   Radiance/Stokes combine including the cloud-fraction (TCC) sensitivity term; all gated on
   `Opt%Compute_Down_Radiance` (so flag-off scattering scenes keep the original Down_Radiance=0,
