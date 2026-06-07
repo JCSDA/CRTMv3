@@ -119,10 +119,19 @@ downwelling via `%Down_Radiance`. Clear-sky + (later) scattering + grazing cases
   baselines are intentionally NOT regenerated here — see the clear/cloudy combine in Phase 2.
   Forward / adjoint / k_matrix Simple all still pass.
 
-### Phase 2 — ADA + SOI surface `Down_Radiance`, differentiated  *(high effort — PAUSE for review first)*
-- ADA FWD: extract surface downwelling without the `obs_4_downward` gate. ADA TL/AD: new code,
-  honoring C1 clamp flags via `SfcOptics_TL/_AD`.
-- SOI FWD: accumulate per-order downwelling. SOI TL/AD: accumulate over orders.
+### Phase 2 — ADA + SOI surface `Down_Radiance`, differentiated  *(high effort — IN PROGRESS)*
+- ADA FWD: **DONE** (commit 64b17db). Un-gated the downward sweep so `s_Level_Rad_DOWN` is always
+  computed; scattering branch of `Assign_Common_Output` sets `Down_Radiance` from the finalized
+  surface value; clear/cloudy `Total_Cloud_Cover` combine added. Verified TOA upwelling unchanged
+  (BT delta = 0). FWD scattering `Down_Radiance` not yet FD-verified (needs ADA TL).
+  - PERF: un-gating runs the adding-doubling downward sweep (2 matinv/layer: Inv_Gamma2 +
+    Inv_Gamma3) on EVERY scattering RT call. Acceptable per "always-on", but a surface-only
+    optimization (full per-layer Inv_Gamma2 recursion, Inv_Gamma3 finalization only at the surface
+    level) would roughly halve the added cost. Deferred; correctness first.
+- ADA TL/AD: **PENDING** — the dense adjoint of the downward recursion (matmul + matinv chains),
+  reusing the layer TL/AD quantities already computed by `CRTM_ADA_TL/_AD`, honoring C1 clamp flags.
+  This is the bulk of the remaining effort/risk; gate every step on the cloudy FD/adjoint harness.
+- SOI FWD: accumulate per-order downwelling. SOI TL/AD: accumulate over orders. **PENDING**.
 - **Clear/cloudy combine:** for fractional-cloud scenes the driver combines `%Radiance`/`%Stokes`
   from the clear (emission) and cloudy (scattering) sub-calls but NOT `%Down_Radiance`. Add the
   same cloud-fraction combine for `Down_Radiance` (FWD/TL/AD/K). This is what makes cloudy
