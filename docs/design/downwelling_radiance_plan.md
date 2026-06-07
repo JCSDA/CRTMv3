@@ -137,11 +137,19 @@ downwelling via `%Down_Radiance`. Clear-sky + (later) scattering + grazing cases
   emission TL baselines regenerated (clear-sky, FD-verified). (A stale aerosol baseline from a
   cross-branch shared build/ was also regenerated — not a regression; this branch has no
   scatter/aerosol source changes.)
-- SOI TL/AD: **NEXT** (chosen warm-up). FWD accumulate per-order downwelling (flag-gated); SOI
-  TL/AD accumulate over orders (the per-order down sweep is already differentiated in
-  `CRTM_SOI_TL/_AD`). Verify with a cloudy-SOI FD/adjoint harness case.
-- ADA TL/AD: **PENDING after SOI** — dense adjoint of the downward recursion (matmul + matinv),
+- SOI FWD/TL/AD: **DONE & VERIFIED.** FWD accumulates the per-order surface downwelling into
+  `s_Level_Rad_DOWN(Index_Sat_Angle,n_Layers)` (gated on `Compute_Down_Radiance`); TL adds optional
+  `down_rad_TL_out` (sum over orders of `s_IterRad_DOWN_TL` at the surface); AD adds optional
+  `down_rad_AD_in` (per-order seed into `s_IterRad_DOWN_AD`, exact transpose). Both SOI call sites in
+  `CRTM_RTSolution.f90` pass the new args. Verified by `test_Unit_Downwelling_TLADK` (cloudy ICE_CLOUD,
+  RT_SOI, overcast TCC=1): FD-vs-TL 6.6e-11, adjoint dot-product 2.4e-16, K-vs-AD exact; scattering
+  values differ from clear-sky (cloud effect confirmed, 22/22 channels scattering). Full suite 212/212.
+  - Harness note: scattering scenes use Cloud_Fraction=1 (overcast, TCC=1) so the missing fractional
+    TL/AD `Down_Radiance` combine doesn't bite; TL/AD/K cloud structures made congruent with FWD.
+- ADA TL/AD: **PENDING** — dense adjoint of the downward recursion (matmul + matinv),
   reusing `CRTM_ADA_TL/_AD` layer quantities, honoring C1 clamp flags. Bulk of remaining risk.
+- Clear/cloudy `Down_Radiance` combine in TL/AD/K: **PENDING** (FWD combine done). Needed for
+  fractional (0<TCC<1) cloudy downwelling; until then fractional scenes give clear-part-only TL/AD.
 - **Clear/cloudy combine:** for fractional-cloud scenes the driver combines `%Radiance`/`%Stokes`
   from the clear (emission) and cloudy (scattering) sub-calls but NOT `%Down_Radiance`. Add the
   same cloud-fraction combine for `Down_Radiance` (FWD/TL/AD/K). This is what makes cloudy

@@ -27,7 +27,7 @@ PROGRAM test_Downwelling_TLADK
   INTEGER,  PARAMETER :: N_PROFILES  = 2
   INTEGER,  PARAMETER :: N_LAYERS    = 92
   INTEGER,  PARAMETER :: N_ABSORBERS = 2
-  INTEGER,  PARAMETER :: N_CLOUDS    = 0
+  INTEGER,  PARAMETER :: N_CLOUDS    = 1    ! allocate a cloud slot; content toggled per scene
   INTEGER,  PARAMETER :: N_AEROSOLS  = 0
   INTEGER,  PARAMETER :: N_SENSORS   = 1
   REAL(fp), PARAMETER :: ZENITH_ANGLE = 30.0_fp
@@ -41,7 +41,7 @@ PROGRAM test_Downwelling_TLADK
   CHARACTER(256) :: Version, Sensor_Id
   INTEGER :: Error_Status, Allocate_Status, n_Channels
   INTEGER :: l, m
-  LOGICAL :: ok_toa, ok_dwn
+  LOGICAL :: ok_toa, ok_dwn, ok_toa_s, ok_dwn_s
 
   TYPE(CRTM_ChannelInfo_type) :: ChannelInfo(N_SENSORS)
   TYPE(CRTM_Geometry_type)    :: Geometry(N_PROFILES)
@@ -49,6 +49,7 @@ PROGRAM test_Downwelling_TLADK
   TYPE(CRTM_Surface_type)     :: Sfc(N_PROFILES)
   TYPE(CRTM_Atmosphere_type)  :: Atm_TL(N_PROFILES), Atm_AD(N_PROFILES)
   TYPE(CRTM_Surface_type)     :: Sfc_TL(N_PROFILES), Sfc_AD(N_PROFILES)
+  TYPE(CRTM_Options_type)     :: Options(N_PROFILES)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution(:,:), RTSolution_pert(:,:)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution_TL(:,:), RTSolution_AD(:,:)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTSolution_K(:,:)
@@ -82,19 +83,36 @@ PROGRAM test_Downwelling_TLADK
   CALL Load_Atm_Data()
   CALL Load_Sfc_Data()
 
+  ! Make the TL/AD/K input atmospheres layer-independently congruent with the FWD
+  ! atmosphere (required by the fractional-cloud ClearSkyCopy path).
+  DO m = 1, N_PROFILES
+    Atm_TL(m)%Climatology = Atm(m)%Climatology
+    Atm_TL(m)%Absorber_ID = Atm(m)%Absorber_ID ; Atm_TL(m)%Absorber_Units = Atm(m)%Absorber_Units
+    Atm_AD(m)%Climatology = Atm(m)%Climatology
+    Atm_AD(m)%Absorber_ID = Atm(m)%Absorber_ID ; Atm_AD(m)%Absorber_Units = Atm(m)%Absorber_Units
+    DO l = 1, n_Channels
+      Atm_K(l,m)%Climatology = Atm(m)%Climatology
+      Atm_K(l,m)%Absorber_ID = Atm(m)%Absorber_ID ; Atm_K(l,m)%Absorber_Units = Atm(m)%Absorber_Units
+    END DO
+  END DO
+
   CALL CRTM_Geometry_SetValue( Geometry, &
                                Sensor_Zenith_Angle = ZENITH_ANGLE, &
                                Sensor_Scan_Angle   = SCAN_ANGLE )
 
-  CALL verify( .FALSE., ok_toa )   ! control: TOA upwelling radiance
-  CALL verify( .TRUE. , ok_dwn )   ! surface downwelling radiance (Down_Radiance)
+  CALL verify( .FALSE., .FALSE., ok_toa   )   ! clear-sky: TOA radiance (control)
+  CALL verify( .TRUE. , .FALSE., ok_dwn   )   ! clear-sky: surface Down_Radiance (emission)
+  CALL verify( .FALSE., .TRUE. , ok_toa_s )   ! SOI scattering: TOA radiance (control)
+  CALL verify( .TRUE. , .TRUE. , ok_dwn_s )   ! SOI scattering: surface Down_Radiance
 
   Error_Status = CRTM_Destroy( ChannelInfo )
 
   WRITE(*,'(/5x,a)') '====================================================='
-  WRITE(*,'(5x,"TOA upwelling control : ",a)') MERGE('PASS','FAIL',ok_toa)
-  WRITE(*,'(5x,"Surface Down_Radiance : ",a)') MERGE('PASS','FAIL',ok_dwn)
-  IF ( ok_toa .AND. ok_dwn ) THEN
+  WRITE(*,'(5x,"clear-sky TOA control       : ",a)') MERGE('PASS','FAIL',ok_toa)
+  WRITE(*,'(5x,"clear-sky Down_Radiance     : ",a)') MERGE('PASS','FAIL',ok_dwn)
+  WRITE(*,'(5x,"SOI scattering TOA control  : ",a)') MERGE('PASS','FAIL',ok_toa_s)
+  WRITE(*,'(5x,"SOI scattering Down_Radiance: ",a)') MERGE('PASS','FAIL',ok_dwn_s)
+  IF ( ok_toa .AND. ok_dwn .AND. ok_toa_s .AND. ok_dwn_s ) THEN
     WRITE(*,'(5x,a)') 'ALL CHECKS PASSED'
     STOP 0
   ELSE
@@ -119,17 +137,39 @@ CONTAINS
     IF ( downwelling ) THEN ; rts%Down_Radiance = val ; ELSE ; rts%Radiance = val ; END IF
   END SUBROUTINE set_seed
 
-  SUBROUTINE verify( downwelling, all_ok )
-    LOGICAL, INTENT(IN)  :: downwelling
+  SUBROUTINE verify( downwelling, scattering, all_ok )
+    LOGICAL, INTENT(IN)  :: downwelling, scattering
     LOGICAL, INTENT(OUT) :: all_ok
-    CHARACTER(20) :: tag
+    CHARACTER(40) :: tag
     REAL(fp) :: tl, fd, R0, Rp, Rm, ratio, best, delta, T0
     REAL(fp) :: LHS, RHS, rel_adj, dy
     REAL(fp) :: maxdiff, scal, rel_k
-    INTEGER  :: ii, kk, ch, l0, m0
+    INTEGER  :: ii, kk, ch, l0, m0, nscat
     LOGICAL  :: ok1, ok2, ok3
 
+    ! Configure the scene: clear-sky (emission) or SOI scattering (opt-in downwelling)
+    DO m = 1, N_PROFILES
+      IF ( scattering ) THEN
+        Options(m)%RT_Algorithm_Id       = RT_SOI
+        Options(m)%Compute_Down_Radiance = .TRUE.
+        Atm(m)%n_Clouds                  = 1
+        Atm(m)%Cloud_Fraction            = ZERO
+        Atm(m)%Cloud_Fraction(40:65)     = ONE    ! overcast (TCC=1): cloudy-only; clear combine weight = 0
+        Atm(m)%Cloud(1)%Type             = ICE_CLOUD
+        Atm(m)%Cloud(1)%Effective_Radius = ZERO
+        Atm(m)%Cloud(1)%Water_Content    = ZERO
+        Atm(m)%Cloud(1)%Effective_Radius(40:65) = 100.0_fp
+        Atm(m)%Cloud(1)%Water_Content(40:65)    = 2.0_fp
+      ELSE
+        Options(m)%RT_Algorithm_Id       = RT_ADA
+        Options(m)%Compute_Down_Radiance = .FALSE.
+        Atm(m)%n_Clouds                  = 0
+        Atm(m)%Cloud(1)%Water_Content    = ZERO
+      END IF
+    END DO
+
     IF ( downwelling ) THEN ; tag = 'Down_Radiance' ; ELSE ; tag = 'TOA Radiance' ; END IF
+    IF ( scattering )  THEN ; tag = TRIM(tag)//' [SOI scattering]' ; ELSE ; tag = TRIM(tag)//' [clear-sky]' ; END IF
     WRITE(*,'(/5x,"============== Output: ",a," ==============")') TRIM(tag)
 
     ! ----------------------------------------------------------------
@@ -138,16 +178,24 @@ CONTAINS
     CALL CRTM_Atmosphere_Zero( Atm_TL ) ; CALL CRTM_Surface_Zero( Sfc_TL )
     Atm_TL(1)%Temperature(PERT_LAYER) = ONE
     Error_Status = CRTM_Tangent_Linear( Atm, Sfc, Atm_TL, Sfc_TL, Geometry, ChannelInfo, &
-                                        RTSolution, RTSolution_TL )
+                                        RTSolution, RTSolution_TL, Options=Options )
     IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'TL fail' ; all_ok=.FALSE. ; RETURN ; END IF
 
+    IF ( scattering ) THEN
+      nscat = COUNT( RTSolution(:,1)%Scattering_Flag )
+      WRITE(*,'(7x,"(scattering channels in profile 1: ",i0," of ",i0,")")') nscat, n_Channels
+    END IF
+
     ! channel most sensitive to T(PERT_LAYER) for the selected output
-    ch = 1 ; tl = ABS(get_out(RTSolution_TL(1,1),downwelling))
-    DO ii = 2, n_Channels
-      IF ( ABS(get_out(RTSolution_TL(ii,1),downwelling)) > tl ) THEN
+    ! (restricted to scattering channels when testing the scattering path)
+    ch = 0 ; tl = ZERO
+    DO ii = 1, n_Channels
+      IF ( scattering .AND. .NOT. RTSolution(ii,1)%Scattering_Flag ) CYCLE
+      IF ( ABS(get_out(RTSolution_TL(ii,1),downwelling)) >= tl ) THEN
         tl = ABS(get_out(RTSolution_TL(ii,1),downwelling)) ; ch = ii
       END IF
     END DO
+    IF ( ch == 0 ) ch = 1
     tl = get_out(RTSolution_TL(ch,1),downwelling)
 
     T0 = Atm(1)%Temperature(PERT_LAYER)
@@ -157,10 +205,10 @@ CONTAINS
     DO kk = 4, 16
       delta = ABS(T0) * 0.1_fp / (2.0_fp**kk)
       Atm(1)%Temperature(PERT_LAYER) = T0 + delta
-      Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert )
+      Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert, Options=Options )
       Rp = get_out(RTSolution_pert(ch,1),downwelling)
       Atm(1)%Temperature(PERT_LAYER) = T0 - delta
-      Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert )
+      Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert, Options=Options )
       Rm = get_out(RTSolution_pert(ch,1),downwelling)
       Atm(1)%Temperature(PERT_LAYER) = T0
       fd = ( Rp - Rm ) / ( 2.0_fp*delta )
@@ -181,7 +229,7 @@ CONTAINS
       END DO
     END DO
     Error_Status = CRTM_Tangent_Linear( Atm, Sfc, Atm_TL, Sfc_TL, Geometry, ChannelInfo, &
-                                        RTSolution, RTSolution_TL )
+                                        RTSolution, RTSolution_TL, Options=Options )
     IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'TL fail' ; all_ok=.FALSE. ; RETURN ; END IF
 
     LHS = ZERO
@@ -196,7 +244,7 @@ CONTAINS
 
     CALL CRTM_Atmosphere_Zero( Atm_AD ) ; CALL CRTM_Surface_Zero( Sfc_AD )
     Error_Status = CRTM_Adjoint( Atm, Sfc, RTSolution_AD, Geometry, ChannelInfo, &
-                                 Atm_AD, Sfc_AD, RTSolution )
+                                 Atm_AD, Sfc_AD, RTSolution, Options=Options )
     IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'AD fail' ; all_ok=.FALSE. ; RETURN ; END IF
 
     RHS = ZERO
@@ -221,14 +269,14 @@ CONTAINS
       CALL set_seed( RTSolution_K(l,2), downwelling, ONE )
     END DO
     Error_Status = CRTM_K_Matrix( Atm, Sfc, RTSolution_K, Geometry, ChannelInfo, &
-                                  Atm_K, Sfc_K, RTSolution )
+                                  Atm_K, Sfc_K, RTSolution, Options=Options )
     IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'K fail' ; all_ok=.FALSE. ; RETURN ; END IF
 
     CALL CRTM_Atmosphere_Zero( Atm_AD ) ; CALL CRTM_Surface_Zero( Sfc_AD )
     CALL CRTM_RTSolution_Zero( RTSolution_AD )
     CALL set_seed( RTSolution_AD(l0,m0), downwelling, ONE )
     Error_Status = CRTM_Adjoint( Atm, Sfc, RTSolution_AD, Geometry, ChannelInfo, &
-                                 Atm_AD, Sfc_AD, RTSolution )
+                                 Atm_AD, Sfc_AD, RTSolution, Options=Options )
     IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'AD fail' ; all_ok=.FALSE. ; RETURN ; END IF
 
     maxdiff = MAXVAL( ABS( Atm_K(l0,m0)%Temperature - Atm_AD(m0)%Temperature ) )

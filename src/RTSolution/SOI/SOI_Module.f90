@@ -279,6 +279,13 @@ CONTAINS
 
       RTV%Number_SOI_Iter = niter
 
+      ! Surface downwelling radiance (Stokes I at the sensor angle), opt-in: total over
+      ! all orders of interaction. SOI is n_Stokes==1, so the downstream n1 == Index_Sat_Angle.
+      IF ( RTV%Compute_Down_Radiance ) THEN
+        RTV%s_Level_Rad_DOWN( Index_Sat_Angle, n_Layers ) = &
+             SUM( RTV%s_Level_IterRad_DOWN( Index_Sat_Angle, n_Layers, 1:RTV%Number_SOI_Iter ) )
+      END IF
+
       RETURN
       END SUBROUTINE CRTM_SOI
 
@@ -298,7 +305,8 @@ CONTAINS
                     reflectivity_TL, & ! Input  TL  reflectivity
                              Pff_TL, & ! Input  TL forward phase matrix
                              Pbb_TL, & ! Input  TL backward phase matrix
-                          s_rad_up_TL) ! Output TL upward radiance 
+                          s_rad_up_TL, & ! Output TL upward radiance
+                      down_rad_TL_out)   ! Output TL surface downwelling radiance (OPTIONAL)
 ! ------------------------------------------------------------------------- !
 !                                                                           !
 ! FUNCTION:                                                                 !
@@ -323,7 +331,8 @@ CONTAINS
       REAL (fp), INTENT(IN), DIMENSION( : ) ::  emissivity_TL
       REAL (fp), INTENT(IN), DIMENSION( :, : ) :: reflectivity_TL 
       REAL (fp), INTENT(IN), DIMENSION( :, :, : ) ::  Pff_TL, Pbb_TL
-      REAL (fp), INTENT(INOUT), DIMENSION( : ) :: s_rad_up_TL 
+      REAL (fp), INTENT(INOUT), DIMENSION( : ) :: s_rad_up_TL
+      REAL (fp), INTENT(OUT), OPTIONAL :: down_rad_TL_out
 
    ! -------------- internal variables --------------------------------- !
 
@@ -381,6 +390,7 @@ CONTAINS
       s_Rad_UP_TL( Index_Sat_Angle ) = ZERO
       s_IterRad_UP_TL( 1 : RTV%n_Angles, 0 : n_Layers, 1 : RTV%Number_SOI_Iter ) = ZERO
       s_IterRad_DOWN_TL( 1 : RTV%n_Angles, 0 : n_Layers, 1 : RTV%Number_SOI_Iter ) = ZERO
+      IF ( PRESENT(down_rad_TL_out) ) down_rad_TL_out = ZERO
 
     !-----------------------------------------
     ! This is the Order of Interaction loop
@@ -469,7 +479,11 @@ CONTAINS
         !----------------
         s_Rad_UP_TL( Index_Sat_Angle ) = s_Rad_UP_TL( Index_Sat_Angle ) + s_IterRad_UP_TL( Index_Sat_Angle, 0, iter )
 
-      END DO  
+        ! Surface downwelling TL: sum over orders of the per-order surface downwelling TL
+        IF ( PRESENT(down_rad_TL_out) ) &
+          down_rad_TL_out = down_rad_TL_out + s_IterRad_DOWN_TL( Index_Sat_Angle, n_Layers, iter )
+
+      END DO
 
       RETURN
       END SUBROUTINE CRTM_SOI_TL
@@ -489,7 +503,8 @@ CONTAINS
                      emissivity_AD, & ! Output AD surface emissivity
                    reflectivity_AD, & ! Output AD surface reflectivity
                             Pff_AD, & ! Output AD forward phase matrix
-                            Pbb_AD)   ! Output AD backward phase matrix
+                            Pbb_AD, & ! Output AD backward phase matrix
+                    down_rad_AD_in)   ! Input  AD surface downwelling radiance (OPTIONAL)
 ! ------------------------------------------------------------------------- !
 ! FUNCTION:                                                                 !
 !   This subroutine calculates IR/MW adjoint radiance at the top of         !
@@ -511,9 +526,10 @@ CONTAINS
       REAL (fp),INTENT(INOUT) ::  Planck_Surface_AD
       REAL (fp),INTENT(INOUT),DIMENSION( : ) ::  emissivity_AD
       REAL (fp),INTENT(INOUT),DIMENSION( :, : ) :: reflectivity_AD 
-      REAL (fp),INTENT(INOUT),DIMENSION( : ) :: s_rad_up_AD 
+      REAL (fp),INTENT(INOUT),DIMENSION( : ) :: s_rad_up_AD
+      REAL (fp),INTENT(IN),OPTIONAL :: down_rad_AD_in
 
-! Local variables 
+! Local variables
       REAL(fp), PARAMETER :: SNGL_SCAT_ALB_THRESH = 0.8
       REAL(fp), PARAMETER :: OPT_DEPTH_THRESH = 4.0
       INTEGER :: iter, k, i, j
@@ -596,7 +612,14 @@ CONTAINS
                                                           s_IterRad_UP_AD( i, n_Layers, iter ) * reflectivity( i, i )
           s_IterRad_UP_AD( i, n_Layers, iter ) = ZERO
         END DO
- 
+
+        ! Adjoint of the surface downwelling radiance output (opt-in). The FWD total is a
+        ! sum over orders, so each order's surface downwelling receives the same seed.
+        ! Injected after the surface-reflection AD and before the downward-sweep AD below.
+        IF ( PRESENT(down_rad_AD_in) ) &
+          s_IterRad_DOWN_AD( Index_Sat_Angle, n_Layers, iter ) = &
+            s_IterRad_DOWN_AD( Index_Sat_Angle, n_Layers, iter ) + down_rad_AD_in
+
 !---------------------------------------
 ! Step up through downward integration
 !---------------------------------------
