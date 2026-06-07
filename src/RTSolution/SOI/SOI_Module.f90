@@ -308,7 +308,8 @@ CONTAINS
                              Pff_TL, & ! Input  TL forward phase matrix
                              Pbb_TL, & ! Input  TL backward phase matrix
                           s_rad_up_TL, & ! Output TL upward radiance
-                      down_rad_TL_out)   ! Output TL surface downwelling radiance (OPTIONAL)
+                      down_rad_TL_out, & ! Output TL surface downwelling radiance (OPTIONAL)
+                 down_rad_prof_TL_out)   ! Output TL downwelling radiance PROFILE (OPTIONAL)
 ! ------------------------------------------------------------------------- !
 !                                                                           !
 ! FUNCTION:                                                                 !
@@ -335,6 +336,7 @@ CONTAINS
       REAL (fp), INTENT(IN), DIMENSION( :, :, : ) ::  Pff_TL, Pbb_TL
       REAL (fp), INTENT(INOUT), DIMENSION( : ) :: s_rad_up_TL
       REAL (fp), INTENT(OUT), OPTIONAL :: down_rad_TL_out
+      REAL (fp), INTENT(OUT), OPTIONAL, DIMENSION(:) :: down_rad_prof_TL_out
 
    ! -------------- internal variables --------------------------------- !
 
@@ -393,6 +395,7 @@ CONTAINS
       s_IterRad_UP_TL( 1 : RTV%n_Angles, 0 : n_Layers, 1 : RTV%Number_SOI_Iter ) = ZERO
       s_IterRad_DOWN_TL( 1 : RTV%n_Angles, 0 : n_Layers, 1 : RTV%Number_SOI_Iter ) = ZERO
       IF ( PRESENT(down_rad_TL_out) ) down_rad_TL_out = ZERO
+      IF ( PRESENT(down_rad_prof_TL_out) ) down_rad_prof_TL_out = ZERO
 
     !-----------------------------------------
     ! This is the Order of Interaction loop
@@ -485,6 +488,11 @@ CONTAINS
         IF ( PRESENT(down_rad_TL_out) ) &
           down_rad_TL_out = down_rad_TL_out + s_IterRad_DOWN_TL( Index_Sat_Angle, n_Layers, iter )
 
+        ! Level-resolved downwelling profile TL: sum over orders at every level.
+        IF ( PRESENT(down_rad_prof_TL_out) ) &
+          down_rad_prof_TL_out(1:n_Layers) = down_rad_prof_TL_out(1:n_Layers) &
+            + s_IterRad_DOWN_TL( Index_Sat_Angle, 1:n_Layers, iter )
+
       END DO
 
       RETURN
@@ -506,7 +514,8 @@ CONTAINS
                    reflectivity_AD, & ! Output AD surface reflectivity
                             Pff_AD, & ! Output AD forward phase matrix
                             Pbb_AD, & ! Output AD backward phase matrix
-                    down_rad_AD_in)   ! Input  AD surface downwelling radiance (OPTIONAL)
+                    down_rad_AD_in, & ! Input  AD surface downwelling radiance (OPTIONAL)
+               down_rad_prof_AD_in)   ! Input  AD downwelling radiance PROFILE (OPTIONAL)
 ! ------------------------------------------------------------------------- !
 ! FUNCTION:                                                                 !
 !   This subroutine calculates IR/MW adjoint radiance at the top of         !
@@ -530,6 +539,7 @@ CONTAINS
       REAL (fp),INTENT(INOUT),DIMENSION( :, : ) :: reflectivity_AD 
       REAL (fp),INTENT(INOUT),DIMENSION( : ) :: s_rad_up_AD
       REAL (fp),INTENT(IN),OPTIONAL :: down_rad_AD_in
+      REAL (fp),INTENT(IN),OPTIONAL,DIMENSION(:) :: down_rad_prof_AD_in
 
 ! Local variables
       REAL(fp), PARAMETER :: SNGL_SCAT_ALB_THRESH = 0.8
@@ -621,6 +631,12 @@ CONTAINS
         IF ( PRESENT(down_rad_AD_in) ) &
           s_IterRad_DOWN_AD( Index_Sat_Angle, n_Layers, iter ) = &
             s_IterRad_DOWN_AD( Index_Sat_Angle, n_Layers, iter ) + down_rad_AD_in
+
+        ! Adjoint of the level-resolved downwelling profile output (opt-in): each level's
+        ! per-order downwelling receives that level's seed (transpose of the TL order-sum).
+        IF ( PRESENT(down_rad_prof_AD_in) ) &
+          s_IterRad_DOWN_AD( Index_Sat_Angle, 1:n_Layers, iter ) = &
+            s_IterRad_DOWN_AD( Index_Sat_Angle, 1:n_Layers, iter ) + down_rad_prof_AD_in(1:n_Layers)
 
 !---------------------------------------
 ! Step up through downward integration
