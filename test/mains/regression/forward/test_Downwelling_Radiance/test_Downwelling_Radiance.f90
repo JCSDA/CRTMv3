@@ -86,7 +86,8 @@ PROGRAM test_Downwelling_Radiance
   ! --------------
   CALL CRTM_Version( Version )
   CALL Program_Message( PROGRAM_NAME, &
-    'Test program for the aircraft instrument option under clear sky conditions.', &
+    'Forward regression of the first-class surface downwelling radiance output '//&
+    '(RTSolution%Down_Radiance, Options%Compute_Down_Radiance).', &
     'CRTM Version: '//TRIM(Version) )
 
 
@@ -168,9 +169,15 @@ PROGRAM test_Downwelling_Radiance
                                Source_Zenith_Angle = SOURCE_ZENITH_ANGLE )
 
 
-  ! 4c. Set the aircraft pressure altitude
-  ! --------------------------------------
-  Opt%obs_4_downward_P = 320.0_fp
+  ! 4c. Request the first-class surface downwelling radiance output
+  ! ---------------------------------------------------------------
+  ! The legacy Obs_4_downward_P option (downwelling at an arbitrary pressure
+  ! level, forward-only, inert in TL/AD/K) has been retired.  Surface downwelling
+  ! radiance is now a first-class, fully-differentiated RTSolution output
+  ! (%Down_Radiance), opt-in for the scattering solvers via Compute_Down_Radiance
+  ! (always-on for the clear-sky emission path).  The TL/AD/K of %Down_Radiance is
+  ! verified to machine precision by test_Unit_Downwelling_TLADK.
+  Opt%Compute_Down_Radiance = .TRUE.
   ! ============================================================================
 
 

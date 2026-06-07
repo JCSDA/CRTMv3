@@ -1182,24 +1182,16 @@ CONTAINS
         Radiance(:) = RTV%s_Level_Rad_UP(n1:n1-1+RTV%n_Stokes, 0)
       END IF
 
-      ! Output downwelling radiance
-      IF ( RTV%obs_4_downward%rt ) THEN
-        Radiance = RTV%s_Level_Rad_DOWN(n1:n1-1+RTV%n_Stokes, RTV%obs_4_downward%idx)
-      END IF
-
       ! Surface downwelling radiance output (Stokes I at the sensor angle), opt-in
-      ! for scattering via Options%Compute_Down_Radiance. Not set for the aircraft/
-      ! obs_4_downward observers (they use the %Radiance overwrite), so their existing
-      ! outputs are unchanged.
+      ! for scattering via Options%Compute_Down_Radiance.
       IF ( RTV%Compute_Down_Radiance ) THEN
         IF ( RTV%RT_Algorithm_Id == RT_SOI ) THEN
           ! SOI stores the finalized surface downwelling directly in s_Level_Rad_DOWN.
           RTSolution%Down_Radiance = RTV%s_Level_Rad_DOWN(n1, Atmosphere%n_Layers)
         ELSE
-          ! ADA/VMOM: s_Level_Rad_DOWN now retains the INTERMEDIATE (adding-down)
-          ! values so the TL/AD downward sweeps can reuse them (the FWD copy-back is
-          ! gated on aircraft/obs_4_downward); the finalized surface value is in
-          ! s_Level_Rad_DOWNT.
+          ! ADA/VMOM: s_Level_Rad_DOWN retains the INTERMEDIATE (adding-down) values
+          ! so the TL/AD downward sweeps can reuse them (the FWD copy-back is gated on
+          ! the aircraft observer); the finalized surface value is in s_Level_Rad_DOWNT.
           RTSolution%Down_Radiance = RTV%s_Level_Rad_DOWNT(n1, Atmosphere%n_Layers)
         END IF
       END IF
@@ -1212,11 +1204,6 @@ CONTAINS
         Radiance(1) = RTV%e_Level_Rad_UP(RTV%aircraft%idx)
       ELSE
         Radiance(1) = RTV%e_Level_Rad_UP(0)
-      END IF
-
-      ! Output downwelling radiance
-      IF ( RTV%obs_4_downward%rt ) THEN
-        Radiance = RTV%e_Level_Rad_DOWN(RTV%obs_4_downward%idx)
       END IF
 
       ! Other emission-only output

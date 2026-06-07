@@ -54,7 +54,6 @@ MODULE RTV_Define
   PUBLIC :: MAX_N_SOI_ITERATIONS
   ! Datatypes
   PUBLIC :: aircraft_rt_type
-  PUBLIC :: obs_4_downward_type
   PUBLIC :: RTV_type
   ! Procedures
   PUBLIC :: RTV_Associated
@@ -97,13 +96,6 @@ MODULE RTV_Define
     ! The output level index
     INTEGER :: idx
   END TYPE aircraft_rt_type
-  ! ...Downward AD calculation
-  TYPE :: obs_4_downward_type
-    ! The switch
-    LOGICAL :: rt = .FALSE.
-    ! The output level index
-    INTEGER :: idx
-  END TYPE obs_4_downward_type
   ! --------------------------------------
   ! Structure definition to hold forward
   ! variables across FWD, TL, and AD calls
@@ -169,9 +161,6 @@ MODULE RTV_Define
 
     ! Aircraft model RT information
     TYPE(aircraft_rt_type) :: aircraft
-
-    ! Downwelling radiance
-    TYPE(obs_4_downward_type) :: obs_4_downward
 
     ! Opt-in switch: compute surface downwelling radiance in the scattering solvers
     LOGICAL :: Compute_Down_Radiance = .FALSE.

@@ -14,8 +14,10 @@
 > ⚠️ Consequence of "surface only + retire option": `Down_Radiance` is strictly the surface
 > value (`e_Level_Rad_DOWN(n_Layers)`). The retired `Obs_4_downward_P` gave downwelling at an
 > arbitrary pressure level. Arbitrary-level downwelling returns only with the deferred profile
-> (Phase 3). Safe to retire now because the option is forward-only, not publicly settable, and
-> inert in TL/AD/K — nothing in a DA pipeline can depend on it.
+> (Phase 3). Retired because the option is forward-only and inert in TL/AD/K — nothing in a DA
+> pipeline can depend on it. (CORRECTION: an earlier draft called it "not publicly settable" — it
+> was in fact a *public* field of the public `CRTM_Options_type`, set directly by the old
+> `test_Downwelling_Radiance`, so its removal is a breaking API change. See Phase 4.)
 
 ---
 
@@ -190,11 +192,26 @@ downwelling via `%Down_Radiance`. Clear-sky + (later) scattering + grazing cases
   `Down_Radiance` physically complete and resolves the 2 deferred TL Simple failures.
 - Gate on Phase-0 scattering + grazing tests; regenerate scattering/cloudy TL/AD baselines.
 
-### Phase 4 — Retire `Obs_4_downward_P`
-- Remove the Options field (`CRTM_Options_Define.f90:144`), `RTV%obs_4_downward`
-  (`RTV_Define.f90:101-106,174`), the FWD parse block (`CRTM_Forward_Module.f90:819-832`), the
-  downward branch of the `Common_RTSolution` overwrite, the ADA gate, and dead TL/AD imports.
-- Migrate `test_Downwelling_Radiance` to read `Down_Radiance`; add TL/AD/K coverage.
+### Phase 4 — Retire `Obs_4_downward_P`  *(DONE)*
+- Removed: the Options field (`CRTM_Options_Define`), `obs_4_downward_type` + `RTV%obs_4_downward`
+  (`RTV_Define`), the FWD parse block (`CRTM_Forward_Module`), both `%Radiance`/downward-overwrite
+  branches (`Common_RTSolution`, scattering + emission), and the ADA gate refs (now keyed on
+  `aircraft%rt .or. Compute_Down_Radiance`). `CRTM_Get_PressureLevelIdx` /
+  `AIRCRAFT_PRESSURE_THRESHOLD` kept (still used by the aircraft observer). No TL/AD/K dead imports
+  existed on this baseline (the channel-threaded refactor had already dropped them).
+- `test_Downwelling_Radiance` migrated: sets `Options%Compute_Down_Radiance = .TRUE.` and regresses
+  the full RTSolution (now `%Radiance` = TOA upwelling, `%Down_Radiance` = surface downwelling) across
+  all 8 registered sensors; baselines regenerated (self-healing — not git-tracked). TL/AD/K coverage
+  is provided rigorously by `test_Unit_Downwelling_TLADK` (FD-vs-TL, adjoint dot-product, K-vs-AD for
+  clear/SOI/ADA) rather than duplicated into the multi-sensor forward regression.
+- **API note:** `Obs_4_downward_P` was a *public* field of the public `CRTM_Options_type` (the old
+  test set it directly), so its removal is a breaking change for any external code that referenced it.
+  Capability change: arbitrary-pressure-level downwelling is gone; `%Down_Radiance` is surface-only
+  (the deferred `Downwelling_Radiance(:)` profile, §10 R4, would restore arbitrary levels).
+- **Release note:** a distributed `fix_*` tarball / stale `build/test/results` carrying the old
+  `test_Downwelling_Radiance` baselines (downwelling-at-320-hPa overwriting `%Radiance`) must be
+  regenerated; clean builds self-heal.
+- Full suite 212/212 after retirement.
 
 ## 8. Verification
 

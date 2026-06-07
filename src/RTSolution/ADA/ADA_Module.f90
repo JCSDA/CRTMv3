@@ -255,12 +255,11 @@ CONTAINS
     END IF
 
 
-    !!  print *,' Aircraft or downward ',RTV%aircraft%rt, RTV%obs_4_downward%rt
      !!  write(6,'(ES15.6)') RTV%s_Level_Rad_UP(1,0)
-    ! Compute the downward radiance profile when an observer needs it (aircraft,
-    ! obs_4_downward) or when the surface downwelling radiance output is requested
-    ! via Options%Compute_Down_Radiance (opt-in; adds the downward-sweep cost).
-    IF(RTV%aircraft%rt .or. RTV%obs_4_downward%rt .or. RTV%Compute_Down_Radiance) THEN
+    ! Compute the downward radiance profile when the aircraft observer needs it or
+    ! when the surface downwelling radiance output is requested via
+    ! Options%Compute_Down_Radiance (opt-in; adds the downward-sweep cost).
+    IF(RTV%aircraft%rt .or. RTV%Compute_Down_Radiance) THEN
     !
     ! Added, May 20, 2024
     !  except at TOA, RTV%s_Level_Rad_UP is "intermediate" value, the following part for final vertical profiles of radiance
@@ -374,19 +373,19 @@ CONTAINS
 
     20 CONTINUE
     ! Copy the FINALIZED profiles back into the working arrays ONLY for the legacy
-    ! forward-only observers (aircraft / obs_4_downward) that read the full
-    ! s_Level_Rad_UP / s_Level_Rad_DOWN profile.  Doing this unconditionally would
-    ! clobber the INTERMEDIATE upward/downward radiances that the TL/AD upward and
-    ! downward sweeps depend on, corrupting both the TOA Jacobian and the surface
+    ! forward-only aircraft observer that reads the full s_Level_Rad_UP /
+    ! s_Level_Rad_DOWN profile.  Doing this unconditionally would clobber the
+    ! INTERMEDIATE upward/downward radiances that the TL/AD upward and downward
+    ! sweeps depend on, corrupting both the TOA Jacobian and the surface
     ! Down_Radiance Jacobian whenever Compute_Down_Radiance is set.  The surface
     ! Down_Radiance output reads s_Level_Rad_DOWNT directly (Common_RTSolution), so
     ! it does not need this copy-back.
-    IF( RTV%aircraft%rt .or. RTV%obs_4_downward%rt ) THEN
+    IF( RTV%aircraft%rt ) THEN
       RTV%s_Level_Rad_DOWN = RTV%s_Level_Rad_DOWNT
       RTV%s_Level_Rad_UP = RTV%s_Level_Rad_UPT
     END IF
 
-    END IF !IF(RTV%aircraft%rt.or.RTV%obs_4_downward%rt.or.RTV%Compute_Down_Radiance)
+    END IF !IF(RTV%aircraft%rt.or.RTV%Compute_Down_Radiance)
 
     RETURN
 
@@ -1468,7 +1467,7 @@ CONTAINS
     ! (CRTM_ADA), restricted to the finalized surface value
     ! s_Level_Rad_DOWNT(n1,n_Layers).  Reuses the saved FWD intermediates in RTV
     ! (s_Level_Rad_DOWN / s_Level_Refl_DOWN hold the INTERMEDIATE adding-down values;
-    ! preserved because the FWD copy-back is gated on aircraft/obs_4_downward).
+    ! preserved because the FWD copy-back is gated on the aircraft observer).
     ! =================================================================
     IF( do_down ) THEN
       n1d = 1
