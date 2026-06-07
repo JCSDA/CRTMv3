@@ -1189,6 +1189,10 @@ CONTAINS
                   RTSolution(ln,m)%Reflectance = &
                         ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Reflectance) + &
                         (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Reflectance)
+                  !...Surface downwelling radiance (always-on output)
+                  RTSolution(ln,m)%Down_Radiance = &
+                        ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Down_Radiance) + &
+                        (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Down_Radiance)
                END IF
                ! The radiance post-processing
                CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), &

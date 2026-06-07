@@ -1186,6 +1186,9 @@ CONTAINS
         Radiance = RTV%s_Level_Rad_DOWN(n1:n1-1+RTV%n_Stokes, RTV%obs_4_downward%idx)
       END IF
 
+      ! Always-on surface downwelling radiance output (Stokes I at the sensor angle)
+      RTSolution%Down_Radiance = RTV%s_Level_Rad_DOWN(n1, Atmosphere%n_Layers)
+
     ! Emission specific assignments
     ELSE
 
