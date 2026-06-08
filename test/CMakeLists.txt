@@ -374,6 +374,11 @@ target_link_libraries(Unit_Downwelling_TLADK PRIVATE crtm)
 add_test(NAME test_Unit_Downwelling_TLADK
          COMMAND $<TARGET_FILE:Unit_Downwelling_TLADK>)
 
+# Performance micro-benchmark for the opt-in level-resolved radiance profiles
+# (Forward + K_Matrix timing, overcast ADA). Not a ctest; run manually.
+add_executable(bench_Profile_Perf mains/unit/Unit_Test/bench_Profile_Perf.f90)
+target_link_libraries(bench_Profile_Perf PRIVATE crtm)
+
 # Surface netCDF I/O round-trip (REL-3.2.0 baseline-format conversion):
 # write a rank-2 Surface(L x M) with NetCDF=.TRUE., read it back, and verify
 # every field round-trips exactly.
