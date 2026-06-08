@@ -769,6 +769,7 @@ CONTAINS
           ! needs the profile switch too).
           RTV(nt)%Compute_Down_Radiance = Opt%Compute_Down_Radiance
           RTV(nt)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+          RTV(nt)%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
           IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
           AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
           AtmOptics_K(nt)%n_Stokes = RTV(nt)%n_Stokes
@@ -955,6 +956,7 @@ CONTAINS
             RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
             RTV(nt)%Compute_Down_Radiance = Opt%Compute_Down_Radiance
             RTV(nt)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+            RTV(nt)%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
             CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
             IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
               Error_Status=FAILURE
@@ -1358,6 +1360,7 @@ CONTAINS
               IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV(nt)%mth_Azi==0 ) THEN
                 RTV_Clear(nt)%mth_Azi = RTV(nt)%mth_Azi
                 RTV_Clear(nt)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+                RTV_Clear(nt)%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
                 SfcOptics_Clear(nt)%mth_Azi = SfcOptics(nt)%mth_Azi
                 Err_Thread = CRTM_Compute_RTSolution( &
                                  Atm_Clear           , &  ! Input
@@ -1500,6 +1503,7 @@ CONTAINS
                 ! The adjoint of the clear sky radiative transfer for fractionally cloudy atmospheres
                 RTV_Clear(nt)%mth_Azi = RTV(nt)%mth_Azi
                 RTV_Clear(nt)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+                RTV_Clear(nt)%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
                 SfcOptics_Clear(nt)%mth_Azi = SfcOptics(nt)%mth_Azi
                 Err_Thread = CRTM_Compute_RTSolution_AD( &
                                  Atm_Clear             , &  ! FWD Input

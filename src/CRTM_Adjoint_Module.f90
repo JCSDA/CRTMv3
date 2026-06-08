@@ -803,6 +803,7 @@ CONTAINS
         ! needs the profile switch too, and the FWD sets it unconditionally).
         RTV%Compute_Down_Radiance = Opt%Compute_Down_Radiance
         RTV%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+        RTV%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
 
         ! Allocate the RTV structure if necessary
         IF( ( Atm%n_Clouds   > 0 .OR. &
@@ -814,6 +815,7 @@ CONTAINS
           RTV%RT_Algorithm_Id = Opt%RT_Algorithm_Id
           RTV%Compute_Down_Radiance = Opt%Compute_Down_Radiance
           RTV%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+          RTV%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
           CALL RTV_Create( RTV, MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
           IF ( .NOT. RTV_Associated(RTV) ) THEN
             Error_Status=FAILURE
@@ -1134,6 +1136,7 @@ CONTAINS
               IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV%mth_Azi==0 ) THEN
                 RTV_Clear%mth_Azi = RTV%mth_Azi
                 RTV_Clear%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+                RTV_Clear%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
                 SfcOptics_Clear%mth_Azi = SfcOptics%mth_Azi
                 Error_Status = CRTM_Compute_RTSolution( &
                                  Atm_Clear       , &  ! Input
@@ -1278,6 +1281,7 @@ CONTAINS
           IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV%mth_Azi==0 ) THEN
                 RTV_Clear%mth_Azi = RTV%mth_Azi
                 RTV_Clear%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+                RTV_Clear%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
                 SfcOptics_Clear%mth_Azi = SfcOptics%mth_Azi
                 Error_Status = CRTM_Compute_RTSolution_AD( &
                                  Atm_Clear          , &  ! FWD Input

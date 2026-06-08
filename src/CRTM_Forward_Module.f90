@@ -515,9 +515,11 @@ CONTAINS
          RTV(:)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
          RTV(:)%Compute_Down_Radiance = Opt%Compute_Down_Radiance
          RTV(:)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+         RTV(:)%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
          ! Clear sub-solve (fractional cloud) needs the profile switch too, so the
          ! clear downwelling profile is computed for the TCC combine below.
          RTV_Clear(:)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+         RTV_Clear(:)%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
          !         IF( Opt%RT_Algorithm_Id == RT_VMOM .and. RTV(1)%n_Stokes == 1) THEN
          !          Error_Status = FAILURE
          !          Message = 'Error of using RT_VMOM not allowed for n_Stokes = 1'

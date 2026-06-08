@@ -1211,6 +1211,22 @@ CONTAINS
         END IF
       END IF
 
+      ! Level-resolved UPWELLING radiance PROFILE (Stokes I at the sensor angle), opt-in
+      ! for scattering via Options%Compute_Up_Radiance_Profile. SOI uses the per-order
+      ! sum s_Level_Rad_UP; ADA/VMOM the FINALIZED s_Level_Rad_UPT (s_Level_Rad_UP holds
+      ! the intermediate adding-up values for the TL/AD). The emission/clear path sets
+      ! Upwelling_Radiance unconditionally (below).
+      IF ( RTV%Compute_Up_Radiance_Profile .AND. CRTM_RTSolution_Associated(RTSolution) ) THEN
+        no = RTSolution%n_Layers
+        na = RTV%n_Added_Layers
+        nt = RTV%n_Layers
+        IF ( RTV%RT_Algorithm_Id == RT_SOI ) THEN
+          RTSolution%Upwelling_Radiance(1:no) = RTV%s_Level_Rad_UP(n1, na+1:nt)
+        ELSE
+          RTSolution%Upwelling_Radiance(1:no) = RTV%s_Level_Rad_UPT(n1, na+1:nt)
+        END IF
+      END IF
+
     ! Emission specific assignments
     ELSE
 

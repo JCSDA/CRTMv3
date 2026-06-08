@@ -566,6 +566,7 @@ CONTAINS
          RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
          RTV(nt)%Compute_Down_Radiance = Opt%Compute_Down_Radiance
          RTV(nt)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+         RTV(nt)%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
       END IF
 
         CALL CRTM_SfcOptics_Create( SfcOptics(nt)  , MAX_N_ANGLES, MAX_N_STOKES )
@@ -893,6 +894,7 @@ CONTAINS
             RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
             RTV(nt)%Compute_Down_Radiance = Opt%Compute_Down_Radiance
             RTV(nt)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+            RTV(nt)%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
             CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
 
             IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
@@ -1283,6 +1285,7 @@ CONTAINS
           IF (CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV(nt)%mth_Azi==0 ) THEN
               RTV_Clear(nt)%mth_Azi = mth_Azi
               RTV_Clear(nt)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+              RTV_Clear(nt)%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
               SfcOptics_Clear(nt)%mth_Azi = mth_Azi
               Err_Thread = CRTM_Compute_RTSolution( &
                                Atm_Clear       , &  ! Input

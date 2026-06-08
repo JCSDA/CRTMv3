@@ -288,6 +288,13 @@ CONTAINS
              SUM( RTV%s_Level_IterRad_DOWN( Index_Sat_Angle, 0:n_Layers, 1:RTV%Number_SOI_Iter ), DIM=2 )
       END IF
 
+      ! Upwelling radiance level profile (opt-in): total over all orders of interaction
+      ! at every level (the level-0 value is the TOA radiance).
+      IF ( RTV%Compute_Up_Radiance_Profile ) THEN
+        RTV%s_Level_Rad_UP( Index_Sat_Angle, 0:n_Layers ) = &
+             SUM( RTV%s_Level_IterRad_UP( Index_Sat_Angle, 0:n_Layers, 1:RTV%Number_SOI_Iter ), DIM=2 )
+      END IF
+
       RETURN
       END SUBROUTINE CRTM_SOI
 

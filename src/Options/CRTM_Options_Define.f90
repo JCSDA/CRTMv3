@@ -148,6 +148,13 @@ MODULE CRTM_Options_Define
     ! also drives the scattering downward sweep.
     LOGICAL :: Compute_Down_Radiance_Profile = .FALSE.
 
+    ! Compute the level-resolved UPWELLING radiance PROFILE
+    ! (RTSolution%Upwelling_Radiance(:)) for the scattering solvers (the emission/clear
+    ! path always computes it), fully differentiated (TL/AD/K). OFF by default: the
+    ! per-level finalization adds the same adding-doubling sweep cost as the downwelling
+    ! profile. Primary DA use is the Forward + K_Matrix output at each layer.
+    LOGICAL :: Compute_Up_Radiance_Profile = .FALSE.
+
     ! RT Algorithm is set to ADA by default
     INTEGER(Long) :: RT_Algorithm_Id = RT_ADA
 

@@ -169,6 +169,10 @@ MODULE RTV_Define
     ! (RTSolution%Downwelling_Radiance), fully differentiated, for all solvers.
     LOGICAL :: Compute_Down_Radiance_Profile = .FALSE.
 
+    ! Opt-in switch: compute the level-resolved upwelling radiance profile
+    ! (RTSolution%Upwelling_Radiance) in the scattering solvers, fully differentiated.
+    LOGICAL :: Compute_Up_Radiance_Profile = .FALSE.
+
     ! Scattering, visible model variables
     INTEGER :: n_Streams         = 0       ! Number of *hemispheric* stream angles used in RT
     INTEGER :: mth_Azi                     ! mth fourier component
