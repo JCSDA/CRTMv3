@@ -108,6 +108,12 @@ PROGRAM test_TELSEM2_MWland
   CALL CRTM_Atmosphere_Create( Atm_TL, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
   CALL CRTM_Atmosphere_Create( Atmosphere_K, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
 
+  ! Allocate the per-layer RTSolution array components; CRTM_Forward/Tangent_Linear/
+  ! K_Matrix require the output RTSolution to be pre-created (they do not allocate it).
+  CALL CRTM_RTSolution_Create( RTSolution,    N_LAYERS )
+  CALL CRTM_RTSolution_Create( RTSolution_TL, N_LAYERS )
+  CALL CRTM_RTSolution_Create( RTSolution_K,  N_LAYERS )
+
   CALL Load_Atm_Data()
   CALL Load_Land_Surface()
 
