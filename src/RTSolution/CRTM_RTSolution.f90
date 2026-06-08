@@ -716,7 +716,8 @@ CONTAINS
                  Pbb_TL(1:nZ,1:nZ,:),                      & ! Input, TL layer backward phase matrix
                  Scattering_Radiance_TL(1:nZ),             & ! Output, TL radiances
                  down_rad_TL_out=Down_Radiance_TL,         & ! Output, TL surface downwelling radiance
-                 down_rad_prof_TL_out=Down_Radiance_Prof_TL ) ! Output, TL downwelling radiance profile
+                 down_rad_prof_TL_out=Down_Radiance_Prof_TL, & ! Output, TL downwelling radiance profile
+                 up_rad_prof_TL_out=Up_Radiance_Prof_TL    ) ! Output, TL upwelling radiance profile
         CASE DEFAULT
           Error_Status = FAILURE
           WRITE(Message,'("Incorrect TL RT_Algorithm_ID, ",i0,", do not fit model")') &
@@ -1166,7 +1167,8 @@ CONTAINS
              Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
              Pbb_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer backward phase matrix
              down_rad_AD_in=Down_Radiance_AD,          & ! Input, AD surface downwelling radiance
-             down_rad_prof_AD_in=Down_Radiance_Prof_AD ) ! Input, AD downwelling radiance profile
+             down_rad_prof_AD_in=Down_Radiance_Prof_AD, & ! Input, AD downwelling radiance profile
+             up_rad_prof_AD_in=Up_Radiance_Prof_AD ) ! Input, AD upwelling radiance profile
       CASE DEFAULT
       Error_Status = FAILURE
       WRITE(Message,'("Incorrect AD RT_Algorithm_ID, ",i0,", do not fit model")') &
