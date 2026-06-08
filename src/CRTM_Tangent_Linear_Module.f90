@@ -47,6 +47,8 @@ MODULE CRTM_Tangent_Linear_Module
   USE CRTM_RTSolution_Define,     ONLY: CRTM_RTSolution_type   , &
                                         CRTM_RTSolution_Destroy, &
                                         CRTM_RTSolution_Zero,    &
+                                        CRTM_RTSolution_Create,  &
+                                        CRTM_RTSolution_Associated, &
                                         CRTM_RTSolution_Inspect
   USE CRTM_Options_Define,        ONLY: CRTM_Options_type, &
                                         CRTM_Options_IsValid
@@ -999,6 +1001,15 @@ CONTAINS
             CALL CRTM_AtmOptics_Zero( AtmOptics_Clear_TL(nt) )
             CALL CRTM_RTSolution_Zero( RTSolution_Clear(nt) )
             CALL CRTM_RTSolution_Zero( RTSolution_Clear_TL(nt) )
+            ! Allocate the clear-sub-solve profile arrays (FWD + TL) so the clear
+            ! downwelling profile is available for the TCC combine (opt-in).
+            IF ( Opt%Compute_Down_Radiance_Profile .AND. &
+                 CRTM_RTSolution_Associated(RTSolution(ln,m)) ) THEN
+              IF ( .NOT. CRTM_RTSolution_Associated(RTSolution_Clear(nt)) ) &
+                CALL CRTM_RTSolution_Create( RTSolution_Clear(nt),    RTSolution(ln,m)%n_Layers )
+              IF ( .NOT. CRTM_RTSolution_Associated(RTSolution_Clear_TL(nt)) ) &
+                CALL CRTM_RTSolution_Create( RTSolution_Clear_TL(nt), RTSolution(ln,m)%n_Layers )
+            END IF
 
 !            CALL CRTM_SfcOptics_Zero( SfcOptics(nt) )
 !            CALL CRTM_SfcOptics_Zero( SfcOptics_TL(nt) )
@@ -1271,6 +1282,7 @@ CONTAINS
             ! Repeat clear sky for fractionally cloudy atmospheres
           IF (CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV(nt)%mth_Azi==0 ) THEN
               RTV_Clear(nt)%mth_Azi = mth_Azi
+              RTV_Clear(nt)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
               SfcOptics_Clear(nt)%mth_Azi = mth_Azi
               Err_Thread = CRTM_Compute_RTSolution( &
                                Atm_Clear       , &  ! Input
@@ -1351,6 +1363,20 @@ CONTAINS
                   ((r_cloudy_dn - RTSolution_Clear(nt)%Down_Radiance) * CloudCover_TL%Total_Cloud_Cover) + &
                   ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear_TL(nt)%Down_Radiance) + &
                   (CloudCover%Total_Cloud_Cover * RTSolution_TL(ln,m)%Down_Radiance)
+            END IF
+
+            ! ...Level-resolved downwelling profile cloudy/clear combine (opt-in). TL
+            !    first (it reads the cloudy FWD profile), then overwrite the FWD profile.
+            IF ( Opt%Compute_Down_Radiance_Profile .AND. &
+                 CRTM_RTSolution_Associated(RTSolution(ln,m)) ) THEN
+              RTSolution_TL(ln,m)%Downwelling_Radiance = &
+                  ((RTSolution(ln,m)%Downwelling_Radiance - RTSolution_Clear(nt)%Downwelling_Radiance) &
+                       * CloudCover_TL%Total_Cloud_Cover) + &
+                  ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear_TL(nt)%Downwelling_Radiance) + &
+                  (CloudCover%Total_Cloud_Cover * RTSolution_TL(ln,m)%Downwelling_Radiance)
+              RTSolution(ln,m)%Downwelling_Radiance = &
+                  ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Downwelling_Radiance) + &
+                  (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Downwelling_Radiance)
             END IF
 
             RTSolution(ln,m)%Radiance = RTSolution(ln,m)%Stokes(1)

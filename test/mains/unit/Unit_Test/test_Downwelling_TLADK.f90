@@ -189,8 +189,9 @@ CONTAINS
     REAL(fp) :: LHS, RHS, rel_adj, dy
     REAL(fp) :: maxdiff, scal, rel_k
     REAL(fp) :: fd_all(n_Channels)
+    REAL(fp) :: surf_rel
     INTEGER  :: ii, kk, ch, l0, m0, nscat
-    LOGICAL  :: ok1, ok2, ok3
+    LOGICAL  :: ok1, ok2, ok3, ok4
 
     ! Select the output: profile level (prof_lvl>0) or surface/TOA scalar.
     g_prof_lvl = prof_lvl
@@ -352,7 +353,22 @@ CONTAINS
     WRITE(*,'(7x,"[3] K vs AD Jacobian (channel ",i0,"):  max|K-AD|/max|K| = ",es11.4,"   ",a)') &
           RTSolution(l0,m0)%Sensor_Channel, rel_k, MERGE('PASS','FAIL',ok3)
 
-    all_ok = ( ok1 .AND. ok2 .AND. ok3 )
+    ! ----------------------------------------------------------------
+    ! Check 4 (profile only) : surface profile value == scalar Down_Radiance.
+    ! Verifies the FWD profile (incl. the fractional-cloud TCC combine) physically
+    ! agrees with the independently-combined surface scalar Down_Radiance.
+    ! ----------------------------------------------------------------
+    ok4 = .TRUE.
+    IF ( g_prof_lvl > 0 ) THEN
+      ! RTSolution(ch,1) holds the unperturbed forward result.
+      surf_rel = ABS( RTSolution(ch,1)%Downwelling_Radiance(N_LAYERS) - RTSolution(ch,1)%Down_Radiance ) &
+                 / MAX( ABS(RTSolution(ch,1)%Down_Radiance), TINY(ONE) )
+      ok4 = ( surf_rel < 1.0e-10_fp )
+      WRITE(*,'(7x,"[4] surface profile vs scalar Down_Radiance:  rel = ",es11.4,"   ",a)') &
+            surf_rel, MERGE('PASS','FAIL',ok4)
+    END IF
+
+    all_ok = ( ok1 .AND. ok2 .AND. ok3 .AND. ok4 )
   END SUBROUTINE verify
 
   INCLUDE 'Load_Atm_Data.inc'

@@ -60,6 +60,8 @@ MODULE CRTM_Adjoint_Module
   USE CRTM_RTSolution_Define,     ONLY: CRTM_RTSolution_type   , &
                                         CRTM_RTSolution_Destroy, &
                                         CRTM_RTSolution_Zero,    &
+                                        CRTM_RTSolution_Create,  &
+                                        CRTM_RTSolution_Associated, &
                                         CRTM_RTSolution_Inspect
   USE CRTM_Options_Define,        ONLY: CRTM_Options_type, &
                                         CRTM_Options_IsValid
@@ -472,6 +474,7 @@ CONTAINS
       REAL(fp) :: transmittance_clear, transmittance_clear_AD
       REAL(fp) :: r_cloudy(4)
       REAL(fp) :: r_cloudy_dn
+      REAL(fp), ALLOCATABLE :: r_cloudy_dn_prof(:)  ! pre-combine cloudy downwelling profile
 
       ! Local atmosphere structure for extra layering
       TYPE(CRTM_Atmosphere_type) :: Atm, Atm_AD
@@ -874,6 +877,15 @@ CONTAINS
           transmittance_AD = ZERO
           CALL CRTM_RTSolution_Zero( RTSolution_Clear )
           CALL CRTM_RTSolution_Zero( RTSolution_Clear_AD )
+          ! Allocate the clear-sub-solve profile arrays (FWD + AD) so the clear
+          ! downwelling profile is available for the TCC combine (opt-in).
+          IF ( Opt%Compute_Down_Radiance_Profile .AND. &
+               CRTM_RTSolution_Associated(RTSolution(ln,m)) ) THEN
+            IF ( .NOT. CRTM_RTSolution_Associated(RTSolution_Clear) ) &
+              CALL CRTM_RTSolution_Create( RTSolution_Clear,    RTSolution(ln,m)%n_Layers )
+            IF ( .NOT. CRTM_RTSolution_Associated(RTSolution_Clear_AD) ) &
+              CALL CRTM_RTSolution_Create( RTSolution_Clear_AD, RTSolution(ln,m)%n_Layers )
+          END IF
 
 
           ! Determine the number of streams (n_Full_Streams) in up+downward directions
@@ -1121,6 +1133,7 @@ CONTAINS
               ! Repeat clear sky for fractionally cloudy atmospheres
               IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV%mth_Azi==0 ) THEN
                 RTV_Clear%mth_Azi = RTV%mth_Azi
+                RTV_Clear%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
                 SfcOptics_Clear%mth_Azi = SfcOptics%mth_Azi
                 Error_Status = CRTM_Compute_RTSolution( &
                                  Atm_Clear       , &  ! Input
@@ -1179,6 +1192,19 @@ CONTAINS
                   (CloudCover%Total_Cloud_Cover * r_cloudy_dn)
             END IF
 
+            ! Level-resolved downwelling profile cloudy/clear forward combine (opt-in).
+            ! Save the pre-combine cloudy profile for the TCC adjoint term below.
+            IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) .AND. &
+                 Opt%Compute_Down_Radiance_Profile .AND. &
+                 CRTM_RTSolution_Associated(RTSolution(ln,m)) ) THEN
+              IF ( ALLOCATED(r_cloudy_dn_prof) ) DEALLOCATE(r_cloudy_dn_prof)
+              ALLOCATE( r_cloudy_dn_prof(RTSolution(ln,m)%n_Layers) )
+              r_cloudy_dn_prof = RTSolution(ln,m)%Downwelling_Radiance
+              RTSolution(ln,m)%Downwelling_Radiance = &
+                  ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear%Downwelling_Radiance) + &
+                  (CloudCover%Total_Cloud_Cover * r_cloudy_dn_prof)
+            END IF
+
             ! The radiance post-processing
             CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), &
                                          NLTE_Predictor, &
@@ -1231,6 +1257,18 @@ CONTAINS
                 RTSolution_AD(ln,m)%Down_Radiance = &
                     CloudCover%Total_Cloud_Cover * RTSolution_AD(ln,m)%Down_Radiance
               END IF
+              ! Adjoint of the level-resolved downwelling profile combine (opt-in). The
+              ! TCC term sums over all levels (TCC is scalar, the profile is a vector).
+              IF ( Opt%Compute_Down_Radiance_Profile .AND. &
+                   CRTM_RTSolution_Associated(RTSolution_AD(ln,m)) ) THEN
+                RTSolution_Clear_AD%Downwelling_Radiance = &
+                    (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_AD(ln,m)%Downwelling_Radiance
+                CloudCover_AD%Total_Cloud_Cover = CloudCover_AD%Total_Cloud_Cover + &
+                    sum( (r_cloudy_dn_prof - RTSolution_Clear%Downwelling_Radiance) &
+                         * RTSolution_AD(ln,m)%Downwelling_Radiance )
+                RTSolution_AD(ln,m)%Downwelling_Radiance = &
+                    CloudCover%Total_Cloud_Cover * RTSolution_AD(ln,m)%Downwelling_Radiance
+              END IF
           END IF
 
        END IF
@@ -1239,6 +1277,7 @@ CONTAINS
          ! The adjoint of the clear sky radiative transfer for fractionally cloudy atmospheres
           IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV%mth_Azi==0 ) THEN
                 RTV_Clear%mth_Azi = RTV%mth_Azi
+                RTV_Clear%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
                 SfcOptics_Clear%mth_Azi = SfcOptics%mth_Azi
                 Error_Status = CRTM_Compute_RTSolution_AD( &
                                  Atm_Clear          , &  ! FWD Input

@@ -46,6 +46,8 @@ MODULE CRTM_Forward_Module
   USE CRTM_RTSolution_Define,     ONLY: CRTM_RTSolution_type   , &
                                         CRTM_RTSolution_Destroy, &
                                         CRTM_RTSolution_Zero,    &
+                                        CRTM_RTSolution_Create,  &
+                                        CRTM_RTSolution_Associated, &
                                         CRTM_RTSolution_Inspect
   USE CRTM_Options_Define,        ONLY: CRTM_Options_type, &
                                         CRTM_Options_IsValid
@@ -513,6 +515,9 @@ CONTAINS
          RTV(:)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
          RTV(:)%Compute_Down_Radiance = Opt%Compute_Down_Radiance
          RTV(:)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
+         ! Clear sub-solve (fractional cloud) needs the profile switch too, so the
+         ! clear downwelling profile is computed for the TCC combine below.
+         RTV_Clear(:)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
          !         IF( Opt%RT_Algorithm_Id == RT_VMOM .and. RTV(1)%n_Stokes == 1) THEN
          !          Error_Status = FAILURE
          !          Message = 'Error of using RT_VMOM not allowed for n_Stokes = 1'
@@ -919,6 +924,12 @@ CONTAINS
                IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
                   CALL CRTM_AtmOptics_Zero( AtmOptics_Clear(nt) )
                   CALL CRTM_RTSolution_Zero( RTSolution_Clear(nt) )
+                  ! Allocate the clear-sub-solve profile arrays so its downwelling
+                  ! profile is populated for the TCC combine (opt-in; created once/thread).
+                  IF ( Opt%Compute_Down_Radiance_Profile .AND. &
+                       CRTM_RTSolution_Associated(RTSolution(ln,m)) .AND. &
+                       .NOT. CRTM_RTSolution_Associated(RTSolution_Clear(nt)) ) &
+                    CALL CRTM_RTSolution_Create( RTSolution_Clear(nt), RTSolution(ln,m)%n_Layers )
                   RTSolution_Clear(nt)%Sensor_Id        = ChannelInfo(n)%Sensor_Id
                   RTSolution_Clear(nt)%WMO_Satellite_Id = ChannelInfo(n)%WMO_Satellite_Id
                   RTSolution_Clear(nt)%WMO_Sensor_Id    = ChannelInfo(n)%WMO_Sensor_Id
@@ -1178,6 +1189,12 @@ CONTAINS
                   RTSolution(ln,m)%Down_Radiance = &
                         ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Down_Radiance) + &
                         (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Down_Radiance)
+                  !...Level-resolved downwelling radiance profile (opt-in)
+                  IF ( Opt%Compute_Down_Radiance_Profile .AND. &
+                       CRTM_RTSolution_Associated(RTSolution(ln,m)) ) &
+                  RTSolution(ln,m)%Downwelling_Radiance = &
+                        ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Downwelling_Radiance) + &
+                        (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Downwelling_Radiance)
                END IF
                ! The radiance post-processing
                CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), &
