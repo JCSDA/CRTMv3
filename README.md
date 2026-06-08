@@ -1,4 +1,4 @@
-CRTM REL-3.1.3
+CRTM REL-3.1.4
 ====================
 
 [![Build Status](https://app.travis-ci.com/JCSDA/CRTMv3.svg?branch=develop)](https://app.travis-ci.com/JCSDA/CRTMv3)
@@ -6,8 +6,9 @@ CRTM REL-3.1.3
 Preamble
 --------
 
-CRTM v3.1.3 release (`REL-3.1.3`)
+CRTM v3.1.4 release (`REL-3.1.4`)
 
+v3.1.4 released June 8, 2026 
 v3.1.3 released February 10, 2025 
 v3.1.2 released July 11, 2025
 v3.1.1 released August 12, 2024
@@ -58,7 +59,7 @@ Contents
 
 Configuration, building, and testing the library
 ================================================  
-JCSDA CRTM v3.1.3 Build Instructions
+JCSDA CRTM v3.1.4 Build Instructions
 
 The CRTM repository directory structure looks (something) like:
 
@@ -117,7 +118,7 @@ But after a clean clone of the development repository, none of the links to sour
 Configuration
 -------------
 By default, the `fix/` directory is provided through ftp using the Get_CRTM_Binary_Files.sh script to obtain and unpack the dataset. 
-If this directory doesn't exist during the `cmake` step, then cmake will download and install into `build/test_data/fix_REL-3.1.2.x/fix/`.
+If this directory doesn't exist during the `cmake` step, then cmake will download and install into `./test-data-release/fix_REL-3.1.2.x/fix/`. (no longer in build directory, but off of source dir). 
 The path to an existing fix file installation can be specified using the `FIX_FILE_PATH` option (see CMake variables summary below).
 
 The fix/ directory (as of v3.1.x) contains most of the netCDF SpcCoeff and TauCoeff files, as part of our ongoing effort to transition toward netCDF-only CRTM.  We expect to deprecate the binary formats in v3.2.x, but code to read / convert binary format will continue.  
