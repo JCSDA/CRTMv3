@@ -8,8 +8,16 @@
 **Locked scope (per review):**
 - Surface scalar `Down_Radiance` across **all** solvers (Emission, ADA, SOI), always-on, fully differentiated.
 - **Retire** `Obs_4_downward_P` once the formal output covers the need.
-- **No** level-resolved profile field for now (deferred — see §10 R4).
-- Phases delivered: **0 → 1 → 2 → 4** (Phase 3 profile dropped).
+- ~~**No** level-resolved profile field for now (deferred — see §10 R4).~~ **Phase 3 DONE** —
+  the level-resolved `Downwelling_Radiance(:)` profile was added after the user flagged
+  arbitrary-pressure-level downwelling as a near-term requirement (see §10 R4, Phase 3 below).
+- Phases delivered: **0 → 1 → 2 → 4**, then **3** (level profile).
+
+**STATUS: COMPLETE.** All phases done and verified by `test_Unit_Downwelling_TLADK`
+(FD-vs-TL, adjoint dot-product, K-vs-AD; clear/SOI/ADA; surface scalar + level profile;
+fractional-cloud combine; surface-profile==scalar cross-check). Full suite 212/212.
+Follow-up logged: the legacy `Upwelling_Radiance(:)` profile is still clear-sky/emission-only
+and not TCC-combined — making it a full footprint-average profile is a separate effort.
 
 > ⚠️ Consequence of "surface only + retire option": `Down_Radiance` is strictly the surface
 > value (`e_Level_Rad_DOWN(n_Layers)`). The retired `Obs_4_downward_P` gave downwelling at an
@@ -212,6 +220,37 @@ downwelling via `%Down_Radiance`. Clear-sky + (later) scattering + grazing cases
   `test_Downwelling_Radiance` baselines (downwelling-at-320-hPa overwriting `%Radiance`) must be
   regenerated; clean builds self-heal.
 - Full suite 212/212 after retirement.
+
+### Phase 3 — Level-resolved `Downwelling_Radiance(:)` profile  *(DONE — added after Phase 4)*
+Restores arbitrary-pressure-level downwelling (host maps a pressure to a level index) as a
+first-class, fully-differentiated (FWD/TL/AD/K) profile, after the user flagged it as a near-term
+requirement (§10 R4). Opt-in via `Options%Compute_Down_Radiance_Profile` (default off; the per-level
+adjoint is more expensive than the surface scalar). Built test-first in steps:
+- **A — field + flag + FWD + harness.** New `RTSolution%Downwelling_Radiance(:)` mirroring
+  `Upwelling_Radiance(:)` plumbing (Define: decl/alloc/zero/inspect/equal/compare, netCDF def/read/
+  write reusing the `n_Layers` dim, binary IO, 5 arithmetic operators). FWD populates it from
+  `e_Level_Rad_DOWN` / `s_Level_Rad_DOWNT` / SOI (extended to fill the full level profile). Adding the
+  netCDF variable forced a one-time regeneration of all RTSolution netCDF baselines (values unchanged,
+  new zero variable). Commit `6b41e38`.
+- **B — Emission** per-level TL (`down_rad_prof_TL_out`) / AD (`down_rad_prof_AD_in`). Driver maps the
+  solver internal levels `na+1:nt` ↔ user levels `1:no`. Also fixed: the AD/K drivers only set the
+  downwelling switches inside the scattering RTV-create block, so the emission/clear path missed the
+  (gated) profile output — now set unconditionally. Commit `2a118dd`.
+- **C — SOI** per-level TL/AD: sum `s_IterRad_DOWN_*` over orders at every level (not just surface).
+  Commit `406b081`.
+- **D — ADA** (dominant effort): per-level `Inv_Gamma3` finalization couples the downward and upward
+  sweeps because interior-level downwelling depends on the *intermediate* upward radiance/reflectivity
+  at that level. TL captures the per-level upward TLs during DO 10; AD was rewritten to run the
+  downward block BEFORE the upward DO 10, produce per-level upward adjoints, and inject them into the
+  upward sweep (superseding the Phase-2 surface-only block). Exact transpose, verified. Commit `825c426`.
+- **E — fractional-cloud TCC combine** (FWD/TL/AD/K): `Downwelling_Radiance(k) = (1-TCC)·clear(k) +
+  TCC·cloudy(k)`, so the profile is the footprint-average and `Downwelling_Radiance(surface) ==
+  Down_Radiance`. Needed `RTV_Clear`%flag + `CRTM_RTSolution_Create` of the clear sub-solve's profile
+  in all 4 drivers; the TCC adjoint term sums over levels. Commit `5a9c454`.
+- **Design note:** the legacy `Upwelling_Radiance(:)` profile is *emission/clear-only* (the scattering
+  solvers never populate it) and is not TCC-combined. Making it a full footprint-average profile is a
+  separate, larger follow-up (compute it in ADA/SOI, combine, differentiate) with baseline/behavior
+  change — deferred.
 
 ## 8. Verification
 
