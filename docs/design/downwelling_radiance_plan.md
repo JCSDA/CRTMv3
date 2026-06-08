@@ -247,10 +247,31 @@ adjoint is more expensive than the surface scalar). Built test-first in steps:
   TCC·cloudy(k)`, so the profile is the footprint-average and `Downwelling_Radiance(surface) ==
   Down_Radiance`. Needed `RTV_Clear`%flag + `CRTM_RTSolution_Create` of the clear sub-solve's profile
   in all 4 drivers; the TCC adjoint term sums over levels. Commit `5a9c454`.
-- **Design note:** the legacy `Upwelling_Radiance(:)` profile is *emission/clear-only* (the scattering
-  solvers never populate it) and is not TCC-combined. Making it a full footprint-average profile is a
-  separate, larger follow-up (compute it in ADA/SOI, combine, differentiate) with baseline/behavior
-  change — deferred.
+- **Design note:** the legacy `Upwelling_Radiance(:)` profile was *emission/clear-only* (the scattering
+  solvers never populated it) and not TCC-combined. → **DONE (follow-up):** see Phase 5 below.
+
+### Phase 5 — Full `Upwelling_Radiance(:)` profile (FWD + K_Matrix for DA)  *(DONE)*
+The upwelling mirror of Phase 3, built when the user confirmed CRTM needs the upward Forward +
+K_Matrix output at each layer for satellite DA (CRTM's primary purpose). Full FWD/TL/AD/K + TCC
+combine — the TL/AD are required even though DA calls FWD/K, because CRTM semantics demand TL/AD match
+the forward code and stay consistent with K_Matrix (the TL is also the FD-vs-TL/adjoint scaffold that
+bulletproofs the intricate ADA adjoint). Opt-in `Options%Compute_Up_Radiance_Profile` (default off);
+emission stays always-on, so no baseline churn. The field already existed (no netCDF change). Steps,
+each verified by `test_Unit_Downwelling_TLADK` (clear/SOI/ADA interior level + fractional):
+- **A′** flag (Options/RTV/4 drivers) + scattering FWD output: ADA from the FINALIZED `s_Level_Rad_UPT`,
+  SOI from the per-order `s_Level_Rad_UP` sum; ADA downward-sweep gate also fires on the up flag (it
+  computes `UPT` alongside `DOWNT`). Commit `67471c8`.
+- **B′** Emission per-level TL/AD (`up_rad_prof_TL_out`/`_AD_in`; capture/seed `e_Level_Rad_UP`). `94d3c9d`.
+- **C′** SOI per-level TL/AD (`s_IterRad_UP` order-sum / per-level seed). `20b1835`.
+- **D′** ADA per-level `UPT` finalization TL/AD: REUSES the Phase-3 Step-D machinery — the TL computes
+  the shared `Inv_Gamma3` TL once then `DOWNT`/`UPT`; the AD accumulates `IG3_AD` from both reverses
+  then runs the shared `tm_dn` reverse once; per-level upward adjoints inject into the upward sweep.
+  `321f7fb`.
+- **E′** TCC combine (FWD/TL/AD/K), reusing the Phase-3 Step-E clear-sub-solve plumbing (clear-profile
+  creation gate widened to fire on either profile flag). Footprint-average, consistent with the TOA
+  Radiance. `7c75772`.
+- **Out of scope:** the scalar `Up_Radiance` and `Upwelling_Overcast_Radiance(:)` remain
+  emission/clear-only diagnostics. Full suite 212/212 throughout.
 
 ## 8. Verification
 
