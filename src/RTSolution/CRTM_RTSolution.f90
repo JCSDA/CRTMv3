@@ -573,6 +573,7 @@ CONTAINS
     REAL(fp) :: Radiance_TL
     REAL(fp) :: Down_Radiance_TL
     REAL(fp), DIMENSION( Atmosphere%n_Layers ) :: Down_Radiance_Prof_TL  ! TL downwelling profile (internal levels)
+    REAL(fp), DIMENSION( Atmosphere%n_Layers ) :: Up_Radiance_Prof_TL    ! TL upwelling profile (internal levels)
     INTEGER :: no_d, na_d, nt_d
 
     ! ------
@@ -612,6 +613,7 @@ CONTAINS
     nZ = RTV%n_Angles * RTV%n_Stokes
     Down_Radiance_TL = ZERO
     Down_Radiance_Prof_TL = ZERO
+    Up_Radiance_Prof_TL = ZERO
     IF( RTV%n_Stokes > 1 ) THEN
        CALL Reshape_Surf_Opt(RTV%n_Angles, RTV%n_Stokes, SfcOptics_TL%Emissivity, SfcOptics_TL%Direct_Reflectivity, &
         SfcOptics_TL%Reflectivity, SfcOptics_TL%S_Emissivity, SfcOptics_TL%S_Direct_Ref, SfcOptics_TL%S_Reflectivity)
@@ -663,7 +665,8 @@ CONTAINS
              SfcOptics_TL%S_Direct_Ref(1:nZ), & ! Input, TL surface reflectivity for a point source
              Radiance_TL,                              & ! Output, TL radiances
              down_rad_TL_out=Down_Radiance_TL,         & ! Output, TL surface downwelling radiance
-             down_rad_prof_TL_out=Down_Radiance_Prof_TL ) ! Output, TL downwelling radiance profile
+             down_rad_prof_TL_out=Down_Radiance_Prof_TL, & ! Output, TL downwelling radiance profile
+             up_rad_prof_TL_out=Up_Radiance_Prof_TL    ) ! Output, TL upwelling radiance profile
       END IF
 
    ELSE IF( RTV%Scattering_RT ) THEN
@@ -746,7 +749,8 @@ CONTAINS
              SfcOptics_TL%Direct_Reflectivity(1:nZ,1), & ! Input, TL surface reflectivity for a point source
              Radiance_TL,                              & ! Output, TL radiances
              down_rad_TL_out=Down_Radiance_TL,         & ! Output, TL surface downwelling radiance
-             down_rad_prof_TL_out=Down_Radiance_Prof_TL ) ! Output, TL downwelling radiance profile
+             down_rad_prof_TL_out=Down_Radiance_Prof_TL, & ! Output, TL downwelling radiance profile
+             up_rad_prof_TL_out=Up_Radiance_Prof_TL    ) ! Output, TL upwelling radiance profile
     END IF
 
     Error_Status = Assign_Common_Output_TL( SfcOptics             , &
@@ -776,6 +780,16 @@ CONTAINS
       na_d = RTV%n_Added_Layers
       nt_d = Atmosphere%n_Layers
       RTSolution_TL%Downwelling_Radiance(1:no_d) = Down_Radiance_Prof_TL(na_d+1:nt_d)
+    END IF
+
+    ! Level-resolved upwelling radiance profile TL (opt-in). Same internal->user
+    ! level mapping as the downwelling profile. Gated so flag-off keeps the legacy
+    ! forward-only Upwelling_Radiance (zero TL), unchanged.
+    IF ( RTV%Compute_Up_Radiance_Profile .AND. ALLOCATED(RTSolution_TL%Upwelling_Radiance) ) THEN
+      no_d = RTSolution_TL%n_Layers
+      na_d = RTV%n_Added_Layers
+      nt_d = Atmosphere%n_Layers
+      RTSolution_TL%Upwelling_Radiance(1:no_d) = Up_Radiance_Prof_TL(na_d+1:nt_d)
     END IF
 
   END FUNCTION CRTM_Compute_RTSolution_TL
@@ -977,6 +991,7 @@ CONTAINS
     REAL (fp) :: Radiance_AD(MAX_N_STOKES)
     REAL (fp) :: Down_Radiance_AD
     REAL (fp), DIMENSION( Atmosphere%n_Layers ) :: Down_Radiance_Prof_AD  ! AD downwelling profile seed (internal levels)
+    REAL (fp), DIMENSION( Atmosphere%n_Layers ) :: Up_Radiance_Prof_AD    ! AD upwelling profile seed (internal levels)
     INTEGER :: no_d, na_d, nt_d
 
 
@@ -1024,6 +1039,16 @@ CONTAINS
       nt_d = Atmosphere%n_Layers
       Down_Radiance_Prof_AD(na_d+1:nt_d) = RTSolution_AD%Downwelling_Radiance(1:no_d)
       RTSolution_AD%Downwelling_Radiance(1:no_d) = ZERO
+    END IF
+
+    ! Level-resolved upwelling radiance profile adjoint seed (opt-in).
+    Up_Radiance_Prof_AD = ZERO
+    IF ( RTV%Compute_Up_Radiance_Profile .AND. ALLOCATED(RTSolution_AD%Upwelling_Radiance) ) THEN
+      no_d = RTSolution_AD%n_Layers
+      na_d = RTV%n_Added_Layers
+      nt_d = Atmosphere%n_Layers
+      Up_Radiance_Prof_AD(na_d+1:nt_d) = RTSolution_AD%Upwelling_Radiance(1:no_d)
+      RTSolution_AD%Upwelling_Radiance(1:no_d) = ZERO
     END IF
 
     ! --------------------------------------
@@ -1086,7 +1111,8 @@ CONTAINS
              SfcOptics_AD%S_Reflectivity(1:nZ,1:nZ), & ! Output, AD surface reflectivity
              SfcOptics_AD%S_Direct_Ref(1:nZ),  & ! Output, AD surface reflectivity for a point source
              down_rad_AD_in=Down_Radiance_AD,  & ! Input, AD surface downwelling radiance
-             down_rad_prof_AD_in=Down_Radiance_Prof_AD ) ! Input, AD downwelling radiance profile
+             down_rad_prof_AD_in=Down_Radiance_Prof_AD, & ! Input, AD downwelling radiance profile
+             up_rad_prof_AD_in=Up_Radiance_Prof_AD ) ! Input, AD upwelling radiance profile
       END IF
       CALL Reshape_Surf_Opt_AD(RTV%n_Angles, RTV%n_Stokes, SfcOptics_AD%Emissivity, SfcOptics_AD%Direct_Reflectivity, &
         SfcOptics_AD%Reflectivity, SfcOptics_AD%S_Emissivity, SfcOptics_AD%S_Direct_Ref, SfcOptics_AD%S_Reflectivity)
@@ -1175,7 +1201,8 @@ CONTAINS
              SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1), & ! Output, AD surface reflectivity
              SfcOptics_AD%Direct_Reflectivity(1:nZ,1), & ! Output, AD surface reflectivity for a point source
              down_rad_AD_in=Down_Radiance_AD,          & ! Input, AD surface downwelling radiance
-             down_rad_prof_AD_in=Down_Radiance_Prof_AD ) ! Input, AD downwelling radiance profile
+             down_rad_prof_AD_in=Down_Radiance_Prof_AD, & ! Input, AD downwelling radiance profile
+             up_rad_prof_AD_in=Up_Radiance_Prof_AD ) ! Input, AD upwelling radiance profile
     END IF
 
     Error_Status = Assign_Common_Output_AD( Atmosphere           , & ! Input
