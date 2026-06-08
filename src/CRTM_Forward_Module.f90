@@ -928,7 +928,7 @@ CONTAINS
                   CALL CRTM_RTSolution_Zero( RTSolution_Clear(nt) )
                   ! Allocate the clear-sub-solve profile arrays so its downwelling
                   ! profile is populated for the TCC combine (opt-in; created once/thread).
-                  IF ( Opt%Compute_Down_Radiance_Profile .AND. &
+                  IF ( (Opt%Compute_Down_Radiance_Profile .OR. Opt%Compute_Up_Radiance_Profile) .AND. &
                        CRTM_RTSolution_Associated(RTSolution(ln,m)) .AND. &
                        .NOT. CRTM_RTSolution_Associated(RTSolution_Clear(nt)) ) &
                     CALL CRTM_RTSolution_Create( RTSolution_Clear(nt), RTSolution(ln,m)%n_Layers )
@@ -1197,6 +1197,12 @@ CONTAINS
                   RTSolution(ln,m)%Downwelling_Radiance = &
                         ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Downwelling_Radiance) + &
                         (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Downwelling_Radiance)
+                  !...Level-resolved upwelling radiance profile (opt-in)
+                  IF ( Opt%Compute_Up_Radiance_Profile .AND. &
+                       CRTM_RTSolution_Associated(RTSolution(ln,m)) ) &
+                  RTSolution(ln,m)%Upwelling_Radiance = &
+                        ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Upwelling_Radiance) + &
+                        (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Upwelling_Radiance)
                END IF
                ! The radiance post-processing
                CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), &

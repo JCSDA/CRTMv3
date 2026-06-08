@@ -579,6 +579,7 @@ CONTAINS
       REAL(fp) :: r_cloudy(4)
       REAL(fp) :: r_cloudy_dn
       REAL(fp) :: r_cloudy_dn_prof(MAX_N_LAYERS)  ! pre-combine cloudy downwelling profile (thread-private)
+      REAL(fp) :: r_cloudy_up_prof(MAX_N_LAYERS)  ! pre-combine cloudy upwelling profile (thread-private)
       INTEGER :: nt, start_ch, end_ch, chunk_ch, n_sensor_channels, ks
       INTEGER :: n_inactive_channels(n_channel_threads+1)
 
@@ -1025,7 +1026,7 @@ CONTAINS
         END IF
 #else
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
-!$OMP    FIRSTPRIVATE(ln, r_cloudy, r_cloudy_dn, r_cloudy_dn_prof)      &
+!$OMP    FIRSTPRIVATE(ln, r_cloudy, r_cloudy_dn, r_cloudy_dn_prof, r_cloudy_up_prof) &
 !$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, Err_Thread,     &
 !$OMP            start_ch, end_ch, Wavenumber, Status_FWD, Status_K,    &
 !$OMP            transmittance, transmittance_K, transmittance_clear,   &
@@ -1085,7 +1086,7 @@ CONTAINS
             CALL CRTM_RTSolution_Zero( RTSolution_Clear_K(nt) )
             ! Allocate the clear-sub-solve profile arrays (FWD + K) so the clear
             ! downwelling profile is available for the TCC combine (opt-in).
-            IF ( Opt%Compute_Down_Radiance_Profile .AND. &
+            IF ( (Opt%Compute_Down_Radiance_Profile .OR. Opt%Compute_Up_Radiance_Profile) .AND. &
                  CRTM_RTSolution_Associated(RTSolution(ln,m)) ) THEN
               IF ( .NOT. CRTM_RTSolution_Associated(RTSolution_Clear(nt)) ) &
                 CALL CRTM_RTSolution_Create( RTSolution_Clear(nt),   RTSolution(ln,m)%n_Layers )
@@ -1425,6 +1426,15 @@ CONTAINS
                       ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Downwelling_Radiance) + &
                       (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Downwelling_Radiance)
                 END IF
+                ! Level-resolved upwelling profile cloudy/clear forward combine (opt-in).
+                IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) .AND. &
+                     Opt%Compute_Up_Radiance_Profile .AND. &
+                     CRTM_RTSolution_Associated(RTSolution(ln,m)) ) THEN
+                  r_cloudy_up_prof(1:RTSolution(ln,m)%n_Layers) = RTSolution(ln,m)%Upwelling_Radiance
+                  RTSolution(ln,m)%Upwelling_Radiance = &
+                      ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Upwelling_Radiance) + &
+                      (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Upwelling_Radiance)
+                END IF
 
                 ! The radiance post-processing
                 CALL Post_Process_RTSolution(Opt, RTSolution(ln,m), &
@@ -1493,6 +1503,18 @@ CONTAINS
                                * RTSolution_K(ln,m)%Downwelling_Radiance )
                       RTSolution_K(ln,m)%Downwelling_Radiance = &
                           CloudCover%Total_Cloud_Cover * RTSolution_K(ln,m)%Downwelling_Radiance
+                    END IF
+                    ! Adjoint of the level-resolved upwelling profile combine (opt-in).
+                    IF ( Opt%Compute_Up_Radiance_Profile .AND. &
+                         CRTM_RTSolution_Associated(RTSolution_K(ln,m)) ) THEN
+                      RTSolution_Clear_K(nt)%Upwelling_Radiance = &
+                          (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_K(ln,m)%Upwelling_Radiance
+                      CloudCover_K(nt)%Total_Cloud_Cover = CloudCover_K(nt)%Total_Cloud_Cover + &
+                          sum( (r_cloudy_up_prof(1:RTSolution(ln,m)%n_Layers) &
+                                - RTSolution_Clear(nt)%Upwelling_Radiance) &
+                               * RTSolution_K(ln,m)%Upwelling_Radiance )
+                      RTSolution_K(ln,m)%Upwelling_Radiance = &
+                          CloudCover%Total_Cloud_Cover * RTSolution_K(ln,m)%Upwelling_Radiance
                     END IF
                  END IF
                 END IF
