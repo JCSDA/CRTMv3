@@ -642,7 +642,8 @@ CONTAINS
                  Scattering_Radiance_TL(1:nZ),             & ! Output, TL radiances
                  Index_Sat_Angle=SfcOptics%Index_Sat_Ang,  & ! Input, sensor zenith angle index
                  down_rad_TL_out=Down_Radiance_TL,         & ! Output, TL surface downwelling radiance
-                 down_rad_prof_TL_out=Down_Radiance_Prof_TL ) ! Output, TL downwelling radiance profile
+                 down_rad_prof_TL_out=Down_Radiance_Prof_TL, & ! Output, TL downwelling radiance profile
+                 up_rad_prof_TL_out=Up_Radiance_Prof_TL     ) ! Output, TL upwelling radiance profile
       ELSE
         CALL CRTM_Emission_TL( &
              Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
@@ -694,7 +695,8 @@ CONTAINS
                  Scattering_Radiance_TL(1:nZ),             & ! Output, TL radiances
                  Index_Sat_Angle=SfcOptics%Index_Sat_Ang,  & ! Input, sensor zenith angle index
                  down_rad_TL_out=Down_Radiance_TL,         & ! Output, TL surface downwelling radiance
-                 down_rad_prof_TL_out=Down_Radiance_Prof_TL ) ! Output, TL downwelling radiance profile
+                 down_rad_prof_TL_out=Down_Radiance_Prof_TL, & ! Output, TL downwelling radiance profile
+                 up_rad_prof_TL_out=Up_Radiance_Prof_TL     ) ! Output, TL upwelling radiance profile
 
         CASE (RT_SOI)
           ! UW SOI RT solver
@@ -1089,7 +1091,8 @@ CONTAINS
              Pbb_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer backward phase matrix
              Index_Sat_Angle=SfcOptics%Index_Sat_Ang,  & ! Input, sensor zenith angle index
              down_rad_AD_in=Down_Radiance_AD,          & ! Input, AD surface downwelling radiance
-             down_rad_prof_AD_in=Down_Radiance_Prof_AD ) ! Input, AD downwelling radiance profile
+             down_rad_prof_AD_in=Down_Radiance_Prof_AD, & ! Input, AD downwelling radiance profile
+             up_rad_prof_AD_in=Up_Radiance_Prof_AD ) ! Input, AD upwelling radiance profile
       ELSE
         CALL CRTM_Emission_AD( &
              Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
@@ -1145,7 +1148,8 @@ CONTAINS
              Pbb_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer backward phase matrix
              Index_Sat_Angle=SfcOptics%Index_Sat_Ang,  & ! Input, sensor zenith angle index
              down_rad_AD_in=Down_Radiance_AD,          & ! Input, AD surface downwelling radiance
-             down_rad_prof_AD_in=Down_Radiance_Prof_AD ) ! Input, AD downwelling radiance profile
+             down_rad_prof_AD_in=Down_Radiance_Prof_AD, & ! Input, AD downwelling radiance profile
+             up_rad_prof_AD_in=Up_Radiance_Prof_AD ) ! Input, AD upwelling radiance profile
 
         CASE (RT_SOI)
         ! UW SOI RT solver
