@@ -92,6 +92,12 @@ CONTAINS
     CALL get_var_i( 'Habit_Phase', CloudCoeff_Exp%Habit_Phase )
     CALL get_var_d( 'mD_a'       , CloudCoeff_Exp%mD_a        )
     CALL get_var_d( 'mD_b'       , CloudCoeff_Exp%mD_b        )
+    ! Optional per-habit Effective_Radius -> Dm multiplier. Absent in older LUTs ->
+    ! stays at the 1.0 identity set by CloudCoeff_Exp_Create (no behaviour change).
+    IF ( ok ) THEN
+      IF ( nf90_inq_varid( fid, 'Reff_to_Dm', vid ) == NF90_NOERR ) &
+        ok = chk( nf90_get_var( fid, vid, CloudCoeff_Exp%Reff_to_Dm ), 'get Reff_to_Dm' )
+    END IF
     ! Habit_Name : char(n_Habit, nchar) -> CHARACTER(SL) array
     IF ( ok ) ok = chk( nf90_inq_varid( fid, 'Habit_Name', vid ), 'varid Habit_Name' )
     IF ( ok ) ok = chk( nf90_get_var( fid, vid, CloudCoeff_Exp%Habit_Name ), 'get Habit_Name' )

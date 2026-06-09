@@ -1522,7 +1522,9 @@ CONTAINS
     CALL find_index( CloudC_Exp%Frequency, csi%f_int, csi%i1, csi%i2, csi%f_outbound )
     csi%f = CloudC_Exp%Frequency(csi%i1:csi%i2)
 
-    csi%r_int = MAX(MIN(CloudC_Exp%Dm(CloudC_Exp%n_Dm),Dm_in),CloudC_Exp%Dm(1))
+    ! Host passes Effective_Radius; the LUT axis is Dm (mass-weighted mean diameter).
+    ! Convert with the per-habit reff->Dm factor (default 1.0 if the LUT omits it).
+    csi%r_int = MAX(MIN(CloudC_Exp%Dm(CloudC_Exp%n_Dm),Dm_in*CloudC_Exp%Reff_to_Dm(h)),CloudC_Exp%Dm(1))
     CALL find_index( CloudC_Exp%Dm, csi%r_int, csi%j1, csi%j2, csi%r_outbound )
     csi%r = CloudC_Exp%Dm(csi%j1:csi%j2)
 
@@ -1594,7 +1596,7 @@ CONTAINS
     ! TL of the interpolation point.  Frequency is fixed (channel) -> zero TL; Dm and
     ! Temperature get zero TL when the value was clamped to the LUT bounds (outbound).
     f_TL = ZERO ; r_TL = ZERO ; t_TL = ZERO ; z3_TL = ZERO
-    r_int_TL = MERGE( ZERO, Dm_TL,          csi%r_outbound )
+    r_int_TL = MERGE( ZERO, Dm_TL*CloudC_Exp%Reff_to_Dm(h), csi%r_outbound )
     t_int_TL = MERGE( ZERO, Temperature_TL, csi%t_outbound )
 
     CALL LPoly_TL( csi%f, csi%f_int, csi%wlp, f_TL, ZERO,     wlp_TL )
@@ -1702,7 +1704,7 @@ CONTAINS
 
     ! Map interp-point adjoints to the cloud-state inputs (zero when clamped/outbound)
     IF ( .NOT. csi%t_outbound ) Temperature_AD = Temperature_AD + t_int_AD
-    IF ( .NOT. csi%r_outbound ) Dm_AD          = Dm_AD          + r_int_AD
+    IF ( .NOT. csi%r_outbound ) Dm_AD          = Dm_AD          + r_int_AD*CloudC_Exp%Reff_to_Dm(h)
   END SUBROUTINE Get_Cloud_Opt_MW_Exp_AD
 
 

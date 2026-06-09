@@ -82,6 +82,7 @@ MODULE CloudCoeff_Exp_Define
     INTEGER(Long), ALLOCATABLE :: Habit_Phase(:)      ! n_Habit (0=liquid,1=frozen)
     REAL(Double),  ALLOCATABLE :: mD_a(:)             ! n_Habit (mass-dimension prefactor)
     REAL(Double),  ALLOCATABLE :: mD_b(:)             ! n_Habit (mass-dimension exponent)
+    REAL(Double),  ALLOCATABLE :: Reff_to_Dm(:)       ! n_Habit (host Effective_Radius -> LUT Dm multiplier; default 1)
     CHARACTER(SL), ALLOCATABLE :: Habit_Name(:)       ! n_Habit
     ! Bulk optics : (Frequency, Temperature, Mu, Dm, Habit)
     REAL(Double),  ALLOCATABLE :: ke(:,:,:,:,:)
@@ -134,6 +135,7 @@ CONTAINS
               self%Habit_Phase(n_Habit), &
               self%mD_a(n_Habit), &
               self%mD_b(n_Habit), &
+              self%Reff_to_Dm(n_Habit), &
               self%Habit_Name(n_Habit), &
               self%ke(n_Frequency,n_Temperature,n_Mu,n_Dm,n_Habit), &
               self%ka(n_Frequency,n_Temperature,n_Mu,n_Dm,n_Habit), &
@@ -154,6 +156,7 @@ CONTAINS
 
     self%Frequency = ZERO; self%Temperature = ZERO; self%Mu = ZERO; self%Dm = ZERO
     self%Habit_Id = 0; self%Habit_Phase = 0; self%mD_a = ZERO; self%mD_b = ZERO
+    self%Reff_to_Dm = 1.0_Double   ! identity unless the LUT supplies per-habit factors
     self%Habit_Name = ' '
     self%ke = ZERO; self%ka = ZERO; self%g = ZERO; self%kb = ZERO
     self%n_Legendre_Eff = 0; self%pcoeff = ZERO
