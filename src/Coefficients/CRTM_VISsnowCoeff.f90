@@ -21,7 +21,9 @@
 !                       paul.vandelst@noaa.gov
 !      Modified by:     Cheng Dang, 05-Mar-2022
 !                       dangch@ucar.edu
-!                       Add SEcategory_ReadFile_IO for netCDF I/O
+!                       Add SEcategory_ReadFile_IO for NetCDF I/O
+!      Modified by:     Cheng Dang, 06-Jun-2026
+!                       Add support for multiple visible snow schemes
 
 MODULE CRTM_VISsnowCoeff
 
@@ -29,11 +31,15 @@ MODULE CRTM_VISsnowCoeff
   ! Environment setup
   ! -----------------
   ! Module use
-  USE Message_Handler  , ONLY: SUCCESS, FAILURE, Display_Message
-  USE SEcategory_Define, ONLY: SEcategory_type, &
-                               SEcategory_Associated, &
-                               SEcategory_Destroy
-  USE SEcategory_IO,     ONLY: SEcategory_ReadFile_IO
+  USE Message_Handler  ,   ONLY: SUCCESS, FAILURE, Display_Message
+  USE SEcategory_Define,   ONLY: SEcategory_type, &
+                                 SEcategory_Associated, &
+                                 SEcategory_Destroy
+  USE SEcategory_IO,       ONLY: SEcategory_ReadFile_IO
+  USE VISsnowCoeff_Define, ONLY: VISsnowCoeff_type, &
+                                VISsnowCoeff_Associated, &
+                                VISsnowCoeff_Destroy
+  USE VISsnowCoeff_IO,     ONLY: VISsnowCoeff_ReadFile_IO
   ! Disable all implicit typing
   IMPLICIT NONE
 
@@ -44,7 +50,7 @@ MODULE CRTM_VISsnowCoeff
   ! Everything private by default
   PRIVATE
   ! The shared data
-  PUBLIC :: VISsnowC
+  PUBLIC :: VISsnowC_SE
   ! Procedures
   PUBLIC :: CRTM_VISsnowCoeff_Load
   PUBLIC :: CRTM_VISsnowCoeff_Destroy
@@ -61,7 +67,8 @@ MODULE CRTM_VISsnowCoeff
   ! ------------------------------------------------
   ! The shared visible snow surface emissivity data
   ! ------------------------------------------------
-  TYPE(SEcategory_type), SAVE :: VISsnowC
+  TYPE(SEcategory_type),   SAVE :: VISsnowC_SE
+  TYPE(VISsnowCoeff_type), SAVE :: VISsnowC
 
 
 CONTAINS
@@ -163,7 +170,7 @@ CONTAINS
   FUNCTION CRTM_VISsnowCoeff_Load( &
     Filename         , &  ! Input
     File_Path        , &  ! Optional input
-    netCDF           , &  ! Optional input
+    NetCDF           , &  ! Optional input
     Quiet            , &  ! Optional input
     Process_ID       , &  ! Optional input
     Output_Process_ID) &  ! Optional input
@@ -171,17 +178,18 @@ CONTAINS
     ! Arguments
     CHARACTER(*),           INTENT(IN) :: Filename
     CHARACTER(*), OPTIONAL, INTENT(IN) :: File_Path
-    LOGICAL,      OPTIONAL, INTENT(IN) :: netCDF
+    LOGICAL,      OPTIONAL, INTENT(IN) :: NetCDF
     LOGICAL     , OPTIONAL, INTENT(IN) :: Quiet
     INTEGER     , OPTIONAL, INTENT(IN) :: Process_ID
     INTEGER     , OPTIONAL, INTENT(IN) :: Output_Process_ID
     ! Function result
-    INTEGER :: err_stat
+    INTEGER :: err_stat, pos
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_VISsnowCoeff_Load'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
     CHARACTER(ML) :: VISsnowCoeff_File
+    CHARACTER(ML) :: Classification_Name
     LOGICAL :: noisy
     ! Function variables
     LOGICAL :: Binary
@@ -190,6 +198,19 @@ CONTAINS
     err_stat = SUCCESS
     ! ...Assign the filename to local variable
     VISsnowCoeff_File = ADJUSTL(Filename)
+    ! ...Get the classification name from the filename
+    !Classification_Name = Filename(:index(Filename,'.')-1) !this is the one-line replacement if confident
+    pos = index(Filename, '.')
+    IF (pos == 0) THEN
+      CALL Display_Message( ROUTINE_NAME, &
+          'Invalid classification filename: '//TRIM(Filename)// &
+          '. Expected format <Classification_Name>.<CoefType>.', &
+          FAILURE )
+      RETURN
+    END IF
+    Classification_Name = Filename(:pos-1)
+    ! PRINT *, 'Loading CRTM visible snow surface emissivity coefficients from file: '//TRIM(VISsnowCoeff_File)//TRIM(pid_msg)
+    ! PRINT *, 'Classification Name: '//TRIM(Classification_Name)
     ! ...Add the file path
     IF ( PRESENT(File_Path) ) VISsnowCoeff_File = TRIM(ADJUSTL(File_Path))//TRIM(VISsnowCoeff_File)
     ! ...Check Quiet argument
@@ -205,27 +226,45 @@ CONTAINS
     ELSE
       pid_msg = ''
     END IF
-    ! ...Check netCDF argument
+    ! ...Check NetCDF argument
     Binary = .TRUE.
-    IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
-
-
-    ! Read the VIS snow SEcategory file
-    err_stat = SEcategory_ReadFile_IO( &
-                 VISsnowC, &
-                 VISsnowCoeff_File, &
-                 netCDF = .NOT. Binary, &
-                 Quiet = .NOT. noisy )
-    IF ( err_stat /= SUCCESS ) THEN
-      msg = 'Error reading VISsnowCoeff SEcategory file '//TRIM(VISsnowCoeff_File)//TRIM(pid_msg)
-      CALL Load_Cleanup(); RETURN
-    END IF
+    IF ( PRESENT(NetCDF) ) Binary = .NOT. NetCDF
+    
+    ! Read the data based on the classification name
+    SELECT CASE ( TRIM(Classification_Name) )
+      CASE ( 'NPOESS' )
+        ! Read the VIS snow SEcategory file
+        err_stat = SEcategory_ReadFile_IO( &
+                    VISsnowC_SE, &
+                    VISsnowCoeff_File, &
+                    NetCDF = .NOT. Binary, &
+                    Quiet = .NOT. noisy )
+        IF ( err_stat /= SUCCESS ) THEN
+          msg = 'Error reading VISsnowCoeff SEcategory file '//TRIM(VISsnowCoeff_File)//TRIM(pid_msg)
+          CALL Load_Cleanup(); RETURN
+        END IF
+      CASE ( 'SNICAR' )
+        ! Read the VIS snow SNICAR file
+        err_stat = VISsnowCoeff_ReadFile_IO( &
+                    VISsnowC, &
+                    VISsnowCoeff_File, &
+                    NetCDF = .NOT. Binary, &
+                    Quiet = .NOT. noisy )
+        IF ( err_stat /= SUCCESS ) THEN
+          msg = 'Error reading VISsnowCoeff SNICAR file '//TRIM(VISsnowCoeff_File)//TRIM(pid_msg)
+          CALL Load_Cleanup(); RETURN
+        END IF
+      CASE DEFAULT
+        msg = 'Unsupported visible snow reflectance classification: '//TRIM(Classification_Name)
+        CALL Display_Message( ROUTINE_NAME, msg, FAILURE ); RETURN 
+    END SELECT
 
 
    CONTAINS
 
      SUBROUTINE Load_CleanUp()
-       CALL SEcategory_Destroy( VISsnowC )
+       CALL SEcategory_Destroy( VISsnowC_SE )
+       CALL VISsnowCoeff_Destroy( VISsnowC )
        err_stat = FAILURE
        CALL Display_Message( ROUTINE_NAME, msg, err_stat )
      END SUBROUTINE Load_CleanUp
@@ -294,8 +333,16 @@ CONTAINS
     END IF
 
     ! Destroy the structure
-    CALL SEcategory_Destroy( VISsnowC )
-    IF ( SEcategory_Associated( VISsnowC ) ) THEN
+    ! ...SEcategory
+    CALL SEcategory_Destroy( VISsnowC_SE )
+    IF ( SEcategory_Associated( VISsnowC_SE ) ) THEN
+      err_stat = FAILURE
+      msg = 'Error deallocating VISsnowCoeff shared data structure'//TRIM(pid_msg)
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat ); RETURN
+    END IF
+    ! ...Other classifications
+    CALL VISsnowCoeff_Destroy( VISsnowC )
+    IF ( VISsnowCoeff_Associated( VISsnowC ) ) THEN
       err_stat = FAILURE
       msg = 'Error deallocating VISsnowCoeff shared data structure'//TRIM(pid_msg)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat ); RETURN
@@ -322,7 +369,28 @@ CONTAINS
 
   FUNCTION CRTM_VISsnowCoeff_IsLoaded() RESULT( IsLoaded )
     LOGICAL :: IsLoaded
-    IsLoaded = SEcategory_Associated( VISsnowC )
+    IsLoaded = VISsnowCoeff_Associated( VISsnowC )
   END FUNCTION CRTM_VISsnowCoeff_IsLoaded
+
+!------------------------------------------------------------------------------
+!:sdoc+:
+!
+! NAME:
+!       CRTM_VISsnowCoeff_SE_IsLoaded
+!
+! PURPOSE:
+!       Function to test if visible snow surface emissivity data has
+!       been loaded into the public data structure VISsnowC_SE.
+!
+! CALLING SEQUENCE:
+!       status = CRTM_VISsnowCoeff_SE_IsLoaded
+!
+!:sdoc-:
+!------------------------------------------------------------------------------
+
+  FUNCTION CRTM_VISsnowCoeff_SE_IsLoaded() RESULT( IsLoaded )
+    LOGICAL :: IsLoaded
+    IsLoaded = SEcategory_Associated( VISsnowC_SE )
+  END FUNCTION CRTM_VISsnowCoeff_SE_IsLoaded
 
 END MODULE CRTM_VISsnowCoeff

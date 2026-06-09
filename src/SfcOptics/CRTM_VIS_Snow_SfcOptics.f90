@@ -27,7 +27,7 @@ MODULE CRTM_VIS_Snow_SfcOptics
   USE CRTM_SfcOptics_Define    , ONLY: CRTM_SfcOptics_type
   USE CRTM_SEcategory          , ONLY: SEVar_type => iVar_type, &
                                        SEcategory_Emissivity
-  USE CRTM_VISsnowCoeff        , ONLY: VISsnowC
+  USE CRTM_VISsnowCoeff        , ONLY: VISsnowC_SE
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -171,7 +171,7 @@ CONTAINS
 
     ! Compute Lambertian surface emissivity
     err_stat = SEcategory_Emissivity( &
-                 VISsnowC         , &  ! Input
+                 VISsnowC_SE      , &  ! Input
                  frequency        , &  ! Input
                  Surface%Snow_Type, &  ! Input
                  emissivity       , &  ! Output

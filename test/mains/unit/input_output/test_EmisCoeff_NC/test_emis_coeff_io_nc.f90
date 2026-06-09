@@ -58,6 +58,7 @@ PROGRAM test_emis_coeff_io_nc
   CHARACTER(*), PARAMETER :: Optional_IRwaterCoeff_File  = 'Nalli2.IRwater.EmisCoeff.nc4'
   CHARACTER(*), PARAMETER :: Optional_IRsnowCoeff_File   = 'Nalli.IRsnow.EmisCoeff.nc4'
   CHARACTER(*), PARAMETER :: Optional_IRsnowCoeff_File_Nalli2 = 'Nalli2.IRsnow.EmisCoeff.nc4'
+  CHARACTER(*), PARAMETER :: Optional_VISsnowCoeff_File   = 'SNICAR.VISsnow.EmisCoeff.nc4'
   LOGICAL,      PARAMETER :: netCDF = .TRUE.
   CHARACTER(*), PARAMETER :: NC_File_Path = './testinput/'
   LOGICAL,      PARAMETER :: Quiet = .TRUE.
@@ -73,7 +74,7 @@ PROGRAM test_emis_coeff_io_nc
   ! Greeting:
   WRITE(*,*) 'HELLO, THIS IS A TEST CODE TO INSPECT EmisCoeff files in netCDF format.'
   WRITE(*,*) 'test_emi_coeff_io_nc'
-  WRITE(*,*) 'The following optional EmisCoeff files are investigated: '
+  WRITE(*,*) 'The following default EmisCoeff files are investigated: '
 
   ! Load the default emissivity coefficient look-up table:
   WRITE(*,*) '...loading: ', Default_IRlandCoeff_File
@@ -235,6 +236,21 @@ PROGRAM test_emis_coeff_io_nc
     CALL Display_Message( 'CRTM_IRsnowCoeff_Load' ,'Error loading IRsnowCoeff data', err_stat )
     STOP 1
   END IF
+
+  WRITE(*,*) '...loading: ', Optional_VISsnowCoeff_File
+  err_stat = 3
+  err_stat = CRTM_VISsnowCoeff_Load( &
+               Optional_VISsnowCoeff_File, &
+               netCDF        = netCDF, &
+               Quiet         = Quiet, &
+               File_Path  = NC_File_Path)
+  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
+  testPassed = UnitTest_Passed(ioTest)
+  IF ( err_stat /= SUCCESS ) THEN
+    CALL Display_Message( 'CRTM_VISsnowCoeff_Load' ,'Error loading VISsnowCoeff data', err_stat )
+    STOP 1
+  END IF
+
   STOP 0
 
 END PROGRAM test_emis_coeff_io_nc

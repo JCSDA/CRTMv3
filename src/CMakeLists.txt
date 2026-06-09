@@ -69,6 +69,9 @@ list( APPEND crtm_src_files
       Coefficients/CRTM_VISlandCoeff.f90
       Coefficients/CRTM_VISsnowCoeff.f90
       Coefficients/CRTM_VISwaterCoeff.f90
+      Coefficients/EmisCoeff/VIS_Snow/VISsnowCoeff_Define.f90
+      Coefficients/EmisCoeff/VIS_Snow/VISsnowCoeff_netCDF_IO.f90
+      Coefficients/EmisCoeff/VIS_Snow/VISsnowCoeff_IO.f90
       Coefficients/EmisCoeff/IR_Land/LSEatlas/LSEatlas_Define.f90
       Coefficients/EmisCoeff/IR_Water/IRwaterCoeff_Define.f90
       Coefficients/EmisCoeff/IR_Water/IRwaterCoeff_IO.f90
