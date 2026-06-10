@@ -38,7 +38,7 @@ MODULE CRTM_IR_Snow_SfcOptics
                                        CRTM_IRsnowCoeff_SE_IsLoaded, &
                                        IRsnowC, &
                                        IRsnowC_SE
-  USE CRTM_IRRsnowEM           , ONLY: IRsnowVar_type => iVar_type, &
+  USE CRTM_IRsnowEM            , ONLY: IRsnowVar_type => iVar_type, &
                                        CRTM_Compute_IRsnowEM, &
                                        CRTM_Compute_IRsnowEM_TL, &
                                        CRTM_Compute_IRsnowEM_AD

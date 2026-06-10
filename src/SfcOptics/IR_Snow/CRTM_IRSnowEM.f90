@@ -45,8 +45,8 @@ MODULE CRTM_IRsnowEM
   PUBLIC :: iVar_type
   ! Procedures
   PUBLIC :: CRTM_Compute_IRsnowEM
-  PUBLIC :: CRTM_Compute_IRRsnowEM_TL
-  PUBLIC :: CRTM_Compute_IRRsnowEM_AD
+  PUBLIC :: CRTM_Compute_IRsnowEM_TL
+  PUBLIC :: CRTM_Compute_IRsnowEM_AD
 
 
   ! -----------------
