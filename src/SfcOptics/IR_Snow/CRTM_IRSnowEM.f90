@@ -1,5 +1,5 @@
 !
-! CRTM_IRSnowEM
+! CRTM_IRsnowEM
 !
 ! Module containing function to invoke the CRTM Infrared
 ! Snow Emissivity Model.
@@ -10,7 +10,7 @@
 !                     dangch@ucar.edu
 !
 
-MODULE CRTM_IRSnowEM
+MODULE CRTM_IRsnowEM
 
   ! -----------------
   ! Environment setup
@@ -44,9 +44,9 @@ MODULE CRTM_IRSnowEM
   ! Derived type
   PUBLIC :: iVar_type
   ! Procedures
-  PUBLIC :: CRTM_Compute_IRSnowEM
-  PUBLIC :: CRTM_Compute_IRSnowEM_TL
-  PUBLIC :: CRTM_Compute_IRSnowEM_AD
+  PUBLIC :: CRTM_Compute_IRsnowEM
+  PUBLIC :: CRTM_Compute_IRRsnowEM_TL
+  PUBLIC :: CRTM_Compute_IRRsnowEM_AD
 
 
   ! -----------------
@@ -120,14 +120,14 @@ CONTAINS
 !:sdoc+:
 !
 ! NAME:
-!       CRTM_Compute_IRSnowEM
+!       CRTM_Compute_IRRsnowEM
 !
 ! PURPOSE:
 !       Function to compute the CRTM infrared snow surface emissivity
 !       for input temperature, grain size, frequency, and angles.
 !
 ! CALLING SEQUENCE:
-!       Error_Status = CRTM_Compute_IRSnowEM(IRsnowCoeff      , &
+!       Error_Status = CRTM_Compute_IRRsnowEM(IRsnowCoeff      , &
 !                                            Snow_Temperature , &
 !                                            Snow_Grain_Size  , &
 !                                            Frequency        , &
@@ -197,7 +197,7 @@ CONTAINS
 !:sdoc-:
 !--------------------------------------------------------------------------------
 
-  FUNCTION CRTM_Compute_IRSnowEM( &
+  FUNCTION CRTM_Compute_IRsnowEM( &
     IRsnowCoeff        , &  ! Input model coefficients
     Snow_Temperature   , &  ! Input
     Snow_Grain_Size    , &  ! Input
@@ -304,14 +304,14 @@ CONTAINS
 
     END DO
 
-  END FUNCTION CRTM_Compute_IRSnowEM
+  END FUNCTION CRTM_Compute_IRsnowEM
 
 
 !--------------------------------------------------------------------------------
 !:sdoc+:
 !
 ! NAME:
-!       CRTM_Compute_IRSnowEM_TL
+!       CRTM_Compute_IRsnowEM_TL
 !
 ! PURPOSE:
 !       Function to compute the tangent-linear CRTM infrared snow
@@ -319,11 +319,11 @@ CONTAINS
 !       and angles.
 !
 !       This function must be called *after* the forward model function,
-!       CRTM_Compute_IRSnowEM, has been called. The forward model function
+!       CRTM_Compute_IRRsnowEM, has been called. The forward model function
 !       populates the internal variable structure argument, iVar.
 !
 ! CALLING SEQUENCE:
-!       Error_Status = CRTM_Compute_IRSnowEM_TL( IRsnowCoeff         , &
+!       Error_Status = CRTM_Compute_IRsnowEM_TL( IRsnowCoeff         , &
 !                                              Snow_Temperature_TL , &
 !                                              Snow_Grain_Size_TL  , &
 !                                              iVar                , &
@@ -377,7 +377,7 @@ CONTAINS
 !:sdoc-:
 !--------------------------------------------------------------------------------
 
-  FUNCTION CRTM_Compute_IRSnowEM_TL( &
+  FUNCTION CRTM_Compute_IRsnowEM_TL( &
     IRsnowCoeff          , &  ! Input model coefficients
     Snow_Temperature_TL  , &  ! Input
     Snow_Grain_Size_TL   , &  ! Input
@@ -466,25 +466,25 @@ CONTAINS
 
     END DO
 
-  END FUNCTION CRTM_Compute_IRSnowEM_TL
+  END FUNCTION CRTM_Compute_IRsnowEM_TL
 
 
 !--------------------------------------------------------------------------------
 !:sdoc+:
 !
 ! NAME:
-!       CRTM_Compute_IRSnowEM_AD
+!       CRTM_Compute_IRsnowEM_AD
 !
 ! PURPOSE:
 !       Function to compute the adjoint of the CRTM infrared snow
 !       emissivity for input grain size, frequency, and angles.
 !
 !       This function must be called *after* the forward model function,
-!       CRTM_Compute_IRSnowEM, has been called. The forward model function
+!       CRTM_Compute_IRsnowEM, has been called. The forward model function
 !       populates the internal variable structure argument, iVar.
 !
 ! CALLING SEQUENCE:
-!       Error_Status = CRTM_Compute_IRSnowEM_AD(IRsnowCoeff         , &
+!       Error_Status = CRTM_Compute_IRsnowEM_AD(IRsnowCoeff         , &
 !                                               Emissivity_AD       , &
 !                                               iVar                , &
 !                                               Snow_Grain_Size_AD  , &
@@ -542,7 +542,7 @@ CONTAINS
 !:sdoc-:
 !--------------------------------------------------------------------------------
 
-  FUNCTION CRTM_Compute_IRSnowEM_AD( &
+  FUNCTION CRTM_Compute_IRsnowEM_AD( &
     IRsnowCoeff          , &  ! Input model coefficients
     Emissivity_AD        , &  ! Input
     iVar                 , &  ! Internal Variable Input
@@ -631,7 +631,7 @@ CONTAINS
                   t_AD                , & ! AD  Output
                   Snow_Temperature_AD   ) ! AD  Output
 
-  END FUNCTION CRTM_Compute_IRSnowEM_AD
+  END FUNCTION CRTM_Compute_IRsnowEM_AD
 
 
 !################################################################################
@@ -672,4 +672,4 @@ CONTAINS
     ei%Is_Allocated = .TRUE.
   END SUBROUTINE Einterp_Create
 
-END MODULE CRTM_IRSnowEM
+END MODULE CRTM_IRsnowEM

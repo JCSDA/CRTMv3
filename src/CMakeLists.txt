@@ -159,8 +159,9 @@ list( APPEND crtm_src_files
       SfcOptics/CRTM_VIS_Land_SfcOptics.f90
       SfcOptics/CRTM_VIS_Snow_SfcOptics.f90
       SfcOptics/CRTM_VIS_Water_SfcOptics.f90
+      SfcOptics/VIS_Snow/CRTM_VISsnowRF.f90
       SfcOptics/IR_Water/IRSSEM/CRTM_IRSSEM.f90
-      SfcOptics/IR_Snow/CRTM_IRSnowEM.f90
+      SfcOptics/IR_Snow/CRTM_IRsnowEM.f90
       SfcOptics/MW_Water/FASTEM_MWSSEM/Azimuth_Emissivity_F6_Module.f90
       SfcOptics/MW_Water/FASTEM_MWSSEM/Azimuth_Emissivity_Module.f90
       SfcOptics/MW_Water/FASTEM_MWSSEM/CRTM_Fastem1.f90
