@@ -37,8 +37,8 @@ MODULE CRTM_VISsnowCoeff
                                  SEcategory_Destroy
   USE SEcategory_IO,       ONLY: SEcategory_ReadFile_IO
   USE VISsnowCoeff_Define, ONLY: VISsnowCoeff_type, &
-                                VISsnowCoeff_Associated, &
-                                VISsnowCoeff_Destroy
+                                 VISsnowCoeff_Associated, &
+                                 VISsnowCoeff_Destroy
   USE VISsnowCoeff_IO,     ONLY: VISsnowCoeff_ReadFile_IO
   ! Disable all implicit typing
   IMPLICIT NONE
@@ -50,11 +50,13 @@ MODULE CRTM_VISsnowCoeff
   ! Everything private by default
   PRIVATE
   ! The shared data
-  PUBLIC :: VISsnowC_SE
+  PUBLIC :: VISsnowC_SE, VISsnowC
   ! Procedures
   PUBLIC :: CRTM_VISsnowCoeff_Load
   PUBLIC :: CRTM_VISsnowCoeff_Destroy
   PUBLIC :: CRTM_VISsnowCoeff_IsLoaded
+  PUBLIC :: CRTM_VISsnowCoeff_SE_IsLoaded
+
 
 
   ! -----------------

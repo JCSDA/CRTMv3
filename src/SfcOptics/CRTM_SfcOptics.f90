@@ -101,6 +101,7 @@ MODULE CRTM_SfcOptics
                                       Compute_VIS_Water_SfcOptics_TL, &
                                       Compute_VIS_Water_SfcOptics_AD
   USE CRTM_VIS_Snow_SfcOptics,  ONLY: VISSSOVar_type => iVar_type, &
+                                      VISSSOVar_SE_type => iVar_SE_type, &
                                       Compute_VIS_Snow_SfcOptics, &
                                       Compute_VIS_Snow_SfcOptics_TL, &
                                       Compute_VIS_Snow_SfcOptics_AD
@@ -153,10 +154,11 @@ MODULE CRTM_SfcOptics
     TYPE(IRSSOVar_SE_type)  :: IRSSOV_SE ! Snow, SE category
     TYPE(IRISOVar_type)     :: IRISOV    ! Ice
     ! Visible
-    TYPE(VISLSOVar_type) :: VISLSOV ! Land
-    TYPE(VISWSOVar_type) :: VISWSOV ! Water
-    TYPE(VISSSOVar_type) :: VISSSOV ! Snow
-    TYPE(VISISOVar_type) :: VISISOV ! Ice
+    TYPE(VISLSOVar_type)    :: VISLSOV    ! Land
+    TYPE(VISWSOVar_type)    :: VISWSOV    ! Water
+    TYPE(VISSSOVar_type)    :: VISSSOV    ! Snow
+    TYPE(VISSSOVar_SE_type) :: VISSSOV_SE ! Snow, SE category
+    TYPE(VISISOVar_type)    :: VISISOV    ! Ice
   END TYPE iVar_type
 
 
@@ -1027,11 +1029,12 @@ CONTAINS
 
             ! Compute the surface optics
             Error_Status = Compute_VIS_Snow_SfcOptics( &
-                             Surface     , &  ! Input
-                             SensorIndex , &  ! Input
-                             ChannelIndex, &  ! Input
-                             SfcOptics   , &  ! In/Output
-                             iVar%VISSSOV  )  ! Internal variable output
+                             Surface        , &  ! Input
+                             SensorIndex    , &  ! Input
+                             ChannelIndex   , &  ! Input
+                             SfcOptics      , &  ! In/Output
+                             iVar%VISSSOV_SE, &  ! Internal variable output
+                             iVar%VISSSOV     )  ! Internal variable output
             IF ( Error_Status /= SUCCESS ) THEN
               WRITE( Message,'("Error computing VIS snow SfcOptics at ",&
                               &"channel index ",i0)' ) ChannelIndex
