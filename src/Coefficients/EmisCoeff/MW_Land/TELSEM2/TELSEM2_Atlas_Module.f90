@@ -418,9 +418,12 @@ CONTAINS
           DO i3lon = i2lon-nbreslon, i2lon+nbreslon
             IF ( MOD(ABS((i3lon-0.5_fp)*(360._fp/atlas%Cells_Per_Band(i2lat))-lon),360._fp) <= resol/2._fp ) THEN
               IF ( nbcel >= SIZE(cell) ) CYCLE
+              ! Longitude wrap: valid cell indices are 1..Cells_Per_Band, so only
+              ! indices strictly beyond the band wrap (i3lon == Cells_Per_Band is
+              ! the band's valid last cell, not a wrap case).
               i4lon = i3lon
-              IF ( i3lon < 1 )                          i4lon = atlas%Cells_Per_Band(i2lat) + i3lon
-              IF ( i3lon >= atlas%Cells_Per_Band(i2lat) ) i4lon = i3lon - atlas%Cells_Per_Band(i2lat)
+              IF ( i3lon < 1 )                           i4lon = atlas%Cells_Per_Band(i2lat) + i3lon
+              IF ( i3lon > atlas%Cells_Per_Band(i2lat) ) i4lon = i3lon - atlas%Cells_Per_Band(i2lat)
               nbcel = nbcel + 1
               cell(nbcel) = atlas%First_Cell(i2lat) + i4lon - 1
               IF ( cell(nbcel) == cell(1) ) nbcel = nbcel - 1

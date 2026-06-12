@@ -38,6 +38,9 @@ MODULE TELSEM2Atlas_netCDF_IO
   ! -----------------
   INTEGER, PARAMETER :: ML = 256
   CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'TELSEM2Atlas_netCDF_IO'
+  ! Number of angular-correction classes (second dim of the emis_interp
+  ! regression tables in TELSEM2_Atlas_Module); the valid Class1 range is 1..N.
+  INTEGER, PARAMETER :: N_CLASS1 = 10
   ! Dimension names
   CHARACTER(*), PARAMETER :: CHANNEL_DIMNAME = 'n_channels'
   CHARACTER(*), PARAMETER :: BAND_DIMNAME    = 'n_latitude_bands'
@@ -243,6 +246,15 @@ CONTAINS
     IF (.NOT. read_int_vec(ncid,CELLNUM_VARNAME,Atlas%Cell_Number)) GOTO 900
     IF (.NOT. read_int_vec(ncid,CLASS1_VARNAME,Atlas%Class1)) GOTO 900
     IF (.NOT. read_int_vec(ncid,CLASS2_VARNAME,Atlas%Class2)) GOTO 900
+    ! Class1 indexes the (3,N_CLASS1) angular-regression tables in emis_interp;
+    ! the stacked arrays hold only populated cells, so every Class1 must be in
+    ! range. Reject a corrupt/wrong file here rather than read out of bounds at
+    ! interpolation time.
+    IF ( ANY( Atlas%Class1 < 1 .OR. Atlas%Class1 > N_CLASS1 ) ) THEN
+      CALL Display_Message( ROUTINE_NAME, &
+        'class1 values out of range in '//TRIM(Filename), FAILURE )
+      GOTO 900
+    END IF
     ! Emissivity
     IF (.NOT. check(NF90_INQ_VARID(ncid,EMIS_VARNAME,vid),'inq emis')) GOTO 900
     IF (.NOT. check(NF90_GET_VAR(ncid,vid,Atlas%Emissivity),'get emis')) GOTO 900
