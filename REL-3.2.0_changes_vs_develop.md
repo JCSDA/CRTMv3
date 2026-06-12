@@ -2,6 +2,8 @@
 
 This issue catalogs the changes on `feature/btj_REL-3.2.0` relative to `develop` and identifies, for each, the brightness-temperature (TB) differences it produces in the common `ctest` regression suite (the `forward` / `tangent_linear` / `k_matrix` / `adjoint` sensor sweeps). The goal is a reference I can point others to when explaining "why did test X change."
 
+> **Refreshed 2026-06-11** to cover the full branch through REL-3.2.0 tag prep. The original catalog (items 1–6) predated the branch's second half; this revision adds the downwelling/upwelling radiance-profile outputs (§10), the `n_Stokes > 1` vector-RT fixes (§8, #318), the TELSEM2 MW-land atlas (§8, #314), the experimental `CRTM-Exp` cloud optics + DDA-ARTS ICE_CLOUD change (§8, #320), the grazing-angle reflectivity guards (§8), and the pre-release review fixes (§11; see the Round 1 / Round 2 comments below). **None of the additions changes any common-suite TB** — they are all opt-in, land/≥200-GHz-only, scalar-path-bit-identical, or new output fields. The md5 note at the foot is also corrected to the current tarball.
+
 ## Summary of TB-affecting changes
 
 | # | Change | Common ctests affected | Nature of the TB difference |
@@ -13,7 +15,7 @@ This issue catalogs the changes on `feature/btj_REL-3.2.0` relative to `develop`
 | 5 | Analytic MW-land emissivity Jacobians (issue #281, `9358caa`) | none in the common ocean sweep; **MW-over-land Surface reference data** (k_matrix/adjoint/TL) | The MW-land emissivity TL/AD were previously identically-zero stubs; they now return analytic sensitivities to `LAI`, `Vegetation_Fraction`, and `Soil_Moisture_Content`. Forward emissivity is unchanged (bit-identical), so only the Surface-Jacobian reference fields for MW-over-land scenes move (from zero to nonzero). |
 | 6 | CONST_MIXED_POLARIZATION (pol type 13) Distance_Ratio fix (`bdc7fb9`) | `tms_*` / TROPICS only | Dropped the erroneous `GeometryInfo%Distance_Ratio` scaling of the fixed polarization angle in the SfcOptics FWD/TL/AD pol-13 branches. Pol type 13 is TMS/TROPICS-only, so no common-suite sensor is affected; TMS/TROPICS BT changes. |
 
-Everything else on the branch is either inert in the common test configuration, changes the default path only for MW-water channels ≥ 200 GHz (the PARMIO backend — no common-suite sensor reaches that frequency, see §8), or only changes behavior on an error/edge path the standard scenes never exercise — see §8.
+Everything else on the branch is either inert in the common test configuration, changes the default path only for MW-water channels ≥ 200 GHz (the PARMIO backend — no common-suite sensor reaches that frequency, see §8), adds new output fields without touching the existing ones (downwelling/upwelling profiles, §10), is opt-in or land/DDA-only (TELSEM2 and `CRTM-Exp`/DDA-ICE, §8), affects only the `n_Stokes > 1` path the scalar suite never runs (§8), or only changes behavior on an error/edge path the standard scenes never exercise — see §8.
 
 ## 1. NetCDF coefficient transition
 
@@ -89,6 +91,10 @@ File: `src/SfcOptics/CRTM_SfcOptics.f90`.
 5. `tms_*` / TROPICS pol-13 `Brightness_Temperature` change → §6 (CONST_MIXED_POLARIZATION Distance_Ratio fix).
 6. Difference depends on `OMP_NUM_THREADS` → not expected; that would be a bug, not one of these changes.
 7. MW-water `Radiance` / `Brightness_Temperature` / Jacobian change on a sensor with channels ≥ 200 GHz (e.g. `mwr_aws`, TROPICS/`tms_*`) → §8 (PARMIO backend — now auto-loaded and auto-dispatched at ≥ 200 GHz; no common-suite sensor reaches that frequency).
+8. A new `Down_Radiance` / `Downwelling_Radiance(:)` / `Upwelling_Radiance(:)` field appears in the reference, or the `RTSolution` comparison gained columns → §10 (new downwelling/upwelling profile outputs; existing `Radiance`/BT unchanged).
+9. MW-over-**land** forward emissivity/BT changed wholesale (not just the Jacobian columns) → §8 (TELSEM2 atlas auto-loaded because its file is present in the coeff path; #314).
+10. MW cloud-ice (DDA-ARTS) `Radiance` / Jacobian change → §8 (`CRTM-Exp`/DDA ICE_CLOUD now scatters + habit default change; #320). Mie-TAMU default LUT is unaffected.
+11. `n_Stokes > 1` (vector-RT) result change → §8 / #318. The scalar (`n_Stokes = 1`) suite is bit-identical.
 
 ## 8. Changes that do not affect the standard regression scenes
 
@@ -110,6 +116,16 @@ These are on the branch but produce **no TB difference** in the common `ctest` c
 * **Argument-interface / hygiene** — `b94b23f` (`FitCoeff_*_Create` assumed-shape `dimensions` arg, re-applying the #192 fix correctly) and the ODCAPS `ODCAPS_AtmAbsorption.f90` / `ODCAPS_Predictor.f90` edits: thread-safety / argument-shape cleanup, no numeric change.
 * **Lifecycle wiring** — `9cebd68`, `34fbbeb`: PARMIO obs-space drivers moved onto the integrated `CRTM_Init` lifecycle; the default RT path is untouched.
 * **Repo cleanup / version bump** — removed `CRTM_V30_TEST/`, `README_JEDI.md`, `Set_CRTM_Environment.sh`, `NOTES`, the deprecated `*_NC` unit-test variants; dropped dead `Zeeman_Utility.f90` from the lib build (kept for the offline `BeCoeff_ASC2NC` tool); `LICENSE` / `VERSION.cmake` / `CRTM_Version.inc` → v3.2.0; `README.md` refreshed; per-compiler flag-file updates (GNU/Intel/IntelLLVM/Cray/XL/NVHPC).
+* **`n_Stokes > 1` vector-RT (polarized scattering) fixes** (`JCSDA/CRTMv3#318`) — `c95ac47`, `56037ca`, `3c65c8b`, `6ec846c`, `4c800db`, `81c4b16`, `3d3ce8f`, `5dd13bf`, `94760ef`, plus the Round-1 `Normalize_Phase` TL/AD mirror (`fe5104c`): corrected the ADA scattering-layer thermal source (intensity-slot-only guard `MOD(i-1,n_Stokes)==0`), the Kirchhoff column-sum bound (`n_Streams → n_Streams*n_Stokes`), the satellite intensity-row special case, the polarized phase-block normalization, the BT adjoint-seed routing to `Stokes(1)`, the K-matrix `SfcOptics%n_Stokes`-from-`Opt` sync, and propagated all of it to TL/AD/K. These were the ~30–44× cloudy-radiance inflation (#318) and its Jacobian consistency.
+  - *No common-suite TB change, by construction:* every change reduces **exactly** to the prior scalar code at `n_Stokes = 1`, and the entire regression suite runs scalar (`Options%n_Stokes` defaults to 1). The `n_Stokes > 1` path is reachable only with a ≥ 6-phase-element cloud LUT (the `CRTM-Exp` scheme below); stock LUTs are hard-rejected by the forward guard.
+  - *New coverage:* `test_VectorRT_TLADK` (Round-1, `1cc9a5b`) — TL-vs-FD on both Stokes components, full-Stokes adjoint dot-product (1e-12 tolerance, fault-injection calibrated), K-vs-AD, and an `n_Stokes=1` scalar control; gated on the `CloudCoeff_Exp_Full6.nc` LUT from #320. This is the first in-repo Jacobian coverage of the path. Remaining deferred items (fractional-cloud `n_Stokes>1` adjoint combine; surface V/H↔I/Q decoupled polarization) are tracked in #318.
+* **TELSEM2 microwave land-emissivity atlas** (`JCSDA/CRTMv3#314`) — `3697a04`, `922662b`, `3d3c6d3`, `c3ac530`, plus `src/Coefficients/.../MW_Land/TELSEM2/*`, `src/Coefficients/CRTM_MWlandCoeff.f90`, integration in `CRTM_MW_Land_SfcOptics.f90` / `CRTM_LifeCycle.f90`: an optional climatological MW land-emissivity atlas (lat/lon/month), ported from RTTOV.
+  - *Why the common suite is unaffected:* the standard sweep is ocean, and the ctest harness deliberately stages the atlas under a **non-default name** so the auto-load does not fire (`test/CMakeLists.txt`). The atlas-derived emissivity is treated as a constant (zero TL/AD), internally consistent since it depends only on lat/lon/month.
+  - *⚠️ Behavior caveat (default-path, land users):* `CRTM_Init` **auto-loads** `<File_Path>/TELSEM2.MWland.EmisCoeff.nc` if present, and the file **ships in `fix_REL-3.2.0.0.tgz`** (`fix/EmisCoeff/MW_Land/netCDF/`). A user who flattens the fix tree into one coefficient directory will silently (a) switch all MW-land forward emissivity from `NESDIS_LandEM` to TELSEM2, and (b) lose the new #281 analytic land Jacobians (the atlas path leaves TL/AD zero). This is a drop-in policy mirroring PARMIO; it needs release-note prominence or an explicit opt-in — tracked in #314.
+* **Experimental `CRTM-Exp` cloud optics + DDA-ARTS ICE_CLOUD change** (`JCSDA/CRTMv3#320`) — `7578d69`, `d04b001`, `bcb9ed4`, `7765d3d`, `f8d8dc9`, `e1eeea0`, plus `CloudCoeff_Exp_{Define,netCDF_IO}.f90`, the `CRTM_CloudScatter.f90` scheme gating, `CRTM_Parameters.f90` (`MAX_N_LEGENDRE_TERMS` 16→64): an opt-in 6-phase-element ('full-Mueller') MW cloud-optics scheme (`Cloud_Model='CRTM-Exp'`), plus a `Data_Type` discriminator (Mie-TAMU vs DDA-ARTS) on `CloudCoeff`.
+  - *Default Mie-TAMU path bit-identical:* `Data_Type` is derived at load from exactly the `ALL(Reff_MW>0)` predicate `develop` evaluated per call, never read from file, so stock `.bin`/`.nc` coefficients are fully backward-compatible; the `CRTM-Exp` scheme is reachable only by the exact `Cloud_Model` string and fails loudly on a mismatched file. `MAX_N_LEGENDRE_TERMS` 16→64 is memory-only (loops bounded by the actual term count).
+  - *⚠️ Behavior caveat (DDA-ARTS users):* for the DDA-ARTS cloud database, ICE_CLOUD now goes through the full scattering branch (was a non-scattering shortcut) **and** the default ICE_CLOUD habit changed `IceSphere(18) → IconCloudIce(6)` (`d04b001`). Both are intended (AWS 325 GHz O−B improvement) but silently change radiances/Jacobians for existing DDA users; no regression pins the new values. Needs release-note coverage. The common Mie-TAMU suite is unaffected.
+* **Grazing-angle MW-water reflectivity guards** — `e662b02` (FastemX), `1c4d4ce` (PARMIO), test `6898e2c` (`test_Grazing_SfcOptics`): clamp the MW-water reflection-correction to a physical range at the near-grazing Gaussian quadrature angles the scattering RT uses (without the guard, the FASTEM-fit reflection correction extrapolates to ~1e35 and produced −1e15 K TBs at ≥ 200 GHz scattering channels). The clamp fires only above ~84°; standard scenes never reach those angles, so no common-suite TB change. (Round-2 `4c80915` added 85° TL/AD/K cases to `test_Downwelling_TLADK`.)
 
 ## 9. Regression baselines converted from binary to netCDF (TB-neutral)
 
@@ -144,7 +160,56 @@ New / changed code:
 * All `forward`/`k_matrix`/`adjoint`/`tangent_linear`/`Aerosol_Bypass`
   drivers flipped to `NetCDF=.TRUE.` + `.nc` baseline names.
 
+## 10. Downwelling / upwelling radiance-profile outputs (new fields, TB-neutral for existing ones)
+
+Commits: `64b17db`..`c3ac530` (the "downwelling"/"upwelling" series, Phases 1–5).
+
+A new family of `RTSolution` outputs, fully differentiated (TL/AD/K) across all
+three solvers (Emission/SOI/ADA):
+
+* `Down_Radiance` — surface downwelling radiance (scalar).
+* `Downwelling_Radiance(:)` — level-resolved downwelling profile (surface→TOA).
+* `Upwelling_Radiance(:)` — level-resolved upwelling profile.
+
+Opt-in via the new `Options%Compute_Down_Radiance`,
+`Compute_Down_Radiance_Profile`, `Compute_Up_Radiance_Profile` flags (all default
+`.FALSE.`); the clear-sky (emission) surface `Down_Radiance` is always computed.
+The fractional-cloud (TCC) combine of the profiles mirrors the `Radiance` combine
+in FWD/TL/AD/K. The legacy `Obs_4_downward_P` aircraft-observer hack was retired
+(Phase 4) with prior aircraft behavior preserved.
+
+**TB effect:** none on existing fields — the forward `Radiance`/`Brightness_Temperature`
+are bit-identical. These are *additional* output fields; the always-on emission
+`Down_Radiance` now populates in the (self-seeding) reference files, but no
+committed truth file changes (the references self-seed on first run, per §9).
+The scattering downwelling/profile outputs are off by default → bit-identical to
+legacy when unused. Verified by `test_Downwelling_TLADK` (14 cases: TL-vs-FD,
+adjoint dot-product, K-vs-AD, and the surface-profile==scalar identity, across
+clear/SOI/ADA × overcast/fractional, plus Round-2 grazing-angle cases).
+
+## 11. Pre-release review fixes (Round 1 / Round 2)
+
+A full validity/completeness review of the branch (2026-06-11) produced two
+rounds of pre-tag fixes to branch-only code — see the dedicated comments below
+("Pre-release fix thread"). **None changes any common-suite TB** (the scalar RT
+path is bit-identical throughout; suite 213/213). Summary:
+
+* **Round 1** (`b19cd61`, `9eda275`, `78aac3d`, `8f75a59`, `fe5104c`, test `1cc9a5b`):
+  TL `Down_Radiance` OMP race; SOI `Compute_*` gating; MW-land soil-moisture
+  Jacobian `+Inf` at SMC=0 (#281); `Resolve_Coeff_Format` extension authority;
+  the `Normalize_Phase` `n_Stokes>1` TL/AD mirror (#318); `test_VectorRT_TLADK`.
+* **Round 2** (`f7000b6`, `8f39e93`, `4be36b1`, `6b188e7`, `4c80915`): K-matrix
+  Exp-scheme Legendre hook; `Options` `Compute_*` flag plumbing
+  (`SetValue`/`Inspect`/`Equal`); rank-1 netCDF `n_Channels/=0` parity guard;
+  TELSEM2 longitude-wrap + `class1` validation; grazing-angle + ≥200 GHz PARMIO
+  test cases + `OMP_Speedup` `RUN_SERIAL`.
+
 ## Appendix: commits `develop..HEAD` (oldest → newest)
+
+> **Note:** the list below is the original snapshot through `57c9911`. The
+> branch has since added the downwelling/upwelling (§10), `n_Stokes>1` (§8/#318),
+> TELSEM2 (§8/#314), and `CRTM-Exp`/DDA-ICE (§8/#320) series plus the §11
+> pre-release fixes; for the full current list use `git log --oneline develop..HEAD`.
 
 ```
 fa64893  updating internal versions to v3.2.0 in preparation for REL-3.2.0
@@ -207,7 +272,8 @@ bdc7fb9  fix(SfcOptics): drop Distance_Ratio scaling in CONST_MIXED_POLARIZATION
 
 (`69edea8`, `a7a6114` are merges pulling `develop` forward.)
 
-> **md5sum note:** the appendix line for `33a23da` records the interim tarball hash
-> `5777242387228359869325e1a0505f85`. That was later superseded by `43661a9`; the
-> **current** `fix_REL-3.2.0.0.tgz` md5 is `056d34c0fadfd67444e69907b013a30a`, which
+> **md5sum note (updated 2026-06-11):** the tarball was re-rolled again after the
+> appendix snapshot — `43661a9`'s `056d34c0fadfd67444e69907b013a30a` was superseded
+> by `99a1fa8` when the TELSEM2 MW-land atlas was added to the tarball. The
+> **current** `fix_REL-3.2.0.0.tgz` md5 is `3dcef94c129efb78c85cdf542fca55ae`, which
 > matches both `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt`.
