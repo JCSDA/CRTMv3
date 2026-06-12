@@ -633,6 +633,23 @@ else()
   message(STATUS "test_CloudCoeff_Exp_Forward not registered (needs mwr_aws coeffs + CloudCoeff_Exp_Full6.nc).")
 endif()
 
+# test_VectorRT_TLADK: TL/AD/K correctness for the vector-RT (n_Stokes>1)
+# cloud-scattering path. The n_Stokes>1 ADA branch needs a >=6-phase-element
+# LUT (the CRTM-Exp scheme), so it is unreachable by every other test; this is
+# its only Jacobian coverage. Verifies TL-vs-central-FD on both Stokes
+# components (d/dWater_Content for the polarized phase chain, d/dTemperature
+# for the thermal source), the full-Stokes adjoint dot-product, K-vs-AD, and
+# an n_Stokes=1 scalar control on the same scene. Same gating as the Exp
+# forward test.
+add_executable(test_VectorRT_TLADK mains/unit/Unit_Test/test_VectorRT_TLADK.f90)
+target_link_libraries(test_VectorRT_TLADK PRIVATE crtm)
+if(AWS_COEFFS_PRESENT AND CLOUDCOEFF_EXP_PRESENT)
+  add_test(NAME test_VectorRT_TLADK
+           COMMAND $<TARGET_FILE:test_VectorRT_TLADK>)
+else()
+  message(STATUS "test_VectorRT_TLADK not registered (needs mwr_aws coeffs + CloudCoeff_Exp_Full6.nc).")
+endif()
+
 # test_Grazing_SfcOptics: regression test for the catastrophic-reflectivity
 # guard in the MW-water surface optics (CRTM_FastemX and CRTM_PARMIO). Drives
 # both backends directly at grazing zenith angles + 325 GHz (where the reflection
