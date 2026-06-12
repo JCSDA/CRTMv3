@@ -366,27 +366,65 @@ CONTAINS
 !                             DIMENSION:  Conformable with Options object
 !                             ATTRIBUTES: INTENT(IN), OPTIONAL
 !
+!   Compute_Down_Radiance:    Set this logical argument to compute the surface
+!                             downwelling radiance (RTSolution%Down_Radiance) for
+!                             the scattering solvers (ADA/SOI). The clear-sky
+!                             (emission) downwelling is always computed.
+!                             If == .TRUE. , scattering downwelling is computed
+!                                == .FALSE., it is not [DEFAULT]
+!                             UNITS:      N/A
+!                             TYPE:       LOGICAL
+!                             DIMENSION:  Conformable with Options object
+!                             ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+!   Compute_Down_Radiance_Profile:
+!                             Set this logical argument to compute the level-resolved
+!                             downwelling radiance profile
+!                             (RTSolution%Downwelling_Radiance(:)), fully
+!                             differentiated (TL/AD/K).
+!                             If == .TRUE. , the profile is computed
+!                                == .FALSE., it is not [DEFAULT]
+!                             UNITS:      N/A
+!                             TYPE:       LOGICAL
+!                             DIMENSION:  Conformable with Options object
+!                             ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+!   Compute_Up_Radiance_Profile:
+!                             Set this logical argument to compute the level-resolved
+!                             upwelling radiance profile
+!                             (RTSolution%Upwelling_Radiance(:)), fully
+!                             differentiated (TL/AD/K).
+!                             If == .TRUE. , the profile is computed
+!                                == .FALSE., it is not [DEFAULT]
+!                             UNITS:      N/A
+!                             TYPE:       LOGICAL
+!                             DIMENSION:  Conformable with Options object
+!                             ATTRIBUTES: INTENT(IN), OPTIONAL
+!
 !:sdoc-:
 !--------------------------------------------------------------------------------
 
   ELEMENTAL SUBROUTINE CRTM_Options_SetValue( &
-    self                   , &
-    Check_Input            , &
-    Use_Old_MWSSEM         , &
-    Use_Antenna_Correction , &
-    Apply_NLTE_Correction  , &
-    Set_ADA_RT             , &
-    Set_SOI_RT             , &
-    Include_Scattering     , &
-    Set_Maximum_Overlap    , &
-    Set_Random_Overlap     , &
-    Set_MaxRan_Overlap     , &
-    Set_Average_Overlap    , &
-    Set_Overcast_Overlap   , &
-    Use_Emissivity         , &
-    Use_Direct_Reflectivity, &
-    n_Streams              , &
-    Aircraft_Pressure        )
+    self                         , &
+    Check_Input                  , &
+    Use_Old_MWSSEM               , &
+    Use_Antenna_Correction       , &
+    Apply_NLTE_Correction        , &
+    Set_ADA_RT                   , &
+    Set_SOI_RT                   , &
+    Include_Scattering           , &
+    Set_Maximum_Overlap          , &
+    Set_Random_Overlap           , &
+    Set_MaxRan_Overlap           , &
+    Set_Average_Overlap          , &
+    Set_Overcast_Overlap         , &
+    Use_Emissivity               , &
+    Use_Direct_Reflectivity      , &
+    n_Streams                    , &
+    Aircraft_Pressure            , &
+    Compute_Down_Radiance        , &
+    Compute_Down_Radiance_Profile, &
+    Compute_Up_Radiance_Profile    )
     ! Arguments
     TYPE(CRTM_Options_type), INTENT(IN OUT) :: self
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Check_Input
@@ -405,6 +443,9 @@ CONTAINS
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_Direct_Reflectivity
     INTEGER ,      OPTIONAL, INTENT(IN)     :: n_Streams
     REAL(fp),      OPTIONAL, INTENT(IN)     :: Aircraft_Pressure
+    LOGICAL ,      OPTIONAL, INTENT(IN)     :: Compute_Down_Radiance
+    LOGICAL ,      OPTIONAL, INTENT(IN)     :: Compute_Down_Radiance_Profile
+    LOGICAL ,      OPTIONAL, INTENT(IN)     :: Compute_Up_Radiance_Profile
 
     ! Set the "direct copy" components
     IF ( PRESENT(Check_Input           ) ) self%Check_Input            = Check_Input
@@ -413,6 +454,11 @@ CONTAINS
     IF ( PRESENT(Apply_NLTE_Correction ) ) self%Apply_NLTE_Correction  = Apply_NLTE_Correction
     IF ( PRESENT(Include_Scattering    ) ) self%Include_Scattering     = Include_Scattering
     IF ( PRESENT(Aircraft_Pressure     ) ) self%Aircraft_Pressure      = Aircraft_Pressure
+    IF ( PRESENT(Compute_Down_Radiance ) ) self%Compute_Down_Radiance  = Compute_Down_Radiance
+    IF ( PRESENT(Compute_Down_Radiance_Profile) ) &
+      self%Compute_Down_Radiance_Profile = Compute_Down_Radiance_Profile
+    IF ( PRESENT(Compute_Up_Radiance_Profile) ) &
+      self%Compute_Up_Radiance_Profile = Compute_Up_Radiance_Profile
 
     ! Set the "minimal processing" components
     IF ( PRESENT(n_Streams) ) THEN
@@ -841,6 +887,10 @@ CONTAINS
     WRITE(*,'(3x,"Include scattering flag     :",1x,l1)') self%Include_Scattering
     WRITE(*,'(3x,"Use n_Streams flag          :",1x,l1)') self%Use_n_Streams
     WRITE(*,'(3x,"n_Streams                   :",1x,i0)') self%n_Streams
+    WRITE(*,'(3x,"n_Stokes                    :",1x,i0)') self%n_Stokes
+    WRITE(*,'(3x,"Compute down radiance       :",1x,l1)') self%Compute_Down_Radiance
+    WRITE(*,'(3x,"Compute down radiance prof. :",1x,l1)') self%Compute_Down_Radiance_Profile
+    WRITE(*,'(3x,"Compute up radiance profile :",1x,l1)') self%Compute_Up_Radiance_Profile
     WRITE(*,'(3x,"Cloud cover overlap method  :",1x,a )') TRIM(CloudCover_Overlap_Name(self%Overlap_Id))
     ! ...Emissivity component
     IF ( CRTM_Options_Associated(self) ) THEN
@@ -1358,6 +1408,10 @@ CONTAINS
                (x%Aircraft_Pressure      .EqualTo. y%Aircraft_Pressure     ) .AND. &
                (x%Use_n_Streams            .EQV.   y%Use_n_Streams         ) .AND. &
                (x%n_Streams                 ==     y%n_Streams             ) .AND. &
+               (x%n_Stokes                  ==     y%n_Stokes              ) .AND. &
+               (x%Compute_Down_Radiance         .EQV. y%Compute_Down_Radiance        ) .AND. &
+               (x%Compute_Down_Radiance_Profile .EQV. y%Compute_Down_Radiance_Profile) .AND. &
+               (x%Compute_Up_Radiance_Profile   .EQV. y%Compute_Up_Radiance_Profile  ) .AND. &
                (x%Include_Scattering       .EQV.   y%Include_Scattering    ) .AND. &
                (x%Overlap_Id                ==     y%Overlap_Id            )
 
@@ -1441,6 +1495,11 @@ CONTAINS
 
 
     ! Read the optional values
+    ! NOTE: the binary record format deliberately excludes the newer type
+    ! components (n_Stokes, Compute_Down_Radiance, Compute_Down_Radiance_Profile,
+    ! Compute_Up_Radiance_Profile) -- they take their type defaults on read.
+    ! Adding them is a file-format change that must be coordinated with
+    ! Write_Record and existing Options files.
     ! ...Input checking logical
     err_stat = ReadLogical_Binary_File( fid, opt%Check_Input )
     IF ( err_stat /= SUCCESS ) THEN
