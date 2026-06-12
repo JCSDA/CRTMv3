@@ -957,7 +957,7 @@ CONTAINS
         ! never lost to a later SUCCESS write by another thread.
         thread_error = SUCCESS
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
-!$OMP    FIRSTPRIVATE(ln, r_cloudy)                                               &
+!$OMP    FIRSTPRIVATE(ln, r_cloudy, r_cloudy_dn)                                  &
 !$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, Err_Thread,    &
 !$OMP          start_ch, end_ch, Wavenumber, transmittance, transmittance_TL,   &
 !$OMP          transmittance_clear, transmittance_clear_TL, l, mth_Azi, ks, Status_FWD,Status_TL) &
