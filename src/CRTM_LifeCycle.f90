@@ -1442,11 +1442,14 @@ CONTAINS
 ! Resolve_Coeff_Format
 !
 ! Decide which format/file/directory a coefficient loader should actually use
-! given a requested format and the user-supplied paths. If the requested file
-! exists, return it unchanged. Otherwise, probe the alternate-format
-! equivalent (NetCDF <-> Binary) and rewrite Filename, Format, and
-! Resolved_Path in place so the caller transparently loads the available
-! format. Supports the REL-3.2.0 Binary -> NetCDF transition.
+! given a requested format and the user-supplied paths. The filename extension
+! is authoritative for the requested format (.nc/.nc4 => netCDF, .bin =>
+! Binary), so an explicit legacy '<name>.bin' filename is read with the Binary
+! reader even though the default Format is netCDF. If the requested file
+! exists, return it (with the reconciled Format). Otherwise, probe the
+! alternate-format equivalent (NetCDF <-> Binary) and rewrite Filename,
+! Format, and Resolved_Path in place so the caller transparently loads the
+! available format. Supports the REL-3.2.0 Binary -> NetCDF transition.
 !
 ! NC_Path and Bin_Path are the user's preferred directories for each format
 ! (typically NC_File_Path and File_Path arguments to CRTM_Init). When only
@@ -1475,6 +1478,19 @@ CONTAINS
     noisy = .TRUE.
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
 
+    ! The filename extension is authoritative for the format of the file the
+    ! caller actually named: a legacy caller passing an explicit '<name>.bin'
+    ! while Format holds the (netCDF) default must get the Binary reader, not
+    ! the netCDF reader pointed at a binary file (and vice versa). Unrecognized
+    ! extensions leave the requested Format in effect.
+    dot = INDEX(Filename, '.', BACK=.TRUE.)
+    IF ( dot >= 1 ) THEN
+      SELECT CASE ( TRIM(Filename(dot:)) )
+        CASE ( '.nc', '.nc4' ) ; Format = 'netCDF'
+        CASE ( '.bin' )        ; Format = 'Binary'
+      END SELECT
+    END IF
+
     requested_name   = Filename
     requested_format = Format
 
@@ -1488,7 +1504,6 @@ CONTAINS
     ! Already on disk: nothing to do.
     IF ( File_Exists(TRIM(Resolved_Path)//TRIM(Filename)) ) RETURN
 
-    dot = INDEX(Filename, '.', BACK=.TRUE.)
     IF ( dot < 1 ) RETURN  ! No extension; can't infer alternate.
 
     SELECT CASE ( TRIM(Filename(dot:)) )
