@@ -1440,9 +1440,9 @@ CONTAINS
       CASE (FROZEN)
         ! ICE_CLOUD's legacy MW shortcut (single non-scattering bin j=1, w=0) is appropriate only for
         ! the Mie-TAMU coeff, which has no submm reff/albedo data for cloud ice. With the DDA-ARTS
-        ! database ICE_CLOUD maps to a full habit (IceSphere) that DOES carry scattering data, so route
-        ! it through the scattering ELSE branch below -- exactly as IR/VIS (Get_Cloud_Opt_IR) and all
-        ! other frozen habits already do. (Gate on the Mie-TAMU discriminator ALL(Reff_MW>0).)
+        ! database ICE_CLOUD maps to a full habit (IconCloudIce) that DOES carry scattering data, so
+        ! route it through the scattering ELSE branch below -- exactly as IR/VIS (Get_Cloud_Opt_IR) and
+        ! all other frozen habits already do. (Gate on the CloudCoeff Data_Type scheme flag.)
         IF (Cloud_Type .EQ. ICE_CLOUD .AND. CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
            j = 1
            CALL interp_1D( CloudC%ke_S_MW(csi%i1:csi%i2,j,k), csi%wlp, ke )

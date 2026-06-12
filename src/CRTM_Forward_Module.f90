@@ -239,7 +239,7 @@ CONTAINS
     Options    ) &  ! Optional input, M
   RESULT( Error_Status )
     ! Arguments
-    USE CRTM_CloudCoeff,          ONLY: CloudC, Active_Cloud_Scheme, CRTM_EXP_CLOUDCOEFF
+    USE CRTM_CloudCoeff,          ONLY: CloudC
     USE CRTM_AerosolCoeff,        ONLY: AeroC
     TYPE(CRTM_Atmosphere_type),        INTENT(IN OUT) :: Atmosphere(:)     ! M
     TYPE(CRTM_Surface_type),           INTENT(IN)     :: Surface(:)        ! M
