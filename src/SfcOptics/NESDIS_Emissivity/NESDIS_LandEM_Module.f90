@@ -521,15 +521,18 @@ subroutine Soil_Diel(freq,t_soil,vmc,rhob,rhos,sand,clay,esm,desm_dvmc)
   ! Analytic d(esm)/d(vmc): esm above is the pre-power "inner" value. The water
   ! permittivity esw depends on vmc only through the imaginary part of es1
   ! (= -K/vmc), so d(esw)/d(vmc) = +K/vmc^2 (imaginary). es2 is independent of vmc.
+  ! At vmc = 0 the vmc**(beta-1) term is unbounded for beta < 1 (soil types with
+  ! high sand fraction), so treat the boundary as a zero-derivative region — the
+  ! same convention as the emissivity/input clip handling.
   IF ( PRESENT(desm_dvmc) ) THEN
     IF ( vmc > ZERO ) THEN
       des1_dvmc = CMPLX(ZERO, rhoef*(rhos-rhob)/(TWOPI*f*esof*rhos*vmc*vmc), fp)
+      dinner_dvmc = beta*vmc**(beta-ONE)*esw**alpha &
+                  + vmc**beta*alpha*esw**(alpha-ONE)*des1_dvmc - ONE
+      desm_dvmc   = (ONE/alpha)*esm**(ONE/alpha - ONE)*dinner_dvmc
     ELSE
-      des1_dvmc = CMPLX(ZERO, ZERO, fp)
+      desm_dvmc = CMPLX(ZERO, ZERO, fp)
     END IF
-    dinner_dvmc = beta*vmc**(beta-ONE)*esw**alpha &
-                + vmc**beta*alpha*esw**(alpha-ONE)*des1_dvmc - ONE
-    desm_dvmc   = (ONE/alpha)*esm**(ONE/alpha - ONE)*dinner_dvmc
   END IF
 
   esm = esm**(ONE/alpha)
