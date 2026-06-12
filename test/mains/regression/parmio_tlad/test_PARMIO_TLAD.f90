@@ -93,6 +93,20 @@ PROGRAM test_PARMIO_TLAD
        azimuth     = -22.0_fp, &
        trans       = 0.80_fp, &
        nfail       = nfail)
+  ! >= 200 GHz: the only LUT group the integrated CRTM dispatcher actually
+  ! routes to (CRTM_MW_Water_SfcOptics sends MW-water channels >= 200 GHz to
+  ! PARMIO). AWS 325 GHz sideband conditions; previously this group had no
+  ! direct kernel FD/adjoint coverage.
+  CALL Run_Case( &
+       label       = 'sss_nominal_m_325', &
+       frequency   = 325.15_fp, &
+       theta       = 53.0_fp, &
+       temperature = 290.15_fp, &
+       salinity    = 34.5_fp, &
+       wind_speed  = 9.0_fp, &
+       azimuth     = 15.0_fp, &
+       trans       = 0.55_fp, &
+       nfail       = nfail)
 
   CALL CRTM_PARMIOCoeff_Destroy()
 

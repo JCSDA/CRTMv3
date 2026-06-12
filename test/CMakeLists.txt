@@ -819,6 +819,13 @@ foreach(regtype IN LISTS regression_types)
     foreach(sensor_id IN LISTS ${testtype}_Sensor_Ids)
         add_test(NAME test_${regtype}_${testtype}_${sensor_id}
                  COMMAND $<TARGET_FILE:test_${regtype}_test_${testtype}> "${sensor_id}")
+        # The speedup test asserts a wall-clock threading speedup (>= 1.20x);
+        # under `ctest -j` the host is oversubscribed by sibling tests and the
+        # measurement flakes. Run it with the machine to itself.
+        if(testtype STREQUAL "OMP_Speedup")
+          set_tests_properties(test_${regtype}_${testtype}_${sensor_id}
+                               PROPERTIES RUN_SERIAL TRUE)
+        endif()
     endforeach()
   endforeach()
 endforeach()

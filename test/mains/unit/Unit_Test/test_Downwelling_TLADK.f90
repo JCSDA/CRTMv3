@@ -47,6 +47,7 @@ PROGRAM test_Downwelling_TLADK
   LOGICAL :: ok_toa, ok_dwn, ok_toa_s, ok_dwn_s, ok_toa_a, ok_dwn_a
   LOGICAL :: ok_dwn_p, ok_dwn_sp, ok_dwn_ap, ok_dwn_cp
   LOGICAL :: ok_up_p, ok_up_sp, ok_up_ap, ok_up_cp
+  LOGICAL :: ok_dwn_g, ok_dwn_ag
 
   TYPE(CRTM_ChannelInfo_type) :: ChannelInfo(N_SENSORS)
   TYPE(CRTM_Geometry_type)    :: Geometry(N_PROFILES)
@@ -133,6 +134,23 @@ PROGRAM test_Downwelling_TLADK
   CALL verify( .FALSE., .TRUE. , RT_ADA, ONE,    0, PROF_LEVEL, ok_up_ap )  ! ADA up profile (overcast: isolate solver)
   CALL verify( .FALSE., .TRUE. , RT_ADA, 0.5_fp, 0, PROF_LEVEL, ok_up_cp )  ! ADA up profile (fractional: + combine)
 
+  ! --- grazing-angle cases (design doc C2): sensor zenith 85 deg, where the
+  ! MW-water catastrophic-reflectivity guard (CRTM_FastemX clamp, 84-86 deg)
+  ! engages on the sensor-angle surface optics. Verifies the clamp branch is
+  ! TL/AD-consistent through the full model (a clamp active in FWD must kill
+  ! the corresponding derivative identically in TL and AD). Check_Input is
+  ! disabled: the 80-deg geometry validation cap would otherwise reject the
+  ! angle before the RT runs.
+  WRITE(*,'(/5x,"--- grazing-angle (85 deg) clamp-branch cases ---")')
+  CALL CRTM_Geometry_SetValue( Geometry, Sensor_Zenith_Angle = 85.0_fp )
+  Options(:)%Check_Input = .FALSE.
+  CALL verify( .TRUE. , .FALSE., RT_ADA, ZERO, 0, 0, ok_dwn_g  )  ! clear-sky Down_Radiance (emission, clamp at sensor angle)
+  CALL verify( .TRUE. , .TRUE. , RT_ADA, ONE,  0, 0, ok_dwn_ag )  ! ADA Down_Radiance (overcast, clamp at sensor + quadrature angles)
+  Options(:)%Check_Input = .TRUE.
+  CALL CRTM_Geometry_SetValue( Geometry, &
+                               Sensor_Zenith_Angle = ZENITH_ANGLE, &
+                               Sensor_Scan_Angle   = SCAN_ANGLE )
+
   Error_Status = CRTM_Destroy( ChannelInfo )
 
   WRITE(*,'(/5x,a)') '====================================================='
@@ -150,9 +168,12 @@ PROGRAM test_Downwelling_TLADK
   WRITE(*,'(5x,"SOI Upwelling profile          : ",a)') MERGE('PASS','FAIL',ok_up_sp)
   WRITE(*,'(5x,"ADA Upwelling profile          : ",a)') MERGE('PASS','FAIL',ok_up_ap)
   WRITE(*,'(5x,"ADA Upwelling profile combine  : ",a)') MERGE('PASS','FAIL',ok_up_cp)
+  WRITE(*,'(5x,"grazing clear-sky Down_Radiance: ",a)') MERGE('PASS','FAIL',ok_dwn_g)
+  WRITE(*,'(5x,"grazing ADA Down_Radiance      : ",a)') MERGE('PASS','FAIL',ok_dwn_ag)
   IF ( ok_toa .AND. ok_dwn .AND. ok_toa_s .AND. ok_dwn_s .AND. ok_toa_a .AND. ok_dwn_a .AND. &
        ok_dwn_p .AND. ok_dwn_sp .AND. ok_dwn_ap .AND. ok_dwn_cp .AND. &
-       ok_up_p .AND. ok_up_sp .AND. ok_up_ap .AND. ok_up_cp ) THEN
+       ok_up_p .AND. ok_up_sp .AND. ok_up_ap .AND. ok_up_cp .AND. &
+       ok_dwn_g .AND. ok_dwn_ag ) THEN
     WRITE(*,'(5x,a)') 'ALL CHECKS PASSED'
     STOP 0
   ELSE
