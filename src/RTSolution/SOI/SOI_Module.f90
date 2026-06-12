@@ -494,17 +494,19 @@ CONTAINS
         !----------------
         s_Rad_UP_TL( Index_Sat_Angle ) = s_Rad_UP_TL( Index_Sat_Angle ) + s_IterRad_UP_TL( Index_Sat_Angle, 0, iter )
 
-        ! Surface downwelling TL: sum over orders of the per-order surface downwelling TL
-        IF ( PRESENT(down_rad_TL_out) ) &
+        ! Surface downwelling TL: sum over orders of the per-order surface downwelling TL.
+        ! Opt-in (mirrors the ADA gate): with the flag off the FWD output is zero, so the
+        ! TL output stays at the zero it was initialized to above.
+        IF ( PRESENT(down_rad_TL_out) .AND. RTV%Compute_Down_Radiance ) &
           down_rad_TL_out = down_rad_TL_out + s_IterRad_DOWN_TL( Index_Sat_Angle, n_Layers, iter )
 
-        ! Level-resolved downwelling profile TL: sum over orders at every level.
-        IF ( PRESENT(down_rad_prof_TL_out) ) &
+        ! Level-resolved downwelling profile TL: sum over orders at every level (opt-in).
+        IF ( PRESENT(down_rad_prof_TL_out) .AND. RTV%Compute_Down_Radiance_Profile ) &
           down_rad_prof_TL_out(1:n_Layers) = down_rad_prof_TL_out(1:n_Layers) &
             + s_IterRad_DOWN_TL( Index_Sat_Angle, 1:n_Layers, iter )
 
-        ! Level-resolved upwelling profile TL: sum over orders at every level.
-        IF ( PRESENT(up_rad_prof_TL_out) ) &
+        ! Level-resolved upwelling profile TL: sum over orders at every level (opt-in).
+        IF ( PRESENT(up_rad_prof_TL_out) .AND. RTV%Compute_Up_Radiance_Profile ) &
           up_rad_prof_TL_out(1:n_Layers) = up_rad_prof_TL_out(1:n_Layers) &
             + s_IterRad_UP_TL( Index_Sat_Angle, 1:n_Layers, iter )
 
@@ -590,10 +592,11 @@ CONTAINS
       DO iter = RTV%Number_SOI_Iter, 1, -1
         s_IterRad_UP_AD( Index_Sat_Angle, 0, iter ) = s_Rad_UP_AD( Index_Sat_Angle )
 
-        ! Adjoint of the level-resolved upwelling profile output (opt-in): each level's
-        ! per-order upwelling receives that level's seed (transpose of the TL order-sum).
-        ! Injected before the upward-integration AD below, which propagates it.
-        IF ( PRESENT(up_rad_prof_AD_in) ) &
+        ! Adjoint of the level-resolved upwelling profile output (opt-in, mirrors the
+        ! ADA gate): each level's per-order upwelling receives that level's seed
+        ! (transpose of the TL order-sum). Injected before the upward-integration AD
+        ! below, which propagates it.
+        IF ( PRESENT(up_rad_prof_AD_in) .AND. RTV%Compute_Up_Radiance_Profile ) &
           s_IterRad_UP_AD( Index_Sat_Angle, 1:n_Layers, iter ) = &
             s_IterRad_UP_AD( Index_Sat_Angle, 1:n_Layers, iter ) + up_rad_prof_AD_in(1:n_Layers)
 !---------------------------------------
@@ -649,16 +652,18 @@ CONTAINS
           s_IterRad_UP_AD( i, n_Layers, iter ) = ZERO
         END DO
 
-        ! Adjoint of the surface downwelling radiance output (opt-in). The FWD total is a
-        ! sum over orders, so each order's surface downwelling receives the same seed.
-        ! Injected after the surface-reflection AD and before the downward-sweep AD below.
-        IF ( PRESENT(down_rad_AD_in) ) &
+        ! Adjoint of the surface downwelling radiance output (opt-in, mirrors the ADA
+        ! gate). The FWD total is a sum over orders, so each order's surface downwelling
+        ! receives the same seed. Injected after the surface-reflection AD and before
+        ! the downward-sweep AD below.
+        IF ( PRESENT(down_rad_AD_in) .AND. RTV%Compute_Down_Radiance ) &
           s_IterRad_DOWN_AD( Index_Sat_Angle, n_Layers, iter ) = &
             s_IterRad_DOWN_AD( Index_Sat_Angle, n_Layers, iter ) + down_rad_AD_in
 
-        ! Adjoint of the level-resolved downwelling profile output (opt-in): each level's
-        ! per-order downwelling receives that level's seed (transpose of the TL order-sum).
-        IF ( PRESENT(down_rad_prof_AD_in) ) &
+        ! Adjoint of the level-resolved downwelling profile output (opt-in, mirrors the
+        ! ADA gate): each level's per-order downwelling receives that level's seed
+        ! (transpose of the TL order-sum).
+        IF ( PRESENT(down_rad_prof_AD_in) .AND. RTV%Compute_Down_Radiance_Profile ) &
           s_IterRad_DOWN_AD( Index_Sat_Angle, 1:n_Layers, iter ) = &
             s_IterRad_DOWN_AD( Index_Sat_Angle, 1:n_Layers, iter ) + down_rad_prof_AD_in(1:n_Layers)
 
