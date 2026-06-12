@@ -1178,6 +1178,17 @@ CONTAINS
       err_stat = Read_Surface_Rank2_NetCDF( Filename, tmp2, noisy, &
                    n_Channels = nch, n_Profiles = nprof )
       IF ( err_stat == SUCCESS ) THEN
+        ! Parity with the binary rank-1 path: a profile-only file must carry the
+        ! true n_Channels == 0 (stored as a global attribute; the channel
+        ! dimension is forced to 1). Reject a rank-2 (K-matrix) file handed to
+        ! the rank-1 reader rather than silently returning its channel-1 slice.
+        IF ( nch /= 0 ) THEN
+          err_stat = FAILURE
+          CALL Display_Message( ROUTINE_NAME, &
+            'n_Channels in '//TRIM(Filename)//' is not zero for a rank-1 '//&
+            '(profiles only) Surface read.', err_stat )
+          RETURN
+        END IF
         Surface = tmp2(1,:)   ! auto-allocates Surface(M)
         IF ( PRESENT(n_Channels) ) n_Channels = nch
         IF ( PRESENT(n_Profiles) ) n_Profiles = nprof
