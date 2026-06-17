@@ -99,9 +99,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:            Set this logical argument to access netCDF format
 !                          CloudCoeff datafiles.
-!                          If == .FALSE., file format is BINARY [DEFAULT].
-!                             == .TRUE.,  file format is NETCDF.
-!                          If not specified, default is .FALSE.
+!                          If == .FALSE., file format is BINARY.
+!                             == .TRUE.,  file format is NETCDF [DEFAULT].
+!                          If not specified, default is .TRUE.
 !                          UNITS:      N/A
 !                          TYPE:       LOGICAL
 !                          DIMENSION:  Scalar
@@ -262,7 +262,7 @@ CONTAINS
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    Binary = .TRUE.
+    Binary = .FALSE.
     IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
 
@@ -340,9 +340,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:         Set this logical argument to access netCDF format
 !                       CloudCoeff datafiles.
-!                       If == .FALSE., file format is BINARY [DEFAULT].
-!                          == .TRUE.,  file format is NETCDF.
-!                       If not specified, default is .FALSE.
+!                       If == .FALSE., file format is BINARY.
+!                          == .TRUE.,  file format is NETCDF [DEFAULT].
+!                       If not specified, default is .TRUE.
 !                       UNITS:      N/A
 !                       TYPE:       LOGICAL
 !                       DIMENSION:  Scalar
@@ -423,7 +423,7 @@ CONTAINS
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    Binary = .TRUE.
+    Binary = .FALSE.
     IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
     ! Call the appropriate function
@@ -481,9 +481,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:         Set this logical argument to access netCDF format
 !                       CloudCoeff datafiles.
-!                       If == .FALSE., file format is BINARY [DEFAULT].
-!                          == .TRUE.,  file format is NETCDF.
-!                       If not specified, default is .FALSE.
+!                       If == .FALSE., file format is BINARY.
+!                          == .TRUE.,  file format is NETCDF [DEFAULT].
+!                       If not specified, default is .TRUE.
 !                       UNITS:      N/A
 !                       TYPE:       LOGICAL
 !                       DIMENSION:  Scalar
@@ -563,7 +563,7 @@ CONTAINS
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    Binary = .TRUE.
+    Binary = .FALSE.
     IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
     ! Call the appropriate function

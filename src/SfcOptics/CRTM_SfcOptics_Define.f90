@@ -503,8 +503,8 @@ CONTAINS
 
     ! Check scalars
     ! ...Logicals
-    IF ( (x%Compute        .NEQV. y%Compute       ) .OR. &
-         (x%Use_New_MWSSEM .NEQV. y%Use_New_MWSSEM) ) RETURN
+    IF ( (x%Compute          .NEQV. y%Compute         ) .OR. &
+         (x%Use_New_MWSSEM   .NEQV. y%Use_New_MWSSEM  ) ) RETURN
     ! ...Other types
     IF ( (.NOT. Compares_Within_Tolerance(x%Azimuth_Angle,y%Azimuth_Angle,n)) .OR. &
          (.NOT. Compares_Within_Tolerance(x%Transmittance,y%Transmittance,n)) .OR. &

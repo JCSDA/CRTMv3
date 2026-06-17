@@ -36,6 +36,7 @@ PROGRAM test_Zeeman
   !
   ! Module usage
   USE CRTM_Module
+  USE CRTM_RTSolution_Diff, ONLY: Report_RTSolution_Diff
   ! Disable all implicit typing
   IMPLICIT NONE
   ! ============================================================================
@@ -242,11 +243,11 @@ PROGRAM test_Zeeman
 
   ! 8a. Create the output file if it does not exist
   ! -----------------------------------------------
-  rts_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.bin'
+  rts_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.nc'
   IF ( .NOT. File_Exists(rts_File) ) THEN
     Message = 'RTSolution save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
-    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, Quiet=.TRUE. )
+    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating RTSolution save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -256,7 +257,7 @@ PROGRAM test_Zeeman
 
   ! 8b. Inquire the saved file
   ! --------------------------
-  Error_Status = CRTM_RTSolution_InquireFile( rts_File, &
+  Error_Status = CRTM_RTSolution_InquireFile( rts_File, NetCDF=.TRUE., &
                                               n_Channels = n_l, &
                                               n_Profiles = n_m )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -284,7 +285,7 @@ PROGRAM test_Zeeman
 
   ! 8e. Read the saved data
   ! -----------------------
-  Error_Status = CRTM_RTSolution_ReadFile( rts_File, rts, Quiet=.TRUE. )
+  Error_Status = CRTM_RTSolution_ReadFile( rts_File, rts, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading RTSolution save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -299,9 +300,10 @@ PROGRAM test_Zeeman
   ELSE
     Message = 'RTSolution results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_Diff( actual=RTSolution, expected=rts, label=PROGRAM_NAME )
     ! Write the current RTSolution results to file
-    rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.bin'
-    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, Quiet=.TRUE. )
+    rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.nc'
+    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary RTSolution save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )

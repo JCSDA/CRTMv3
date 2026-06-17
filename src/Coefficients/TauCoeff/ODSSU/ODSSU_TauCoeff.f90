@@ -30,9 +30,10 @@ MODULE ODSSU_TauCoeff
   ! -----------------
   ! Module use
   USE Message_Handler   , ONLY: SUCCESS, FAILURE, WARNING, Display_Message
-  USE ODSSU_Define      , ONLY: ODSSU_TauCoeff_type    => ODSSU_type, &          
-                                ODSSU_Destroy_TauCoeff => Destroy_ODSSU        
+  USE ODSSU_Define      , ONLY: ODSSU_TauCoeff_type    => ODSSU_type, &
+                                ODSSU_Destroy_TauCoeff => Destroy_ODSSU
   USE ODSSU_Binary_IO   , ONLY: Read_TauCoeff_Binary   => Read_ODSSU_Binary
+  USE ODSSU_netCDF_IO   , ONLY: Read_TauCoeff_netCDF   => Read_ODSSU_netCDF
   USE CRTM_Parameters   , ONLY: MAX_N_SENSORS           , &
                                 CRTM_Set_Max_nChannels  , &
                                 CRTM_Reset_Max_nChannels, &
@@ -173,16 +174,18 @@ CONTAINS
 !------------------------------------------------------------------------------
 
   FUNCTION Load_TauCoeff( Sensor_ID        , &  ! Input
-                          File_Path        , &  ! Optional input      
-                          Quiet            , &  ! Optional input      
-                          Process_ID       , &  ! Optional input      
-                          Output_Process_ID, &  ! Optional input      
-                          Message_Log      ) &  ! Error messaging     
-                        RESULT( Error_Status )                        
+                          File_Path        , &  ! Optional input
+                          Quiet            , &  ! Optional input
+                          netCDF           , &  ! Optional input
+                          Process_ID       , &  ! Optional input
+                          Output_Process_ID, &  ! Optional input
+                          Message_Log      ) &  ! Error messaging
+                        RESULT( Error_Status )
     ! Arguments
     CHARACTER(*), DIMENSION(:), OPTIONAL, INTENT(IN) :: Sensor_ID
     CHARACTER(*),               OPTIONAL, INTENT(IN) :: File_Path
     INTEGER,                    OPTIONAL, INTENT(IN) :: Quiet
+    LOGICAL,                    OPTIONAL, INTENT(IN) :: netCDF
     INTEGER,                    OPTIONAL, INTENT(IN) :: Process_ID
     INTEGER,                    OPTIONAL, INTENT(IN) :: Output_Process_ID
     CHARACTER(*),               OPTIONAL, INTENT(IN) :: Message_Log
@@ -196,9 +199,13 @@ CONTAINS
     CHARACTER(256), DIMENSION(MAX_N_SENSORS) :: TauCoeff_File
     INTEGER :: Allocate_Status
     INTEGER :: n, n_Sensors
+    LOGICAL :: use_netCDF
 
     ! Set up
     Error_Status = SUCCESS
+    ! Default I/O is binary unless caller asks for netCDF
+    use_netCDF = .FALSE.
+    IF ( PRESENT(netCDF) ) use_netCDF = netCDF
     ! Create a process ID message tag for
     ! WARNING and FAILURE messages
     IF ( PRESENT(Process_ID) ) THEN
@@ -222,12 +229,20 @@ CONTAINS
         RETURN
       END IF
       DO n=1,n_Sensors
-        TauCoeff_File(n) = TRIM(ADJUSTL(Sensor_ID(n)))//'.TauCoeff.bin'
+        IF ( use_netCDF ) THEN
+          TauCoeff_File(n) = TRIM(ADJUSTL(Sensor_ID(n)))//'.TauCoeff.nc'
+        ELSE
+          TauCoeff_File(n) = TRIM(ADJUSTL(Sensor_ID(n)))//'.TauCoeff.bin'
+        END IF
       END DO
     ELSE
       ! No sensors specified. Use default filename.
       n_Sensors=1
-      TauCoeff_File(1) = 'TauCoeff.bin'
+      IF ( use_netCDF ) THEN
+        TauCoeff_File(1) = 'TauCoeff.nc'
+      ELSE
+        TauCoeff_File(1) = 'TauCoeff.bin'
+      END IF
     END IF
     
     ! Add the file path
@@ -251,12 +266,19 @@ CONTAINS
     
     ! Read the TauCoeff data files
     DO n = 1, n_Sensors
-      Error_Status = Read_TauCoeff_Binary( TRIM(TauCoeff_File(n))             , &  ! Input
-                                           TC(n)                              , &  ! Output
-                                           Quiet            =Quiet            , &
-                                           Process_ID       =Process_ID       , &
-                                           Output_Process_ID=Output_Process_ID, &
-                                           Message_Log      =Message_Log        )
+      IF ( use_netCDF ) THEN
+        Error_Status = Read_TauCoeff_netCDF( TRIM(TauCoeff_File(n)), &
+                                             TC(n)                 , &
+                                             Quiet      =Quiet     , &
+                                             Message_Log=Message_Log )
+      ELSE
+        Error_Status = Read_TauCoeff_Binary( TRIM(TauCoeff_File(n))             , &
+                                             TC(n)                              , &
+                                             Quiet            =Quiet            , &
+                                             Process_ID       =Process_ID       , &
+                                             Output_Process_ID=Output_Process_ID, &
+                                             Message_Log      =Message_Log        )
+      END IF
       IF ( Error_Status /= SUCCESS ) THEN
         WRITE(Message,'("Error reading TauCoeff file #",i0,", ",a)') &
                       n, TRIM(TauCoeff_File(n))

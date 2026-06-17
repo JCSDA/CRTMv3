@@ -30,7 +30,7 @@ MODULE CRTM_TauCoeff
   USE Type_Kinds          , ONLY: Long
   USE File_Utility        , ONLY: File_Exists
   USE Binary_File_Utility , ONLY: Open_Binary_File
-  USE Message_Handler     , ONLY: SUCCESS, FAILURE, WARNING, Display_Message
+  USE Message_Handler     , ONLY: SUCCESS, FAILURE, WARNING, INFORMATION, Display_Message
   USE CRTM_Parameters     , ONLY: MAX_N_SENSORS, SET
   USE ODAS_TauCoeff       , ONLY: ODAS_Load_TauCoeff    => Load_TauCoeff   , &
                                   ODAS_Destroy_TauCoeff => Destroy_TauCoeff, &
@@ -231,7 +231,12 @@ CONTAINS
     CHARACTER(SL), ALLOCATABLE :: SensorIDs(:)
     CHARACTER(SL), ALLOCATABLE :: zfnames(:)
     INTEGER,       ALLOCATABLE :: SensorIndex(:)
-    LOGICAL :: binary 
+    LOGICAL :: binary
+    LOGICAL :: use_netCDF
+    LOGICAL :: alt_available
+    LOGICAL :: zeeman_use_netCDF
+    LOGICAL :: zeeman_nc_exists, zeeman_bin_exists
+    CHARACTER(16) :: zeeman_ext
 
     ! Set up
     Error_Status = SUCCESS
@@ -245,8 +250,9 @@ CONTAINS
     ELSE
       Process_ID_Tag = ' '
     END IF
-    ! ...Check netCDF argument
-    binary = .TRUE.
+    ! ...Check netCDF argument. Default is NetCDF (REL-3.2.0); fallback to
+    !    Binary (or vice versa) is decided per-batch below.
+    binary = .FALSE.
     IF ( PRESENT(netCDF) ) binary = .NOT. netCDF
 
     ! Determine the number of sensors and construct their filenames
@@ -281,11 +287,71 @@ CONTAINS
         TauCoeff_File(1) = 'TauCoeff.nc'
       END IF
     END IF
-    
+
     ! Add the file path
     DO n=1,n_Sensors
       TauCoeff_File(n) = TRIM(ADJUSTL(local_path))//TRIM(TauCoeff_File(n))
     END DO
+
+    ! Batch-level format fallback: if any of the requested files is missing
+    ! but the alternate-format set is fully present, switch the whole batch.
+    ! ODAS/ODPS/ODSSU loaders accept a single netCDF flag, so per-sensor
+    ! mixed formats are not supported.
+    alt_available = .TRUE.
+    DO n=1,n_Sensors
+      IF ( .NOT. File_Exists(TRIM(TauCoeff_File(n))) ) THEN
+        alt_available = .FALSE.
+        EXIT
+      END IF
+    END DO
+    IF ( .NOT. alt_available ) THEN
+      ! Try the alternate format for the whole batch.
+      BLOCK
+        CHARACTER(256), DIMENSION(MAX_N_SENSORS) :: Alt_File
+        LOGICAL :: alt_complete
+        CHARACTER(8) :: alt_ext, req_ext
+
+        IF ( binary ) THEN
+          req_ext = '.bin'
+          alt_ext = '.nc'
+        ELSE
+          req_ext = '.nc'
+          alt_ext = '.bin'
+        END IF
+
+        IF ( PRESENT(Sensor_ID) ) THEN
+          DO n=1,n_Sensors
+            Alt_File(n) = TRIM(ADJUSTL(local_path)) // &
+                          TRIM(ADJUSTL(Sensor_ID(n))) // &
+                          '.TauCoeff' // TRIM(alt_ext)
+          END DO
+        ELSE
+          Alt_File(1) = TRIM(ADJUSTL(local_path)) // 'TauCoeff' // TRIM(alt_ext)
+        END IF
+
+        alt_complete = .TRUE.
+        DO n=1,n_Sensors
+          IF ( .NOT. File_Exists(TRIM(Alt_File(n))) ) THEN
+            alt_complete = .FALSE.
+            EXIT
+          END IF
+        END DO
+
+        IF ( alt_complete ) THEN
+          DO n=1,n_Sensors
+            TauCoeff_File(n) = Alt_File(n)
+          END DO
+          binary = .NOT. binary
+          CALL Display_Message( ROUTINE_NAME, &
+            'Requested '//TRIM(req_ext)//' TauCoeff file(s) missing; '// &
+            'falling back to '//TRIM(alt_ext)//' for the whole batch', &
+            INFORMATION )
+        END IF
+      END BLOCK
+    END IF
+
+    ! Resolved per-batch netCDF flag to pass downstream.
+    use_netCDF = .NOT. binary
 
     ! set the sensor dimension for structure TC
     TC%n_Sensors = n_Sensors
@@ -401,7 +467,7 @@ CONTAINS
                                        Sensor_ID        =SensorIDs(1:n)   , & 
                                        File_Path        =File_Path        , & 
                                        Quiet            =Quiet            , & 
-                                       netCDF           =netCDF           , &
+                                       netCDF           =use_netCDF       , &
                                        Process_ID       =Process_ID       , & 
                                        Output_Process_ID=Output_Process_ID, & 
                                        Message_Log      =Message_Log        ) 
@@ -410,7 +476,7 @@ CONTAINS
         Error_Status = ODAS_Load_TauCoeff( &
                                        File_Path        =File_Path        , &
                                        Quiet            =Quiet            , &
-                                       netCDF           =netCDF           , &
+                                       netCDF           =use_netCDF       , &
                                        Process_ID       =Process_ID       , &
                                        Output_Process_ID=Output_Process_ID, &
                                        Message_Log      =Message_Log        )
@@ -450,7 +516,7 @@ CONTAINS
                                        Sensor_ID        =SensorIDs(1:n)   , & 
                                        File_Path        =File_Path        , & 
                                        Quiet            =Quiet            , &
-                                       netCDF           =netCDF           , & 
+                                       netCDF           =use_netCDF       , & 
                                        Process_ID       =Process_ID       , & 
                                        Output_Process_ID=Output_Process_ID, & 
                                        Message_Log      =Message_Log        ) 
@@ -459,7 +525,7 @@ CONTAINS
         Error_Status = ODPS_Load_TauCoeff( &
                                        File_Path        =File_Path        , &
                                        Quiet            =Quiet            , &
-                                       netCDF           =netCDF           , &
+                                       netCDF           =use_netCDF       , &
                                        Process_ID       =Process_ID       , &
                                        Output_Process_ID=Output_Process_ID, &
                                        Message_Log      =Message_Log        )
@@ -496,17 +562,19 @@ CONTAINS
                                 SensorIDs, SensorIndex, &
                                 SensorID_in = Sensor_ID )
         Error_Status = ODSSU_Load_TauCoeff( &
-                                       Sensor_ID        =SensorIDs(1:n)   , & 
-                                       File_Path        =File_Path        , & 
-                                       Quiet            =Quiet            , & 
-                                       Process_ID       =Process_ID       , & 
-                                       Output_Process_ID=Output_Process_ID, & 
-                                       Message_Log      =Message_Log        ) 
+                                       Sensor_ID        =SensorIDs(1:n)   , &
+                                       File_Path        =File_Path        , &
+                                       Quiet            =Quiet            , &
+                                       netCDF           =use_netCDF       , &
+                                       Process_ID       =Process_ID       , &
+                                       Output_Process_ID=Output_Process_ID, &
+                                       Message_Log      =Message_Log        )
       ELSE
         ! for the case that the Sensor_ID is not present (in this case, 1 sensor only)
         Error_Status = ODSSU_Load_TauCoeff( &
                                        File_Path        =File_Path        , &
                                        Quiet            =Quiet            , &
+                                       netCDF           =use_netCDF       , &
                                        Process_ID       =Process_ID       , &
                                        Output_Process_ID=Output_Process_ID, &
                                        Message_Log      =Message_Log        )
@@ -541,11 +609,45 @@ CONTAINS
     TC%ZSensor_LoIndex = 0
     TC%n_ODZeeman = 0
     i = 1
+
+    ! Batch-level format probe. ODZeeman_Load_TauCoeff takes a single netCDF
+    ! flag, so the whole Zeeman batch must use one format; this picks it.
+    !
+    ! Prefer NetCDF. A Zeeman-candidate sensor only forces the batch to Binary
+    ! when it genuinely has a Binary coeff but NOT the NetCDF one (a real
+    ! mixed-format set). A sensor that has NEITHER format (e.g. AMSU-A in a
+    ! NetCDF-only deployment that ships no zamsua*.TauCoeff at all) has no
+    ! Zeeman coefficient to load and must NOT drag the batch to Binary: doing
+    ! so would make a NetCDF-only SSMIS set (which ships zssmis*.TauCoeff.nc
+    ! and no .bin) silently lose its Zeeman correction, because the per-file
+    ! existence guard below would then find no zssmis*.TauCoeff.bin. Sensors
+    ! with no Zeeman file in either format are simply skipped by that guard.
+    zeeman_use_netCDF = .TRUE.
+    DO n = 1, n_Sensors
+      IF ( TC%WMO_Sensor_ID(n) == WMO_SSMIS .OR. TC%WMO_Sensor_ID(n) == WMO_AMSUA ) THEN
+        zeeman_nc_exists  = File_Exists( TRIM(local_path) // 'z' // TRIM(TC%Sensor_ID(n)) // '.TauCoeff.nc'  )
+        zeeman_bin_exists = File_Exists( TRIM(local_path) // 'z' // TRIM(TC%Sensor_ID(n)) // '.TauCoeff.bin' )
+        IF ( ( .NOT. zeeman_nc_exists ) .AND. zeeman_bin_exists ) THEN
+          zeeman_use_netCDF = .FALSE.
+          CALL Display_Message( ROUTINE_NAME, &
+            'NetCDF Zeeman TauCoeff missing for '//TRIM(TC%Sensor_ID(n))// &
+            '; using Binary for the whole Zeeman batch', &
+            INFORMATION )
+          EXIT
+        END IF
+      END IF
+    END DO
+    IF ( zeeman_use_netCDF ) THEN
+      zeeman_ext = '.TauCoeff.nc'
+    ELSE
+      zeeman_ext = '.TauCoeff.bin'
+    END IF
+
     DO n = 1, n_Sensors
       IF(TC%WMO_Sensor_ID(n) == WMO_SSMIS .OR. TC%WMO_Sensor_ID(n) == WMO_AMSUA )THEN
-               
-          ! file name: i.g. zssmis_n16.TauCoeff.bin
-        zfnames(i) = 'z'//TRIM(TC%Sensor_ID(n))//'.TauCoeff.bin'
+
+          ! file name: e.g. zssmis_f16.TauCoeff.nc (or .bin if NetCDF set incomplete)
+        zfnames(i) = 'z'//TRIM(TC%Sensor_ID(n))//TRIM(zeeman_ext)
         IF( File_Exists(TRIM(local_path)//TRIM(zfnames(i))) ) THEN
           TC%ZSensor_LoIndex(n) = i
           TC%n_ODZeeman = i
@@ -553,14 +655,15 @@ CONTAINS
         END IF
       END IF
     END DO
-    IF( TC%n_ODZeeman > 0 )THEN 
-      Error_Status = ODZeeman_Load_TauCoeff( &                              
-                                     zfnames(1:TC%n_ODZeeman)           , &                     
-                                     File_Path        =File_Path        , &    
-                                     Quiet            =Quiet            , &    
-                                     Process_ID       =Process_ID       , &    
-                                     Output_Process_ID=Output_Process_ID, &    
-                                     Message_Log      =Message_Log        )  
+    IF( TC%n_ODZeeman > 0 )THEN
+      Error_Status = ODZeeman_Load_TauCoeff( &
+                                     zfnames(1:TC%n_ODZeeman)            , &
+                                     File_Path        =File_Path         , &
+                                     Quiet            =Quiet             , &
+                                     netCDF           =zeeman_use_netCDF , &
+                                     Process_ID       =Process_ID        , &
+                                     Output_Process_ID=Output_Process_ID , &
+                                     Message_Log      =Message_Log         )
       IF ( Error_Status /= SUCCESS ) THEN
         CALL Display_Message( ROUTINE_NAME, &
                               'Error loading ODZeeman TauCoeff data', &

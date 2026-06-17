@@ -21,6 +21,15 @@
 ! Patrick Stegmann 2021-08-31     Added PRA_POLARIZATION scheme for GEMS-1.
 !
 ! Cheng Dang       2022-05-31     Added IRsnowCoeff TL and AD modules
+!
+! B. T. Johnson    2026-05-28     Removed GeometryInfo%Distance_Ratio scaling from
+!                                 the CONST_MIXED_POLARIZATION (=13) emissivity/
+!                                 reflectivity mixing in the FWD/TL/AD routines.
+!                                 PolAngle is the fixed channel polarization angle,
+!                                 not a zenith angle, so the scan-geometry ratio
+!                                 should not be applied. Affects TMS (TROPICS /
+!                                 tomorrow.io) sensors. (per Y. Chen / Y.-K. Lee /
+!                                 J. Zhang investigation)
 
 MODULE CRTM_SfcOptics
 
@@ -519,9 +528,11 @@ CONTAINS
           ! Compute the surface optics
           Error_Status = Compute_MW_Land_SfcOptics( &
                            Surface     , &  ! Input
+                           GeometryInfo, &  ! Input
                            SensorIndex , &  ! Input
                            ChannelIndex, &  ! Input
-                           SfcOptics     )  ! In/Output
+                           SfcOptics   , &  ! In/Output
+                           iVar%MWLSOV   )  ! Internal variable output
           IF ( Error_Status /= SUCCESS ) THEN
             WRITE( Message,'("Error computing MW land SfcOptics at ",&
                             &"channel index ",i0)' ) ChannelIndex
@@ -746,8 +757,11 @@ CONTAINS
             ! (Personal Communication)
             !
             CASE ( CONST_MIXED_POLARIZATION )
-              SIN2_Angle = (GeometryInfo%Distance_Ratio * &
-                           SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)))**2
+              ! Constant (scan-independent) polarization mixing. PolAngle is the
+              ! fixed channel polarization angle, so it is NOT scaled by
+              ! GeometryInfo%Distance_Ratio (unlike the V/H-mixed cases, where
+              ! Distance_Ratio converts the local zenith angle to the scan angle).
+              SIN2_Angle = SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex))**2
               DO i = 1, nZ
                 SfcOptics%Emissivity(i,1) = (Emissivity(i,1)*(SIN2_Angle)) + &
                                               (Emissivity(i,2)*(ONE-SIN2_Angle))
@@ -1298,7 +1312,11 @@ CONTAINS
         Microwave_Land: IF( Surface%Land_Coverage > ZERO) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_MW_Land_SfcOptics_TL( SfcOptics_TL )
+          Error_Status = Compute_MW_Land_SfcOptics_TL( &
+                           SfcOptics   , &  ! Input
+                           Surface_TL  , &  ! Input
+                           SfcOptics_TL, &  ! Output
+                           iVar%MWLSOV   )  ! Internal variable input
           IF ( Error_Status /= SUCCESS ) THEN
             WRITE( Message,'("Error computing MW land SfcOptics_TL at ",&
                             &"channel index ",i0)' ) ChannelIndex
@@ -1497,8 +1515,11 @@ CONTAINS
 
             ! Polarization mixing with constant offset angle for TROPICS
             CASE ( CONST_MIXED_POLARIZATION )
-              SIN2_Angle = (GeometryInfo%Distance_Ratio * &
-                           SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)))**2
+              ! Constant (scan-independent) polarization mixing. PolAngle is the
+              ! fixed channel polarization angle, so it is NOT scaled by
+              ! GeometryInfo%Distance_Ratio (unlike the V/H-mixed cases, where
+              ! Distance_Ratio converts the local zenith angle to the scan angle).
+              SIN2_Angle = SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex))**2
               DO i = 1, nZ
                 SfcOptics_TL%Emissivity(i,1) = (Emissivity_TL(i,1)*(SIN2_Angle)) + &
                                                   (Emissivity_TL(i,2)*(ONE-SIN2_Angle))
@@ -1560,8 +1581,14 @@ CONTAINS
           ! Coupled polarization from atmosphere
           ! considered. Simply copy the data
           ! ------------------------------------
-          SfcOptics_TL%Emissivity   = Emissivity_TL(1:nZ,1:nL)
-          SfcOptics_TL%Reflectivity = Reflectivity_TL(1:nZ,1:nL,1:nZ,1:nL)
+          ! NOTE: index the LHS sub-blocks (matching the forward model, L812-813)
+          ! so the allocatable target keeps its (MAX_N_ANGLES,MAX_N_STOKES) size.
+          ! A whole-array assignment here reallocates the target to (nZ,nL), which
+          ! shrinks SfcOptics_TL%Emissivity below MAX_N_STOKES and causes a
+          ! subsequent FASTEM-X surface TL write (Iv/Ih/U/V => 4 Stokes) to run
+          ! out of bounds for n_Stokes>1.
+          SfcOptics_TL%Emissivity(1:nZ,1:nL)             = Emissivity_TL(1:nZ,1:nL)
+          SfcOptics_TL%Reflectivity(1:nZ,1:nL,1:nZ,1:nL) = Reflectivity_TL(1:nZ,1:nL,1:nZ,1:nL)
 
         END IF Decoupled_Polarization
 
@@ -2036,8 +2063,11 @@ CONTAINS
 
             ! Polarization mixing with constant offset angle for TROPICS
             CASE ( CONST_MIXED_POLARIZATION )
-              SIN2_Angle = (GeometryInfo%Distance_Ratio * &
-                           SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)))**2
+              ! Constant (scan-independent) polarization mixing. PolAngle is the
+              ! fixed channel polarization angle, so it is NOT scaled by
+              ! GeometryInfo%Distance_Ratio (unlike the V/H-mixed cases, where
+              ! Distance_Ratio converts the local zenith angle to the scan angle).
+              SIN2_Angle = SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex))**2
               DO i = 1, nZ
                 ! PS: The adjoint is the transpose of the TL relationship:
                 ! eV_AD = e_AD * SIN^2(theta)
@@ -2225,7 +2255,11 @@ CONTAINS
             (Reflectivity_AD(1:nZ,1:2,1:nZ,1:2)*Surface%Land_Coverage)
 
           ! Compute the surface optics adjoints
-          Error_Status = Compute_MW_Land_SfcOptics_AD( SfcOptics_AD )
+          Error_Status = Compute_MW_Land_SfcOptics_AD( &
+                           SfcOptics   , &  ! Input
+                           SfcOptics_AD, &  ! Input
+                           Surface_AD  , &  ! Output
+                           iVar%MWLSOV   )  ! Internal variable input
           IF ( Error_Status /= SUCCESS ) THEN
             WRITE( Message,'("Error computing MW land SfcOptics_AD at ",&
                             &"channel index ",i0)' ) ChannelIndex

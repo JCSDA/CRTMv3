@@ -45,7 +45,10 @@ MODULE CRTM_CloudScatter
   USE CRTM_CloudCoeff,          ONLY: CloudC, &
                                       INVALID_CLOUDCOEFF, &
                                       MIE_TAMU_CLOUDCOEFF, &
-                                      DDA_ARTS_CLOUDCOEFF
+                                      DDA_ARTS_CLOUDCOEFF, &
+                                      CloudC_Exp, &
+                                      Active_Cloud_Scheme, &
+                                      CRTM_EXP_CLOUDCOEFF
 
   USE CRTM_Atmosphere_Define,   ONLY: CRTM_Atmosphere_type, &
                                       WATER_CLOUD, &
@@ -238,6 +241,7 @@ CONTAINS
     ! Local variables
     CHARACTER(ML) :: Message
     INTEGER  :: k, kc, l, m, n, j
+    INTEGER  :: Le                       ! experimental-scheme effective truncation order
     REAL(fp) :: Frequency_MW, Frequency_IR
     LOGICAL  :: Layer_Mask(Atm%n_Layers)
     INTEGER  :: Layer_Index(Atm%n_Layers)
@@ -254,6 +258,14 @@ CONTAINS
     ! Spectral variables
     Frequency_MW = SC(SensorIndex)%Frequency(ChannelIndex)
     Frequency_IR = SC(SensorIndex)%Wavenumber(ChannelIndex)
+    ! Determine the phase-function truncation order.
+    IF ( Active_Cloud_Scheme == CRTM_EXP_CLOUDCOEFF ) THEN
+      ! Experimental scheme: truncation order is taken from the LUT (running
+      ! maximum accumulated in the cloud loop below), DECOUPLED from the RT
+      ! stream count. The legacy {4,6,8,16} lOffset block packing is not used.
+      CScat%n_Legendre_Terms = 0
+      CScat%lOffset          = 0
+    ELSE
     ! Determine offset for Legendre coefficients in
     ! the CloudC lookup table corresponding to the
     ! number of streams
@@ -275,6 +287,7 @@ CONTAINS
           RETURN
         END IF
     END SELECT
+    END IF
 
     ! ---------------------------------------------
     ! Loop over the different clouds in the profile
@@ -295,7 +308,28 @@ CONTAINS
         kc = Layer_Index(k)
 
         ! Call sensor specific routines
-        IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
+        IF ( Active_Cloud_Scheme == CRTM_EXP_CLOUDCOEFF ) THEN
+          ! Experimental 'CRTM-Exp' scheme (microwave only in v1)
+          IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
+            CALL Get_Cloud_Opt_MW_Exp(CScat                            , & ! Input
+                                      Frequency_MW                     , & ! Input
+                                      Atm%Cloud(n)%Type                , & ! Input
+                                      Atm%Cloud(n)%Effective_Radius(kc), & ! Input (mapped to Dm)
+                                      Atm%Temperature(kc)              , & ! Input
+                                      CSV%ke(kc,n)                     , & ! Output
+                                      CSV%kb(kc,n)                     , & ! Output
+                                      CSV%w(kc,n)                      , & ! Output
+                                      CSV%pcoeff(:,:,kc,n)             , & ! Output
+                                      Le                               , & ! Output (effective truncation)
+                                      CSV%csi(kc,n)                      ) ! Interpolation
+            CScat%n_Legendre_Terms = MAX( CScat%n_Legendre_Terms, Le )
+          ELSE
+            CSV%ke(kc,n)         = ZERO
+            CSV%kb(kc,n)         = ZERO
+            CSV%w(kc,n)          = ZERO
+            CSV%pcoeff(:,:,kc,n) = ZERO
+          END IF
+        ELSE IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
           CALL Get_Cloud_Opt_MW(CScat                            , & ! Input
                                 Frequency_MW                     , & ! Input
                                 Atm%Cloud(n)%Type                , & ! Input
@@ -525,6 +559,10 @@ CONTAINS
     ! ------
     Error_Status = SUCCESS
     IF (Atm%n_Clouds == 0) RETURN
+    ! Experimental scheme sets n_Legendre_Terms dynamically in the forward; mirror it
+    ! onto AtmOptics_TL so the local n_Legendre_Terms (below) and the downstream
+    ! RT/Combine/clear-sky-copy TL stay congruent with the forward.
+    IF ( Active_Cloud_Scheme == CRTM_EXP_CLOUDCOEFF ) CScat_TL%n_Legendre_Terms = CScat%n_Legendre_Terms
     ! Spectral variables
     Frequency_MW = SC(SensorIndex)%Frequency(ChannelIndex)
     Frequency_IR = SC(SensorIndex)%Wavenumber(ChannelIndex)
@@ -551,7 +589,15 @@ CONTAINS
         kc = Layer_Index(k)
 
         ! Call sensor specific routines
-        IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
+        IF ( Active_Cloud_Scheme == CRTM_EXP_CLOUDCOEFF ) THEN
+          IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
+            CALL Get_Cloud_Opt_MW_Exp_TL( CScat_TL, Atm%Cloud(n)%Type, CSV%ke(kc,n), CSV%w(kc,n), &
+                                          Atm_TL%Cloud(n)%Effective_Radius(kc), Atm_TL%Temperature(kc), &
+                                          ke_TL, kb_TL, w_TL, pcoeff_TL, CSV%csi(kc,n) )
+          ELSE
+            ke_TL = ZERO ; kb_TL = ZERO ; w_TL = ZERO ; pcoeff_TL = ZERO
+          END IF
+        ELSE IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
           CALL Get_Cloud_Opt_MW_TL(CScat_TL                            , & ! Input
                                    Atm%Cloud(n)%Type                   , & ! Input
                                    CSV%ke(kc,n)                        , & ! Input
@@ -770,6 +816,9 @@ CONTAINS
     ! ------
     Error_Status = SUCCESS
     IF ( Atm%n_Clouds == 0 ) RETURN
+    ! Experimental scheme: mirror the dynamic forward Legendre count onto AtmOptics_AD
+    ! so the local n_Legendre_Terms (below) matches the forward.
+    IF ( Active_Cloud_Scheme == CRTM_EXP_CLOUDCOEFF ) CScat_AD%n_Legendre_Terms = CScat%n_Legendre_Terms
     ! Spectral variables
     Frequency_MW = SC(SensorIndex)%Frequency(ChannelIndex)
     Frequency_IR = SC(SensorIndex)%Wavenumber(ChannelIndex)
@@ -862,7 +911,16 @@ CONTAINS
         END IF
 
         ! Call sensor specific routines
-        IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
+        IF ( Active_Cloud_Scheme == CRTM_EXP_CLOUDCOEFF ) THEN
+          IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
+            CALL Get_Cloud_Opt_MW_Exp_AD( CScat_AD, Atm%Cloud(n)%Type, CSV%ke(kc,n), CSV%w(kc,n), &
+                                          ke_AD, kb_AD, w_AD, pcoeff_AD, &
+                                          Atm_AD%Cloud(n)%Effective_Radius(kc), Atm_AD%Temperature(kc), &
+                                          CSV%csi(kc,n) )
+          ELSE
+            ke_AD = ZERO ; kb_AD = ZERO ; w_AD = ZERO ; pcoeff_AD = ZERO
+          END IF
+        ELSE IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
           CALL Get_Cloud_Opt_MW_AD(CScat_AD                            , & ! Input
                                    Atm%Cloud(n)%Type                   , & ! Input
                                    CSV%ke(kc,n)                        , & ! Input
@@ -1311,7 +1369,7 @@ CONTAINS
 
     ! If all Reff_MW existed in the CloudCoeff then  CloudC%Reff_MW should be greater than zero and
     ! will use Reff for interpolation otherwise will use the water content
-    IF (ALL(CloudC%Reff_MW .GT. ZERO)) THEN
+    IF (CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
        csi%r_int = MAX(MIN(CloudC%Reff_MW(CloudC%n_MW_Radii),Reff),CloudC%Reff_MW(1))
        CALL find_index(CloudC%Reff_MW, csi%r_int, csi%j1,csi%j2, csi%r_outbound)
        csi%r = CloudC%Reff_MW(csi%j1:csi%j2)
@@ -1380,7 +1438,12 @@ CONTAINS
            END IF ! Cloud scatter
         ENDIF !Cloud_Type
       CASE (FROZEN)
-        IF (Cloud_Type .EQ. ICE_CLOUD) THEN
+        ! ICE_CLOUD's legacy MW shortcut (single non-scattering bin j=1, w=0) is appropriate only for
+        ! the Mie-TAMU coeff, which has no submm reff/albedo data for cloud ice. With the DDA-ARTS
+        ! database ICE_CLOUD maps to a full habit (IconCloudIce) that DOES carry scattering data, so
+        ! route it through the scattering ELSE branch below -- exactly as IR/VIS (Get_Cloud_Opt_IR) and
+        ! all other frozen habits already do. (Gate on the CloudCoeff Data_Type scheme flag.)
+        IF (Cloud_Type .EQ. ICE_CLOUD .AND. CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
            j = 1
            CALL interp_1D( CloudC%ke_S_MW(csi%i1:csi%i2,j,k), csi%wlp, ke )
            CALL interp_1D( CloudC%kb_S_MW(csi%i1:csi%i2,j,k), csi%wlp, kb )
@@ -1411,6 +1474,236 @@ CONTAINS
     END SELECT
 
   END SUBROUTINE Get_Cloud_Opt_MW
+
+
+  ! ---------------------------------------------
+  ! Experimental ('CRTM-Exp') MW cloud optics.
+  ! Interpolates CloudC_Exp over (Frequency, Dm, Temperature) for the given
+  ! habit (cloud_type). The phase-function truncation order (Le) is taken from
+  ! the LUT (n_Legendre_Eff) and is DECOUPLED from the RT stream count.
+  ! v1: host Effective_Radius is used directly as Dm (identity map); n_Mu=1.
+  ! pcoeff convention matches the legacy reader: pcoeff(l,m)=0.5*chi_l, with the
+  ! (2l+1) carried in the normalized Legendre polynomials and pcoeff(0,1)=0.5.
+  ! ---------------------------------------------
+  SUBROUTINE Get_Cloud_Opt_MW_Exp( CloudScatter , &  ! Input
+                                   Frequency    , &  ! Input  (GHz)
+                                   cloud_type   , &  ! Input
+                                   Dm_in        , &  ! Input  Dm proxy (microns)
+                                   Temperature  , &  ! Input  (K)
+                                   ke           , &  ! Output mass extinction (m^2/kg)
+                                   kb           , &  ! Output mass backscatter (m^2/kg)
+                                   w            , &  ! Output single-scatter albedo
+                                   pcoeff       , &  ! Output phase coefficients
+                                   Le           , &  ! Output effective truncation order
+                                   csi            )  ! Interpolation
+    TYPE(CRTM_AtmOptics_type), INTENT(IN)     :: CloudScatter
+    REAL(fp),                  INTENT(IN)     :: Frequency, Dm_in, Temperature
+    INTEGER,                   INTENT(IN)     :: cloud_type
+    REAL(fp),                  INTENT(OUT)    :: ke, kb, w
+    REAL(fp),                  INTENT(IN OUT) :: pcoeff(0:,:)
+    INTEGER,                   INTENT(OUT)    :: Le
+    TYPE(CSinterp_type),       INTENT(IN OUT) :: csi
+    ! Local
+    INTEGER  :: h, l, m, np, nfill
+    REAL(fp) :: ka, tmp
+
+    ke = ZERO; ka = ZERO; kb = ZERO; w = ZERO; Le = 0
+    pcoeff = ZERO
+
+    ! Habit index in the LUT (match the CRTM cloud-type integer)
+    h = 0
+    DO l = 1, INT(CloudC_Exp%n_Habit)
+      IF ( INT(CloudC_Exp%Habit_Id(l)) == cloud_type ) THEN ; h = l ; EXIT ; END IF
+    END DO
+    IF ( h < 1 ) RETURN     ! habit not in this LUT -> no contribution
+
+    ! Interpolation indices/polynomials: Frequency (wlp), Dm (xlp), Temperature (ylp)
+    csi%f_int = MAX(MIN(CloudC_Exp%Frequency(CloudC_Exp%n_Frequency),Frequency),CloudC_Exp%Frequency(1))
+    CALL find_index( CloudC_Exp%Frequency, csi%f_int, csi%i1, csi%i2, csi%f_outbound )
+    csi%f = CloudC_Exp%Frequency(csi%i1:csi%i2)
+
+    csi%r_int = MAX(MIN(CloudC_Exp%Dm(CloudC_Exp%n_Dm),Dm_in),CloudC_Exp%Dm(1))
+    CALL find_index( CloudC_Exp%Dm, csi%r_int, csi%j1, csi%j2, csi%r_outbound )
+    csi%r = CloudC_Exp%Dm(csi%j1:csi%j2)
+
+    csi%t_int = MAX(MIN(CloudC_Exp%Temperature(CloudC_Exp%n_Temperature),Temperature),CloudC_Exp%Temperature(1))
+    CALL find_index( CloudC_Exp%Temperature, csi%t_int, csi%k1, csi%k2, csi%t_outbound )
+    csi%t = CloudC_Exp%Temperature(csi%k1:csi%k2)
+
+    CALL LPoly( csi%f, csi%f_int, csi%wlp )   ! Frequency
+    CALL LPoly( csi%r, csi%r_int, csi%xlp )   ! Dm
+    CALL LPoly( csi%t, csi%t_int, csi%ylp )   ! Temperature
+
+    ! Bulk optics (mu index = 1 in v1). Cubes are (Freq,T,Dm) -> (wlp,ylp,xlp).
+    CALL interp_3D( CloudC_Exp%ke(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), csi%wlp, csi%ylp, csi%xlp, ke )
+    CALL interp_3D( CloudC_Exp%ka(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), csi%wlp, csi%ylp, csi%xlp, ka )
+    CALL interp_3D( CloudC_Exp%kb(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), csi%wlp, csi%ylp, csi%xlp, kb )
+    IF ( ke > ZERO ) w = MAX( MIN( (ke-ka)/ke, ONE ), ZERO )
+
+    IF ( CloudScatter%n_Phase_Elements > 0 .AND. CloudScatter%Include_Scattering ) THEN
+      ! n_Legendre_Eff is a COUNT incl. order 0, so the max significant physical
+      ! order is (count-1). Output pcoeff index = physical order; the LUT Fortran
+      ! Legendre index = physical order + 1 (1-based vs 0-based). Cap so the LUT
+      ! read (l+1) and the output index stay in bounds.
+      nfill = MAXVAL( CloudC_Exp%n_Legendre_Eff(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h) ) - 1
+      nfill = MIN( nfill, INT(CloudC_Exp%n_Legendre)-1, MAX_N_LEGENDRE_TERMS-1 )
+      nfill = MAX( nfill, 0 )
+      np = MIN( CloudScatter%n_Phase_Elements, INT(CloudC_Exp%n_Phase_Elements) )
+      pcoeff(0,1) = POINT_5
+      DO m = 1, np
+        DO l = 1, nfill
+          CALL interp_3D( CloudC_Exp%pcoeff(m,l+1,csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), &
+                          csi%wlp, csi%ylp, csi%xlp, tmp )
+          pcoeff(l,m) = POINT_5 * tmp
+        END DO
+      END DO
+      Le = nfill + 1     ! n_Legendre_Terms: RT sums physical orders 0..nfill
+    END IF
+
+  END SUBROUTINE Get_Cloud_Opt_MW_Exp
+!
+!------------------------------------------------------------------------------
+! Tangent-linear / adjoint of the experimental MW cloud optics interpolation.
+! Perturbable inputs are Dm (= effective radius) and Temperature; Frequency is
+! the (fixed) channel.  Mirrors Get_Cloud_Opt_MW_Exp; uses the saved csi.
+!------------------------------------------------------------------------------
+  SUBROUTINE Get_Cloud_Opt_MW_Exp_TL( CloudScatter, cloud_type, ke, w,   &  ! FWD Input
+                                      Dm_TL, Temperature_TL,             &  ! TL  Input
+                                      ke_TL, kb_TL, w_TL, pcoeff_TL,     &  ! TL  Output
+                                      csi )                                 ! Interpolation
+    TYPE(CRTM_AtmOptics_type), INTENT(IN)     :: CloudScatter
+    INTEGER,                   INTENT(IN)     :: cloud_type
+    REAL(fp),                  INTENT(IN)     :: ke, w, Dm_TL, Temperature_TL
+    REAL(fp),                  INTENT(OUT)    :: ke_TL, kb_TL, w_TL
+    REAL(fp),                  INTENT(IN OUT) :: pcoeff_TL(0:,:)
+    TYPE(CSinterp_type),       INTENT(IN)     :: csi
+    ! Local
+    INTEGER  :: h, l, m, np, nfill
+    REAL(fp) :: ka, ka_TL, tmp_TL, r_int_TL, t_int_TL
+    REAL(fp) :: f_TL(NPTS), r_TL(NPTS), t_TL(NPTS), z3_TL(NPTS,NPTS,NPTS)
+    TYPE(LPoly_type) :: wlp_TL, xlp_TL, ylp_TL
+
+    ke_TL = ZERO; kb_TL = ZERO; w_TL = ZERO; pcoeff_TL = ZERO
+
+    h = 0
+    DO l = 1, INT(CloudC_Exp%n_Habit)
+      IF ( INT(CloudC_Exp%Habit_Id(l)) == cloud_type ) THEN ; h = l ; EXIT ; END IF
+    END DO
+    IF ( h < 1 ) RETURN
+
+    ! TL of the interpolation point.  Frequency is fixed (channel) -> zero TL; Dm and
+    ! Temperature get zero TL when the value was clamped to the LUT bounds (outbound).
+    f_TL = ZERO ; r_TL = ZERO ; t_TL = ZERO ; z3_TL = ZERO
+    r_int_TL = MERGE( ZERO, Dm_TL,          csi%r_outbound )
+    t_int_TL = MERGE( ZERO, Temperature_TL, csi%t_outbound )
+
+    CALL LPoly_TL( csi%f, csi%f_int, csi%wlp, f_TL, ZERO,     wlp_TL )
+    CALL LPoly_TL( csi%r, csi%r_int, csi%xlp, r_TL, r_int_TL, xlp_TL )
+    CALL LPoly_TL( csi%t, csi%t_int, csi%ylp, t_TL, t_int_TL, ylp_TL )
+
+    ! Cubes are (Freq,T,Dm) -> interp order (wlp,ylp,xlp), matching the forward.
+    CALL interp_3D_TL( CloudC_Exp%ke(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), &
+                       csi%wlp, csi%ylp, csi%xlp, z3_TL, wlp_TL, ylp_TL, xlp_TL, ke_TL )
+    CALL interp_3D_TL( CloudC_Exp%ka(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), &
+                       csi%wlp, csi%ylp, csi%xlp, z3_TL, wlp_TL, ylp_TL, xlp_TL, ka_TL )
+    CALL interp_3D_TL( CloudC_Exp%kb(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), &
+                       csi%wlp, csi%ylp, csi%xlp, z3_TL, wlp_TL, ylp_TL, xlp_TL, kb_TL )
+
+    ! w = (ke-ka)/ke, clamped to [0,1] in the forward -> zero TL when clamped.
+    IF ( ke > ZERO .AND. w > ZERO .AND. w < ONE ) THEN
+      ka   = ke * ( ONE - w )
+      w_TL = ka*ke_TL/(ke*ke) - ka_TL/ke
+    END IF
+
+    IF ( CloudScatter%n_Phase_Elements > 0 .AND. CloudScatter%Include_Scattering ) THEN
+      nfill = MAXVAL( CloudC_Exp%n_Legendre_Eff(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h) ) - 1
+      nfill = MIN( nfill, INT(CloudC_Exp%n_Legendre)-1, MAX_N_LEGENDRE_TERMS-1 )
+      nfill = MAX( nfill, 0 )
+      np = MIN( CloudScatter%n_Phase_Elements, INT(CloudC_Exp%n_Phase_Elements) )
+      DO m = 1, np
+        DO l = 1, nfill
+          CALL interp_3D_TL( CloudC_Exp%pcoeff(m,l+1,csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), &
+                             csi%wlp, csi%ylp, csi%xlp, z3_TL, wlp_TL, ylp_TL, xlp_TL, tmp_TL )
+          pcoeff_TL(l,m) = POINT_5 * tmp_TL
+        END DO
+      END DO
+    END IF
+  END SUBROUTINE Get_Cloud_Opt_MW_Exp_TL
+!
+  SUBROUTINE Get_Cloud_Opt_MW_Exp_AD( CloudScatter, cloud_type, ke, w,   &  ! FWD Input
+                                      ke_AD, kb_AD, w_AD, pcoeff_AD,     &  ! AD  Input (consumed)
+                                      Dm_AD, Temperature_AD,             &  ! AD  Output (accumulated)
+                                      csi )                                 ! Interpolation
+    TYPE(CRTM_AtmOptics_type), INTENT(IN)     :: CloudScatter
+    INTEGER,                   INTENT(IN)     :: cloud_type
+    REAL(fp),                  INTENT(IN)     :: ke, w
+    REAL(fp),                  INTENT(IN OUT) :: ke_AD, kb_AD, w_AD
+    REAL(fp),                  INTENT(IN OUT) :: pcoeff_AD(0:,:)
+    REAL(fp),                  INTENT(IN OUT) :: Dm_AD, Temperature_AD
+    TYPE(CSinterp_type),       INTENT(IN)     :: csi
+    ! Local
+    INTEGER  :: h, l, m, np, nfill
+    REAL(fp) :: ka, ka_AD, tmp_AD, r_int_AD, t_int_AD
+    REAL(fp) :: f_AD(NPTS), r_AD(NPTS), t_AD(NPTS), z3_AD(NPTS,NPTS,NPTS)
+    TYPE(LPoly_type) :: wlp_AD, xlp_AD, ylp_AD
+
+    h = 0
+    DO l = 1, INT(CloudC_Exp%n_Habit)
+      IF ( INT(CloudC_Exp%Habit_Id(l)) == cloud_type ) THEN ; h = l ; EXIT ; END IF
+    END DO
+    IF ( h < 1 ) THEN     ! habit not in LUT -> consume input adjoints, no contribution
+      ke_AD = ZERO; kb_AD = ZERO; w_AD = ZERO; pcoeff_AD = ZERO
+      RETURN
+    END IF
+
+    ! Initialise local adjoints
+    z3_AD = ZERO; f_AD = ZERO; r_AD = ZERO; t_AD = ZERO
+    r_int_AD = ZERO; t_int_AD = ZERO; ka_AD = ZERO
+    CALL Clear_LPoly( wlp_AD ); CALL Clear_LPoly( xlp_AD ); CALL Clear_LPoly( ylp_AD )
+
+    ! Adjoint of the phase-coefficient interpolation
+    IF ( CloudScatter%n_Phase_Elements > 0 .AND. CloudScatter%Include_Scattering ) THEN
+      nfill = MAXVAL( CloudC_Exp%n_Legendre_Eff(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h) ) - 1
+      nfill = MIN( nfill, INT(CloudC_Exp%n_Legendre)-1, MAX_N_LEGENDRE_TERMS-1 )
+      nfill = MAX( nfill, 0 )
+      np = MIN( CloudScatter%n_Phase_Elements, INT(CloudC_Exp%n_Phase_Elements) )
+      DO m = 1, np
+        DO l = 1, nfill
+          tmp_AD = POINT_5 * pcoeff_AD(l,m)
+          CALL interp_3D_AD( CloudC_Exp%pcoeff(m,l+1,csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), &
+                             csi%wlp, csi%ylp, csi%xlp, tmp_AD, z3_AD, wlp_AD, ylp_AD, xlp_AD )
+        END DO
+      END DO
+    END IF
+    pcoeff_AD = ZERO
+
+    ! Adjoint of w = (ke-ka)/ke (clamped) -> ke_AD, ka_AD
+    IF ( ke > ZERO .AND. w > ZERO .AND. w < ONE ) THEN
+      ka    = ke * ( ONE - w )
+      ke_AD = ke_AD + ka*w_AD/(ke*ke)
+      ka_AD = ka_AD - w_AD/ke
+    END IF
+    w_AD = ZERO
+
+    ! Adjoint of the ke/ka/kb interpolation (accumulate into the LPoly adjoints)
+    CALL interp_3D_AD( CloudC_Exp%kb(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), &
+                       csi%wlp, csi%ylp, csi%xlp, kb_AD, z3_AD, wlp_AD, ylp_AD, xlp_AD )
+    kb_AD = ZERO
+    CALL interp_3D_AD( CloudC_Exp%ka(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), &
+                       csi%wlp, csi%ylp, csi%xlp, ka_AD, z3_AD, wlp_AD, ylp_AD, xlp_AD )
+    CALL interp_3D_AD( CloudC_Exp%ke(csi%i1:csi%i2,csi%k1:csi%k2,1,csi%j1:csi%j2,h), &
+                       csi%wlp, csi%ylp, csi%xlp, ke_AD, z3_AD, wlp_AD, ylp_AD, xlp_AD )
+    ke_AD = ZERO
+
+    ! Adjoint of the interpolating polynomials -> interp-point adjoints
+    CALL LPoly_AD( csi%t, csi%t_int, csi%ylp, ylp_AD, t_AD, t_int_AD )
+    CALL LPoly_AD( csi%r, csi%r_int, csi%xlp, xlp_AD, r_AD, r_int_AD )
+    ! (frequency is fixed -> wlp_AD discarded)
+
+    ! Map interp-point adjoints to the cloud-state inputs (zero when clamped/outbound)
+    IF ( .NOT. csi%t_outbound ) Temperature_AD = Temperature_AD + t_int_AD
+    IF ( .NOT. csi%r_outbound ) Dm_AD          = Dm_AD          + r_int_AD
+  END SUBROUTINE Get_Cloud_Opt_MW_Exp_AD
 
 
   ! ---------------------------------------------
@@ -1482,7 +1775,7 @@ CONTAINS
 
      ! If all Reff_MW existed in the CloudCoeff then  CloudC%Reff_MW should be greater than zero and
     ! will use Reff for interpolation otherwise will use the water content
-    IF (ALL(CloudC%Reff_MW .GT. ZERO)) THEN
+    IF (CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
        ! Find the index of the given cloud type (k) in CloudCoeff
        ! The array index starts from zero but findloc starts from 1
        cloud_loc = FINDLOC(CLOUD_TYPE_MIE_TAMU, Cloud_Type, DIM=1) - 1
@@ -1588,7 +1881,9 @@ CONTAINS
            END IF
         END IF ! Cloud_Type
      CASE (FROZEN)
-        IF (Cloud_Type .EQ. ICE_CLOUD) THEN
+        ! DDA-ARTS ICE_CLOUD scatters (see FWD Get_Cloud_Opt_MW); gate the Mie-TAMU-only non-scattering
+        ! shortcut so DDA cloud ice uses the same 2-D TL interpolation as the other frozen habits.
+        IF (Cloud_Type .EQ. ICE_CLOUD .AND. CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
             ! No TL interpolation of extinction coefficient as it
             ! is only a fn. of frequency for ice cloud
             ke_TL = ZERO
@@ -1716,7 +2011,7 @@ CONTAINS
 
     ! If all Reff_MW existed in the CloudCoeff then  CloudC%Reff_MW should be greater than zero and
     ! will use Reff for interpolation otherwise will use the water content
-    IF (ALL(CloudC%Reff_MW .GT. ZERO)) THEN
+    IF (CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
        ! Find the index of the given cloud type (k) in CloudCoeff
        ! The array index starts from zero but findloc starts from 1
        cloud_loc = FINDLOC(CLOUD_TYPE_MIE_TAMU, Cloud_Type, DIM=1) - 1
@@ -1844,14 +2139,16 @@ CONTAINS
                           f_AD, f_int_AD    ) ! AD  Output
            ! The AD outputs
            Temperature_AD = Temperature_AD + t_int_AD
-           IF (ALL(CloudC%Reff_MW .GT. ZERO)) THEN
+           IF (CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
               Reff_AD = Reff_AD + r_int_AD
            ELSE
               Water_Density_AD = Water_Density_AD + r_int_AD
            END IF
         END IF
      CASE (FROZEN)
-        IF (Cloud_Type .EQ. ICE_CLOUD) THEN
+        ! DDA-ARTS ICE_CLOUD scatters (see FWD Get_Cloud_Opt_MW); gate the Mie-TAMU-only non-scattering
+        ! shortcut so DDA cloud ice uses the same 2-D AD interpolation as the other frozen habits.
+        IF (Cloud_Type .EQ. ICE_CLOUD .AND. CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
            ! No AD interpolation as it is only a fn.
            ! of frequency for ice cloud
            ! ---------------------------------------
@@ -1922,7 +2219,7 @@ CONTAINS
                           wlp_AD,           & ! AD  Input
                           f_AD, f_int_AD    ) ! AD  Output
            ! The AD outputs
-           IF (ALL(CloudC%Reff_MW .GT. ZERO)) THEN
+           IF (CloudC%Data_Type == MIE_TAMU_CLOUDCOEFF) THEN
               Reff_AD = Reff_AD + r_int_AD
            ELSE
               Water_Density_AD = Water_Density_AD + r_int_AD

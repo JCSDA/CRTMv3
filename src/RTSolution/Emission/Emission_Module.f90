@@ -191,7 +191,10 @@ CONTAINS
                          emissivity_TL, & ! Input  TL surface emissivity
                        reflectivity_TL, & ! Input  TL surface reflectivity matrix
                 direct_reflectivity_TL, & ! Input  TL surface ditrct reflectivity
-                             up_rad_TL)   ! Output TL TOA radiance
+                             up_rad_TL, & ! Output TL TOA radiance
+                       down_rad_TL_out, & ! Output TL surface downwelling radiance (OPTIONAL)
+                  down_rad_prof_TL_out, & ! Output TL downwelling radiance PROFILE (OPTIONAL)
+                    up_rad_prof_TL_out)   ! Output TL upwelling radiance PROFILE (OPTIONAL)
 ! --------------------------------------------------------------------------- !
 !  FUNCTION: Compute tangent-linear upward radiance at the top of the         !
 !    atmosphere using carried results in RTV structure from forward           !
@@ -208,8 +211,11 @@ CONTAINS
       REAL (fp), INTENT(IN), DIMENSION( 0: ) :: Planck_Atmosphere,Planck_Atmosphere_TL
       REAL (fp), INTENT(IN) :: Planck_Surface,u,Planck_Surface_TL
       REAL (fp), INTENT(INOUT) :: up_rad_TL
+      REAL (fp), INTENT(OUT), OPTIONAL :: down_rad_TL_out
+      REAL (fp), INTENT(OUT), OPTIONAL, DIMENSION(:) :: down_rad_prof_TL_out
+      REAL (fp), INTENT(OUT), OPTIONAL, DIMENSION(:) :: up_rad_prof_TL_out
 
-    !   Structure RTV carried in variables from forward calculation. 
+    !   Structure RTV carried in variables from forward calculation.
       TYPE(RTV_type), INTENT( IN) :: RTV
     !  internal variables
       REAL (fp) :: layer_source_up_TL, layer_source_down_TL,a_TL,down_rad_TL
@@ -221,11 +227,12 @@ CONTAINS
     !#                -- Downwelling TL radiance   --                           #
     !#--------------------------------------------------------------------------#
 
-      down_rad_TL = ZERO 
+      down_rad_TL = ZERO
       Total_OD_TL = ZERO
-    
+
       Total_OD = RTV%Total_OD
- 
+      IF ( PRESENT(down_rad_prof_TL_out) ) down_rad_prof_TL_out = ZERO
+
       DO k = 1, n_Layers
        ! accumulate tangent-linear optical depth
        Total_OD_TL = Total_OD_TL + T_OD_TL(k)
@@ -233,12 +240,18 @@ CONTAINS
 
        layer_source_down_TL = Planck_Atmosphere_TL(k) * ( ONE - RTV%e_Layer_Trans_DOWN(k) ) &
                             - Planck_Atmosphere(k) * RTV%e_Layer_Trans_DOWN(k) * a_TL
- 
+
      ! downward tangent-linear radiance
-     !    down_rad(k) = down_rad(k-1) * layer_trans(k) + layer_source_down 
+     !    down_rad(k) = down_rad(k-1) * layer_trans(k) + layer_source_down
        down_rad_TL = down_rad_TL*RTV%e_Layer_Trans_DOWN(k)  &
        +RTV%e_Level_Rad_DOWN(k-1)*RTV%e_Layer_Trans_DOWN(k)*a_TL+layer_source_down_TL
+       ! Per-level downwelling TL profile: down_rad_TL now holds TL of e_Level_Rad_DOWN(k).
+       IF ( PRESENT(down_rad_prof_TL_out) ) down_rad_prof_TL_out(k) = down_rad_TL
       ENDDO
+
+      ! Surface downwelling tangent-linear radiance (always-on output).
+      ! At this point down_rad_TL holds TL of e_Level_Rad_DOWN(n_Layers).
+      IF ( PRESENT(down_rad_TL_out) ) down_rad_TL_out = down_rad_TL
 
     !#--------------------------------------------------------------------------#
     !#                -- at surface   --                                        #
@@ -263,18 +276,27 @@ CONTAINS
     !#            -- Upwelling TL radiance   --                                 #
     !#--------------------------------------------------------------------------#
 
+      ! Per-level upwelling TL profile: up_rad_TL currently holds the TL of the
+      ! surface-level upward radiance e_Level_Rad_UP(n_Layers).
+      IF ( PRESENT(up_rad_prof_TL_out) ) THEN
+        up_rad_prof_TL_out = ZERO
+        up_rad_prof_TL_out(n_Layers) = up_rad_TL
+      END IF
+
       DO k = n_Layers, 1, -1
-       a_TL = -T_OD_TL(k)/u 
+       a_TL = -T_OD_TL(k)/u
        layer_source_up_TL = Planck_Atmosphere_TL(k) * ( ONE - RTV%e_Layer_Trans_UP(k) ) &
                           - Planck_Atmosphere(k) * RTV%e_Layer_Trans_UP(k) * a_TL
-  
+
       ! upward tangent linear radiance
        up_rad_TL=up_rad_TL*RTV%e_Layer_Trans_UP(k)  &
-       +RTV%e_Level_Rad_UP(k)*RTV%e_Layer_Trans_UP(k)*a_TL+layer_source_up_TL 
+       +RTV%e_Level_Rad_UP(k)*RTV%e_Layer_Trans_UP(k)*a_TL+layer_source_up_TL
+       ! up_rad_TL now holds the TL of e_Level_Rad_UP(k-1) (level 0 = TOA = Radiance).
+       IF ( PRESENT(up_rad_prof_TL_out) .AND. k-1 >= 1 ) up_rad_prof_TL_out(k-1) = up_rad_TL
       ENDDO
 !
       RETURN
-      END SUBROUTINE CRTM_Emission_TL 
+      END SUBROUTINE CRTM_Emission_TL
 !
 !
       SUBROUTINE CRTM_Emission_AD(n_Layers, & ! Input  number of atmospheric layers
@@ -295,7 +317,10 @@ CONTAINS
                          Planck_Surface_AD, & ! Output AD surface Planck radiance
                              emissivity_AD, & ! Output AD surface emissivity
                            reflectivity_AD, & ! Output AD surface reflectivity matrix
-                    direct_reflectivity_AD)   ! Output AD surface direct reflectivity
+                    direct_reflectivity_AD, & ! Output AD surface direct reflectivity
+                            down_rad_AD_in, & ! Input  AD surface downwelling radiance (OPTIONAL)
+                       down_rad_prof_AD_in, & ! Input  AD downwelling radiance PROFILE (OPTIONAL)
+                         up_rad_prof_AD_in)   ! Input  AD upwelling radiance PROFILE (OPTIONAL)
 ! --------------------------------------------------------------------------- !
 !  FUNCTION: Compute adjoint upward radiance at the top of the                !
 !    atmosphere using carried results in RTV structure from forward           !
@@ -312,6 +337,9 @@ CONTAINS
       REAL (fp), INTENT(IN), DIMENSION( 0: ) ::  Planck_Atmosphere
       REAL (fp), INTENT(IN) :: Planck_Surface,u
       REAL (fp), INTENT(IN) :: up_rad_AD_in
+      REAL (fp), INTENT(IN), OPTIONAL :: down_rad_AD_in
+      REAL (fp), INTENT(IN), OPTIONAL, DIMENSION(:) :: down_rad_prof_AD_in
+      REAL (fp), INTENT(IN), OPTIONAL, DIMENSION(:) :: up_rad_prof_AD_in
       REAL (fp), INTENT(IN OUT), DIMENSION( : ) ::  T_OD_AD,emissivity_AD
       REAL (fp), INTENT(IN OUT), DIMENSION( :,: ) :: reflectivity_AD
       REAL (fp), INTENT(IN OUT), DIMENSION( : ) :: direct_reflectivity_AD
@@ -341,6 +369,11 @@ CONTAINS
     !#--------------------------------------------------------------------------#
 !
       DO k = 1, n_Layers
+       ! Inject adjoint of the per-level upwelling profile output: at the top of
+       ! iteration k, up_rad_AD is the adjoint of e_Level_Rad_UP(k-1) (level 0 = TOA
+       ! = Radiance, handled by up_rad_AD_in).
+       IF ( PRESENT(up_rad_prof_AD_in) .AND. k-1 >= 1 ) up_rad_AD = up_rad_AD + up_rad_prof_AD_in(k-1)
+
        a_AD = RTV%e_Level_Rad_UP(k)*RTV%e_Layer_Trans_UP(k)*up_rad_AD
        layer_source_up_AD = up_rad_AD
        up_rad_AD = up_rad_AD * RTV%e_Layer_Trans_UP(k)
@@ -348,12 +381,16 @@ CONTAINS
        Planck_Atmosphere_AD(k) = Planck_Atmosphere_AD(k) + &
               layer_source_up_AD * (ONE - RTV%e_Layer_Trans_UP(k))
        a_AD = a_AD - Planck_Atmosphere(k) * RTV%e_Layer_Trans_UP(k)* layer_source_up_AD
- 
-       T_OD_AD(k) = T_OD_AD(k) - a_AD/u 
+
+       T_OD_AD(k) = T_OD_AD(k) - a_AD/u
       ENDDO
     !#--------------------------------------------------------------------------#
     !#                -- at surface   --                                        #
     !#--------------------------------------------------------------------------#
+
+       ! Inject the surface-level (n_Layers) upwelling profile adjoint into up_rad_AD,
+       ! which the surface block below distributes to emissivity / Planck / reflectivity.
+       IF ( PRESENT(up_rad_prof_AD_in) ) up_rad_AD = up_rad_AD + up_rad_prof_AD_in(n_Layers)
 
        IF( Is_Solar_Channel ) THEN
         cosine_u0 = cos(Source_Zenith_Radian)
@@ -369,11 +406,18 @@ CONTAINS
       Planck_Surface_AD = emissivity(n_Angles)*up_rad_AD
       reflectivity_AD(1,1)=up_rad_AD*RTV%e_Level_Rad_DOWN(n_Layers)
       down_rad_AD = reflectivity(1,1)*up_rad_AD
+      ! Inject adjoint of the surface downwelling radiance output (always-on).
+      ! e_Level_Rad_DOWN(n_Layers) feeds both the surface reflection and Down_Radiance.
+      IF ( PRESENT(down_rad_AD_in) ) down_rad_AD = down_rad_AD + down_rad_AD_in
 !
     !#--------------------------------------------------------------------------#
     !#                -- Downward adjoint radiance   --                         #
     !#--------------------------------------------------------------------------#
       DO k = n_Layers, 1, -1
+
+       ! Inject adjoint of the per-level downwelling radiance profile output:
+       ! at the top of iteration k, down_rad_AD is the adjoint of e_Level_Rad_DOWN(k).
+       IF ( PRESENT(down_rad_prof_AD_in) ) down_rad_AD = down_rad_AD + down_rad_prof_AD_in(k)
 
        a_AD = RTV%e_Level_Rad_DOWN(k-1)*RTV%e_Layer_Trans_DOWN(k)*down_rad_AD
        layer_source_down_AD = down_rad_AD
