@@ -889,6 +889,7 @@ EmisCoeff/IR_Water/netCDF/Nalli.IRwater.EmisCoeff.nc
 EmisCoeff/IR_Water/netCDF/Nalli2.IRwater.EmisCoeff.nc
 EmisCoeff/IR_Land/SEcategory/netCDF/USGS.IRland.EmisCoeff.nc
 EmisCoeff/VIS_Land/SEcategory/netCDF/USGS.VISland.EmisCoeff.nc
+EmisCoeff/VIS_Snow/SNICAR/netCDF/SNICAR.VISsnow.EmisCoeff.nc
 SpcCoeff/netCDF/hirs4_metop-a.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/hirs4_metop-a.TauCoeff.nc
 SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
