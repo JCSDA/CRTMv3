@@ -133,6 +133,7 @@ list( APPEND crtm_src_files
       Options/CRTM_Options_Define.f90
       Options/SSU_Input/SSU_Input_Define.f90
       Options/Zeeman_Input/Zeeman_Input_Define.f90
+      Options/OP_Input/OP_Input_Define.f90
       RTSolution/ADA/ADA_Module.f90
       RTSolution/Common_RTSolution.f90
       RTSolution/CRTM_RTSolution_Define.f90

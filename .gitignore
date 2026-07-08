@@ -10,3 +10,4 @@ rebuild.bash
 .gitignore
 *~
 conductor/
+.vscode/
