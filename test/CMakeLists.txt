@@ -1,4 +1,4 @@
-# (C) Copyright 2017-2018 UCAR.
+../../../CMakeLists.txt# (C) Copyright 2017-2018 UCAR.
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
@@ -338,6 +338,12 @@ target_link_libraries(Unit_Aerosol_Bypass_k_matrix PRIVATE crtm)
 add_test(NAME test_Unit_Aerosol_Bypass_k_matrix
          COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass_k_matrix>)
 set_tests_properties(test_Unit_Aerosol_Bypass_k_matrix  PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+add_executable(Unit_OP_TEST mains/unit/Unit_Test/test_OP.f90)
+target_link_libraries(Unit_OP_TEST PRIVATE crtm)
+add_test(NAME test_Unit_OP_TEST
+         COMMAND $<TARGET_FILE:Unit_OP_TEST>)
+set_tests_properties(test_Unit_OP_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 #SpcCoeff utilities
 list (APPEND SCoeff_Utils
@@ -684,6 +690,12 @@ SpcCoeff/Little_Endian/ssu_n09.SpcCoeff.bin
 SpcCoeff/Little_Endian/ssu_n11.SpcCoeff.bin
 SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
 )
+
+# update this and merge into the list above
+# Symlink OP test data
+CREATE_SYMLINK_FILENAME( $ENV{CRTM_TEST_ROOT}/mains/unit/Unit_Test
+		                 ${CMAKE_CURRENT_BINARY_DIR}/testinput
+				             TOP_SingleProfile.nc )
 
 # Symlink all CRTM files
 # Version 3
