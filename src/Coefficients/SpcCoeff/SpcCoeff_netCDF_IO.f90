@@ -1162,7 +1162,17 @@ CONTAINS
              msg = 'Error reading ACCoeff from '//TRIM(AC_Filename)
              RETURN
           END IF
- 
+
+          ! ..Check that the ACCoeff data is for the same sensor
+          IF ( SpcCoeff%Sensor_Id           /= SpcCoeff%AC%Sensor_Id        .OR. &
+               SpcCoeff%WMO_Satellite_Id    /= SpcCoeff%AC%WMO_Satellite_Id .OR. &
+               SpcCoeff%WMO_Sensor_Id       /= SpcCoeff%AC%WMO_Sensor_Id    .OR. &
+               ANY( SpcCoeff%Sensor_Channel /= SpcCoeff%AC%Sensor_Channel ) ) THEN
+            msg = 'Antenna correction sensor information is inconsistent with SpcCoeff'
+            err_stat = FAILURE
+            RETURN
+          END IF
+
           IF ( noisy ) THEN
              CALL ACCoeff_Info( SpcCoeff%AC, msg )
              CALL Display_Message( ROUTINE_NAME, 'FILE: '//TRIM(AC_Filename)//'; '//TRIM(msg), INFORMATION )
@@ -1180,7 +1190,17 @@ CONTAINS
              msg = 'Error reading NLTECoeff from '//TRIM(NLTE_Filename)
              RETURN
           END IF
- 
+
+          ! ..Check that the NLTECoeff data is for the same sensor
+          IF ( SpcCoeff%Sensor_Id           /= SpcCoeff%NC%Sensor_Id        .OR. &
+               SpcCoeff%WMO_Satellite_Id    /= SpcCoeff%NC%WMO_Satellite_Id .OR. &
+               SpcCoeff%WMO_Sensor_Id       /= SpcCoeff%NC%WMO_Sensor_Id    .OR. &
+               ANY( SpcCoeff%Sensor_Channel /= SpcCoeff%NC%Sensor_Channel ) ) THEN
+            msg = 'non-LTE correction sensor information is inconsistent with SpcCoeff'
+            err_stat = FAILURE
+            RETURN
+          END IF
+
           IF ( noisy ) THEN
              CALL NLTECoeff_Info( SpcCoeff%NC, msg )
              CALL Display_Message( ROUTINE_NAME, 'FILE: '//TRIM(NLTE_Filename)//'; '//TRIM(msg), INFORMATION )
