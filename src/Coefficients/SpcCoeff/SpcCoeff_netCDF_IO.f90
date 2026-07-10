@@ -34,7 +34,10 @@ MODULE SpcCoeff_netCDF_IO
                              SpcCoeff_ValidRelease  , &
                              SpcCoeff_Info          
   USE SensorInfo_Parameters, ONLY: ACTIVE_SENSOR
-
+  USE ACCoeff_Define,        ONLY: ACCoeff_Info
+  USE ACCoeff_netCDF_IO,     ONLY: ACCoeff_netCDF_ReadFile
+  USE NLTECoeff_Define,      ONLY: NLTECoeff_Info
+  USE NLTECoeff_netCDF_IO,   ONLY: NLTECoeff_netCDF_ReadFile
   USE netcdf
   ! Disable implicit typing
   IMPLICIT NONE
@@ -746,6 +749,10 @@ CONTAINS
       CALL Display_Message( ROUTINE_NAME, 'FILE: '//TRIM(Filename)//'; '//TRIM(msg), INFORMATION )
     END IF
 
+
+
+
+
   CONTAINS
 
     SUBROUTINE Write_CleanUp()
@@ -868,6 +875,14 @@ CONTAINS
     INTEGER :: fileid
     INTEGER :: n_channels
     INTEGER :: varid
+    ! Vars for reading AC/NLTECoeff
+    CHARACTER(ML) :: AC_Filename, NLTE_Filename
+    CHARACTER(*),PARAMETER :: Spc_Suffix = ".SpcCoeff.nc"
+    CHARACTER(*),PARAMETER :: AC_Suffix = ".ACCoeff.nc"
+    CHARACTER(*),PARAMETER :: NLTE_Suffix = ".NLTECoeff.nc"
+    INTEGER :: ipos
+    LOGICAL :: lexist
+
 
 
     ! Set up
@@ -1129,6 +1144,51 @@ CONTAINS
       CALL SpcCoeff_Info( SpcCoeff, msg )
       CALL Display_Message( ROUTINE_NAME, 'FILE: '//TRIM(Filename)//'; '//TRIM(msg), INFORMATION )
     END IF
+
+    ! Read ACCoeff/NLTECoeff for the sensor if their files exist
+    ipos = index(Filename, Spc_Suffix, back=.true.)
+    AC_Filename = Filename(:ipos-1)//AC_Suffix//Filename(ipos+len(Spc_Suffix):)
+    NLTE_Filename = Filename(:ipos-1)//NLTE_Suffix//Filename(ipos+len(Spc_Suffix):)
+
+    IF (ipos>0) THEN
+       ! Read ACCoff
+       INQUIRE(FILE=TRIM(AC_Filename),EXIST=lexist)
+       IF (lexist) THEN
+          CALL Display_Message( ROUTINE_NAME, 'Reading ACCoeff File: '//TRIM(AC_Filename), INFORMATION )
+          err_stat = ACCoeff_netCDF_ReadFile( TRIM(AC_Filename), &
+                                    SpcCoeff%AC, &
+                                    Quiet )
+          IF ( err_stat /= SUCCESS ) THEN
+             msg = 'Error reading ACCoeff from '//TRIM(AC_Filename)
+             RETURN
+          END IF
+ 
+          IF ( noisy ) THEN
+             CALL ACCoeff_Info( SpcCoeff%AC, msg )
+             CALL Display_Message( ROUTINE_NAME, 'FILE: '//TRIM(AC_Filename)//'; '//TRIM(msg), INFORMATION )
+          END IF
+       END IF
+
+       ! Read NLTECoeff
+       INQUIRE(FILE=TRIM(NLTE_Filename),EXIST=lexist)
+       IF (lexist) THEN
+          CALL Display_Message( ROUTINE_NAME, 'Reading NLTECoeff File: '//TRIM(NLTE_Filename), INFORMATION )
+          err_stat = NLTECoeff_netCDF_ReadFile( TRIM(NLTE_Filename), &
+                                    SpcCoeff%NC, &
+                                    Quiet )
+          IF ( err_stat /= SUCCESS ) THEN
+             msg = 'Error reading NLTECoeff from '//TRIM(NLTE_Filename)
+             RETURN
+          END IF
+ 
+          IF ( noisy ) THEN
+             CALL NLTECoeff_Info( SpcCoeff%NC, msg )
+             CALL Display_Message( ROUTINE_NAME, 'FILE: '//TRIM(NLTE_Filename)//'; '//TRIM(msg), INFORMATION )
+          END IF
+       END IF
+
+    END IF
+
 
   CONTAINS
  
