@@ -218,6 +218,7 @@ PROGRAM test_OP
   Options_AOP(1)%AOP%n_Layers         = OP_AOP%n_Layers
   Options_AOP(1)%AOP%n_Phase_Elements = OP_AOP%n_Phase_Elements
   Options_AOP(1)%AOP%n_Legendre_Terms = OP_AOP%n_Legendre_Terms
+  Options_AOP(1)%AOP%Channel_Index = OP_AOP%Channel_Index
   Options_AOP(1)%AOP%tau    = OP_AOP%tau
   Options_AOP(1)%AOP%bs     = OP_AOP%bs
   Options_AOP(1)%AOP%kb     = OP_AOP%kb
@@ -242,6 +243,7 @@ PROGRAM test_OP
   Options_COP(1)%COP%n_Layers         = OP_COP%n_Layers
   Options_COP(1)%COP%n_Phase_Elements = OP_COP%n_Phase_Elements
   Options_COP(1)%COP%n_Legendre_Terms = OP_COP%n_Legendre_Terms
+  Options_COP(1)%COP%Channel_Index = OP_COP%Channel_Index
   Options_COP(1)%COP%tau    = OP_COP%tau
   Options_COP(1)%COP%bs     = OP_COP%bs
   Options_COP(1)%COP%kb     = OP_COP%kb
@@ -264,6 +266,7 @@ PROGRAM test_OP
   Options_TOP(1)%TOP%n_Layers         = OP_TOP%n_Layers
   Options_TOP(1)%TOP%n_Phase_Elements = OP_TOP%n_Phase_Elements
   Options_TOP(1)%TOP%n_Legendre_Terms = OP_TOP%n_Legendre_Terms
+  Options_TOP(1)%TOP%Channel_Index = OP_TOP%Channel_Index
   Options_TOP(1)%TOP%tau    = OP_TOP%tau
   Options_TOP(1)%TOP%bs     = OP_TOP%bs
   Options_TOP(1)%TOP%kb     = OP_TOP%kb

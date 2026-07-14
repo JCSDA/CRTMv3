@@ -356,6 +356,11 @@ CONTAINS
     TYPE(OP_Input_type),       INTENT(INOUT) :: OP
     INTEGER :: ilay, iphas, ileg, ileg1
 
+    ! Record which SpcCoeff ChannelIndex this column corresponds to, so
+    ! CRTM_Forward_Module's OP_Input_Channel_Position lookup can find it
+    ! (see CRTMv3 issue #327).
+    OP%Channel_Index(ChannelIndex) = ChannelIndex
+
     DO ilay = 1, AO%n_Layers
       OP%tau(ChannelIndex,ilay) = AO%Optical_Depth(ilay)
       OP%bs(ChannelIndex,ilay)  = AO%Single_Scatter_Albedo(ilay)

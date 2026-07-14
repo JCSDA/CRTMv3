@@ -40,6 +40,7 @@ MODULE OP_Input_Define
   PUBLIC :: OP_Input_InquireFile
   PUBLIC :: OP_Input_ReadFile
   PUBLIC :: OP_Input_WriteFile
+  PUBLIC :: OP_Input_Channel_Position
 
   ! -------------------
   ! Procedure overloads
@@ -52,7 +53,10 @@ MODULE OP_Input_Define
   ! Module parameters
   ! -----------------
   ! Release and version
-  INTEGER, PARAMETER :: OP_INPUT_RELEASE = 1  ! This determines structure and file formats.
+  INTEGER, PARAMETER :: OP_INPUT_RELEASE = 2  ! This determines structure and file formats.
+  ! ...Release 2 added Channel_Index, mapping each column of tau/bs/kb/pcoeff to the
+  !    SpcCoeff ChannelIndex it was computed for, so a caller can supply optical profile
+  !    data for a subset of a sensor's channels (see CRTMv3 issue #327).
   ! Close status for write errors
   CHARACTER(*), PARAMETER :: WRITE_ERROR_STATUS = 'DELETE'
   ! Literal constants
@@ -75,6 +79,7 @@ MODULE OP_Input_Define
   CHARACTER(*), PARAMETER :: BS_VARNAME         = 'bs'
   CHARACTER(*), PARAMETER :: PCOEFF_VARNAME     = 'pcoeff'
   CHARACTER(*), PARAMETER :: KB_VARNAME         = 'kb'
+  CHARACTER(*), PARAMETER :: CHANNEL_INDEX_VARNAME = 'channel_index'
 
   ! Variable description attribute.
   CHARACTER(*), PARAMETER :: DESCRIPTION_ATTNAME = 'description'
@@ -82,6 +87,8 @@ MODULE OP_Input_Define
   CHARACTER(*), PARAMETER :: BS_DESCRIPTION      = 'Layer volume scattering coefficient'
   CHARACTER(*), PARAMETER :: PCOEFF_DESCRIPTION  = 'Layer phase function coefficients for scatters'
   CHARACTER(*), PARAMETER :: KB_DESCRIPTION      = 'Layer backward scattering coefficient'
+  CHARACTER(*), PARAMETER :: CHANNEL_INDEX_DESCRIPTION = &
+    'SpcCoeff ChannelIndex that each tau/bs/kb/pcoeff column was computed for'
 
 
   ! Variable units attribute.
@@ -97,6 +104,7 @@ MODULE OP_Input_Define
 
   ! Variable types
   INTEGER, PARAMETER :: FLOAT_TYPE = NF90_DOUBLE
+  INTEGER, PARAMETER :: INT_TYPE   = NF90_INT
 
   !--------------------
   ! Structure defintion
@@ -124,6 +132,12 @@ MODULE OP_Input_Define
     REAL(fp), ALLOCATABLE :: bs(:,:)          ! K * L
     REAL(fp), ALLOCATABLE :: kb(:,:)          ! K * L
     REAL(fp), ALLOCATABLE :: pcoeff(:,:,:,:)  ! K * L * Il * Ip
+
+    ! SpcCoeff ChannelIndex each column of tau/bs/kb/pcoeff was computed for.
+    ! Lets a caller supply optical profile data for a subset of a sensor's
+    ! channels; use OP_Input_Channel_Position to map a ChannelIndex to the
+    ! corresponding column position. 0 in this array means "unset".
+    INTEGER, ALLOCATABLE :: Channel_Index(:)  ! K
 
   END TYPE OP_Input_type
   !:tdoc-:
@@ -423,6 +437,19 @@ CONTAINS
             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Write_Cleanup(); RETURN
     END IF
+    ! ...channel_index variable
+    NF90_Status = NF90_INQ_VARID( FileId,CHANNEL_INDEX_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//CHANNEL_INDEX_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_PUT_VAR( FileId,VarID,OP%Channel_Index )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error writing '//CHANNEL_INDEX_VARNAME//' to '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Write_Cleanup(); RETURN
+    END IF
 
     ! Close the file
     NF90_Status = NF90_CLOSE( FileId )
@@ -536,6 +563,7 @@ CONTAINS
     INTEGER :: Release
     LOGICAL :: noisy
     REAL(fp), ALLOCATABLE :: tau(:,:), bs(:,:), kb(:,:),pcoeff(:,:,:,:)
+    INTEGER,  ALLOCATABLE :: channel_index(:)
 
 
     ! Set up
@@ -571,6 +599,7 @@ CONTAINS
                      n_Layers           , &
                      n_Phase_Elements   , &
                      n_Legendre_Terms   ), &
+             channel_index( n_Channels ), &
              STAT = alloc_stat )
     IF ( alloc_stat /= 0 ) RETURN
 
@@ -639,6 +668,19 @@ CONTAINS
             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Read_Cleanup(); RETURN
     END IF
+    ! ...channel_index variable
+    NF90_Status = NF90_INQ_VARID( FileId,CHANNEL_INDEX_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//CHANNEL_INDEX_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_GET_VAR( FileId,VarID,channel_index )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error reading '//CHANNEL_INDEX_VARNAME//' from '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
 
     ! Assign variables
     ALLOCATE(OP)
@@ -650,6 +692,7 @@ CONTAINS
     OP%bs  = bs
     OP%kb  = kb
     OP%pcoeff = pcoeff
+    OP%Channel_Index = channel_index
 
     ! Close the file
     NF90_Status = NF90_CLOSE( FileId ); Close_File = .FALSE.
@@ -977,6 +1020,7 @@ CONTAINS
                            n_Layers           , &
                            n_Phase_Elements   , &
                            n_Legendre_Terms   ), &
+               OP%Channel_Index( n_Channels )  , &
                STAT = alloc_stat )
       IF ( alloc_stat /= 0 ) RETURN
 
@@ -992,11 +1036,70 @@ CONTAINS
       OP%bs     = ZERO
       OP%kb     = ZERO
       OP%pcoeff = ZERO
+      OP%Channel_Index = 0
 
       ! Set allocationindicator
       OP%Is_Allocated = .TRUE.
 
   END SUBROUTINE OP_Input_Create
+
+!--------------------------------------------------------------------------------
+!:sdoc+:
+!
+! NAME:
+!       OP_Input_Channel_Position
+!
+! PURPOSE:
+!       Function to map a SpcCoeff ChannelIndex to the column position within
+!       an OP_Input object's tau/bs/kb/pcoeff arrays that holds the data for
+!       that channel. Allows an OP_Input object to cover only a subset of a
+!       sensor's channels (e.g. a single-channel optical profile) rather than
+!       requiring one column per channel in ChannelIndex order.
+!
+! CALLING SEQUENCE:
+!       pos = OP_Input_Channel_Position( OP, ChannelIndex )
+!
+! OBJECTS:
+!       OP:            OP_Input object whose Channel_Index array is searched.
+!                      UNITS:      N/A
+!                      TYPE:       OP_Input_type
+!                      DIMENSION:  Scalar
+!                      ATTRIBUTES: INTENT(IN)
+!
+! INPUTS:
+!       ChannelIndex:  The SpcCoeff channel index to look up.
+!                      UNITS:      N/A
+!                      TYPE:       INTEGER
+!                      DIMENSION:  Scalar
+!                      ATTRIBUTES: INTENT(IN)
+!
+! FUNCTION RESULT:
+!       pos:           1-based column position of ChannelIndex within OP's
+!                      tau/bs/kb/pcoeff arrays, or 0 if ChannelIndex is not
+!                      covered by this OP_Input object.
+!                      UNITS:      N/A
+!                      TYPE:       INTEGER
+!                      DIMENSION:  Scalar
+!
+!:sdoc-:
+!--------------------------------------------------------------------------------
+
+  FUNCTION OP_Input_Channel_Position( OP, ChannelIndex ) RESULT( pos )
+    TYPE(OP_Input_type), INTENT(IN) :: OP
+    INTEGER,              INTENT(IN) :: ChannelIndex
+    INTEGER :: pos
+    INTEGER :: i
+
+    pos = 0
+    IF ( .NOT. OP_Input_Associated(OP) ) RETURN
+    DO i = 1, OP%n_Channels
+      IF ( OP%Channel_Index(i) == ChannelIndex ) THEN
+        pos = i
+        RETURN
+      END IF
+    END DO
+
+  END FUNCTION OP_Input_Channel_Position
 
 !################################################################################
 !################################################################################
@@ -1159,6 +1262,22 @@ CONTAINS
     Put_Status(3) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME   ,FILL_FLOAT)
     IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
       msg = 'Error writing '//PCOEFF_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+    ! ...channel_index variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      CHANNEL_INDEX_VARNAME, &
+      INT_TYPE, &
+      dimIDs=(/n_Channels_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//CHANNEL_INDEX_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_PUT_ATT( FileID,VarID,DESCRIPTION_ATTNAME ,CHANNEL_INDEX_DESCRIPTION)
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error writing '//CHANNEL_INDEX_VARNAME//' variable attributes to '//TRIM(Filename)
       CALL Create_Cleanup(); RETURN
     END IF
 
