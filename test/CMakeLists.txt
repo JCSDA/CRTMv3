@@ -1,4 +1,4 @@
-../../../CMakeLists.txt# (C) Copyright 2017-2018 UCAR.
+# (C) Copyright 2017-2018 UCAR.
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
@@ -344,6 +344,10 @@ target_link_libraries(Unit_OP_TEST PRIVATE crtm)
 add_test(NAME test_Unit_OP_TEST
          COMMAND $<TARGET_FILE:Unit_OP_TEST>)
 set_tests_properties(test_Unit_OP_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+# Utility to (re)generate the AOP/COP/TOP_SingleProfile.nc files used by Unit_OP_TEST
+add_executable(Generate_OP mains/unit/Unit_Test/Generate_OP.f90)
+target_link_libraries(Generate_OP PRIVATE crtm)
 
 #SpcCoeff utilities
 list (APPEND SCoeff_Utils
@@ -693,8 +697,10 @@ SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
 
 # update this and merge into the list above
 # Symlink OP test data
-CREATE_SYMLINK_FILENAME( $ENV{CRTM_TEST_ROOT}/mains/unit/Unit_Test
+CREATE_SYMLINK_FILENAME( ${CRTM_TEST_ROOT}/mains/unit/Unit_Test
 		                 ${CMAKE_CURRENT_BINARY_DIR}/testinput
+				             AOP_SingleProfile.nc
+				             COP_SingleProfile.nc
 				             TOP_SingleProfile.nc )
 
 # Symlink all CRTM files
