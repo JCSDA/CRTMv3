@@ -100,12 +100,7 @@ MODULE CRTM_Forward_Module
   USE CRTM_CloudCover_Define,     ONLY: CRTM_CloudCover_type
   USE CRTM_Active_Sensor,         ONLY: CRTM_Compute_Reflectivity, &
                                         Calculate_Cloud_Water_Density
-  USE OP_Input_Define,            ONLY: OP_Input_type      , &
-                                        OP_Input_Create    , &
-                                        OP_Input_WriteFile , &
-                                        OP_Input_ReadFile  , &
-                                        OP_Input_Associated, &
-                                        OP_Input_Channel_Position
+  USE OP_Input_Define,            ONLY: OP_Input_Channel_Position
 
   ! Internal variable definition modules
   ! ...AtmOptics
@@ -476,7 +471,6 @@ CONTAINS
       INTEGER :: nt, start_ch, end_ch, chunk_ch, n_sensor_channels
       INTEGER :: n_inactive_channels(n_channel_threads+1)
 
-      TYPE(OP_Input_type) :: TOP
       ! Local atmosphere structure for extra layering
       TYPE(CRTM_Atmosphere_type) :: Atm
       ! Clear sky structures
@@ -1031,17 +1025,17 @@ CONTAINS
                   END IF
                END IF
 
-               ! Optical properties of clouds and aerosols
+               ! Get or compute cloud particle absorption/scattering properties
                !
                ! pos maps ChannelIndex to the column of opt%TOP/COP/AOP holding this
                ! channel's data. It is 0 (not found) whenever the corresponding
                ! Use_*_OP flag is off, or when it's on but this particular channel
                ! isn't covered by the supplied OP_Input (e.g. a single-channel
                ! OP_Input in a multi-channel run) - either way, fall through to the
-               ! usual internal computation for this channel (see CRTMv3 issue #327).
+               ! usual internal computation for this channel.
                pos = 0
                IF ( Options_Present .AND. opt%Use_Total_OP ) pos = OP_Input_Channel_Position( opt%TOP, ChannelIndex )
-               IF ( pos >= 1 ) THEN
+               IF ( pos >= 1 ) THEN ! use total optical properties from user-defined OP_Input
                   AtmOptics(nt)%Include_Scattering = .TRUE.
                   DO ilay = 1, Atm%n_Layers
                      AtmOptics(nt)%Optical_Depth(ilay)         = AtmOptics(nt)%Optical_Depth(ilay)         + opt%TOP%tau(pos, ilay)
@@ -1058,10 +1052,10 @@ CONTAINS
 
                ELSE
 
-                  ! ...Clouds, if opt%Use_Cloud_OP
+                  ! ...Clouds
                   pos = 0
                   IF ( Options_Present .AND. opt%Use_Cloud_OP ) pos = OP_Input_Channel_Position( opt%COP, ChannelIndex )
-                  IF ( pos >= 1 ) THEN
+                  IF ( pos >= 1 ) THEN ! use cloud optical properties from user-defined OP_Input
                      ! Use user-defined cloud optical profiles
                      AtmOptics(nt)%Include_Scattering = .TRUE.
                      DO ilay = 1, Atm%n_Layers
@@ -1076,7 +1070,8 @@ CONTAINS
                         END DO
                         END DO
                      END DO
-                  ELSEIF( Atm%n_Clouds > 0 ) THEN
+                  ELSEIF( Atm%n_Clouds > 0 ) THEN ! else compute, CRTM default
+                     ! Compute the cloud particle absorption/scattering properties
                      Err_Thread = CRTM_Compute_CloudScatter( Atm          , &  ! Input
                                                              GeometryInfo , &  ! Input
                                                              SensorIndex  , &  ! Input
@@ -1095,8 +1090,7 @@ CONTAINS
                   ! ...Aerosols
                   pos = 0
                   IF ( Options_Present .AND. opt%Use_Aerosol_OP ) pos = OP_Input_Channel_Position( opt%AOP, ChannelIndex )
-                  IF ( pos >= 1 ) THEN
-                     ! Use user-defined aerosol optical profiles
+                  IF ( pos >= 1 ) THEN  ! use aerosol optical properties from user-defined OP_Input
                      AtmOptics(nt)%Include_Scattering = .TRUE.
                      DO ilay = 1, Atm%n_Layers
                         AtmOptics(nt)%Optical_Depth(ilay)         = AtmOptics(nt)%Optical_Depth(ilay)         + opt%AOP%tau(pos, ilay)
@@ -1110,7 +1104,7 @@ CONTAINS
                         END DO
                         END DO
                      END DO
-                  ELSEIF ( Atm%n_Aerosols > 0 ) THEN
+                  ELSEIF ( Atm%n_Aerosols > 0 ) THEN ! else, CRTM default
                      ! Compute the aerosol absorption/scattering properties
                      Err_Thread = CRTM_Compute_AerosolScatter( Atm          , &  ! Input
                                                                SensorIndex  , &  ! Input
@@ -1131,8 +1125,6 @@ CONTAINS
                IF( AtmOptics(nt)%Include_Scattering ) THEN
                   CALL CRTM_AtmOptics_Combine( AtmOptics(nt), AOvar(nt) )
                END IF
-
-
 
                ! ...Save vertically integrated scattering optical depth for output
                RTSolution(ln,m)%SOD = AtmOptics(nt)%Scattering_Optical_Depth

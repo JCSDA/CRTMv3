@@ -53,10 +53,7 @@ MODULE OP_Input_Define
   ! Module parameters
   ! -----------------
   ! Release and version
-  INTEGER, PARAMETER :: OP_INPUT_RELEASE = 2  ! This determines structure and file formats.
-  ! ...Release 2 added Channel_Index, mapping each column of tau/bs/kb/pcoeff to the
-  !    SpcCoeff ChannelIndex it was computed for, so a caller can supply optical profile
-  !    data for a subset of a sensor's channels (see CRTMv3 issue #327).
+  INTEGER, PARAMETER :: OP_INPUT_RELEASE = 1
   ! Close status for write errors
   CHARACTER(*), PARAMETER :: WRITE_ERROR_STATUS = 'DELETE'
   ! Literal constants
@@ -83,8 +80,8 @@ MODULE OP_Input_Define
 
   ! Variable description attribute.
   CHARACTER(*), PARAMETER :: DESCRIPTION_ATTNAME = 'description'
-  CHARACTER(*), PARAMETER :: TAU_DESCRIPTION     = 'Layer optical depth'
-  CHARACTER(*), PARAMETER :: BS_DESCRIPTION      = 'Layer volume scattering coefficient'
+  CHARACTER(*), PARAMETER :: TAU_DESCRIPTION     = 'Layer extinction optical depth'
+  CHARACTER(*), PARAMETER :: BS_DESCRIPTION      = 'Layer scattering optical depth'
   CHARACTER(*), PARAMETER :: PCOEFF_DESCRIPTION  = 'Layer phase function coefficients for scatters'
   CHARACTER(*), PARAMETER :: KB_DESCRIPTION      = 'Layer backward scattering coefficient'
   CHARACTER(*), PARAMETER :: CHANNEL_INDEX_DESCRIPTION = &
@@ -237,10 +234,9 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'OP_Input_IsValid'
     CHARACTER(ML) :: msg
 
+    ! Placeholder for now, more test needed
     ! Setup
     IsValid = .TRUE.
-
-    ! CD: placeholder for now
 
   END FUNCTION OP_Input_IsValid
 

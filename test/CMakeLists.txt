@@ -358,7 +358,6 @@ add_executable(Unit_Aerosol_Bypass_k_matrix mains/unit/Unit_Test/test_Aerosol_By
 target_link_libraries(Unit_Aerosol_Bypass_k_matrix PRIVATE crtm)
 add_test(NAME test_Unit_Aerosol_Bypass_k_matrix
          COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass_k_matrix>)
-set_tests_properties(test_Unit_Aerosol_Bypass_k_matrix  PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 # MW land surface Jacobian validation (issue #281): analytic LAI / Vegetation_Fraction
 # Jacobians (K-matrix adjoint and tangent-linear) vs finite differences.
@@ -400,17 +399,15 @@ add_executable(Unit_OP_TEST mains/unit/Unit_Test/test_OP.f90)
 target_link_libraries(Unit_OP_TEST PRIVATE crtm)
 add_test(NAME test_Unit_OP
          COMMAND $<TARGET_FILE:Unit_OP_TEST>)
-set_tests_properties(test_Unit_OP PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
-
-# Utility to (re)generate the AOP/COP/TOP_SingleProfile.nc files used by Unit_OP_TEST
-add_executable(Generate_OP mains/unit/Unit_Test/Generate_OP.f90)
-target_link_libraries(Generate_OP PRIVATE crtm)
 
 add_executable(Unit_OP_Subset_TEST mains/unit/Unit_Test/test_OP_Subset.f90)
 target_link_libraries(Unit_OP_Subset_TEST PRIVATE crtm)
 add_test(NAME test_Unit_OP_Subset
          COMMAND $<TARGET_FILE:Unit_OP_Subset_TEST>)
-set_tests_properties(test_Unit_OP_Subset PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+# Utility to (re)generate the AOP/COP/TOP_SingleProfile.nc files used by Unit_OP_TEST
+add_executable(Generate_OP mains/unit/Unit_Test/Generate_OP.f90)
+target_link_libraries(Generate_OP PRIVATE crtm)
 
 # Utility to (re)generate the AOP/COP/TOP_Subset.nc files used by Unit_OP_Subset_TEST
 add_executable(Generate_OP_Subset mains/unit/Unit_Test/Generate_OP_Subset.f90)

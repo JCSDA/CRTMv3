@@ -358,7 +358,6 @@ CONTAINS
 
     ! Record which SpcCoeff ChannelIndex this column corresponds to, so
     ! CRTM_Forward_Module's OP_Input_Channel_Position lookup can find it
-    ! (see CRTMv3 issue #327).
     OP%Channel_Index(ChannelIndex) = ChannelIndex
 
     DO ilay = 1, AO%n_Layers
