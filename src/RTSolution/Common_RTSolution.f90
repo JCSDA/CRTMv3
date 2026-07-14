@@ -19,7 +19,8 @@ MODULE Common_RTSolution
   USE CRTM_Parameters,           ONLY: ONE, ZERO, TWO, PI, &
                                        DEGREES_TO_RADIANS, &
                                        SECANT_DIFFUSIVITY, &
-                                       SCATTERING_ALBEDO_THRESHOLD
+                                       SCATTERING_ALBEDO_THRESHOLD, &
+                                       RT_SOI
   USE Message_Handler,           ONLY: SUCCESS, Display_Message
   USE CRTM_Atmosphere_Define,    ONLY: CRTM_Atmosphere_type
   USE CRTM_Surface_Define,       ONLY: CRTM_Surface_type
@@ -1181,9 +1182,49 @@ CONTAINS
         Radiance(:) = RTV%s_Level_Rad_UP(n1:n1-1+RTV%n_Stokes, 0)
       END IF
 
-      ! Output downwelling radiance
-      IF ( RTV%obs_4_downward%rt ) THEN
-        Radiance = RTV%s_Level_Rad_DOWN(n1:n1-1+RTV%n_Stokes, RTV%obs_4_downward%idx)
+      ! Surface downwelling radiance output (Stokes I at the sensor angle), opt-in
+      ! for scattering via Options%Compute_Down_Radiance.
+      IF ( RTV%Compute_Down_Radiance ) THEN
+        IF ( RTV%RT_Algorithm_Id == RT_SOI ) THEN
+          ! SOI stores the finalized surface downwelling directly in s_Level_Rad_DOWN.
+          RTSolution%Down_Radiance = RTV%s_Level_Rad_DOWN(n1, Atmosphere%n_Layers)
+        ELSE
+          ! ADA/VMOM: s_Level_Rad_DOWN retains the INTERMEDIATE (adding-down) values
+          ! so the TL/AD downward sweeps can reuse them (the FWD copy-back is gated on
+          ! the aircraft observer); the finalized surface value is in s_Level_Rad_DOWNT.
+          RTSolution%Down_Radiance = RTV%s_Level_Rad_DOWNT(n1, Atmosphere%n_Layers)
+        END IF
+      END IF
+
+      ! Level-resolved downwelling radiance PROFILE (Stokes I at the sensor angle),
+      ! opt-in via Options%Compute_Down_Radiance_Profile. SOI stores the finalized
+      ! profile in s_Level_Rad_DOWN; ADA/VMOM in s_Level_Rad_DOWNT (s_Level_Rad_DOWN
+      ! holds the intermediate adding-down values for the TL/AD).
+      IF ( RTV%Compute_Down_Radiance_Profile .AND. CRTM_RTSolution_Associated(RTSolution) ) THEN
+        no = RTSolution%n_Layers
+        na = RTV%n_Added_Layers
+        nt = RTV%n_Layers
+        IF ( RTV%RT_Algorithm_Id == RT_SOI ) THEN
+          RTSolution%Downwelling_Radiance(1:no) = RTV%s_Level_Rad_DOWN(n1, na+1:nt)
+        ELSE
+          RTSolution%Downwelling_Radiance(1:no) = RTV%s_Level_Rad_DOWNT(n1, na+1:nt)
+        END IF
+      END IF
+
+      ! Level-resolved UPWELLING radiance PROFILE (Stokes I at the sensor angle), opt-in
+      ! for scattering via Options%Compute_Up_Radiance_Profile. SOI uses the per-order
+      ! sum s_Level_Rad_UP; ADA/VMOM the FINALIZED s_Level_Rad_UPT (s_Level_Rad_UP holds
+      ! the intermediate adding-up values for the TL/AD). The emission/clear path sets
+      ! Upwelling_Radiance unconditionally (below).
+      IF ( RTV%Compute_Up_Radiance_Profile .AND. CRTM_RTSolution_Associated(RTSolution) ) THEN
+        no = RTSolution%n_Layers
+        na = RTV%n_Added_Layers
+        nt = RTV%n_Layers
+        IF ( RTV%RT_Algorithm_Id == RT_SOI ) THEN
+          RTSolution%Upwelling_Radiance(1:no) = RTV%s_Level_Rad_UP(n1, na+1:nt)
+        ELSE
+          RTSolution%Upwelling_Radiance(1:no) = RTV%s_Level_Rad_UPT(n1, na+1:nt)
+        END IF
       END IF
 
     ! Emission specific assignments
@@ -1194,11 +1235,6 @@ CONTAINS
         Radiance(1) = RTV%e_Level_Rad_UP(RTV%aircraft%idx)
       ELSE
         Radiance(1) = RTV%e_Level_Rad_UP(0)
-      END IF
-
-      ! Output downwelling radiance
-      IF ( RTV%obs_4_downward%rt ) THEN
-        Radiance = RTV%e_Level_Rad_DOWN(RTV%obs_4_downward%idx)
       END IF
 
       ! Other emission-only output
@@ -1215,6 +1251,10 @@ CONTAINS
         ! defined by the user input layering
         RTSolution%Upwelling_Radiance(1:no) = RTV%e_Level_Rad_UP(na+1:nt)
         RTSolution%Upwelling_Overcast_Radiance(1:no) = RTV%e_Cloud_Radiance_UP(na+1:nt)
+        ! Level-resolved downwelling radiance profile (opt-in). Surface value
+        ! (level nt) equals the Down_Radiance scalar.
+        IF ( RTV%Compute_Down_Radiance_Profile ) &
+          RTSolution%Downwelling_Radiance(1:no) = RTV%e_Level_Rad_DOWN(na+1:nt)
       END IF
     END IF
 
@@ -2463,13 +2503,18 @@ CONTAINS
         END DO
 
           ! Normalisation for energy conservation
-          ! Using FWD results Lff, Lbb and normalize Pff_TL, Pbb_TL (n_Angles, n_Angles)
+          ! Using FWD results Lff, Lbb and normalize Pff_TL, Pbb_TL (n_Angles, n_Angles).
+          ! The full TL slices carry the polarized off-diagonal block elements,
+          ! which mirror the forward's D2 normalization (intensity elements of
+          ! the full slices are scattered back from Lff_TL/Lbb_TL below).
           CALL Normalize_Phase_TL( &
                  k, RTV, &
                  Lff,           & ! FWD Input
                  Lbb,           & ! FWD Input
                  Lff_TL(:,:), & ! TL  Output
-                 Lbb_TL(:,:)  ) ! TL  Output
+                 Lbb_TL(:,:), & ! TL  Output
+                 Pff_TL_full = Pff_TL(:,:,k), & ! TL Output, polarized blocks
+                 Pbb_TL_full = Pbb_TL(:,:,k)  ) ! TL Output, polarized blocks
 
         DO j = 1, jn
           DO i = 1, RTV%n_Angles
@@ -2681,11 +2726,16 @@ CONTAINS
           END DO
         END DO
 
+        ! The full AD slices carry the polarized off-diagonal block elements
+        ! (transpose of the TL mirror); intensity elements travel through the
+        ! contracted Lff_AD/Lbb_AD and are scattered back below.
         CALL Normalize_Phase_AD( &
               k, RTV, &
               Lff, Lbb,      & ! FWD Input
               Lff_AD, & ! AD  Output
-              Lbb_AD  ) ! AD  Output
+              Lbb_AD, & ! AD  Output
+              Pff_AD_full = Pff_AD(:,:,k), & ! AD Output, polarized blocks
+              Pbb_AD_full = Pbb_AD(:,:,k)  ) ! AD Output, polarized blocks
 
         DO j = 1, RTV%n_Angles
           ! add solar angle
@@ -2898,7 +2948,7 @@ CONTAINS
     INTEGER,        INTENT(IN)     :: k
     TYPE(RTV_type), INTENT(IN OUT) :: RTV
     ! Local variables
-    INTEGER :: i, j, nZ, i1, j1
+    INTEGER :: i, j, nZ, i1, j1, ii, jj
 
     nZ = RTV%n_Angles
 
@@ -2958,6 +3008,19 @@ CONTAINS
         RTV%Pff(i1,j1,k)=RTV%Pff(i1,j1,k)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k))
         RTV%Pbb(i1,j1,k)=RTV%Pbb(i1,j1,k)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k))
       END DO
+      ! D2: scale this row's polarized off-diagonal block elements by the same
+      ! intensity-normalization factor (polarized blocks are pre-built for all
+      ! columns j; the (1,1) elements were scaled just above).
+      DO j = 1, nZ
+        j1 = (j-1)*RTV%n_Stokes + 1
+        DO jj = 0, RTV%n_Stokes-1
+          DO ii = 0, RTV%n_Stokes-1
+            IF( ii == 0 .AND. jj == 0 ) CYCLE
+            RTV%Pff(i1+ii,j1+jj,k)=RTV%Pff(i1+ii,j1+jj,k)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k))
+            RTV%Pbb(i1+ii,j1+jj,k)=RTV%Pbb(i1+ii,j1+jj,k)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k))
+          END DO
+        END DO
+      END DO
       RTV%Sum_Fac(i,k)=ZERO
       IF( i < nZ ) THEN
         DO j=i+1,nZ
@@ -2989,7 +3052,8 @@ CONTAINS
 
   END SUBROUTINE Normalize_Phase
 
-  SUBROUTINE Normalize_Phase_TL( k, RTV, Pff, Pbb, Pff_TL, Pbb_TL )
+  SUBROUTINE Normalize_Phase_TL( k, RTV, Pff, Pbb, Pff_TL, Pbb_TL, &
+                                 Pff_TL_full, Pbb_TL_full )
     ! Arguments
     INTEGER       , INTENT(IN)     :: k
     TYPE(RTV_type), INTENT(IN)     :: RTV
@@ -2997,10 +3061,17 @@ CONTAINS
     REAL(fp)      , INTENT(IN)     :: Pbb(:,:)
     REAL(fp)      , INTENT(IN OUT) :: Pff_TL(:,:)
     REAL(fp)      , INTENT(IN OUT) :: Pbb_TL(:,:)
+    ! Full (n_Angles*n_Stokes) TL phase matrices for the n_Stokes>1 path:
+    ! mirrors the forward's D2 scaling of the polarized off-diagonal block
+    ! elements. Pff/Pbb/Pff_TL/Pbb_TL above are the intensity-contracted
+    ! (n_Angles x n_Angles) work arrays; these are the uncontracted slices.
+    REAL(fp), OPTIONAL, INTENT(IN OUT) :: Pff_TL_full(:,:)
+    REAL(fp), OPTIONAL, INTENT(IN OUT) :: Pbb_TL_full(:,:)
     ! Local variables
     REAL(fp) :: n_Factor_TL
     REAL(fp) :: Sum_Fac_TL(0:RTV%n_Angles)
-    INTEGER :: i, j, nZ
+    REAL(fp) :: pol_scale, pol_ratio_TL
+    INTEGER :: i, j, nZ, i1, j1, ii, jj
 
     nZ = RTV%n_Angles
 
@@ -3020,6 +3091,28 @@ CONTAINS
                       Pbb(i,j)/RTV%n_Factor(i,k)/RTV%n_Factor(i,k)*n_Factor_TL*(ONE-RTV%Sum_Fac(i-1,k)) - &
                       Pbb(i,j)/RTV%n_Factor(i,k)*Sum_Fac_TL(i-1)
       END DO
+      ! D2 mirror (n_Stokes>1): TL of the forward's polarized off-diagonal
+      ! block scaling P_pol' = P_pol * S_i, S_i = (1-Sum_Fac(i-1))/n_Factor(i).
+      ! The S_i-derivative cross term uses the post-normalization forward
+      ! values in RTV%Pff/Pbb: P_pol*S_i_TL = P_pol' * (S_i_TL/S_i).
+      IF ( RTV%n_Stokes > 1 .AND. PRESENT(Pff_TL_full) ) THEN
+        pol_scale    = (ONE-RTV%Sum_Fac(i-1,k))/RTV%n_Factor(i,k)
+        pol_ratio_TL = -Sum_Fac_TL(i-1)/(ONE-RTV%Sum_Fac(i-1,k)) &
+                       - n_Factor_TL/RTV%n_Factor(i,k)
+        i1 = (i-1)*RTV%n_Stokes + 1
+        DO j = 1, nZ
+          j1 = (j-1)*RTV%n_Stokes + 1
+          DO jj = 0, RTV%n_Stokes-1
+            DO ii = 0, RTV%n_Stokes-1
+              IF( ii == 0 .AND. jj == 0 ) CYCLE
+              Pff_TL_full(i1+ii,j1+jj) = Pff_TL_full(i1+ii,j1+jj)*pol_scale &
+                                       + RTV%Pff(i1+ii,j1+jj,k)*pol_ratio_TL
+              Pbb_TL_full(i1+ii,j1+jj) = Pbb_TL_full(i1+ii,j1+jj)*pol_scale &
+                                       + RTV%Pbb(i1+ii,j1+jj,k)*pol_ratio_TL
+            END DO
+          END DO
+        END DO
+      END IF
       Sum_Fac_TL(i)=ZERO
       ! Symmetric condition
       IF( i < nZ ) THEN
@@ -3052,7 +3145,8 @@ CONTAINS
 
   END SUBROUTINE Normalize_Phase_TL
 
-  SUBROUTINE Normalize_Phase_AD( k, RTV, Pff, Pbb, Pff_AD, Pbb_AD )
+  SUBROUTINE Normalize_Phase_AD( k, RTV, Pff, Pbb, Pff_AD, Pbb_AD, &
+                                 Pff_AD_full, Pbb_AD_full )
     ! Arguments
     INTEGER       , INTENT(IN)     :: k
     TYPE(RTV_type), INTENT(IN)     :: RTV
@@ -3060,10 +3154,15 @@ CONTAINS
     REAL(fp)      , INTENT(IN)     :: Pbb(:,:)
     REAL(fp)      , INTENT(IN OUT) :: Pff_AD(:,:)
     REAL(fp)      , INTENT(IN OUT) :: Pbb_AD(:,:)
+    ! Full (n_Angles*n_Stokes) AD phase matrices for the n_Stokes>1 path:
+    ! exact transpose of the Normalize_Phase_TL polarized-block mirror.
+    REAL(fp), OPTIONAL, INTENT(IN OUT) :: Pff_AD_full(:,:)
+    REAL(fp), OPTIONAL, INTENT(IN OUT) :: Pbb_AD_full(:,:)
     ! Local variables
-    INTEGER :: i, j, nZ
+    INTEGER :: i, j, nZ, i1, j1, ii, jj
     REAL(fp) :: n_Factor_AD
     REAL(fp) :: Sum_Fac_AD(0:RTV%n_Angles)
+    REAL(fp) :: pol_scale, pol_ratio_AD
 
 
     nZ = RTV%n_Angles
@@ -3106,6 +3205,32 @@ CONTAINS
         END DO
       END IF
       Sum_Fac_AD(i) = ZERO
+      ! D2 mirror adjoint (n_Stokes>1): exact transpose of the polarized
+      ! off-diagonal block TL in Normalize_Phase_TL. The inner product with
+      ! the post-normalization forward values is accumulated before the
+      ! in-place rescaling of each polarized adjoint element; the result
+      ! feeds Sum_Fac_AD(i-1) and n_Factor_AD, which the existing intensity
+      ! adjoint chains below propagate.
+      IF ( RTV%n_Stokes > 1 .AND. PRESENT(Pff_AD_full) ) THEN
+        pol_scale    = (ONE-RTV%Sum_Fac(i-1,k))/RTV%n_Factor(i,k)
+        pol_ratio_AD = ZERO
+        i1 = (i-1)*RTV%n_Stokes + 1
+        DO j = 1, nZ
+          j1 = (j-1)*RTV%n_Stokes + 1
+          DO jj = 0, RTV%n_Stokes-1
+            DO ii = 0, RTV%n_Stokes-1
+              IF( ii == 0 .AND. jj == 0 ) CYCLE
+              pol_ratio_AD = pol_ratio_AD &
+                           + RTV%Pff(i1+ii,j1+jj,k)*Pff_AD_full(i1+ii,j1+jj) &
+                           + RTV%Pbb(i1+ii,j1+jj,k)*Pbb_AD_full(i1+ii,j1+jj)
+              Pff_AD_full(i1+ii,j1+jj) = Pff_AD_full(i1+ii,j1+jj)*pol_scale
+              Pbb_AD_full(i1+ii,j1+jj) = Pbb_AD_full(i1+ii,j1+jj)*pol_scale
+            END DO
+          END DO
+        END DO
+        Sum_Fac_AD(i-1) = Sum_Fac_AD(i-1) - pol_ratio_AD/(ONE-RTV%Sum_Fac(i-1,k))
+        n_Factor_AD     = n_Factor_AD     - pol_ratio_AD/RTV%n_Factor(i,k)
+      END IF
       DO j = nZ, i, -1
         Sum_Fac_AD(i-1) = Sum_Fac_AD(i-1) - Pbb(i,j)/RTV%n_Factor(i,k)*Pbb_AD(i,j)
         n_Factor_AD = n_Factor_AD -Pbb(i,j)/RTV%n_Factor(i,k)/RTV%n_Factor(i,k) * &

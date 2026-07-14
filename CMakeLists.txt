@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(crtm VERSION 3.1.3 LANGUAGES Fortran)
+project(crtm VERSION 3.2.0 LANGUAGES Fortran)
 
 option(OPENMP "Build crtm with OpenMP support" ON)
 option(FIX_FILE_PATH "Path to fix files (default: fix/)" OFF)
@@ -59,18 +59,13 @@ include(GNUInstallDirs)
 ## Dependencies (unchanged from original)
 if(OPENMP)
   find_package(OpenMP COMPONENTS Fortran)
-
-	# Check if OMP_NUM_THREADS is set in the environment
-	if(DEFINED ENV{OMP_NUM_THREADS})
-		set(OMP_NUM_THREADS $ENV{OMP_NUM_THREADS})
-	else()
-		# Set a default value if not set
-		set(OMP_NUM_THREADS "1")
-	endif()
-	
-	# Export OMP_NUM_THREADS to the environment
-	set(ENV{OMP_NUM_THREADS} ${OMP_NUM_THREADS})
 endif()
+
+# Enable portable Fortran source preprocessing across all supported compilers
+# (gfortran, ifort, ifx, flang, Cray, NVHPC, XL). This is the cross-compiler
+# replacement for hardcoded -cpp/-fpp flags and lets sources use #ifdef _OPENMP
+# guards regardless of file extension.
+set(CMAKE_Fortran_PREPROCESS ON)
 
 if(DEFINED ENV{NETCDF_PATH})
   list(APPEND CMAKE_PREFIX_PATH $ENV{NETCDF_PATH})

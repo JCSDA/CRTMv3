@@ -602,6 +602,9 @@ CONTAINS
 
       LOGICAL           NOCONV, NOTLAS
       INTEGER :: I, J, L, K, KKK, LLL,N, N1, N2, IN, LB, KA, II
+      INTEGER :: IBAL  ! diagonal-balancing iteration counter (loop guard)
+      REAL(fp), PARAMETER :: SFMAX2 = 1.0E30_fp  ! upper bound on balance scaling (anti-overflow)
+      REAL(fp), PARAMETER :: SFMIN2 = 1.0E-30_fp ! lower bound on balance scaling (anti-underflow)
 !      DOUBLE PRECISION  TOL, DISCRI, SGN, RNORM, W, F, G, H, P, Q, R
       REAL(fp) :: TOL, DISCRI, SGN, RNORM, W, F, G, H, P, Q, R
       REAL(fp) :: REPL, COL, ROW, SCALE, T, X, Z, S, Y, UU, VV
@@ -720,7 +723,18 @@ CONTAINS
          WKD(I) = ONE
 130   CONTINUE
 
+!                        ** Cap the diagonal-balancing iteration. This EISPACK
+!                        ** BALANC loop can fail to converge (oscillate between
+!                        ** scalings) on some matrices and spin forever -- it is
+!                        ** this routine's only otherwise-uncapped loop (the QR
+!                        ** iteration below caps at 30). Balancing is purely a
+!                        ** numerical preconditioning of A: it does not change
+!                        ** the eigenvalues, and A and the scaling WKD stay
+!                        ** mutually consistent at every pass, so stopping after
+!                        ** a generous number of passes is safe for the QR step.
+      IBAL = 0
 140   NOCONV = .FALSE.
+      IBAL = IBAL + 1
          DO 200 I = L, K
             COL = ZERO
             ROW = ZERO
@@ -730,16 +744,31 @@ CONTAINS
                   ROW = ROW + ABS( AAD(I,J) )
                END IF
 150         CONTINUE
+!                        ** Guard against a zero submatrix row/column norm.
+!                        ** The iterative scaling loops 160/170 below cannot
+!                        ** balance a row or column whose off-diagonal norm is
+!                        ** exactly zero: loop 160 spins forever (COL=0<ROW/C5,
+!                        ** COL*C6 stays 0) and loop 170 spins forever (ROW=0,
+!                        ** G=0, COL>=0 always true). The row/column isolation
+!                        ** steps (30/80) only ensure nonzero norms over 1..K,
+!                        ** not over the balance submatrix L..K, so a zero norm
+!                        ** can still reach here -- an infinite loop that
+!                        ** manifests under optimized builds. This is the
+!                        ** documented EISPACK BALANC defect; LAPACK xGEBAL
+!                        ** fixes it identically ("Guard against zero C or R
+!                        ** due to underflow"). A zero-norm row/column needs no
+!                        ** balancing, so skip it.
+            IF ( COL.EQ.ZERO .OR. ROW.EQ.ZERO ) GO TO 200
             F = ONE
             G = ROW / C5
             H = COL + ROW
-160         IF ( COL.LT.G ) THEN
+160         IF ( COL.LT.G .AND. COL.LT.SFMAX2 ) THEN   ! .AND. bound: never scale to overflow
                F   = F * C5
                COL = COL * C6
                GO TO 160
             END IF
             G = ROW * C5
-170         IF ( COL.GE.G ) THEN
+170         IF ( COL.GE.G .AND. COL.GT.SFMIN2 ) THEN   ! .AND. bound: never scale to underflow
                F   = F / C5
                COL = COL / C6
                GO TO 170
@@ -757,7 +786,7 @@ CONTAINS
             END IF
 200      CONTINUE
 
-      IF ( NOCONV ) GO TO 140
+      IF ( NOCONV .AND. IBAL .LT. 1000 ) GO TO 140
 !                                  ** IS -A- ALREADY IN HESSENBERG FORM?
       IF ( K-1 .LT. L+1 ) GO TO 350
 !                                   ** TRANSFER -A- TO A HESSENBERG FORM

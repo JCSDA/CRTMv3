@@ -54,7 +54,7 @@ PROGRAM test_AerosolScatter_AD
   Error_Status = CRTM_SpcCoeff_Load( (/Sensor_Id/), File_Path=File_Path )
   IF ( Error_Status /= SUCCESS ) STOP 1
   
-  Error_Status = CRTM_AerosolCoeff_Load('GOCART-GEOS5', 'AerosolCoeff.GOCART-GEOS5.bin', File_Path=File_Path)
+  Error_Status = CRTM_AerosolCoeff_Load('GOCART-GEOS5', 'AerosolCoeff.GOCART-GEOS5.nc', File_Path=File_Path, netCDF=.TRUE.)
   IF ( Error_Status /= SUCCESS ) STOP 1
 
   ! Create structures

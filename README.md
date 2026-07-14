@@ -1,4 +1,4 @@
-CRTM REL-3.1.3
+CRTM REL-3.2.0
 ====================
 
 [![Build Status](https://app.travis-ci.com/JCSDA/CRTMv3.svg?branch=develop)](https://app.travis-ci.com/JCSDA/CRTMv3)
@@ -6,14 +6,16 @@ CRTM REL-3.1.3
 Preamble
 --------
 
-CRTM v3.1.3 release (`REL-3.1.3`)
+CRTM v3.2.0 release (`REL-3.2.0`)
 
-v3.1.3 released February 10, 2025 
+v3.2.0 released MMMM DD, YYYY
+v3.1.3 released February 12, 2026 (small release)
 v3.1.2 released July 11, 2025
 v3.1.1 released August 12, 2024
 v3.1.0 (alpha) Released October 31, 2023
 v3.0.0 Released March, 2023  
-v2.4.1-alpha Released on April 1, 2021 (internal release only)
+
+v2.4.1 Released on June 9, 2025 (NB 2.4.x development/releases persisted well into the era where v3.x was being developed) 
 v2.4.0 Released on October 23, 2020
 
 This is a v3.x release of CRTM, some features may not be fully functional. Contact crtm-support@googlegroups.com.
@@ -29,7 +31,7 @@ Basic requirements:
 
 =========================================================
 
-**JEDI NOTE** This release branch is also designed to work directly in a JEDI container or JEDI environment. If you're doing JEDI things, you're probably in the right spot. However, you should stop reading right now and have a look at the README_JEDI.md file.   
+**JEDI NOTE** This release branch is also designed to work directly in a JEDI container or JEDI environment. If you're doing JEDI things, you're probably in the right spot. CRTM is JEDI-ready by default as of v3.2.0 and requires no special activities.   
 
 If you're looking for an older version of CRTM (v2.3.0 or older) you should obtain the appropriate tarball from
 https://bin.ssec.wisc.edu/pub/s4/CRTM/   OR https://github.com/JCSDA/crtm (old versions).   
@@ -58,7 +60,7 @@ Contents
 
 Configuration, building, and testing the library
 ================================================  
-JCSDA CRTM v3.1.3 Build Instructions
+JCSDA CRTM v3.2.0 Build Instructions
 
 The CRTM repository directory structure looks (something) like:
 
@@ -66,7 +68,6 @@ The CRTM repository directory structure looks (something) like:
  .
   ├── LICENSE  (Public Domain)
   ├── COPYING  (Public Domain)
-  ├── NOTES
   ├── README.md 
   ├── Get_CRTM_Binary_Files.sh  
   ├── <b>cmake/</b>
@@ -117,10 +118,10 @@ But after a clean clone of the development repository, none of the links to sour
 Configuration
 -------------
 By default, the `fix/` directory is provided through ftp using the Get_CRTM_Binary_Files.sh script to obtain and unpack the dataset. 
-If this directory doesn't exist during the `cmake` step, then cmake will download and install into `build/test_data/fix_REL-3.1.2.x/fix/`.
+If this directory doesn't exist during the `cmake` step, then cmake will download and install into `build/test_data/fix_REL-3.2.0.x/fix/`.
 The path to an existing fix file installation can be specified using the `FIX_FILE_PATH` option (see CMake variables summary below).
 
-The fix/ directory (as of v3.1.x) contains most of the netCDF SpcCoeff and TauCoeff files, as part of our ongoing effort to transition toward netCDF-only CRTM.  We expect to deprecate the binary formats in v3.2.x, but code to read / convert binary format will continue.  
+The fix/ directory (as of v3.2.0) contains most of the netCDF SpcCoeff and TauCoeff files, as part of our ongoing effort to transition toward netCDF-only CRTM.  We expect to deprecate the binary formats in v3.2.x, but code to read / convert binary format will continue.  
 
 As of CRTM v3.0.0, we no longer support legacy build system using autotools. (i.e., configure/make).  Only cmake / ecbuild (a cmake wrapper, but not required) is supported.   Many standalone Makefiles, make.dependencies, etc. have been removed, but not entirely.  Cleanup occurs as we work our way through the repository updating other things.  
 
@@ -145,6 +146,7 @@ The CMake variables of interest are:
 `-DCMAKE_INSTALL_PREFIX=<path-to-install>` (You have to run `make install` to install the libcrtm* into your desired directory `<build>/path-to-install`).
 `-DFIX_FILE_PATH=<path-to-fix-files>` (default is `fix/`, populated by Get_CRTM_Binary_Files.sh if needed)
 `-DBUILD_TESTING = ON / OFF` (enables/disabled testing under `test/`; default is ON)
+`-DOPENMP = ON / OFF` (build with OpenMP support; default is ON. `OFF` produces a fully serial library -- see "OpenMP and thread safety" below)
 
 
 example:
@@ -185,6 +187,41 @@ Then continue with the build steps per above.  You can find your number of proce
 
 nvfortran also works on WSL, but has a more involved install process -- if you're using nvfortran, please visit https://github.com/JCSDA/CRTMv3 and create an issue. 
 
+
+OpenMP and thread safety
+------------------------
+
+CRTM is built with OpenMP enabled by default (`-DOPENMP=ON`). Build with `-DOPENMP=OFF`
+for a fully serial library.
+
+**Controlling the thread count.** Parallelism is controlled at run time by the standard
+`OMP_NUM_THREADS` environment variable. If `OMP_NUM_THREADS` is *unset or set to an empty
+string*, CRTM coerces it to **1 thread** (i.e. CRTM runs serially) -- this is done in
+`CRTM_Init` because some OpenMP runtimes misbehave on an empty `OMP_NUM_THREADS`. Set
+`OMP_NUM_THREADS=N` to run with N threads.
+
+**Where the parallelism is.** Each call to a CRTM forward operator parallelizes internally:
+`CRTM_Forward`, `CRTM_Tangent_Linear`, and `CRTM_K_Matrix` parallelize over channels (and,
+when multiple profiles are passed and there are enough threads, also over profiles);
+`CRTM_Adjoint` parallelizes over profiles. You do not (and should not) wrap CRTM calls in
+your own OpenMP region -- see the thread-safety rules below.
+
+**Thread-safety rules for host applications:**
+
+  1. `CRTM_Init` and `CRTM_Destroy` are **not** thread-safe. Call each exactly once, from a
+     single thread, with no concurrent CRTM activity -- they create/destroy the shared,
+     process-wide coefficient state.
+  2. After a successful `CRTM_Init`, the four RT entry points (`CRTM_Forward`,
+     `CRTM_Tangent_Linear`, `CRTM_K_Matrix`, `CRTM_Adjoint`) only *read* the shared
+     coefficient data. Call them from a single host thread and let CRTM's internal OpenMP
+     do the parallelization; calling them concurrently from multiple host threads is not
+     supported.
+  3. As always, give each call non-overlapping input/output arrays (the usual rule for
+     Fortran array arguments).
+
+**Compiler note.** The K-matrix channel-level parallel path is enabled for gfortran,
+Intel LLVM (`ifx` / IntelLLVM), and nvfortran. Legacy "classic" Intel `ifort`
+(pre-LLVM) uses a serial fallback for that path; everything else is unchanged.
 
 Known Issues
 ------------

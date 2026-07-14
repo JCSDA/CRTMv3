@@ -80,7 +80,7 @@ PROGRAM test_TL_convergence
   INTEGER :: n_ls, n_ms
   CHARACTER(256) :: atmk_File, sfck_File
   REAL(fp) :: Perturbation
-  REAL(16) :: Ratio_new(nsign), Ratio_old(nsign)
+  REAL(fp) :: Ratio_new(nsign), Ratio_old(nsign)
   REAL(fp), PARAMETER :: TOLERANCE = 0.1_fp
   REAL(fp) :: Reflectivity_Prtb(N_LAYERS), Reflectivity(N_LAYERS), Reflectivity_TL(N_LAYERS)
 
@@ -156,7 +156,7 @@ PROGRAM test_TL_convergence
   ! if netCDF I/O
   ELSE IF ( Coeff_Format == 'netCDF' ) THEN
     CloudCoeff_Format   = 'netCDF'
-    CloudCoeff_File     = 'CloudCoeff_DDA_Moradi_2022.nc4'
+    CloudCoeff_File     = 'CloudCoeff_DDA_Moradi_2022.nc'
   ELSE
     message = 'Aerosol/Cloud coefficient format is not supported'
     CALL Display_Message( PROGRAM_NAME, message, FAILURE )
@@ -170,7 +170,7 @@ PROGRAM test_TL_convergence
       AerosolCoeff_File   = 'AerosolCoeff.bin'
     ELSE IF ( Coeff_Format == 'netCDF' ) THEN
       AerosolCoeff_Format = 'netCDF'
-      AerosolCoeff_File   = 'AerosolCoeff.nc4'
+      AerosolCoeff_File   = 'AerosolCoeff.nc'
     ELSE
       message = 'Aerosol coefficient format is not supported'
       CALL Display_Message( PROGRAM_NAME, message, FAILURE )
@@ -182,7 +182,7 @@ PROGRAM test_TL_convergence
       AerosolCoeff_File   = 'AerosolCoeff.CMAQ.bin'
     ELSE IF ( Coeff_Format == 'netCDF' ) THEN
       AerosolCoeff_Format = 'netCDF'
-      AerosolCoeff_File   = 'AerosolCoeff.CMAQ.nc4'
+      AerosolCoeff_File   = 'AerosolCoeff.CMAQ.nc'
     ELSE
       message = 'Aerosol coefficient format is not supported'
       CALL Display_Message( PROGRAM_NAME, message, FAILURE )
@@ -194,7 +194,7 @@ PROGRAM test_TL_convergence
       AerosolCoeff_File   = 'AerosolCoeff.GOCART-GEOS5.bin'
     ELSE IF ( Coeff_Format == 'netCDF' ) THEN
       AerosolCoeff_Format = 'netCDF'
-      AerosolCoeff_File   = 'AerosolCoeff.GOCART-GEOS5.nc4'
+      AerosolCoeff_File   = 'AerosolCoeff.GOCART-GEOS5.nc'
     ELSE
       message = 'Aerosol coefficient format is not supported'
       CALL Display_Message( PROGRAM_NAME, message, FAILURE )
@@ -206,7 +206,7 @@ PROGRAM test_TL_convergence
       AerosolCoeff_File   = 'AerosolCoeff.NAAPS.bin'
     ELSE IF ( Coeff_Format == 'netCDF' ) THEN
       AerosolCoeff_Format = 'netCDF'
-      AerosolCoeff_File   = 'AerosolCoeff.NAAPS.nc4'
+      AerosolCoeff_File   = 'AerosolCoeff.NAAPS.nc'
     ELSE
       message = 'Aerosol coefficient format is not supported'
       CALL Display_Message( PROGRAM_NAME, message, FAILURE )

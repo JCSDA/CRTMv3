@@ -53,6 +53,8 @@ list( APPEND crtm_src_files
       Coefficients/BeCoeff/BeCoeff_IO.f90
       Coefficients/CloudCoeff/CloudCoeff_Binary_IO.f90
       Coefficients/CloudCoeff/CloudCoeff_Define.f90
+      Coefficients/CloudCoeff/CloudCoeff_Exp_Define.f90
+      Coefficients/CloudCoeff/CloudCoeff_Exp_netCDF_IO.f90
       Coefficients/CloudCoeff/CloudCoeff_netCDF_IO.f90
       Coefficients/CloudCoeff/CloudCoeff_IO.f90
       Coefficients/CRTM_AerosolCoeff.f90
@@ -62,7 +64,14 @@ list( APPEND crtm_src_files
       Coefficients/CRTM_IRlandCoeff.f90
       Coefficients/CRTM_IRsnowCoeff.f90
       Coefficients/CRTM_IRwaterCoeff.f90
+      Coefficients/CRTM_MWlandCoeff.f90
       Coefficients/CRTM_MWwaterCoeff.f90
+      Coefficients/CRTM_PARMIOCoeff.f90
+      Coefficients/EmisCoeff/MW_Land/TELSEM2/TELSEM2Atlas_Define.f90
+      Coefficients/EmisCoeff/MW_Land/TELSEM2/TELSEM2Atlas_netCDF_IO.f90
+      Coefficients/EmisCoeff/MW_Land/TELSEM2/TELSEM2_Atlas_Module.f90
+      Coefficients/EmisCoeff/MW_Water/PARMIOCoeff/PARMIOCoeff_Define.f90
+      Coefficients/EmisCoeff/MW_Water/PARMIOCoeff/PARMIOCoeff_netCDF_IO.f90
       Coefficients/CRTM_SpcCoeff.f90
       Coefficients/CRTM_TauCoeff.f90
       Coefficients/CRTM_VISiceCoeff.f90
@@ -107,6 +116,7 @@ list( APPEND crtm_src_files
       Coefficients/TauCoeff/ODPS/ODPS_Define.f90
       Coefficients/TauCoeff/ODPS/ODPS_TauCoeff.f90
       Coefficients/TauCoeff/ODSSU/ODSSU_Binary_IO.f90
+      Coefficients/TauCoeff/ODSSU/ODSSU_netCDF_IO.f90
       Coefficients/TauCoeff/ODSSU/ODSSU_Define.f90
       Coefficients/TauCoeff/ODSSU/ODSSU_TauCoeff.f90
       Coefficients/TauCoeff/ODZeeman/ODZeeman_TauCoeff.f90
@@ -168,6 +178,12 @@ list( APPEND crtm_src_files
       SfcOptics/MW_Water/FASTEM_MWSSEM/Reflection_Correction_Module.f90
       SfcOptics/MW_Water/FASTEM_MWSSEM/Slope_Variance.f90
       SfcOptics/MW_Water/FASTEM_MWSSEM/Small_Scale_Correction_Module.f90
+      SfcOptics/MW_Water/PARMIO_MWSSEM/PARMIO_LUT_Interpolation.f90
+      SfcOptics/MW_Water/PARMIO_MWSSEM/PARMIO_RC_Interpolation.f90
+      SfcOptics/MW_Water/PARMIO_MWSSEM/PARMIO_Azimuth_Module.f90
+      SfcOptics/MW_Water/PARMIO_MWSSEM/CRTM_PARMIO.f90
+      SfcOptics/MW_Water/PARMIO_MWSSEM/CRTM_PARMIO_TL.f90
+      SfcOptics/MW_Water/PARMIO_MWSSEM/CRTM_PARMIO_AD.f90
       SfcOptics/MW_Water/Fresnel/Fresnel.f90
       SfcOptics/MW_Water/LowFrequency_MWSSEM/CRTM_LowFrequency_MWSSEM.f90
       SfcOptics/MW_Water/Ocean_Permittivity/Ellison.f90
@@ -196,6 +212,7 @@ list( APPEND crtm_src_files
       Surface/CRTM_Surface_Define.f90
       Surface/SensorData/CRTM_SensorData_Define.f90
       Test_Utility/UnitTest/UnitTest_Define.f90
+      Test_Utility/CRTM_RTSolution_Diff.f90
       Utility/Binary_File_Utility.f90
       Utility/Compare_Float_Numbers.f90
       Utility/DateTime_Utility/DateTime_Utility.f90
@@ -216,7 +233,6 @@ list( APPEND crtm_src_files
       Utility/String_Utility.f90
       Utility/Timing_Utility.f90
       Utility/Type_Kinds.f90
-      Zeeman/Zeeman_Utility.f90
 )
 include(GNUInstallDirs)
 
@@ -236,18 +252,15 @@ set(MODULE_DIR module/${PROJECT_NAME}/${CMAKE_Fortran_COMPILER_ID}/${CMAKE_Fortr
 add_library(${PROJECT_NAME} ${LIBRARY_TYPE} ${crtm_src_files})
 
 # Link dependencies
-target_link_libraries(${PROJECT_NAME} PUBLIC OpenMP::OpenMP_Fortran)
+if(OPENMP)
+  target_link_libraries(${PROJECT_NAME} PUBLIC OpenMP::OpenMP_Fortran)
+endif()
 target_link_libraries(${PROJECT_NAME} PUBLIC NetCDF::NetCDF_Fortran)
 
 # Set the Fortran module directory for build and install phases
 set_target_properties(${PROJECT_NAME} PROPERTIES
     Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/${MODULE_DIR})
 
-set_source_files_properties(
-  ${CMAKE_CURRENT_SOURCE_DIR}/CRTM_K_Matrix_Module.f90
-  PROPERTIES COMPILE_FLAGS "-cpp"
-)
-  
 # Install Fortran modules into the correct destination
 install(DIRECTORY ${CMAKE_BINARY_DIR}/${MODULE_DIR}/ DESTINATION ${CRTM_INSTALL_PREFIX}/${MODULE_DIR})
 

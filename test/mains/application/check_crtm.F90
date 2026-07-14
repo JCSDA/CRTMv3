@@ -75,8 +75,8 @@ PROGRAM check_crtm
   CHARACTER(*), PARAMETER :: NC_COEFFICIENT_PATH='./testinput/'
 
   ! Aerosol/Cloud coefficient format
-  CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
-  !CHARACTER(*), PARAMETER :: Coeff_Format = 'netCDF'
+  CHARACTER(*), PARAMETER :: Coeff_Format = 'netCDF'
+  !CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
 
   ! Aerosol/Cloud coefficient scheme
   CHARACTER(*), PARAMETER :: Aerosol_Model = 'CRTM'

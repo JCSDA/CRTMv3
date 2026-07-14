@@ -26,8 +26,8 @@ PROGRAM test_Aerosol_Bypass_Adjoint
 
 
   ! Aerosol/Cloud coefficient format
-  CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
-  !CHARACTER(*), PARAMETER :: Coeff_Format = 'netCDF'
+  CHARACTER(*), PARAMETER :: Coeff_Format = 'netCDF'
+  !CHARACTER(*), PARAMETER :: Coeff_Format = 'Binary'
 
 
 
@@ -284,13 +284,13 @@ PROGRAM test_Aerosol_Bypass_Adjoint
   ! ------------------------------------------------
   ! 9a.1 Atmosphere file
   ! ...Generate filename
-  atmad_file = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.bin'
+  atmad_file = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.nc'
   ! ...Check if the file exists
   IF ( .NOT. File_Exists(atmad_file) ) THEN
     Message = 'Atmosphere_AD save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write Atmosphere_AD structure to file
-    Error_Status = CRTM_Atmosphere_WriteFile( atmad_file, Atmosphere_AD, Quiet=.TRUE. )
+    Error_Status = CRTM_Atmosphere_WriteFile( atmad_file, Atmosphere_AD, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating Atmosphere_AD save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -299,13 +299,13 @@ PROGRAM test_Aerosol_Bypass_Adjoint
   END IF
   ! 9a.2 Surface file
   ! ...Generate filename
-  sfcad_file = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.bin'
+  sfcad_file = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.nc'
   ! ...Check if the file exists
   IF ( .NOT. File_Exists(sfcad_file) ) THEN
     Message = 'Surface_AD save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write Surface_AD structure to file
-    Error_Status = CRTM_Surface_WriteFile( sfcad_file, Surface_AD, Quiet=.TRUE. )
+    Error_Status = CRTM_Surface_WriteFile( sfcad_file, Surface_AD, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating Surface_AD save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -321,7 +321,7 @@ PROGRAM test_Aerosol_Bypass_Adjoint
   ! 9b. Inquire the saved files
   ! ---------------------------
   ! 9b.1 Atmosphere file
-  Error_Status = CRTM_Atmosphere_InquireFile( atmad_file, &
+  Error_Status = CRTM_Atmosphere_InquireFile( atmad_file, NetCDF=.TRUE., &
                                               n_Channels = n_la, &
                                               n_Profiles = n_ma )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -330,7 +330,7 @@ PROGRAM test_Aerosol_Bypass_Adjoint
     STOP 1
   END IF
   ! 9b.2 Surface file
-  Error_Status = CRTM_Surface_InquireFile( sfcad_file, &
+  Error_Status = CRTM_Surface_InquireFile( sfcad_file, NetCDF=.TRUE., &
                                            n_Channels = n_ls, &
                                            n_Profiles = n_ms )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -352,14 +352,14 @@ PROGRAM test_Aerosol_Bypass_Adjoint
   ! 9d. Read the saved data
   ! -----------------------
   ! 9d.1 Atmosphere file
-  Error_Status = CRTM_Atmosphere_ReadFile( atmad_file, atm_AD, Quiet=.TRUE. )
+  Error_Status = CRTM_Atmosphere_ReadFile( atmad_file, atm_AD, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading Atmosphere_AD save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
   ! 9d.2 Surface file
-  Error_Status = CRTM_Surface_ReadFile( sfcad_file, sfc_AD, Quiet=.TRUE. )
+  Error_Status = CRTM_Surface_ReadFile( sfcad_file, sfc_AD, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading Surface_AD save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -377,9 +377,9 @@ PROGRAM test_Aerosol_Bypass_Adjoint
   !   CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
   !   STOP 1
   !   ! Write the current Atmosphere_AD results to file
-  !   atmad_file = TRIM(Sensor_Id)//'.Atmosphere.bin'
+  !   atmad_file = TRIM(Sensor_Id)//'.Atmosphere.nc'
   !
-  !   Error_Status = CRTM_Atmosphere_WriteFile( atmad_file, atm_AD, Quiet=.TRUE. )
+  !   Error_Status = CRTM_Atmosphere_WriteFile( atmad_file, atm_AD, NetCDF=.TRUE., Quiet=.TRUE. )
   !   IF ( Error_Status /= SUCCESS ) THEN
   !     Message = 'Error creating temporary Atmosphere_AD save file for failed comparison'
   !     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -396,8 +396,8 @@ PROGRAM test_Aerosol_Bypass_Adjoint
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
     ! Write the current Surface_AD results to file
-    sfcad_file = TRIM(Sensor_Id)//'.Surface.bin'
-    Error_Status = CRTM_Surface_WriteFile( sfcad_file, Surface_AD, Quiet=.TRUE. )
+    sfcad_file = TRIM(Sensor_Id)//'.Surface.nc'
+    Error_Status = CRTM_Surface_WriteFile( sfcad_file, Surface_AD, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary Surface_AD save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )

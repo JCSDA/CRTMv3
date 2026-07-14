@@ -321,7 +321,7 @@ CONTAINS
     dimensions  )  ! Input
     ! Arguments
     TYPE(FitCoeff_1D_type), INTENT(OUT) :: self
-    INTEGER               , INTENT(IN)  :: dimensions(1)
+    INTEGER               , INTENT(IN)  :: dimensions(:)
     ! Local variables
     INTEGER :: alloc_stat
 
@@ -349,7 +349,7 @@ CONTAINS
     dimensions  )  ! Input
     ! Arguments
     TYPE(FitCoeff_2D_type), INTENT(OUT) :: self
-    INTEGER               , INTENT(IN)  :: dimensions(2)
+    INTEGER               , INTENT(IN)  :: dimensions(:)
     ! Local variables
     INTEGER :: alloc_stat
 
@@ -377,7 +377,7 @@ CONTAINS
     dimensions  )  ! Input
     ! Arguments
     TYPE(FitCoeff_3D_type), INTENT(OUT) :: self
-    INTEGER               , INTENT(IN)  :: dimensions(3)
+    INTEGER               , INTENT(IN)  :: dimensions(:)
     ! Local variables
     INTEGER :: alloc_stat
 
