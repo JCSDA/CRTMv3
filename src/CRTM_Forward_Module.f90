@@ -100,6 +100,7 @@ MODULE CRTM_Forward_Module
   USE CRTM_CloudCover_Define,     ONLY: CRTM_CloudCover_type
   USE CRTM_Active_Sensor,         ONLY: CRTM_Compute_Reflectivity, &
                                         Calculate_Cloud_Water_Density
+  USE OP_Input_Define,            ONLY: OP_Input_Channel_Position
 
   ! Internal variable definition modules
   ! ...AtmOptics
@@ -455,6 +456,8 @@ CONTAINS
       LOGICAL :: Atmosphere_Invalid, Surface_Invalid, Geometry_Invalid, Options_Invalid
       INTEGER :: iFOV
       INTEGER :: n, l    ! sensor index, channel index
+      INTEGER :: ilay, iphas, ileg, ileg1
+      INTEGER :: pos  ! column position of ChannelIndex within opt%TOP/COP/AOP
       INTEGER :: SensorIndex
       INTEGER :: ChannelIndex
       INTEGER :: ln, nc, ks
@@ -1022,39 +1025,101 @@ CONTAINS
                   END IF
                END IF
 
-               ! Compute the cloud particle absorption/scattering properties
-               IF( Atm%n_Clouds > 0 ) THEN
-                  Err_Thread = CRTM_Compute_CloudScatter( Atm          , &  ! Input
-                                                            GeometryInfo , &  ! Input
-                                                            SensorIndex  , &  ! Input
-                                                            ChannelIndex , &  ! Input
-                                                            AtmOptics(nt), &  ! Output
-                                                            CSvar(nt)       ) ! Internal variable output
-                  IF ( Err_Thread /= SUCCESS ) THEN
-                     WRITE( Message,'("Error computing CloudScatter for ",a,&
-                          &", channel ",i0,", profile #",i0)' ) &
-                          TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                     CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
-                     thread_error = MAX(thread_error, Err_Thread)
-                  END IF
-               END IF
+               ! Get or compute cloud particle absorption/scattering properties
+               !
+               ! pos maps ChannelIndex to the column of opt%TOP/COP/AOP holding this
+               ! channel's data. It is 0 (not found) whenever the corresponding
+               ! Use_*_OP flag is off, or when it's on but this particular channel
+               ! isn't covered by the supplied OP_Input (e.g. a single-channel
+               ! OP_Input in a multi-channel run) - either way, fall through to the
+               ! usual internal computation for this channel.
+               pos = 0
+               IF ( Options_Present .AND. opt%Use_Total_OP ) pos = OP_Input_Channel_Position( opt%TOP, ChannelIndex )
+               IF ( pos >= 1 ) THEN ! use total optical properties from user-defined OP_Input
+                  AtmOptics(nt)%Include_Scattering = .TRUE.
+                  DO ilay = 1, Atm%n_Layers
+                     AtmOptics(nt)%Optical_Depth(ilay)         = AtmOptics(nt)%Optical_Depth(ilay)         + opt%TOP%tau(pos, ilay)
+                     AtmOptics(nt)%Single_Scatter_Albedo(ilay) = AtmOptics(nt)%Single_Scatter_Albedo(ilay) + opt%TOP%bs(pos, ilay)
+                     AtmOptics(nt)%Backscat_Coefficient(ilay)  = AtmOptics(nt)%Backscat_Coefficient(ilay)  + opt%TOP%kb(pos, ilay)
+                     DO iphas = 1, 1
+                        DO ileg = 0, AtmOptics(nt)%n_Legendre_Terms
+                        ileg1 = ileg + 1
+                        AtmOptics(nt)%Phase_Coefficient(ileg,iphas,ilay) = AtmOptics(nt)%Phase_Coefficient(ileg,iphas,ilay) + &
+                                                                           opt%TOP%pcoeff(pos,ilay,iphas,ileg1)
+                        END DO
+                     END DO
+                  END DO
 
-               ! Compute the aerosol absorption/scattering properties
-               IF ( Atm%n_Aerosols > 0 ) THEN
-                  Err_Thread = CRTM_Compute_AerosolScatter( Atm          , &  ! Input
-                                                              SensorIndex  , &  ! Input
-                                                              ChannelIndex , &  ! Input
-                                                              AtmOptics(nt), &  ! In/Output
-                                                              ASvar(nt)       ) ! Internal variable output
+               ELSE
 
-                  IF ( Err_Thread /= SUCCESS ) THEN
-                     WRITE( Message,'("Error computing AerosolScatter for ",a,&
-                          &", channel ",i0,", profile #",i0)' ) &
-                          TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                     CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
-                     thread_error = MAX(thread_error, Err_Thread)
+                  ! ...Clouds
+                  pos = 0
+                  IF ( Options_Present .AND. opt%Use_Cloud_OP ) pos = OP_Input_Channel_Position( opt%COP, ChannelIndex )
+                  IF ( pos >= 1 ) THEN ! use cloud optical properties from user-defined OP_Input
+                     ! Use user-defined cloud optical profiles
+                     AtmOptics(nt)%Include_Scattering = .TRUE.
+                     DO ilay = 1, Atm%n_Layers
+                        AtmOptics(nt)%Optical_Depth(ilay)         = AtmOptics(nt)%Optical_Depth(ilay)         + opt%COP%tau(pos, ilay)
+                        AtmOptics(nt)%Single_Scatter_Albedo(ilay) = AtmOptics(nt)%Single_Scatter_Albedo(ilay) + opt%COP%bs(pos, ilay)
+                        AtmOptics(nt)%Backscat_Coefficient(ilay)  = AtmOptics(nt)%Backscat_Coefficient(ilay)  + opt%COP%kb(pos, ilay)
+                        DO iphas = 1, 1
+                        DO ileg = 0, AtmOptics(nt)%n_Legendre_Terms
+                           ileg1 = ileg + 1
+                           AtmOptics(nt)%Phase_Coefficient(ileg,iphas,ilay) = AtmOptics(nt)%Phase_Coefficient(ileg,iphas,ilay) + &
+                                                                              opt%COP%pcoeff(pos,ilay,iphas,ileg1)
+                        END DO
+                        END DO
+                     END DO
+                  ELSEIF( Atm%n_Clouds > 0 ) THEN ! else compute, CRTM default
+                     ! Compute the cloud particle absorption/scattering properties
+                     Err_Thread = CRTM_Compute_CloudScatter( Atm          , &  ! Input
+                                                             GeometryInfo , &  ! Input
+                                                             SensorIndex  , &  ! Input
+                                                             ChannelIndex , &  ! Input
+                                                             AtmOptics(nt), &  ! Output
+                                                             CSvar(nt)       ) ! Internal variable output
+                     IF ( Err_Thread /= SUCCESS ) THEN
+                        WRITE( Message,'("Error computing CloudScatter for ",a,&
+                           &", channel ",i0,", profile #",i0)' ) &
+                           TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
+                           CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                        thread_error = MAX(thread_error, Err_Thread)
+                     END IF
                   END IF
-               END IF
+
+                  ! ...Aerosols
+                  pos = 0
+                  IF ( Options_Present .AND. opt%Use_Aerosol_OP ) pos = OP_Input_Channel_Position( opt%AOP, ChannelIndex )
+                  IF ( pos >= 1 ) THEN  ! use aerosol optical properties from user-defined OP_Input
+                     AtmOptics(nt)%Include_Scattering = .TRUE.
+                     DO ilay = 1, Atm%n_Layers
+                        AtmOptics(nt)%Optical_Depth(ilay)         = AtmOptics(nt)%Optical_Depth(ilay)         + opt%AOP%tau(pos, ilay)
+                        AtmOptics(nt)%Single_Scatter_Albedo(ilay) = AtmOptics(nt)%Single_Scatter_Albedo(ilay) + opt%AOP%bs(pos, ilay)
+                        AtmOptics(nt)%Backscat_Coefficient(ilay)  = AtmOptics(nt)%Backscat_Coefficient(ilay)  + opt%AOP%kb(pos, ilay)
+                        DO iphas = 1, 1
+                        DO ileg = 0, AtmOptics(nt)%n_Legendre_Terms
+                           ileg1 = ileg + 1
+                           AtmOptics(nt)%Phase_Coefficient(ileg,iphas,ilay) = AtmOptics(nt)%Phase_Coefficient(ileg,iphas,ilay) + &
+                                                                              opt%AOP%pcoeff(pos,ilay,iphas,ileg1)
+                        END DO
+                        END DO
+                     END DO
+                  ELSEIF ( Atm%n_Aerosols > 0 ) THEN ! else, CRTM default
+                     ! Compute the aerosol absorption/scattering properties
+                     Err_Thread = CRTM_Compute_AerosolScatter( Atm          , &  ! Input
+                                                               SensorIndex  , &  ! Input
+                                                               ChannelIndex , &  ! Input
+                                                               AtmOptics(nt), &  ! In/Output
+                                                               ASvar(nt)      )  ! Internal variable output
+                     IF ( Err_Thread /= SUCCESS ) THEN
+                        WRITE( Message,'("Error computing AerosolScatter for ",a,&
+                              &", channel ",i0,", profile #",i0)' ) &
+                              TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
+                        CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                        thread_error = MAX(thread_error, Err_Thread)
+                     END IF
+                  END IF
+               END IF  !IF ( Options_Present .AND. opt%Use_Total_OP )
 
                ! Compute the combined atmospheric optical properties
                IF( AtmOptics(nt)%Include_Scattering ) THEN

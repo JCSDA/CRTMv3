@@ -38,15 +38,12 @@ jobs:
           aws-region: us-east-2
 
       - name: Run JEDI CI
-        uses: JCSDA-internal/jedi-ci@develop
+        uses: JCSDA-internal/jedi-ci@v2
         with:
           container_version: latest
           target_project_name: crtm
-          test_dependencies: ioda ioda-data oops gsw ufo ufo-data
-          test_strategy: ALL
           test_script: run_tests.sh
           unittest_tag: CRTM_Tests
           bundle_repository: https://github.com/JCSDA/jedi-bundle.git
-          target_repo_dir: target_repository
           bundle_branch: develop
           jedi_ci_token: ${{ steps.generate-token.outputs.token }}

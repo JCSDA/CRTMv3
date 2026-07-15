@@ -395,6 +395,25 @@ target_link_libraries(Unit_Atmosphere_netCDF_io PRIVATE crtm)
 add_test(NAME test_Unit_Atmosphere_netCDF_io
          COMMAND $<TARGET_FILE:Unit_Atmosphere_netCDF_io>)
 
+add_executable(Unit_OP_TEST mains/unit/Unit_Test/test_OP.f90)
+target_link_libraries(Unit_OP_TEST PRIVATE crtm)
+add_test(NAME test_Unit_OP
+         COMMAND $<TARGET_FILE:Unit_OP_TEST>)
+
+add_executable(Unit_OP_Subset_TEST mains/unit/Unit_Test/test_OP_Subset.f90)
+target_link_libraries(Unit_OP_Subset_TEST PRIVATE crtm)
+add_test(NAME test_Unit_OP_Subset
+         COMMAND $<TARGET_FILE:Unit_OP_Subset_TEST>)
+
+# Utility to (re)generate the AOP/COP/TOP_SingleProfile.nc files used by Unit_OP_TEST
+add_executable(Generate_OP mains/unit/Unit_Test/Generate_OP.f90)
+target_link_libraries(Generate_OP PRIVATE crtm)
+
+# Utility to (re)generate the AOP/COP/TOP_Subset.nc files used by Unit_OP_Subset_TEST
+add_executable(Generate_OP_Subset mains/unit/Unit_Test/Generate_OP_Subset.f90)
+target_link_libraries(Generate_OP_Subset PRIVATE crtm)
+
+
 #SpcCoeff utilities
 list (APPEND SCoeff_Utils
   SpcCoeff_Edit
@@ -1015,6 +1034,16 @@ if(TMS_TAU_PRESENT)
   list(APPEND crtm_test_input
        TauCoeff/ODPS/netCDF/tms_tropics-01.TauCoeff.nc)
 endif()
+
+# Symlink OP test data
+CREATE_SYMLINK_FILENAME( ${CRTM_TEST_ROOT}/mains/unit/Unit_Test
+		                 ${CMAKE_CURRENT_BINARY_DIR}/testinput
+				             AOP_SingleProfile.nc
+				             COP_SingleProfile.nc
+				             TOP_SingleProfile.nc
+				             AOP_Subset.nc
+				             COP_Subset.nc
+				             TOP_Subset.nc )
 
 # Symlink all CRTM files
 # Version 3

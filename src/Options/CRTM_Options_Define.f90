@@ -51,6 +51,10 @@ MODULE CRTM_Options_Define
                                     CloudCover_Overcast_Overlap, &
                                     CloudCover_Overlap_IsValid, &
                                     CloudCover_Overlap_Name
+  USE OP_Input_Define      , ONLY: OP_Input_type, &
+                                   OPERATOR(==), &
+                                   OP_Input_IsValid, &
+                                   OP_Input_Inspect
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -196,6 +200,15 @@ MODULE CRTM_Options_Define
 
     ! Whether to skip this profile
     LOGICAL :: Skip_Profile = .FALSE.
+
+    ! User defined optical profiles
+    LOGICAL :: Use_Aerosol_OP = .FALSE.  ! Aerosol
+    LOGICAL :: Use_Cloud_OP   = .FALSE.  ! Cloud
+    LOGICAL :: Use_Total_OP   = .FALSE.  ! Aerosol + Cloud
+    TYPE(OP_Input_Type) :: AOP           ! Aerosol optical profiles
+    TYPE(OP_Input_Type) :: COP           ! Cloud optical profiles
+    TYPE(OP_Input_Type) :: TOP           ! Total optical profiles
+
   END TYPE CRTM_Options_type
   !:tdoc-:
 
@@ -420,8 +433,11 @@ CONTAINS
     Set_Overcast_Overlap         , &
     Use_Emissivity               , &
     Use_Direct_Reflectivity      , &
+    Use_Aerosol_OP               , &
+    Use_Cloud_OP                 , &
+    Use_Total_OP                 , &
     n_Streams                    , &
-    Aircraft_Pressure            , &
+    Aircraft_Pressure            , &  
     Compute_Down_Radiance        , &
     Compute_Down_Radiance_Profile, &
     Compute_Up_Radiance_Profile    )
@@ -441,6 +457,9 @@ CONTAINS
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Set_Overcast_Overlap
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_Emissivity
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_Direct_Reflectivity
+    LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_Aerosol_OP
+    LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_Cloud_OP
+    LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_Total_OP
     INTEGER ,      OPTIONAL, INTENT(IN)     :: n_Streams
     REAL(fp),      OPTIONAL, INTENT(IN)     :: Aircraft_Pressure
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Compute_Down_Radiance
@@ -493,6 +512,18 @@ CONTAINS
 
     IF ( PRESENT(Use_Direct_Reflectivity) ) &
       self%Use_Direct_Reflectivity = Use_Direct_Reflectivity .AND. self%Is_Allocated
+
+    ! Aerosol optical profiles
+    IF ( PRESENT(Use_Aerosol_OP) ) &
+      self%Use_Aerosol_OP = Use_Aerosol_OP .AND. self%Is_Allocated
+
+    ! Cloud optical profiles
+    IF ( PRESENT(Use_Cloud_OP) ) &
+      self%Use_Cloud_OP = Use_Cloud_OP .AND. self%Is_Allocated
+
+    ! Total optical profiles
+    IF ( PRESENT(Use_Total_OP) ) &
+      self%Use_Total_OP = Use_Total_OP .AND. self%Is_Allocated
 
   END SUBROUTINE CRTM_Options_SetValue
 
@@ -849,6 +880,19 @@ CONTAINS
     ! Check cloud overlap option validity
     IsValid = CloudCover_Overlap_IsValid( self%Overlap_Id ) .AND. IsValid
 
+    ! Check OP input Options
+    IF ( self%Use_Aerosol_OP ) THEN
+      IsValid = OP_Input_IsValid( self%AOP ) .AND. IsValid
+    END IF
+
+    IF ( self%Use_Cloud_OP ) THEN
+      IsValid = OP_Input_IsValid( self%COP ) .AND. IsValid
+    END IF
+
+    IF ( self%Use_Total_OP ) THEN
+      IsValid = OP_Input_IsValid( self%TOP ) .AND. IsValid
+    END IF
+
   END FUNCTION CRTM_Options_IsValid
 
 
@@ -909,6 +953,10 @@ CONTAINS
     CALL SSU_Input_Inspect( self%SSU )
     ! ...Zeeman input
     CALL Zeeman_Input_Inspect( self%Zeeman )
+    ! ...OP input
+    CALL OP_Input_Inspect( self%AOP )
+    CALL OP_Input_Inspect( self%COP )
+    CALL OP_Input_Inspect( self%TOP )
 
   END SUBROUTINE CRTM_Options_Inspect
 

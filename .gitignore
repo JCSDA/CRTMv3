@@ -14,3 +14,4 @@ build.bash
 rebuild.bash
 *~
 conductor/
+.vscode/
