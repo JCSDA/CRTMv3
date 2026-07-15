@@ -63,7 +63,7 @@ MODULE OP_Input_Define
 
   ! NetCDF attributes
   ! Global attribute names. Case sensitive
-  CHARACTER(*), PARAMETER :: RELEASE_GATTNAME     = 'Release'
+  CHARACTER(*), PARAMETER :: RELEASE_GATTNAME   = 'Release'
 
   ! Dimension names
   CHARACTER(*), PARAMETER :: CHANNEL_DIMNAME    = 'n_Channels'
@@ -118,12 +118,6 @@ MODULE OP_Input_Define
     INTEGER :: n_Layers           = 0  ! L dimension
     INTEGER :: n_Phase_Elements   = 0  ! Ip dimension
     INTEGER :: n_Legendre_Terms   = 0  ! Il dimension
-
-    ! Scalar components
-    ! LOGICAL  :: Include_Scattering = .TRUE.
-    ! INTEGER  :: lOffset = 0    ! Start position in array for Legendre coefficients
-    ! REAL(fp) :: Scattering_Optical_Depth = ZERO
-    ! REAL(fp) :: depolarization = 0.0279_fp
 
     REAL(fp), ALLOCATABLE :: tau(:,:)         ! K * L
     REAL(fp), ALLOCATABLE :: bs(:,:)          ! K * L
@@ -371,7 +365,7 @@ CONTAINS
                  OP%n_Phase_Elements     , &  ! Input
                  OP%n_Legendre_Terms     , &  ! Input
                  OP%Release              , &  ! Input
-                 FileId                   )    ! Output
+                 FileId                  )    ! Output
     IF ( err_stat /= SUCCESS ) THEN
        msg = 'Error creating output file '//TRIM(Filename)
        CALL Write_Cleanup(); RETURN
@@ -594,7 +588,7 @@ CONTAINS
              pcoeff( n_Channels         , &
                      n_Layers           , &
                      n_Phase_Elements   , &
-                     n_Legendre_Terms   ), &
+                     n_Legendre_Terms  ), &
              channel_index( n_Channels ), &
              STAT = alloc_stat )
     IF ( alloc_stat /= 0 ) RETURN
@@ -986,7 +980,7 @@ CONTAINS
 !--------------------------------------------------------------------------------
 
   ELEMENTAL SUBROUTINE OP_Input_Create( &
-      OP             , &
+      OP              , &
       n_Channels      , &
       n_Layers        , &
       n_Phase_Elements, &
@@ -1013,10 +1007,10 @@ CONTAINS
                OP%bs(  n_Channels, n_Layers ), &
                OP%kb(  n_Channels, n_Layers ), &
                OP%pcoeff( n_Channels         , &
-                           n_Layers           , &
-                           n_Phase_Elements   , &
-                           n_Legendre_Terms   ), &
-               OP%Channel_Index( n_Channels )  , &
+                          n_Layers           , &
+                          n_Phase_Elements   , &
+                          n_Legendre_Terms  ), &
+               OP%Channel_Index( n_Channels ), &
                STAT = alloc_stat )
       IF ( alloc_stat /= 0 ) RETURN
 
@@ -1082,7 +1076,7 @@ CONTAINS
 
   FUNCTION OP_Input_Channel_Position( OP, ChannelIndex ) RESULT( pos )
     TYPE(OP_Input_type), INTENT(IN) :: OP
-    INTEGER,              INTENT(IN) :: ChannelIndex
+    INTEGER,             INTENT(IN) :: ChannelIndex
     INTEGER :: pos
     INTEGER :: i
 
@@ -1310,15 +1304,14 @@ CONTAINS
     ! Setup
     is_equal = .FALSE.
 
-    is_equal = (x%n_Layers              == y%n_Layers             ) .AND. &
-               (x%n_Phase_Elements      == y%n_Phase_Elements     ) .AND. &
-               (x%n_Legendre_Terms      == y%n_Legendre_Terms     ) !.AND. &
-            ! ALL(x%Optical_Depth         .EqualTo. y%Optical_Depth        ) .AND. &
-            ! ALL(x%Single_Scatter_Albedo .EqualTo. y%Single_Scatter_Albedo) .AND. &
-            ! ALL(x%Asymmetry_Factor      .EqualTo. y%Asymmetry_Factor     ) .AND. &
-            ! ALL(x%Backscat_Coefficient  .EqualTo. y%Backscat_Coefficient ) .AND. &
-            ! ALL(x%Delta_Truncation      .EqualTo. y%Delta_Truncation     ) .AND. &
-            ! ALL(x%Phase_Coefficient     .EqualTo. y%Phase_Coefficient    )
+    is_equal = (x%n_Channels       == y%n_Channels      ) .AND. &
+               (x%n_Layers         == y%n_Layers        ) .AND. &
+               (x%n_Phase_Elements == y%n_Phase_Elements) .AND. &
+               (x%n_Legendre_Terms == y%n_Legendre_Terms) .AND. &
+            ALL(x%tau    .EqualTo. y%tau   ) .AND. &
+            ALL(x%kb     .EqualTo. y%kb    ) .AND. &
+            ALL(x%bs     .EqualTo. y%bs    ) .AND. &
+            ALL(x%pcoeff .EqualTo. y%pcoeff)
   END FUNCTION OP_Input_Equal
 
 END MODULE OP_Input_Define

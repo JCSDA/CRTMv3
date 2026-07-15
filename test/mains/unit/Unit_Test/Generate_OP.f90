@@ -236,7 +236,7 @@ PROGRAM Generate_OP
     AtmOptics_Cloud%Include_Scattering = .TRUE.
     IF ( Atm_x(1)%n_Clouds > 0 ) THEN
       CALL CSvar_Create( CSvar, n_Full_Streams, n_Phase_Elements, Atm_x(1)%n_Layers, Atm_x(1)%n_Clouds )
-      Error_Status = CRTM_Compute_CloudScatter( Atm_x(1)       , &  ! Input
+      Error_Status = CRTM_Compute_CloudScatter(  Atm_x(1)       , &  ! Input
                                                  GeometryInfo(1), &  ! Input
                                                  SensorIndex    , &  ! Input
                                                  ChannelIndex   , &  ! Input
@@ -257,7 +257,7 @@ PROGRAM Generate_OP
     AtmOptics_Aerosol%Include_Scattering = .TRUE.
     IF ( Atm_x(1)%n_Aerosols > 0 ) THEN
       CALL ASvar_Create( ASvar, n_Full_Streams, n_Phase_Elements, Atm_x(1)%n_Layers, Atm_x(1)%n_Aerosols )
-      Error_Status = CRTM_Compute_AerosolScatter( Atm_x(1)         , &  ! Input
+      Error_Status = CRTM_Compute_AerosolScatter(  Atm_x(1)         , &  ! Input
                                                    SensorIndex      , &  ! Input
                                                    ChannelIndex     , &  ! Input
                                                    AtmOptics_Aerosol, &  ! Output

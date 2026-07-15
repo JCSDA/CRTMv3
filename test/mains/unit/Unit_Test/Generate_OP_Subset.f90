@@ -4,11 +4,7 @@
 ! Utility program to generate user-defined aerosol/cloud/total optical
 ! profile (AOP/COP/TOP) netCDF files that cover only a SUBSET of a sensor's
 ! channels (channels 2 and 3 of 'v.abi_gr' here), rather than every channel
-! the sensor has. Otherwise identical to Generate_OP.f90 - same atmosphere/
-! surface data, same fixed 16-stream setup. The resulting files exercise the
-! OP_Input%Channel_Index / OP_Input_Channel_Position channel-mapping fix for
-! CRTMv3 issue #327 (https://github.com/JCSDA/CRTMv3/issues/327), and are
-! read back by test_OP_Subset.f90.
+! the sensor has. Otherwise identical to Generate_OP.f90 
 
 
 
