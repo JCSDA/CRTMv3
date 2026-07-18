@@ -75,6 +75,7 @@ MODULE ODPS_Predictor
   PUBLIC :: GROUP_1
   PUBLIC :: GROUP_2
   PUBLIC :: GROUP_3
+  PUBLIC :: GROUP_MW_O3
   PUBLIC :: ALLOW_OPTRAN
 
 
@@ -82,14 +83,18 @@ MODULE ODPS_Predictor
   ! Module parameters
   ! -----------------
   ! Dimensions of each predictor group.
-  INTEGER, PARAMETER  :: N_G = 3
-  INTEGER, PARAMETER  :: N_COMPONENTS_G(N_G)     = (/8,   5, 2/)
-  INTEGER, PARAMETER  :: N_ABSORBERS_G(N_G)      = (/6,   3, 1/)
-  INTEGER, PARAMETER  :: MAX_N_PREDICTORS_G(N_G) = (/18, 15, 14/)
+  ! Group 7 is the MW+ozone variant of group 3 (indexes 4 - 6 are Zeeman);
+  ! entries 4 - 6 in the dimension tables are placeholders (Zeeman has its
+  ! own predictor module and never reaches these tables).
+  INTEGER, PARAMETER  :: N_G = 7
+  INTEGER, PARAMETER  :: N_COMPONENTS_G(N_G)     = (/8,   5, 2, 0, 0, 0, 3/)
+  INTEGER, PARAMETER  :: N_ABSORBERS_G(N_G)      = (/6,   3, 1, 0, 0, 0, 2/)
+  INTEGER, PARAMETER  :: MAX_N_PREDICTORS_G(N_G) = (/18, 15, 14, 0, 0, 0, 14/)
   ! Group index (note, group indexes 4 - 6 are reserved for Zeeman sub-algorithms
   INTEGER, PARAMETER :: GROUP_1 = 1
   INTEGER, PARAMETER :: GROUP_2 = 2
   INTEGER, PARAMETER :: GROUP_3 = 3
+  INTEGER, PARAMETER :: GROUP_MW_O3 = 7   ! MW with a scene-ozone component
 
   ! Number of predictors for each component
   INTEGER, PARAMETER :: N_PREDICTORS_G1(8) = (/ &
@@ -114,6 +119,11 @@ MODULE ODPS_Predictor
   INTEGER, PARAMETER :: N_PREDICTORS_G3(2) = (/ &
                      7, &  ! dry gas
                     14 /)  ! water vapor line and continua
+
+  INTEGER, PARAMETER :: N_PREDICTORS_G7(3) = (/ &
+                     7, &  ! effective dry gas (climatological trace gases folded in)
+                    14, &  ! water vapor line and continua
+                    11 /)  ! ozone (same formulation as the IR ozone component)
 
 
   ! Component IDs
@@ -145,6 +155,7 @@ MODULE ODPS_Predictor
   ! MW sensor Component indexes
   INTEGER, PARAMETER :: COMP_DRY_MW = 1
   INTEGER, PARAMETER :: COMP_WET_MW = 2
+  INTEGER, PARAMETER :: COMP_OZO_MW = 3   ! GROUP_MW_O3 only
 
   ! Component index to component ID mapping
   INTEGER, PARAMETER :: COMPONENT_ID_MAP_G1(8) = (/ &
@@ -168,6 +179,11 @@ MODULE ODPS_Predictor
                                   EDRY_ComID, &
                                    WET_ComID /)
 
+  INTEGER, PARAMETER :: COMPONENT_ID_MAP_G7(3) = (/ &
+                                  EDRY_ComID, &
+                                   WET_ComID, &
+                                   OZO_ComID /)
+
   ! Absorber IDs (HITRAN)
   INTEGER, PARAMETER ::   H2O_ID =  1
   INTEGER, PARAMETER ::   CO2_ID =  2
@@ -185,6 +201,7 @@ MODULE ODPS_Predictor
   INTEGER,  PARAMETER :: ABS_CH4_IR = 6
 
   INTEGER,  PARAMETER :: ABS_H2O_MW = 1
+  INTEGER,  PARAMETER :: ABS_O3_MW  = 2   ! GROUP_MW_O3 only
 
   ! Absorber index to absorber ID mapping
   INTEGER,  PARAMETER :: ABSORBER_ID_MAP_G1(6) = (/ &
@@ -202,6 +219,10 @@ MODULE ODPS_Predictor
 
   INTEGER,  PARAMETER :: ABSORBER_ID_MAP_G3(1) = (/ &
                                            H2O_ID /)
+
+  INTEGER,  PARAMETER :: ABSORBER_ID_MAP_G7(2) = (/ &
+                                           H2O_ID, &
+                                           O3_ID /)
   ! Literal constants
   REAL(fp), PARAMETER :: ZERO      = 0.0_fp
   REAL(fp), PARAMETER :: ONE       = 1.0_fp
@@ -766,7 +787,7 @@ CONTAINS
     SELECT CASE( Group_ID )
       CASE( GROUP_1, GROUP_2 )
          CALL ODPS_Compute_Predictor_IR()
-      CASE( GROUP_3 )
+      CASE( GROUP_3, GROUP_MW_O3 )
          CALL ODPS_Compute_Predictor_MW()
     END SELECT
 
@@ -1028,6 +1049,9 @@ CONTAINS
       REAL(fp) ::    H2O_S
       REAL(fp) ::    H2O_R4
       REAL(fp) ::    H2OdH2OTzp
+      REAL(fp) ::    O3
+      REAL(fp) ::    O3_A
+      REAL(fp) ::    O3_R
 
       Layer_Loop : DO k = 1, n_Layers
 
@@ -1057,7 +1081,11 @@ CONTAINS
        !#-------------------------------------------------------------------#
 
        ! set number of predictors
-        Predictor%n_CP = N_PREDICTORS_G3
+        IF ( Group_ID == GROUP_MW_O3 ) THEN
+          Predictor%n_CP = N_PREDICTORS_G7
+        ELSE
+          Predictor%n_CP = N_PREDICTORS_G3
+        END IF
 
         !  ----------------------
         !   Fixed (Dry) predictors
@@ -1087,6 +1115,26 @@ CONTAINS
         Predictor%X(k, 12,COMP_WET_MW) = H2O_S*H2O_A
         Predictor%X(k, 13,COMP_WET_MW) = H2O_S*H2O_S
         Predictor%X(k, 14,COMP_WET_MW) = H2OdH2OTzp
+
+        !  -----------------------
+        !  Ozone predictors (GROUP_MW_O3 only; same formulation as IR)
+        !  -----------------------
+        IF ( Group_ID == GROUP_MW_O3 ) THEN
+          O3   = Absorber(k,ABS_O3_MW)/Ref_Absorber(k, ABS_O3_MW)
+          O3_A = SECANG(k)*O3
+          O3_R = SQRT( O3_A )
+          Predictor%X(k, 1, COMP_OZO_MW)  = O3_A
+          Predictor%X(k, 2, COMP_OZO_MW)  = O3_A*DT
+          Predictor%X(k, 3, COMP_OZO_MW)  = O3_A*O3*GAzp(k,ABS_O3_MW)
+          Predictor%X(k, 4, COMP_OZO_MW)  = O3_A*O3_A
+          Predictor%X(k, 5, COMP_OZO_MW)  = O3_A*GAzp(k,ABS_O3_MW)
+          Predictor%X(k, 6, COMP_OZO_MW)  = O3_A*SQRT(SECANG(k)*GAzp(k,ABS_O3_MW))
+          Predictor%X(k, 7, COMP_OZO_MW)  = O3_R*DT
+          Predictor%X(k, 8, COMP_OZO_MW)  = O3_R
+          Predictor%X(k, 9, COMP_OZO_MW)  = O3_R*O3/GAzp(k,ABS_O3_MW)
+          Predictor%X(k,10, COMP_OZO_MW)  = SECANG(k)*GAzp(k,ABS_O3_MW)
+          Predictor%X(k,11, COMP_OZO_MW)  = (SECANG(k)*GAzp(k,ABS_O3_MW))**2
+        END IF
 
       END DO Layer_Loop
 
@@ -1276,7 +1324,7 @@ CONTAINS
     SELECT CASE( Group_ID )
       CASE( GROUP_1, GROUP_2 )
          CALL ODPS_Compute_Predictor_IR_TL()
-      CASE( GROUP_3 )
+      CASE( GROUP_3, GROUP_MW_O3 )
          CALL ODPS_Compute_Predictor_MW_TL()
     END SELECT
 
@@ -1603,6 +1651,9 @@ CONTAINS
       REAL(fp) ::    H2O_S,        H2O_S_TL
       REAL(fp) ::    H2O_R4,       H2O_R4_TL
       REAL(fp) ::    H2OdH2OTzp,   H2OdH2OTzp_TL
+      REAL(fp) ::    O3,           O3_TL
+      REAL(fp) ::    O3_A,         O3_A_TL
+      REAL(fp) ::    O3_R,         O3_R_TL
 
       Layer_Loop : DO k = 1, n_Layers
 
@@ -1650,7 +1701,11 @@ CONTAINS
        !#-------------------------------------------------------------------#
 
        ! set number of predictors
-        Predictor_TL%n_CP = N_PREDICTORS_G3
+        IF ( Group_ID == GROUP_MW_O3 ) THEN
+          Predictor_TL%n_CP = N_PREDICTORS_G7
+        ELSE
+          Predictor_TL%n_CP = N_PREDICTORS_G3
+        END IF
 
         !  ----------------------
         !   Fixed (Dry) predictors
@@ -1681,6 +1736,36 @@ CONTAINS
         Predictor_TL%X(k, 12,COMP_WET_MW) = H2O_S_TL*H2O_A + H2O_S*H2O_A_TL
         Predictor_TL%X(k, 13,COMP_WET_MW) = TWO*H2O_S*H2O_S_TL
         Predictor_TL%X(k, 14,COMP_WET_MW) = H2OdH2OTzp_TL
+
+        !  -----------------------
+        !  Ozone predictors (GROUP_MW_O3 only)
+        !  -----------------------
+        IF ( Group_ID == GROUP_MW_O3 ) THEN
+          O3      = Absorber(k,ABS_O3_MW)/Ref_Absorber(k, ABS_O3_MW)
+          O3_TL   = Absorber_TL(k,ABS_O3_MW)/Ref_Absorber(k, ABS_O3_MW)
+          O3_A    = SECANG(k)*O3
+          O3_A_TL = SECANG(k)*O3_TL
+          O3_R    = SQRT( O3_A )
+          O3_R_TL = (POINT_5 / SQRT(O3_A)) * O3_A_TL
+          Predictor_TL%X(k, 1, COMP_OZO_MW)  = O3_A_TL
+          Predictor_TL%X(k, 2, COMP_OZO_MW)  = O3_A_TL*DT + O3_A*DT_TL
+          Predictor_TL%X(k, 3, COMP_OZO_MW)  = O3_A_TL*O3*PAFV%GAzp(k,ABS_O3_MW) &
+                                             + O3_A*O3_TL*PAFV%GAzp(k,ABS_O3_MW) &
+                                             + O3_A*O3*GAzp_TL(k,ABS_O3_MW)
+          Predictor_TL%X(k, 4, COMP_OZO_MW)  = TWO*O3_A*O3_A_TL
+          Predictor_TL%X(k, 5, COMP_OZO_MW)  = O3_A_TL*PAFV%GAzp(k,ABS_O3_MW) &
+                                             + O3_A*GAzp_TL(k,ABS_O3_MW)
+          Predictor_TL%X(k, 6, COMP_OZO_MW)  = O3_A_TL*SQRT(SECANG(k)*PAFV%GAzp(k,ABS_O3_MW)) &
+                                             + O3_A*POINT_5*SQRT(SECANG(k)/PAFV%GAzp(k,ABS_O3_MW)) &
+                                              *GAzp_TL(k,ABS_O3_MW)
+          Predictor_TL%X(k, 7, COMP_OZO_MW)  = O3_R_TL*DT + O3_R*DT_TL
+          Predictor_TL%X(k, 8, COMP_OZO_MW)  = O3_R_TL
+          Predictor_TL%X(k, 9, COMP_OZO_MW)  = O3_R_TL*O3/PAFV%GAzp(k,ABS_O3_MW) &
+                                             + O3_R*O3_TL/PAFV%GAzp(k,ABS_O3_MW) &
+                                             - O3_R*O3*GAzp_TL(k,ABS_O3_MW)/PAFV%GAzp(k,ABS_O3_MW)**2
+          Predictor_TL%X(k,10, COMP_OZO_MW)  = SECANG(k)*GAzp_TL(k,ABS_O3_MW)
+          Predictor_TL%X(k,11, COMP_OZO_MW)  = TWO*SECANG(k)**2 * PAFV%GAzp(k,ABS_O3_MW)*GAzp_TL(k,ABS_O3_MW)
+        END IF
 
       END DO Layer_Loop
 
@@ -1857,7 +1942,7 @@ CONTAINS
     SELECT CASE( Group_ID )
       CASE( GROUP_1, GROUP_2 )
          CALL ODPS_Compute_Predictor_IR_AD()
-      CASE( GROUP_3 )
+      CASE( GROUP_3, GROUP_MW_O3 )
          CALL ODPS_Compute_Predictor_MW_AD()
     END SELECT
 
@@ -2475,6 +2560,9 @@ CONTAINS
       REAL(fp) :: H2O_S,        H2O_S_AD
       REAL(fp) :: H2O_R4,       H2O_R4_AD
       REAL(fp) :: H2OdH2OTzp,   H2OdH2OTzp_AD
+      REAL(fp) :: O3,           O3_AD
+      REAL(fp) :: O3_A,         O3_A_AD
+      REAL(fp) :: O3_R,         O3_R_AD
 
       DT_AD         = ZERO
       T_AD          = ZERO
@@ -2486,6 +2574,9 @@ CONTAINS
       H2O_S_AD      = ZERO
       H2O_R4_AD     = ZERO
       H2OdH2OTzp_AD = ZERO
+      O3_AD         = ZERO
+      O3_A_AD       = ZERO
+      O3_R_AD       = ZERO
 
       Layer_Loop : DO k = n_Layers, 1, -1
 
@@ -2510,12 +2601,22 @@ CONTAINS
         H2O_R4 = SQRT( H2O_R )
         H2OdH2OTzp = H2O/PAFV%GATzp(k, ABS_H2O_MW)
 
+        IF ( Group_ID == GROUP_MW_O3 ) THEN
+          O3   = Absorber(k,ABS_O3_MW)/Ref_Absorber(k, ABS_O3_MW)
+          O3_A = SECANG(k)*O3
+          O3_R = SQRT( O3_A )
+        END IF
+
        !#-------------------------------------------------------------------#
        !#        -- Predictors --                                           #
        !#-------------------------------------------------------------------#
 
        ! set number of predictors
-        Predictor_AD%n_CP = N_PREDICTORS_G3
+        IF ( Group_ID == GROUP_MW_O3 ) THEN
+          Predictor_AD%n_CP = N_PREDICTORS_G7
+        ELSE
+          Predictor_AD%n_CP = N_PREDICTORS_G3
+        END IF
 
         !  ----------------------
         !   Fixed (Dry) predictors
@@ -2595,6 +2696,52 @@ CONTAINS
         Predictor_AD%X(k, 12,COMP_WET_MW) = ZERO
         Predictor_AD%X(k, 13,COMP_WET_MW) = ZERO
         Predictor_AD%X(k, 14,COMP_WET_MW) = ZERO
+
+        !  -----------------------
+        !  Ozone predictors (GROUP_MW_O3 only)
+        !  -----------------------
+        IF ( Group_ID == GROUP_MW_O3 ) THEN
+
+          O3_A_AD = O3_A_AD                                                       &
+                    + Predictor_AD%X(k, 1, COMP_OZO_MW)                           &
+                    + Predictor_AD%X(k, 2, COMP_OZO_MW)*DT                        &
+                    + Predictor_AD%X(k, 3, COMP_OZO_MW)*O3*PAFV%GAzp(k,ABS_O3_MW) &
+                    + Predictor_AD%X(k, 4, COMP_OZO_MW)*TWO*O3_A                  &
+                    + Predictor_AD%X(k, 5, COMP_OZO_MW)*PAFV%GAzp(k,ABS_O3_MW)    &
+                    + Predictor_AD%X(k, 6, COMP_OZO_MW)*SQRT(SECANG(k)*PAFV%GAzp(k,ABS_O3_MW))
+
+          DT_AD   = DT_AD                                                         &
+                    + Predictor_AD%X(k, 2, COMP_OZO_MW)*O3_A                      &
+                    + Predictor_AD%X(k, 7, COMP_OZO_MW)*O3_R
+
+          O3_AD   = O3_AD                                                         &
+                    + Predictor_AD%X(k, 3, COMP_OZO_MW)*O3_A*PAFV%GAzp(k,ABS_O3_MW) &
+                    + Predictor_AD%X(k, 9, COMP_OZO_MW)*O3_R/PAFV%GAzp(k,ABS_O3_MW)
+
+          GAzp_AD(k,ABS_O3_MW) = GAzp_AD(k,ABS_O3_MW)                             &
+                    + Predictor_AD%X(k, 3, COMP_OZO_MW)*O3_A*O3                   &
+                    + Predictor_AD%X(k, 5, COMP_OZO_MW)*O3_A                      &
+                    + Predictor_AD%X(k, 6, COMP_OZO_MW)*POINT_5*O3_A*SQRT(SECANG(k)/PAFV%GAzp(k,ABS_O3_MW)) &
+                    - Predictor_AD%X(k, 9, COMP_OZO_MW)*O3_R*O3/PAFV%GAzp(k,ABS_O3_MW)**2 &
+                    + Predictor_AD%X(k,10, COMP_OZO_MW)*SECANG(k)                 &
+                    + Predictor_AD%X(k,11, COMP_OZO_MW)*TWO*SECANG(k)**2*PAFV%GAzp(k,ABS_O3_MW)
+
+          O3_R_AD = O3_R_AD                                                       &
+                    + Predictor_AD%X(k, 7, COMP_OZO_MW)*DT                        &
+                    + Predictor_AD%X(k, 8, COMP_OZO_MW)                           &
+                    + Predictor_AD%X(k, 9, COMP_OZO_MW)*O3/PAFV%GAzp(k,ABS_O3_MW)
+
+          Predictor_AD%X(k, 1:11, COMP_OZO_MW) = ZERO
+
+          O3_A_AD = O3_A_AD + O3_R_AD * POINT_5 / SQRT(O3_A)
+          O3_AD   = O3_AD + O3_A_AD * SECANG(k)
+          O3_R_AD = ZERO
+          O3_A_AD = ZERO
+          Absorber_AD(k,ABS_O3_MW) = Absorber_AD(k,ABS_O3_MW)            &
+                                   + O3_AD / Ref_Absorber(k, ABS_O3_MW)
+          O3_AD   = ZERO
+
+        END IF
 
         !-------------------------------------------
         !  Abosrber amount scalled by the reference
@@ -3263,6 +3410,8 @@ CONTAINS
          Component_ID = COMPONENT_ID_MAP_G2(Component_Index)
       CASE( GROUP_3 )
          Component_ID = COMPONENT_ID_MAP_G3(Component_Index)
+      CASE( GROUP_MW_O3 )
+         Component_ID = COMPONENT_ID_MAP_G7(Component_Index)
       CASE DEFAULT
          Component_ID = HUGE(Component_ID)  ! Entry not found: Hopefully induce code to fail 
     END SELECT
@@ -3280,6 +3429,8 @@ CONTAINS
           Absorber_ID = ABSORBER_ID_MAP_G2(Absorber_Index)
       CASE( GROUP_3 )
           Absorber_ID = ABSORBER_ID_MAP_G3(Absorber_Index)
+      CASE( GROUP_MW_O3 )
+          Absorber_ID = ABSORBER_ID_MAP_G7(Absorber_Index)
       CASE DEFAULT
           Absorber_ID = HUGE(Absorber_ID)  ! Entry not found: Hopefully induce code to fail 
       END SELECT
@@ -3289,7 +3440,8 @@ CONTAINS
   PURE FUNCTION ODPS_Get_Ozone_Component_ID(Group_Index) RESULT( Ozone_Component_ID )
     INTEGER, INTENT(IN) :: Group_Index
     INTEGER :: Ozone_Component_ID
-    IF( Group_Index == GROUP_1 .OR. Group_Index == GROUP_2)THEN
+    IF( Group_Index == GROUP_1 .OR. Group_Index == GROUP_2 .OR. &
+        Group_Index == GROUP_MW_O3 )THEN
       Ozone_Component_ID = OZO_ComID
     ELSE
       Ozone_Component_ID = -1

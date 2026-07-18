@@ -650,6 +650,22 @@ else()
   message(STATUS "test_VectorRT_TLADK not registered (needs mwr_aws coeffs + CloudCoeff_Exp_Full6.nc).")
 endif()
 
+# test_MW_O3_TLAD: TL/AD/K parity for the MW scene-ozone ODPS component
+# (GROUP_MW_O3, Group_Index=7). Verifies TL-vs-central-FD for O3/H2O/T column
+# perturbations, the adjoint dot-product over T+H2O+O3, and K-vs-AD on the
+# most O3-sensitive channel. Self-adapting: against a 2-component group-3
+# TauCoeff (the stock testinput link) it asserts the O3 response is
+# identically zero (backward-compatibility control); against a group-7 file
+# it exercises the ozone predictor TL/AD/K blocks end-to-end.
+add_executable(test_MW_O3_TLAD mains/unit/Unit_Test/test_MW_O3_TLAD.f90)
+target_link_libraries(test_MW_O3_TLAD PRIVATE crtm)
+if(AWS_COEFFS_PRESENT)
+  add_test(NAME test_MW_O3_TLAD
+           COMMAND $<TARGET_FILE:test_MW_O3_TLAD>)
+else()
+  message(STATUS "test_MW_O3_TLAD not registered (needs mwr_aws coeffs).")
+endif()
+
 # test_Grazing_SfcOptics: regression test for the catastrophic-reflectivity
 # guard in the MW-water surface optics (CRTM_FastemX and CRTM_PARMIO). Drives
 # both backends directly at grazing zenith angles + 325 GHz (where the reflection
