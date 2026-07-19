@@ -1201,13 +1201,16 @@ CONTAINS
       ! profile in s_Level_Rad_DOWN; ADA/VMOM in s_Level_Rad_DOWNT (s_Level_Rad_DOWN
       ! holds the intermediate adding-down values for the TL/AD).
       IF ( RTV%Compute_Down_Radiance_Profile .AND. CRTM_RTSolution_Associated(RTSolution) ) THEN
-        no = RTSolution%n_Layers
         na = RTV%n_Added_Layers
         nt = RTV%n_Layers
+        ! Clamp to the conformant extent: a user RTSolution allocated with a
+        ! different n_Layers than the atmosphere must not drive the section
+        ! assignment out of bounds.
+        no = MIN( RTSolution%n_Layers, nt - na )
         IF ( RTV%RT_Algorithm_Id == RT_SOI ) THEN
-          RTSolution%Downwelling_Radiance(1:no) = RTV%s_Level_Rad_DOWN(n1, na+1:nt)
+          RTSolution%Downwelling_Radiance(1:no) = RTV%s_Level_Rad_DOWN(n1, na+1:na+no)
         ELSE
-          RTSolution%Downwelling_Radiance(1:no) = RTV%s_Level_Rad_DOWNT(n1, na+1:nt)
+          RTSolution%Downwelling_Radiance(1:no) = RTV%s_Level_Rad_DOWNT(n1, na+1:na+no)
         END IF
       END IF
 
@@ -1217,13 +1220,13 @@ CONTAINS
       ! the intermediate adding-up values for the TL/AD). The emission/clear path sets
       ! Upwelling_Radiance unconditionally (below).
       IF ( RTV%Compute_Up_Radiance_Profile .AND. CRTM_RTSolution_Associated(RTSolution) ) THEN
-        no = RTSolution%n_Layers
         na = RTV%n_Added_Layers
         nt = RTV%n_Layers
+        no = MIN( RTSolution%n_Layers, nt - na )  ! conformant extent (see above)
         IF ( RTV%RT_Algorithm_Id == RT_SOI ) THEN
-          RTSolution%Upwelling_Radiance(1:no) = RTV%s_Level_Rad_UP(n1, na+1:nt)
+          RTSolution%Upwelling_Radiance(1:no) = RTV%s_Level_Rad_UP(n1, na+1:na+no)
         ELSE
-          RTSolution%Upwelling_Radiance(1:no) = RTV%s_Level_Rad_UPT(n1, na+1:nt)
+          RTSolution%Upwelling_Radiance(1:no) = RTV%s_Level_Rad_UPT(n1, na+1:na+no)
         END IF
       END IF
 
@@ -1244,17 +1247,20 @@ CONTAINS
       RTSolution%Surface_Planck_Radiance = RTV%Planck_Surface
       IF ( CRTM_RTSolution_Associated( RTSolution ) ) THEN
         ! Shorter names for indexing
-        no = RTSolution%n_Layers  ! Original no. of layers
         na = RTV%n_Added_Layers   ! No. of added layers
         nt = RTV%n_Layers         ! Current total no. of layers
+        ! Original no. of layers, clamped to the conformant extent (a user
+        ! RTSolution allocated with a different n_Layers must not drive the
+        ! section assignments out of bounds)
+        no = MIN( RTSolution%n_Layers, nt - na )
         ! Assign only the upwelling radiance profile
         ! defined by the user input layering
-        RTSolution%Upwelling_Radiance(1:no) = RTV%e_Level_Rad_UP(na+1:nt)
-        RTSolution%Upwelling_Overcast_Radiance(1:no) = RTV%e_Cloud_Radiance_UP(na+1:nt)
+        RTSolution%Upwelling_Radiance(1:no) = RTV%e_Level_Rad_UP(na+1:na+no)
+        RTSolution%Upwelling_Overcast_Radiance(1:no) = RTV%e_Cloud_Radiance_UP(na+1:na+no)
         ! Level-resolved downwelling radiance profile (opt-in). Surface value
         ! (level nt) equals the Down_Radiance scalar.
         IF ( RTV%Compute_Down_Radiance_Profile ) &
-          RTSolution%Downwelling_Radiance(1:no) = RTV%e_Level_Rad_DOWN(na+1:nt)
+          RTSolution%Downwelling_Radiance(1:no) = RTV%e_Level_Rad_DOWN(na+1:na+no)
       END IF
     END IF
 
@@ -3036,16 +3042,20 @@ CONTAINS
     END DO
 
     IF( RTV%n_Streams < nZ ) THEN
-      ! Sensor viewing angle differs from the Gaussian angles
+      ! Sensor viewing angle differs from the Gaussian angles. The intensity
+      ! element of the sensor-angle block is column/row (nZ-1)*n_Stokes+1
+      ! (same j1 convention as every block above), NOT nZ*n_Stokes, which is
+      ! the last polarized component of that block.
+      i1 = (nZ-1)*RTV%n_Stokes + 1
       RTV%n_Factor(nZ,k) =  RTV%Sum_Fac(nZ-1,k)
       DO j = 1, nZ
         j1 = (j-1)*RTV%n_Stokes + 1
-        RTV%Pff(j1,nZ*RTV%n_Stokes,k) = RTV%Pff(j1,nZ*RTV%n_Stokes,k)/RTV%n_Factor(nZ,k)
-        RTV%Pbb(j1,nZ*RTV%n_Stokes,k) = RTV%Pbb(j1,nZ*RTV%n_Stokes,k)/RTV%n_Factor(nZ,k)
+        RTV%Pff(j1,i1,k) = RTV%Pff(j1,i1,k)/RTV%n_Factor(nZ,k)
+        RTV%Pbb(j1,i1,k) = RTV%Pbb(j1,i1,k)/RTV%n_Factor(nZ,k)
         ! Symmetric condition
         IF( j < nZ ) THEN
-          RTV%Pff(nZ*RTV%n_Stokes,j1,k) = RTV%Pff(j1,nZ*RTV%n_Stokes,k)
-          RTV%Pbb(nZ*RTV%n_Stokes,j1,k) = RTV%Pbb(j1,nZ*RTV%n_Stokes,k)
+          RTV%Pff(i1,j1,k) = RTV%Pff(j1,i1,k)
+          RTV%Pbb(i1,j1,k) = RTV%Pbb(j1,i1,k)
         END IF
       END DO
     END IF

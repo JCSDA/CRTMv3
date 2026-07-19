@@ -779,20 +779,22 @@ CONTAINS
     ! internal-level output (1:nt) onto the user layering (1:no), mirroring the FWD
     ! Common_RTSolution assignment Downwelling_Radiance(1:no)=...(na+1:nt).
     IF ( RTV%Compute_Down_Radiance_Profile .AND. ALLOCATED(RTSolution_TL%Downwelling_Radiance) ) THEN
-      no_d = RTSolution_TL%n_Layers
       na_d = RTV%n_Added_Layers
       nt_d = Atmosphere%n_Layers
-      RTSolution_TL%Downwelling_Radiance(1:no_d) = Down_Radiance_Prof_TL(na_d+1:nt_d)
+      ! Clamp to the conformant extent (user RTSolution_TL may be allocated
+      ! with a different n_Layers than the atmosphere)
+      no_d = MIN( RTSolution_TL%n_Layers, nt_d - na_d )
+      RTSolution_TL%Downwelling_Radiance(1:no_d) = Down_Radiance_Prof_TL(na_d+1:na_d+no_d)
     END IF
 
     ! Level-resolved upwelling radiance profile TL (opt-in). Same internal->user
     ! level mapping as the downwelling profile. Gated so flag-off keeps the legacy
     ! forward-only Upwelling_Radiance (zero TL), unchanged.
     IF ( RTV%Compute_Up_Radiance_Profile .AND. ALLOCATED(RTSolution_TL%Upwelling_Radiance) ) THEN
-      no_d = RTSolution_TL%n_Layers
       na_d = RTV%n_Added_Layers
       nt_d = Atmosphere%n_Layers
-      RTSolution_TL%Upwelling_Radiance(1:no_d) = Up_Radiance_Prof_TL(na_d+1:nt_d)
+      no_d = MIN( RTSolution_TL%n_Layers, nt_d - na_d )  ! conformant extent
+      RTSolution_TL%Upwelling_Radiance(1:no_d) = Up_Radiance_Prof_TL(na_d+1:na_d+no_d)
     END IF
 
   END FUNCTION CRTM_Compute_RTSolution_TL
@@ -1037,20 +1039,22 @@ CONTAINS
     ! FWD/TL profile assignment.
     Down_Radiance_Prof_AD = ZERO
     IF ( RTV%Compute_Down_Radiance_Profile .AND. ALLOCATED(RTSolution_AD%Downwelling_Radiance) ) THEN
-      no_d = RTSolution_AD%n_Layers
       na_d = RTV%n_Added_Layers
       nt_d = Atmosphere%n_Layers
-      Down_Radiance_Prof_AD(na_d+1:nt_d) = RTSolution_AD%Downwelling_Radiance(1:no_d)
+      ! Clamp to the conformant extent (user RTSolution_AD may be allocated
+      ! with a different n_Layers than the atmosphere)
+      no_d = MIN( RTSolution_AD%n_Layers, nt_d - na_d )
+      Down_Radiance_Prof_AD(na_d+1:na_d+no_d) = RTSolution_AD%Downwelling_Radiance(1:no_d)
       RTSolution_AD%Downwelling_Radiance(1:no_d) = ZERO
     END IF
 
     ! Level-resolved upwelling radiance profile adjoint seed (opt-in).
     Up_Radiance_Prof_AD = ZERO
     IF ( RTV%Compute_Up_Radiance_Profile .AND. ALLOCATED(RTSolution_AD%Upwelling_Radiance) ) THEN
-      no_d = RTSolution_AD%n_Layers
       na_d = RTV%n_Added_Layers
       nt_d = Atmosphere%n_Layers
-      Up_Radiance_Prof_AD(na_d+1:nt_d) = RTSolution_AD%Upwelling_Radiance(1:no_d)
+      no_d = MIN( RTSolution_AD%n_Layers, nt_d - na_d )  ! conformant extent
+      Up_Radiance_Prof_AD(na_d+1:na_d+no_d) = RTSolution_AD%Upwelling_Radiance(1:no_d)
       RTSolution_AD%Upwelling_Radiance(1:no_d) = ZERO
     END IF
 
