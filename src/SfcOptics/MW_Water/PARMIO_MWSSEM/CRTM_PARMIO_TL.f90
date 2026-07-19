@@ -10,7 +10,9 @@ MODULE CRTM_PARMIO_TL
   USE PARMIOCoeff_Define, ONLY: PARMIOCoeff_type, N_PARMIO_HARMONIC_TERMS
   USE CRTM_PARMIO, ONLY: iVar_type
   USE PARMIO_LUT_Interpolation, ONLY: PARMIO_LUT_Interp_TL
-  USE PARMIO_Azimuth_Module, ONLY: PARMIO_Azimuth_Recombine_TL
+  USE PARMIO_Azimuth_Module, ONLY: PARMIO_Azimuth_Recombine_TL, &
+                                   PARMIO_AZ_HARMONIC_FIRST,    &
+                                   PARMIO_AZ_HARMONIC_LAST
   USE PARMIO_RC_Interpolation, ONLY: PARMIO_RC_Interp_TL
   USE Reflection_Correction_Module, ONLY: Reflection_Correction_TL
   USE CRTM_MWwaterCoeff, ONLY: MWwaterC
@@ -22,6 +24,8 @@ MODULE CRTM_PARMIO_TL
   INTEGER, PARAMETER :: N_STOKES = 4
   INTEGER, PARAMETER :: Iv_IDX = 1
   INTEGER, PARAMETER :: Ih_IDX = 2
+  INTEGER, PARAMETER :: U_IDX  = 3
+  INTEGER, PARAMETER :: V_IDX  = 4
 
   REAL(fp), PARAMETER :: ZERO = 0.0_fp
   REAL(fp), PARAMETER :: ONE  = 1.0_fp
@@ -74,6 +78,10 @@ CONTAINS
     IF (PRESENT(Azimuth_Angle_TL) .AND. iVar%Has_Azimuth) THEN
       azimuth_tl = Azimuth_Angle_TL
     END IF
+    ! No valid azimuth: the forward dropped the harmonic slots, so their
+    ! coefficient perturbations must not leak into the emissivity TL.
+    IF (.NOT. iVar%Has_Azimuth) &
+      coefficients_TL(PARMIO_AZ_HARMONIC_FIRST:PARMIO_AZ_HARMONIC_LAST) = ZERO
 
     CALL PARMIO_Azimuth_Recombine_TL( &
           Coefficients         = iVar%Coefficients, &
@@ -122,6 +130,9 @@ CONTAINS
     ! quadrature angle), in which case the forward used the bare (1 - emissivity)
     ! and its derivative IS the base term -- so leave it.
     Reflectivity_TL(1:N_STOKES) = -Emissivity_TL(1:N_STOKES)
+    ! 3rd/4th Stokes reflectivity is identically zero in the forward.
+    Reflectivity_TL(U_IDX) = ZERO
+    Reflectivity_TL(V_IDX) = ZERO
     IF (iVar%Has_PARMIO_RC) THEN
       IF (.NOT. iVar%Reflectivity_Clamped(Iv_IDX)) Reflectivity_TL(Iv_IDX) = rdown_TL(1)
       IF (.NOT. iVar%Reflectivity_Clamped(Ih_IDX)) Reflectivity_TL(Ih_IDX) = rdown_TL(2)

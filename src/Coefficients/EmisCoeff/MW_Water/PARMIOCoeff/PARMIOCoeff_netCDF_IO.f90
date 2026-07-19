@@ -99,6 +99,10 @@ CONTAINS
     CALL Get_Global_Att_String(FileId, 'permittivity_policy', PARMIOCoeff%Permittivity_Policy)
     CALL Get_Global_Att_String(FileId, 'foam_policy',         PARMIOCoeff%Foam_Policy)
     CALL Get_Global_Att_String(FileId, 'coefficient_units',   PARMIOCoeff%Coefficient_Units)
+    ! Group-boundary thresholds used by the runtime group selection; keep the
+    ! compile-time defaults when the file does not carry them.
+    CALL Get_Global_Att_Real(FileId, 'sss_cutoff_ghz',          PARMIOCoeff%SSS_Cutoff_GHz)
+    CALL Get_Global_Att_Real(FileId, 'permittivity_switch_ghz', PARMIOCoeff%Permittivity_Switch_GHz)
 
     ! Load each of the three groups
     DO g = 1, PARMIO_N_GROUPS
@@ -455,6 +459,21 @@ CONTAINS
     status = NF90_GET_ATT(ncid, NF90_GLOBAL, attname, value)
     IF (status /= NF90_NOERR) value = ''
   END SUBROUTINE Get_Global_Att_String
+
+
+  !-----------------------------------------------------------------
+  !  Helper: best-effort global-attribute real read (value untouched
+  !  on absence, so compile-time defaults survive)
+  !-----------------------------------------------------------------
+  SUBROUTINE Get_Global_Att_Real(ncid, attname, value)
+    INTEGER,      INTENT(IN)    :: ncid
+    CHARACTER(*), INTENT(IN)    :: attname
+    REAL(fp),     INTENT(INOUT) :: value
+    INTEGER  :: status
+    REAL(fp) :: attval
+    status = NF90_GET_ATT(ncid, NF90_GLOBAL, attname, attval)
+    IF (status == NF90_NOERR) value = attval
+  END SUBROUTINE Get_Global_Att_Real
 
 
   !-----------------------------------------------------------------

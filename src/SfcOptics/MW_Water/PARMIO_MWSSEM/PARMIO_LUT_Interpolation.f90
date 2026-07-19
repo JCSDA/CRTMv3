@@ -93,6 +93,14 @@ CONTAINS
           Frequency_GHz,                      &
           SSS_Cutoff_GHz_Override          = cutoff_sss, &
           Permittivity_Switch_GHz_Override = cutoff_perm)
+    ! Unallocated group: return inert zeros with Group_ID=0, which the TL/AD
+    ! already treat as "no contribution" (same guard they carry).
+    IF (.NOT. LUT%Group(g)%Is_Allocated) THEN
+      iVar%Group_ID = 0
+      Coefficients  = 0.0_fp
+      Foam_Fraction = 0.0_fp
+      RETURN
+    END IF
     iVar%Group_ID  = g
     iVar%SSS_Active = LUT%Group(g)%SSS_Axis_Active
 

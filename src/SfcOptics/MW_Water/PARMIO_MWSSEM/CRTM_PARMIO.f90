@@ -17,7 +17,9 @@ MODULE CRTM_PARMIO
   USE PARMIO_LUT_Interpolation, ONLY: &
         PARMIO_LUT_iVar_type,         &
         PARMIO_LUT_Interp_Forward
-  USE PARMIO_Azimuth_Module, ONLY: PARMIO_Azimuth_Recombine
+  USE PARMIO_Azimuth_Module, ONLY: PARMIO_Azimuth_Recombine, &
+                                   PARMIO_AZ_HARMONIC_FIRST, &
+                                   PARMIO_AZ_HARMONIC_LAST
   USE PARMIO_RC_Interpolation, ONLY: &
         PARMIO_RC_iVar_type,         &
         PARMIO_RC_Interp_Forward
@@ -37,6 +39,8 @@ MODULE CRTM_PARMIO
   INTEGER, PARAMETER :: N_STOKES = 4
   INTEGER, PARAMETER :: Iv_IDX = 1
   INTEGER, PARAMETER :: Ih_IDX = 2
+  INTEGER, PARAMETER :: U_IDX  = 3
+  INTEGER, PARAMETER :: V_IDX  = 4
 
   REAL(fp), PARAMETER :: ZERO = 0.0_fp
   REAL(fp), PARAMETER :: ONE  = 1.0_fp
@@ -123,7 +127,14 @@ CONTAINS
     iVar%Zenith_Angle   = Zenith_Angle
     iVar%cos_z          = COS(Zenith_Angle * DEGREES_TO_RADIANS)
     iVar%Wind_Speed     = Wind_Speed
-    iVar%Has_Azimuth       = PRESENT(Azimuth_Angle)
+    ! CRTM marks "no sensor azimuth" with an out-of-range sentinel (the
+    ! Geometry default is 999.9), so the relative azimuth reaching us is only
+    ! meaningful within +/-360 deg. Mirror Compute_FastemX: apply the
+    ! azimuthal model only for a valid angle.
+    iVar%Has_Azimuth = .FALSE.
+    IF ( PRESENT(Azimuth_Angle) ) THEN
+      IF ( ABS(Azimuth_Angle) <= 360.0_fp ) iVar%Has_Azimuth = .TRUE.
+    END IF
     iVar%Has_Transmittance = PRESENT(Transmittance)
     IF (iVar%Has_Azimuth)       iVar%Azimuth_Angle  = Azimuth_Angle
     IF (iVar%Has_Transmittance) iVar%Transmittance  = Transmittance
@@ -147,9 +158,15 @@ CONTAINS
           Foam_Fraction    = iVar%Foam_Fraction, &
           iVar             = iVar%LUT_Var)
 
+    ! Without a valid azimuth, use the azimuthal mean: drop the cos/sin
+    ! harmonic slots (evaluating them at phi=0 would add the full upwind
+    ! anisotropy amplitude). Matches FastemX's e_Azimuth = 0 convention.
+    ! TL/AD zero the same slots so the derivative chain stays consistent.
+    IF (.NOT. iVar%Has_Azimuth) &
+      iVar%Coefficients(PARMIO_AZ_HARMONIC_FIRST:PARMIO_AZ_HARMONIC_LAST) = ZERO
+
     ! 2) Recombine the 14 coefficients into CRTM's microwave surface-
-    !    optics basis at the requested azimuth (phi=0 if azimuth absent,
-    !    matching FastemX).
+    !    optics basis at the requested azimuth.
     CALL PARMIO_Azimuth_Recombine( &
           Coefficients      = iVar%Coefficients, &
           Azimuth_Angle_deg = phi_deg,           &
@@ -219,6 +236,14 @@ CONTAINS
       iVar%Reflectivity(Ih_IDX) = MIN( MAX( ONE - iVar%Emissivity(Ih_IDX), ZERO ), ONE )
       iVar%Reflectivity_Clamped(Ih_IDX) = .TRUE.
     END IF
+
+    ! 3rd/4th Stokes: the U and circular emissivities are small azimuthal
+    ! harmonics oscillating about zero; (1 - e) is NOT their reflectivity.
+    ! Downwelling atmospheric U/V is not reflected here -- zero them,
+    ! matching Compute_FastemX ("3rd, 4th Stokes from atmosphere are not
+    ! included").
+    iVar%Reflectivity(U_IDX) = ZERO
+    iVar%Reflectivity(V_IDX) = ZERO
 
     ! Write outputs
     Emissivity   = iVar%Emissivity

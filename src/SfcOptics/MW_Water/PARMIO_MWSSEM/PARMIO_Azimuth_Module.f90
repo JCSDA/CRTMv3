@@ -42,6 +42,14 @@ MODULE PARMIO_Azimuth_Module
   PUBLIC :: PARMIO_Azimuth_Recombine
   PUBLIC :: PARMIO_Azimuth_Recombine_TL
   PUBLIC :: PARMIO_Azimuth_Recombine_AD
+  PUBLIC :: PARMIO_AZ_HARMONIC_FIRST
+  PUBLIC :: PARMIO_AZ_HARMONIC_LAST
+
+  ! Coefficient slots carrying the azimuthal (cos/sin) harmonics in the
+  ! 14-vector documented above; slots 1-4 and 13-14 are azimuth-independent.
+  ! Callers zero this range to evaluate the azimuthal mean (no-azimuth case).
+  INTEGER, PARAMETER :: PARMIO_AZ_HARMONIC_FIRST = 5
+  INTEGER, PARAMETER :: PARMIO_AZ_HARMONIC_LAST  = 12
 
   REAL(fp), PARAMETER :: PI = 3.141592653589793238462643383279_fp
   REAL(fp), PARAMETER :: DEGREES_TO_RADIANS = PI / 180.0_fp

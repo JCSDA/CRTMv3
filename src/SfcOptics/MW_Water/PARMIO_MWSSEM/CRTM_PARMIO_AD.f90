@@ -10,7 +10,9 @@ MODULE CRTM_PARMIO_AD
   USE PARMIOCoeff_Define, ONLY: PARMIOCoeff_type, N_PARMIO_HARMONIC_TERMS
   USE CRTM_PARMIO, ONLY: iVar_type
   USE PARMIO_LUT_Interpolation, ONLY: PARMIO_LUT_Interp_AD
-  USE PARMIO_Azimuth_Module, ONLY: PARMIO_Azimuth_Recombine_AD
+  USE PARMIO_Azimuth_Module, ONLY: PARMIO_Azimuth_Recombine_AD, &
+                                   PARMIO_AZ_HARMONIC_FIRST,    &
+                                   PARMIO_AZ_HARMONIC_LAST
   USE PARMIO_RC_Interpolation, ONLY: PARMIO_RC_Interp_AD
   USE Reflection_Correction_Module, ONLY: Reflection_Correction_AD
   USE CRTM_MWwaterCoeff, ONLY: MWwaterC
@@ -75,9 +77,9 @@ CONTAINS
     transmittance_AD_local = ZERO
     IF (PRESENT(Transmittance_AD)) transmittance_AD_local = Transmittance_AD
 
-    Emissivity_AD(U_IDX) = Emissivity_AD(U_IDX) - Reflectivity_AD(U_IDX)
+    ! 3rd/4th Stokes reflectivity is identically zero in the forward (matching
+    ! FastemX), so its adjoint seed is discarded without touching Emissivity_AD.
     Reflectivity_AD(U_IDX) = ZERO
-    Emissivity_AD(V_IDX) = Emissivity_AD(V_IDX) - Reflectivity_AD(V_IDX)
     Reflectivity_AD(V_IDX) = ZERO
 
     ! V/H components the forward clamped to the bare (1 - emissivity): apply that
@@ -150,6 +152,11 @@ CONTAINS
     IF (PRESENT(Azimuth_Angle_AD) .AND. iVar%Has_Azimuth) THEN
       Azimuth_Angle_AD = Azimuth_Angle_AD + azimuth_AD
     END IF
+    ! No valid azimuth: the forward dropped the harmonic slots, so their
+    ! adjoint must not propagate into the LUT coefficient chain (transpose
+    ! of the TL zeroing).
+    IF (.NOT. iVar%Has_Azimuth) &
+      coefficients_AD(PARMIO_AZ_HARMONIC_FIRST:PARMIO_AZ_HARMONIC_LAST) = ZERO
 
     CALL PARMIO_LUT_Interp_AD( &
           PARMIOCoeff, &

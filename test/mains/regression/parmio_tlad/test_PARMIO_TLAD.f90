@@ -108,6 +108,19 @@ PROGRAM test_PARMIO_TLAD
        trans       = 0.55_fp, &
        nfail       = nfail)
 
+  ! CRTM marks "no sensor azimuth" with an out-of-range sentinel (Geometry
+  ! default 999.9). An invalid relative azimuth must behave exactly like an
+  ! absent one: azimuthal-mean emissivity (harmonic slots dropped), zero
+  ! 3rd/4th-Stokes emissivity and reflectivity.
+  CALL Check_Sentinel_Azimuth( &
+       label       = 'sentinel_azimuth', &
+       frequency   = 325.15_fp, &
+       theta       = 53.0_fp, &
+       temperature = 290.15_fp, &
+       salinity    = 34.5_fp, &
+       wind_speed  = 9.0_fp, &
+       nfail       = nfail)
+
   CALL CRTM_PARMIOCoeff_Destroy()
 
   IF (nfail > 0) THEN
@@ -142,12 +155,53 @@ CONTAINS
          ivar, e, r, Azimuth_Angle=azimuth)
 
     expected_r = 1.0_fp - expected_e
+    ! 3rd/4th Stokes reflectivity is identically zero (FastemX convention):
+    ! the U/circular emissivities are azimuthal harmonics, not (1 - r) pairs.
+    expected_r(3:4) = 0.0_fp
     err = MAX(MAXVAL(ABS(e - expected_e)), MAXVAL(ABS(r - expected_r)))
     IF (err > FWD_TOL) THEN
       WRITE(*,'(a,": forward grid-point mismatch: ",es13.5)') TRIM(label), err
       nfail = nfail + 1
     END IF
   END SUBROUTINE Check_Forward_Grid_Point
+
+  SUBROUTINE Check_Sentinel_Azimuth(label, frequency, theta, temperature, &
+                                    salinity, wind_speed, nfail)
+    CHARACTER(*), INTENT(IN)     :: label
+    REAL(fp),     INTENT(IN)     :: frequency
+    REAL(fp),     INTENT(IN)     :: theta
+    REAL(fp),     INTENT(IN)     :: temperature
+    REAL(fp),     INTENT(IN)     :: salinity
+    REAL(fp),     INTENT(IN)     :: wind_speed
+    INTEGER,      INTENT(IN OUT) :: nfail
+
+    TYPE(PARMIO_iVar_type) :: ivar_inv, ivar_abs
+    REAL(fp) :: e_inv(N_STOKES), r_inv(N_STOKES)
+    REAL(fp) :: e_abs(N_STOKES), r_abs(N_STOKES)
+    REAL(fp) :: err
+
+    ! Wind_Direction(0) - Sensor_Azimuth_Angle(999.9) as the dispatcher forms it
+    CALL Compute_PARMIO( &
+         PARMIOC, frequency, 1, theta, temperature, salinity, wind_speed, &
+         ivar_inv, e_inv, r_inv, Azimuth_Angle=-999.9_fp)
+    CALL Compute_PARMIO( &
+         PARMIOC, frequency, 1, theta, temperature, salinity, wind_speed, &
+         ivar_abs, e_abs, r_abs)
+
+    err = MAX(MAXVAL(ABS(e_inv - e_abs)), MAXVAL(ABS(r_inv - r_abs)))
+    IF (err > FWD_TOL) THEN
+      WRITE(*,'(a,": sentinel azimuth differs from absent azimuth: ",es13.5)') &
+        TRIM(label), err
+      nfail = nfail + 1
+    END IF
+    err = MAX(MAXVAL(ABS(e_inv(3:4))), MAXVAL(ABS(r_inv(3:4))))
+    IF (err > FWD_TOL) THEN
+      WRITE(*,'(a,": nonzero 3rd/4th Stokes for sentinel azimuth: ",es13.5)') &
+        TRIM(label), err
+      nfail = nfail + 1
+    END IF
+  END SUBROUTINE Check_Sentinel_Azimuth
+
 
   SUBROUTINE Run_Case(label, frequency, theta, temperature, salinity, &
                       wind_speed, azimuth, trans, nfail)
