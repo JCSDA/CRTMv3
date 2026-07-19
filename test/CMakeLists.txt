@@ -73,7 +73,7 @@ IF(EXISTS  ${FIX_FILE_PATH})
 
 else() # Download CRTM coefficients
   set( CRTM_COEFFS_BRANCH_PREFIX "" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
-  set( CRTM_COEFFS_BRANCH "fix_REL-3.2.0.0" )  #Note switch to 3.2.0 when tarball ready
+  set( CRTM_COEFFS_BRANCH "fix_REL-3.2.0.0" )
 
   set(CRTM_COEFFS_PATH ${CMAKE_SOURCE_DIR}/test-data-release)
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
@@ -373,6 +373,15 @@ add_executable(Unit_Downwelling_TLADK mains/unit/Unit_Test/test_Downwelling_TLAD
 target_link_libraries(Unit_Downwelling_TLADK PRIVATE crtm)
 add_test(NAME test_Unit_Downwelling_TLADK
          COMMAND $<TARGET_FILE:Unit_Downwelling_TLADK>)
+
+# Multi-sensor single-call consistency: one CRTM_Forward/TL/K_Matrix call with
+# ChannelInfo(1:2) must match the per-sensor calls bit-for-bit (guards the
+# cumulative 'ln' channel-offset bookkeeping in the OpenMP sensor/channel loops,
+# which no single-sensor test can see).
+add_executable(Unit_MultiSensor_SingleCall mains/unit/Unit_Test/test_MultiSensor_SingleCall.f90)
+target_link_libraries(Unit_MultiSensor_SingleCall PRIVATE crtm)
+add_test(NAME test_Unit_MultiSensor_SingleCall
+         COMMAND $<TARGET_FILE:Unit_MultiSensor_SingleCall>)
 
 # Performance micro-benchmark for the opt-in level-resolved radiance profiles
 # (Forward + K_Matrix timing, overcast ADA). Not a ctest; run manually.
@@ -875,14 +884,13 @@ add_test(NAME test_TL_convergence_active_sensor COMMAND test_TL_convergence_acti
 #####################################################################
 
 list( APPEND crtm_test_input
-# REL-3.2.0: NetCDF is the canonical LUT format. Symlinks point at .nc
-# files in the netCDF/ subtrees of the test data. Two exceptions retain
-# .bin symlinks because no NetCDF analog is published yet:
-#   - SSU TauCoeff (no TauCoeff/ODPS/netCDF/ssu_n*.TauCoeff.nc on disk)
-#   - Zeeman SSMIS TauCoeff (loaded by a path that hardcodes .bin)
-# CRTM_Init's per-loader fallback (Resolve_Coeff_Format / SpcCoeff /
-# TauCoeff) silently switches to .bin when an .nc file is missing, so
-# missing entries here are recoverable for sensors that have a binary copy.
+# REL-3.2.0: NetCDF is the canonical LUT format; every coefficient symlink
+# below points at a .nc file (SSU TauCoeff was converted via ODSSUBIN2NC and
+# the Zeeman SSMIS zssmis_*.TauCoeff.nc set is complete). The
+# fix_REL-3.2.0.0 tarball ships NO .bin coefficient files, so none are
+# staged and the per-loader netCDF->Binary fallback (Resolve_Coeff_Format /
+# SpcCoeff / TauCoeff) is not exercised by this suite: the binary
+# coefficient READ path is untested at the suite level for this release.
 AerosolCoeff/netCDF/AerosolCoeff.nc
 AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.nc
 AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.BRC.kb.v2.nc
@@ -946,16 +954,16 @@ TauCoeff/ODPS/netCDF/atms_n21.TauCoeff.nc
 # directory as the SpcCoeff file when present; without these, NLTE-active
 # IR channels (e.g. cris399_npp 4.3 um band) and AMSU/MHS antenna
 # corrections silently default to zero.
-SpcCoeff/netCDF/cris399_npp.NLTECoeff.nc
-SpcCoeff/netCDF/iasi_metop-b.NLTECoeff.nc
-SpcCoeff/netCDF/airs_aqua.NLTECoeff.nc
+NLTECoeff/netCDF/cris399_npp.NLTECoeff.nc
+NLTECoeff/netCDF/iasi_metop-b.NLTECoeff.nc
+NLTECoeff/netCDF/airs_aqua.NLTECoeff.nc
 # cris-fsr_n21 is exercised by many regression/OMP tests above; its NLTECoeff
 # lives only under the canonical NLTECoeff/netCDF/ tree (no SpcCoeff/netCDF/
 # copy). CREATE_SYMLINK_FILENAME stages by basename, so the testinput/ symlink
 # still lands next to cris-fsr_n21.SpcCoeff.nc for the flat-directory sibling
 # lookup the test drivers rely on (File_Path=./testinput/).
 NLTECoeff/netCDF/cris-fsr_n21.NLTECoeff.nc
-SpcCoeff/netCDF/amsua_n19.ACCoeff.nc
+ACCoeff/netCDF/amsua_n19.ACCoeff.nc
 SpcCoeff/netCDF/v.viirs-m_j2.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/v.viirs-m_j2.TauCoeff.nc
 SpcCoeff/netCDF/v.abi_g18.SpcCoeff.nc
