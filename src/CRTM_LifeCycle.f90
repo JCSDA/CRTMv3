@@ -145,6 +145,8 @@ CONTAINS
 !                                 VISsnowCoeff_File   = VISsnowCoeff_File   , &
 !                                 VISiceCoeff_File    = VISiceCoeff_File    , &
 !                                 MWwaterCoeff_File   = MWwaterCoeff_File   , &
+!                                 PARMIOCoeff_File    = PARMIOCoeff_File    , &
+!                                 MWlandCoeff_File    = MWlandCoeff_File    , &
 !                                 IRwaterCoeff_Format = IRwaterCoeff_Format , &
 !                                 IRlandCoeff_Format  = IRlandCoeff_Format  , &
 !                                 IRiceCoeff_Format   = IRiceCoeff_Format   , &
@@ -164,10 +166,12 @@ CONTAINS
 !                           initialised. These sensor ids are used to construct
 !                           the sensor specific SpcCoeff and TauCoeff filenames
 !                           containing the necessary coefficient data, i.e.
-!                             <Sensor_ID>.SpcCoeff.bin
+!                             <Sensor_ID>.SpcCoeff.nc
 !                           and
-!                             <Sensor_ID>.TauCoeff.bin
-!                           for each sensor Id in the list.
+!                             <Sensor_ID>.TauCoeff.nc
+!                           for each sensor Id in the list. The filename
+!                           extension follows the resolved coefficient format
+!                           (.nc for netCDF, the default; .bin for Binary).
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Rank-1 (n_Sensors)
@@ -183,6 +187,15 @@ CONTAINS
 !                           ATTRIBUTES: INTENT(OUT)
 !
 ! OPTIONAL INPUTS:
+!       Note on coefficient file formats:
+!         From REL-3.2.0 the default coefficient format is netCDF, and the
+!         default filenames carry the .nc extension. Each <X>Coeff_Format
+!         argument below overrides the format for that coefficient type, and
+!         accepts 'netCDF' or 'Binary'. Whatever format is selected, if the
+!         requested file is not present on disk but its equivalent in the other
+!         format is, the reader falls back to the format that exists. Binary
+!         files are read from File_Path and netCDF files from NC_File_Path, so
+!         the two formats may live in separate directory trees.
 !       Aerosol_Model:     Name of the aerosol scheme for scattering calculation
 !                          Available aerosol scheme:
 !                          - CRTM  [DEFAULT]
@@ -196,8 +209,8 @@ CONTAINS
 !
 !       AerosolCoeff_Format:    Format of the aerosol optical properties data
 !                               Available options:
-!                               - Binary  [DEFAULT]
-!                               - netCDF
+!                               - netCDF  [DEFAULT]
+!                               - Binary
 !                               UNITS:      N/A
 !                               TYPE:       CHARACTER(*)
 !                               DIMENSION:  Scalar
@@ -207,17 +220,17 @@ CONTAINS
 !                           properties data for scattering calculations.
 !                           Available datafiles:
 !                           CRTM:
-!                           - AerosolCoeff.bin      [DEFAULT, Binary]
-!                           - AerosolCoeff.nc/nc4   [netCDF-Classic/4]
+!                           - AerosolCoeff.nc       [DEFAULT, netCDF]
+!                           - AerosolCoeff.bin      [Binary]
 !                           CMAQ:
+!                           - AerosolCoeff.CMAQ.nc       [netCDF]
 !                           - AerosolCoeff.CMAQ.bin      [Binary]
-!                           - AerosolCoeff.CMAQ.nc/nc4   [netCDF-Classic/4]
 !                           GOCART-GEOS5:
+!                           - AerosolCoeff.GOCART-GEOS5.nc       [netCDF]
 !                           - AerosolCoeff.GOCART-GEOS5.bin      [Binary]
-!                           - AerosolCoeff.GOCART-GEOS5.nc/nc4   [netCDF-Classic/4]
 !                           NAAPS:
+!                           - AerosolCoeff.NAAPS.nc       [netCDF]
 !                           - AerosolCoeff.NAAPS.bin      [Binary]
-!                           - AerosolCoeff.NAAPS.nc/nc4   [netCDF-Classic/4]
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -233,8 +246,8 @@ CONTAINS
 !
 !       CloudCoeff_Format:     Format of the cloud optical properties data
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -243,8 +256,8 @@ CONTAINS
 !       CloudCoeff_File:    Name of the data file containing the cloud optical
 !                           properties data for scattering calculations.
 !                           Available datafiles:
-!                           - CloudCoeff.bin  [DEFAULT, Binary]
-!                           - CloudCoeff.nc     [netCDF-Classic/4]
+!                           - CloudCoeff.nc   [DEFAULT, netCDF]
+!                           - CloudCoeff.bin  [Binary]
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -252,8 +265,8 @@ CONTAINS
 !
 !       SpcCoeff_Format:     Format of the CRTM spectral coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -261,8 +274,8 @@ CONTAINS
 !
 !       TauCoeff_Format:     Format of the CRTM transmittance coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -291,9 +304,43 @@ CONTAINS
 !       MWwaterCoeff_File:  Name of the data file containing the coefficient
 !                           data for the microwave water emissivity model.
 !                           Available datafiles:
-!                           - FASTEM6.MWwater.EmisCoeff.bin  [DEFAULT]
-!                           - FASTEM5.MWwater.EmisCoeff.bin
-!                           - FASTEM4.MWwater.EmisCoeff.bin
+!                           - FASTEM6.MWwater.EmisCoeff.nc  [DEFAULT]
+!                           - FASTEM5.MWwater.EmisCoeff.nc
+!                           - FASTEM4.MWwater.EmisCoeff.nc
+!                           UNITS:      N/A
+!                           TYPE:       CHARACTER(*)
+!                           DIMENSION:  Scalar
+!                           ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+!       PARMIOCoeff_File:   Name of the look-up table used by the PARMIO
+!                           microwave water emissivity model, which supersedes
+!                           FASTEM for channel frequencies at or above 200 GHz.
+!                           Available datafiles:
+!                           - PARMIO.MWwater.EmisCoeff.nc  [DEFAULT]
+!                           If this argument is not specified, the default file
+!                           is loaded from the coefficient path when the sensor
+!                           set contains a microwave sensor; if it is not found
+!                           there, CRTM continues using FASTEM at all
+!                           frequencies (an absent default file is not an
+!                           error). If this argument IS specified and the named
+!                           file cannot be read, initialisation fails.
+!                           Channels below 200 GHz are unaffected either way.
+!                           UNITS:      N/A
+!                           TYPE:       CHARACTER(*)
+!                           DIMENSION:  Scalar
+!                           ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+!       MWlandCoeff_File:   Name of the microwave land emissivity atlas file.
+!                           Available datafiles:
+!                           - TELSEM2.MWland.EmisCoeff.nc
+!                           If supplied (or if the default-named file is found
+!                           on the coefficient path) the TELSEM2 climatological
+!                           atlas replaces the NESDIS_LandEM physical model for
+!                           microwave land surfaces. The atlas depends only on
+!                           latitude, longitude and month, so its tangent-linear
+!                           and adjoint are zero; NESDIS_LandEM supplies
+!                           analytic land emissivity Jacobians and is used when
+!                           no atlas is loaded.
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -302,8 +349,8 @@ CONTAINS
 !       IRwaterCoeff_File:  Name of the data file containing the coefficient
 !                           data for the infrared water emissivity model.
 !                           Available datafiles:
-!                           - Nalli.IRwater.EmisCoeff.bin  [DEFAULT]
-!                           - WuSmith.IRwater.EmisCoeff.bin
+!                           - Nalli.IRwater.EmisCoeff.nc  [DEFAULT]
+!                           - WuSmith.IRwater.EmisCoeff.nc
 !                           If not specified the Nalli datafile is read.
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
@@ -313,9 +360,9 @@ CONTAINS
 !       IRlandCoeff_File:   Name of the data file containing the coefficient
 !                           data for the infrared land emissivity model.
 !                           Available datafiles:
-!                           - NPOESS.IRland.EmisCoeff.bin  [DEFAULT]
-!                           - IGBP.IRland.EmisCoeff.bin
-!                           - USGS.IRland.EmisCoeff.bin
+!                           - NPOESS.IRland.EmisCoeff.nc  [DEFAULT]
+!                           - IGBP.IRland.EmisCoeff.nc
+!                           - USGS.IRland.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -324,10 +371,10 @@ CONTAINS
 !       IRsnowCoeff_File:   Name of the data file containing the coefficient
 !                           data for the infrared snow emissivity model.
 !                           Available datafiles:
-!                           - NPOESS.IRsnow.EmisCoeff.bin  [DEFAULT]
-!                           - IGBP.IRsnow.EmisCoeff.bin
-!                           - USGS.IRsnow.EmisCoeff.bin
-!                           - Nalli.IRsnow.EmisCoeff.bin
+!                           - NPOESS.IRsnow.EmisCoeff.nc  [DEFAULT]
+!                           - IGBP.IRsnow.EmisCoeff.nc
+!                           - USGS.IRsnow.EmisCoeff.nc
+!                           - Nalli.IRsnow.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -336,9 +383,9 @@ CONTAINS
 !       IRiceCoeff_File:    Name of the data file containing the coefficient
 !                           data for the infrared ice emissivity model.
 !                           Available datafiles:
-!                           - NPOESS.IRice.EmisCoeff.bin  [DEFAULT]
-!                           - IGBP.IRice.EmisCoeff.bin
-!                           - USGS.IRice.EmisCoeff.bin
+!                           - NPOESS.IRice.EmisCoeff.nc  [DEFAULT]
+!                           - IGBP.IRice.EmisCoeff.nc
+!                           - USGS.IRice.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -347,9 +394,9 @@ CONTAINS
 !       VISwaterCoeff_File: Name of the data file containing the coefficient
 !                           data for the visible water emissivity model.
 !                           Available datafiles:
-!                           - NPOESS.VISwater.EmisCoeff.bin  [DEFAULT]
-!                           - IGBP.VISwater.EmisCoeff.bin
-!                           - USGS.VISwater.EmisCoeff.bin
+!                           - NPOESS.VISwater.EmisCoeff.nc  [DEFAULT]
+!                           - IGBP.VISwater.EmisCoeff.nc
+!                           - USGS.VISwater.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -358,9 +405,9 @@ CONTAINS
 !       VISlandCoeff_File:  Name of the data file containing the coefficient
 !                           data for the visible land emissivity model.
 !                           Available datafiles:
-!                           - NPOESS.VISland.EmisCoeff.bin  [DEFAULT]
-!                           - IGBP.VISland.EmisCoeff.bin
-!                           - USGS.VISland.EmisCoeff.bin
+!                           - NPOESS.VISland.EmisCoeff.nc  [DEFAULT]
+!                           - IGBP.VISland.EmisCoeff.nc
+!                           - USGS.VISland.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -369,9 +416,9 @@ CONTAINS
 !       VISsnowCoeff_File:  Name of the data file containing the coefficient
 !                           data for the visible snow emissivity model.
 !                           Available datafiles:
-!                           - NPOESS.VISsnow.EmisCoeff.bin  [DEFAULT]
-!                           - IGBP.VISsnow.EmisCoeff.bin
-!                           - USGS.VISsnow.EmisCoeff.bin
+!                           - NPOESS.VISsnow.EmisCoeff.nc  [DEFAULT]
+!                           - IGBP.VISsnow.EmisCoeff.nc
+!                           - USGS.VISsnow.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -380,9 +427,9 @@ CONTAINS
 !       VISiceCoeff_File:   Name of the data file containing the coefficient
 !                           data for the visible ice emissivity model.
 !                           Available datafiles:
-!                           - NPOESS.VISice.EmisCoeff.bin  [DEFAULT]
-!                           - IGBP.VISice.EmisCoeff.bin
-!                           - USGS.VISice.EmisCoeff.bin
+!                           - NPOESS.VISice.EmisCoeff.nc  [DEFAULT]
+!                           - IGBP.VISice.EmisCoeff.nc
+!                           - USGS.VISice.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -390,8 +437,8 @@ CONTAINS
 !
 !     IRwaterCoeff_Format:   Format of the CRTM IRwater coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -399,8 +446,8 @@ CONTAINS
 !
 !      IRlandCoeff_Format:   Format of the CRTM IRland coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -408,8 +455,8 @@ CONTAINS
 !
 !      IRsnowCoeff_Format:   Format of the CRTM IRsnow coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -417,8 +464,8 @@ CONTAINS
 !
 !       IRiceCoeff_Format:   Format of the CRTM IRice coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -426,8 +473,8 @@ CONTAINS
 !
 !    VISwaterCoeff_Format:   Format of the CRTM VISwater coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -435,8 +482,8 @@ CONTAINS
 !
 !     VISlandCoeff_Format:   Format of the CRTM VISland coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -444,8 +491,8 @@ CONTAINS
 !
 !     VISsnowCoeff_Format:   Format of the CRTM VISsnow coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -453,8 +500,8 @@ CONTAINS
 !
 !     VISiceCoeff_Format:   Format of the CRTM VISice coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
