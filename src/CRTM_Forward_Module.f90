@@ -832,7 +832,10 @@ CONTAINS
                  SpcCoeff_IsUltravioletSensor(SC(SensorIndex)) .OR. &
                  SpcCoeff_IsVisibleSensor(SC(SensorIndex)) ) .AND. &
                  AtmOptics(nt)%Include_Scattering ) THEN
-               CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
+               ! RTV is per-profile; for the 2nd+ sensor of a multi-sensor call it
+               ! is already allocated (same dims) and re-ALLOCATE would fail.
+               IF ( .NOT. RTV_Associated(RTV(nt)) ) &
+                  CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
 
                IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
                   Error_Status=FAILURE
@@ -902,7 +905,9 @@ CONTAINS
             ELSE
                end_ch = MIN( start_ch + chunk_ch - 1, n_sensor_channels )
             END IF
-            ln = (start_ch - 1) - n_inactive_channels(nt)
+            ! ln enters FIRSTPRIVATE holding the cumulative channel count of all
+            ! previous sensors in this call; offset it by this thread's chunk.
+            ln = ln + (start_ch - 1) - n_inactive_channels(nt)
             ! -------------
             ! CHANNEL LOOP
             ! -------------
