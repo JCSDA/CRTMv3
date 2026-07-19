@@ -8,7 +8,7 @@ Preamble
 
 CRTM v3.2.0 release (`REL-3.2.0`)
 
-v3.2.0 released MMMM DD, YYYY
+v3.2.0 released July 31, 2026 (see RELEASE_NOTES_v3.2.0.md)
 v3.1.3 released February 12, 2026 (small release)
 v3.1.2 released July 11, 2025
 v3.1.1 released August 12, 2024
