@@ -369,40 +369,27 @@ PROGRAM test_Aerosol_Bypass_Adjoint
   ! 9e. Compare the adjoints
   ! ------------------------
   ! 9e.1 Atmosphere
-  ! IF ( ALL(CRTM_Atmosphere_Compare(Atmosphere_AD, atm_AD, n_SigFig=3)) ) THEN
-  !   Message = 'Atmosphere_AD Adjoints are the same!'
-  !   CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
-  ! ELSE
-  !   Message = 'Atmosphere_AD Adjoints are different!'
-  !   CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-  !   STOP 1
-  !   ! Write the current Atmosphere_AD results to file
-  !   atmad_file = TRIM(Sensor_Id)//'.Atmosphere.nc'
-  !
-  !   Error_Status = CRTM_Atmosphere_WriteFile( atmad_file, atm_AD, NetCDF=.TRUE., Quiet=.TRUE. )
-  !   IF ( Error_Status /= SUCCESS ) THEN
-  !     Message = 'Error creating temporary Atmosphere_AD save file for failed comparison'
-  !     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-  !     STOP 1
-  !   END IF
-  ! END IF
+  ! NOT compared: the baseline is written on ICASE=1 while the final adjoints
+  ! come from ICASE=2 with a different n_Aerosols (the bypass aerosol), so the
+  ! Atmosphere_AD structures are non-conforming by design and
+  ! CRTM_Atmosphere_Compare correctly reports them different. A field-wise
+  ! comparison excluding the aerosol arrays would be needed to assert the
+  ! non-aerosol adjoints here; only the Surface adjoints are asserted below.
   ! 9e.2 Surface
-  ! IF ( ALL(CRTM_Surface_Compare(Surface_AD, sfc_AD, n_SigFig=5)) ) THEN
   IF ( ALL(CRTM_Surface_Compare(Surface_AD, sfc_AD)) ) THEN
     Message = 'Surface_AD Adjoints are the same!'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
   ELSE
     Message = 'Surface_AD Adjoints are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-    STOP 1
-    ! Write the current Surface_AD results to file
+    ! Write the current Surface_AD results to file for diagnosis
     sfcad_file = TRIM(Sensor_Id)//'.Surface.nc'
     Error_Status = CRTM_Surface_WriteFile( sfcad_file, Surface_AD, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary Surface_AD save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-      STOP 1
     END IF
+    STOP 1
   END IF
   ! ============================================================================
 

@@ -377,20 +377,12 @@ PROGRAM test_Aerosol_Bypass_k_matrix
   ! 9e. Compare some Jacobians
   ! --------------------------
   ! 9e.1 Atmosphere
-  ! IF ( ALL(CRTM_Atmosphere_Compare(Atmosphere_K, atm_k)) ) THEN
-  !   Message = 'Atmosphere_K Jacobians are the same!'
-  !   CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
-  ! ELSE
-  !   Message = 'Atmosphere_K Jacobians are different!'
-  !   CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-  !   ! Write the current Atmosphere_K results to file
-  !   atmk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.nc'
-  !   Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, NetCDF=.TRUE., Quiet=.TRUE. )
-  !   IF ( Error_Status /= SUCCESS ) THEN
-  !     Message = 'Error creating temporary Atmosphere_K save file for failed comparison'
-  !     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-  !   END IF
-  ! END IF
+  ! NOT compared: the baseline is written on ICASE=1 (n_Aerosols=2) while the
+  ! final Jacobians come from ICASE=2 (n_Aerosols=3, the bypass aerosol), so
+  ! the Atmosphere_K structures are non-conforming by design and
+  ! CRTM_Atmosphere_Compare correctly reports them different. A field-wise
+  ! comparison excluding the aerosol arrays would be needed to assert the
+  ! non-aerosol Jacobians here; only the Surface Jacobians are asserted below.
   ! 9e.2 Surface
   IF ( ALL(CRTM_Surface_Compare(Surface_K, sfc_k, n_SigFig=5)) ) THEN
     Message = 'Surface_K Jacobians are the same!'

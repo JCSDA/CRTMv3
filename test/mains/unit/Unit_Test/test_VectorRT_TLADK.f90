@@ -303,9 +303,11 @@ CONTAINS
     delta = ABS(X0) * 0.1_fp / 256.0_fp
     CALL set_var( var, X0 + delta )
     Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert, Options=Options )
+    IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'FD forward fail' ; ok=.FALSE. ; RETURN ; END IF
     DO ii = 1, n_Channels ; fd_all(ii) = get_out(RTSolution_pert(ii,1),ks_out) ; END DO
     CALL set_var( var, X0 - delta )
     Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert, Options=Options )
+    IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'FD forward fail' ; ok=.FALSE. ; RETURN ; END IF
     DO ii = 1, n_Channels
       fd_all(ii) = ( fd_all(ii) - get_out(RTSolution_pert(ii,1),ks_out) ) / ( 2.0_fp*delta )
     END DO
@@ -325,9 +327,11 @@ CONTAINS
       delta = ABS(X0) * 0.1_fp / (2.0_fp**kk)
       CALL set_var( var, X0 + delta )
       Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert, Options=Options )
+      IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'FD forward fail' ; ok=.FALSE. ; RETURN ; END IF
       Rp = get_out(RTSolution_pert(ch,1),ks_out)
       CALL set_var( var, X0 - delta )
       Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert, Options=Options )
+      IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'FD forward fail' ; ok=.FALSE. ; RETURN ; END IF
       Rm = get_out(RTSolution_pert(ch,1),ks_out)
       CALL set_var( var, X0 )
       fd = ( Rp - Rm ) / ( 2.0_fp*delta )

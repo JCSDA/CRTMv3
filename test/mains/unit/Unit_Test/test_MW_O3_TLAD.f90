@@ -234,9 +234,11 @@ CONTAINS
     eps = 1.0e-3_fp
     CALL perturb( var, base, +eps )
     Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert )
+    IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'FD forward fail' ; ok=.FALSE. ; RETURN ; END IF
     DO ii = 1, n_Channels ; fd_all(ii) = RTSolution_pert(ii,1)%Radiance ; END DO
     CALL perturb( var, base, -eps )
     Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert )
+    IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'FD forward fail' ; ok=.FALSE. ; RETURN ; END IF
     DO ii = 1, n_Channels
       fd_all(ii) = ( fd_all(ii) - RTSolution_pert(ii,1)%Radiance ) / ( 2.0_fp*eps )
     END DO
@@ -277,9 +279,11 @@ CONTAINS
       eps = 0.1_fp / (2.0_fp**kk)
       CALL perturb( var, base, +eps )
       Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert )
+      IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'FD forward fail' ; ok=.FALSE. ; RETURN ; END IF
       Rp = RTSolution_pert(ch,1)%Radiance
       CALL perturb( var, base, -eps )
       Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert )
+      IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'FD forward fail' ; ok=.FALSE. ; RETURN ; END IF
       Rm = RTSolution_pert(ch,1)%Radiance
       CALL perturb( var, base, ZERO )
       fd = ( Rp - Rm ) / ( 2.0_fp*eps )

@@ -295,9 +295,11 @@ CONTAINS
     delta = ABS(T0) * 0.1_fp / 256.0_fp
     Atm(1)%Temperature(PERT_LAYER) = T0 + delta
     Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert, Options=Options )
+    IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'FD forward fail' ; all_ok=.FALSE. ; RETURN ; END IF
     DO ii = 1, n_Channels ; fd_all(ii) = get_out(RTSolution_pert(ii,1),downwelling) ; END DO
     Atm(1)%Temperature(PERT_LAYER) = T0 - delta
     Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert, Options=Options )
+    IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'FD forward fail' ; all_ok=.FALSE. ; RETURN ; END IF
     DO ii = 1, n_Channels
       fd_all(ii) = ( fd_all(ii) - get_out(RTSolution_pert(ii,1),downwelling) ) / ( 2.0_fp*delta )
     END DO
@@ -318,9 +320,11 @@ CONTAINS
       delta = ABS(T0) * 0.1_fp / (2.0_fp**kk)
       Atm(1)%Temperature(PERT_LAYER) = T0 + delta
       Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert, Options=Options )
+      IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'FD forward fail' ; all_ok=.FALSE. ; RETURN ; END IF
       Rp = get_out(RTSolution_pert(ch,1),downwelling)
       Atm(1)%Temperature(PERT_LAYER) = T0 - delta
       Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTSolution_pert, Options=Options )
+      IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'FD forward fail' ; all_ok=.FALSE. ; RETURN ; END IF
       Rm = get_out(RTSolution_pert(ch,1),downwelling)
       Atm(1)%Temperature(PERT_LAYER) = T0
       fd = ( Rp - Rm ) / ( 2.0_fp*delta )
