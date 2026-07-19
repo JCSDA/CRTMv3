@@ -68,7 +68,7 @@ fi
 if ! test -f "$filename"; then
     # Ensure that filename is set to the local directory.
     filename="${foldername}.tgz"
-    echo "Downloading $filename (7 GB tar file)"
+    echo "Downloading $filename (~3.5 GB tar file)"
     wget $download_url -O "${filename}"
 fi
 
