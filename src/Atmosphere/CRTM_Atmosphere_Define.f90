@@ -3214,6 +3214,15 @@ CONTAINS
     n_Channels = SIZE(Atmosphere,DIM=1)
     n_Profiles = SIZE(Atmosphere,DIM=2)
 
+    ! A zero-size array would pass the vacuous ANY() check below and then
+    ! dereference Atmosphere(1,1) out of bounds.
+    IF ( n_Channels < 1 .OR. n_Profiles < 1 ) THEN
+      msg = 'Zero-size Atmosphere array in input.'
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
+
     ! All elements must be allocated
     IF ( ANY( .NOT. CRTM_Atmosphere_Associated(Atmosphere) ) ) THEN
       msg = 'Unallocated Atmosphere element(s) in input.'

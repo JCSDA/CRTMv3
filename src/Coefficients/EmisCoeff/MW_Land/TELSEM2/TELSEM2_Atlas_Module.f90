@@ -239,6 +239,9 @@ CONTAINS
     resol = atlas%Resolution
     IF ( PRESENT(Resolution) ) resol = Resolution
     lon = MODULO( Longitude, 360.0_fp )
+    ! IEEE rounding can return exactly 360.0 for a tiny negative input, which
+    ! would index one cell past the latitude band downstream.
+    IF ( lon >= 360.0_fp ) lon = ZERO
 
     ! List of atlas cells contributing at the requested resolution (1 at native)
     CALL calc_cellnum_mult( atlas, Latitude, lon, resol, cell, nb_cell )

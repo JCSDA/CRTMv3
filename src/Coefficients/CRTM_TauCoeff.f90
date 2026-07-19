@@ -236,7 +236,7 @@ CONTAINS
     LOGICAL :: alt_available
     LOGICAL :: zeeman_use_netCDF
     LOGICAL :: zeeman_nc_exists, zeeman_bin_exists
-    CHARACTER(16) :: zeeman_ext
+    CHARACTER(16) :: zeeman_ext, zeeman_other_ext
 
     ! Set up
     Error_Status = SUCCESS
@@ -639,8 +639,10 @@ CONTAINS
     END DO
     IF ( zeeman_use_netCDF ) THEN
       zeeman_ext = '.TauCoeff.nc'
+      zeeman_other_ext = '.TauCoeff.bin'
     ELSE
       zeeman_ext = '.TauCoeff.bin'
+      zeeman_other_ext = '.TauCoeff.nc'
     END IF
 
     DO n = 1, n_Sensors
@@ -652,6 +654,17 @@ CONTAINS
           TC%ZSensor_LoIndex(n) = i
           TC%n_ODZeeman = i
           i = i + 1
+        ELSE IF ( File_Exists( TRIM(local_path)//'z'//TRIM(TC%Sensor_ID(n))// &
+                               TRIM(zeeman_other_ext) ) ) THEN
+          ! The sensor DOES have a Zeeman coefficient file, but only in the
+          ! format the batch probe did not choose (mixed-format deployment).
+          ! Skipping it silently would drop the Zeeman correction (wrong TBs
+          ! in upper-stratospheric channels) with no trace -- make it loud.
+          CALL Display_Message( ROUTINE_NAME, &
+            'Zeeman TauCoeff for '//TRIM(TC%Sensor_ID(n))//' exists only as z'// &
+            TRIM(TC%Sensor_ID(n))//TRIM(zeeman_other_ext)//' but the Zeeman batch format is '// &
+            TRIM(zeeman_ext)//'; its Zeeman correction is DISABLED for this run', &
+            WARNING )
         END IF
       END IF
     END DO

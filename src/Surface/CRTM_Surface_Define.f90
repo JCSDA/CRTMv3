@@ -3038,6 +3038,7 @@ CONTAINS
     LOGICAL :: Close_File
     INTEGER :: NF90_Status, FileId, VarId
     INTEGER :: l, m, n_File_Channels, n_File_Profiles, n_Buf_Channels, alloc_stat
+    INTEGER :: DimId, n_File_Fields
     REAL(fp), ALLOCATABLE :: Surface_Data(:,:,:)
 
     ! Set up
@@ -3078,6 +3079,23 @@ CONTAINS
     END IF
     ! ...Close the file if any error from here on
     Close_File = .TRUE.
+
+    ! Schema check: the packed-record layout is positional, so a file written
+    ! with a different field count would silently misassign every field.
+    NF90_Status = NF90_INQ_DIMID( FileId,SFC_FIELD_DIMNAME,DimId )
+    IF ( NF90_Status == NF90_NOERR ) &
+      NF90_Status = NF90_INQUIRE_DIMENSION( FileId,DimId,Len=n_File_Fields )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//SFC_FIELD_DIMNAME//' dimension in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    IF ( n_File_Fields /= N_SURFACE_FIELDS ) THEN
+      WRITE( msg,'("Surface field-count mismatch in ",a,": file has ",i0, &
+             &", this build expects ",i0)' ) &
+             TRIM(Filename), n_File_Fields, N_SURFACE_FIELDS
+      CALL Read_Cleanup(); RETURN
+    END IF
 
     ! Read the packed data
     NF90_Status = NF90_INQ_VARID( FileId,SFC_DATA_VARNAME,VarId )

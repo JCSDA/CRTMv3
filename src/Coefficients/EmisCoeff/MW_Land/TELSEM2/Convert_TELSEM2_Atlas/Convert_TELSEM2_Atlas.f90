@@ -41,7 +41,8 @@ PROGRAM Convert_TELSEM2_Atlas
   IF ( nargs >= 1 ) THEN
     CALL GET_COMMAND_ARGUMENT(1, atlas_dir)
   ELSE
-    atlas_dir = '/home/jbenjam/CRTM/telsem2_atlas/'
+    WRITE(*,'(a)') 'Usage: Convert_TELSEM2_Atlas <atlas_dir> [<output_netcdf_file>]'
+    STOP 1
   END IF
   IF ( nargs >= 2 ) THEN
     CALL GET_COMMAND_ARGUMENT(2, out_file)

@@ -255,6 +255,27 @@ CONTAINS
         'class1 values out of range in '//TRIM(Filename), FAILURE )
       GOTO 900
     END IF
+    ! Cell_Number indexes Correspondence(n_Cells,:) at grid-setup time -- an
+    ! out-of-range value is an out-of-bounds WRITE during CRTM_Init.
+    IF ( ANY( Atlas%Cell_Number < 1 .OR. Atlas%Cell_Number > n_Cells ) ) THEN
+      CALL Display_Message( ROUTINE_NAME, &
+        'cellnum values out of range in '//TRIM(Filename), FAILURE )
+      GOTO 900
+    END IF
+    ! Per-month slices must partition the stacked data arrays.
+    IF ( ANY( Atlas%Month_Offset < 0 ) .OR. &
+         ANY( Atlas%Month_Offset + Atlas%Month_Data_Count > n_Data ) ) THEN
+      CALL Display_Message( ROUTINE_NAME, &
+        'month offset/count indexing exceeds n_data in '//TRIM(Filename), FAILURE )
+      GOTO 900
+    END IF
+    ! The band count must agree with the resolution attribute: equare() loops
+    ! to FLOOR(180/resolution) writing per-band arrays sized by n_Bands.
+    IF ( n_Bands /= FLOOR( 180.0_Double/resolution ) ) THEN
+      CALL Display_Message( ROUTINE_NAME, &
+        'n_latitude_bands inconsistent with resolution attribute in '//TRIM(Filename), FAILURE )
+      GOTO 900
+    END IF
     ! Emissivity
     IF (.NOT. check(NF90_INQ_VARID(ncid,EMIS_VARNAME,vid),'inq emis')) GOTO 900
     IF (.NOT. check(NF90_GET_VAR(ncid,vid,Atlas%Emissivity),'get emis')) GOTO 900

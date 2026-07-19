@@ -51,7 +51,8 @@ MODULE ODSSU_netCDF_IO
                               Allocate_ODPS, &
                               Allocate_ODPS_OPTRAN, &
                               Destroy_ODPS, &
-                              Associated_ODPS
+                              Associated_ODPS, &
+                              N_PREDICTOR_USED_OPTRAN
   USE ODSSU_Define    , ONLY: ODSSU_type, &
                               Allocate_ODSSU, &
                               Destroy_ODSSU, &
@@ -60,6 +61,7 @@ MODULE ODSSU_netCDF_IO
                               Info_ODSSU, &
                               ODAS_ALGORITHM, ODPS_ALGORITHM
   USE CRTM_Parameters , ONLY: ODSSU_ALGORITHM
+  USE SensorInfo_Parameters, ONLY: INVALID_WMO_SATELLITE_ID, INVALID_WMO_SENSOR_ID
   USE netcdf
   USE netCDF_Utility  , ONLY: Put_netCDF_Variable, &
                               Get_netCDF_Variable, &
@@ -277,11 +279,13 @@ CONTAINS
     END IF
     IF ( PRESENT(WMO_Satellite_Id) ) THEN
       NF90_Status = NF90_GET_ATT( NC_FileID, NF90_GLOBAL, WMO_SATELLITE_ID_GATTNAME, WMO_Satellite_Id )
-      IF ( NF90_Status /= NF90_NOERR ) WMO_Satellite_Id = -1
+      ! CRTM's missing-id sentinel, not -1, so downstream validity checks see
+      ! "invalid" rather than a plausible-but-wrong id
+      IF ( NF90_Status /= NF90_NOERR ) WMO_Satellite_Id = INVALID_WMO_SATELLITE_ID
     END IF
     IF ( PRESENT(WMO_Sensor_Id) ) THEN
       NF90_Status = NF90_GET_ATT( NC_FileID, NF90_GLOBAL, WMO_SENSOR_ID_GATTNAME, WMO_Sensor_Id )
-      IF ( NF90_Status /= NF90_NOERR ) WMO_Sensor_Id = -1
+      IF ( NF90_Status /= NF90_NOERR ) WMO_Sensor_Id = INVALID_WMO_SENSOR_ID
     END IF
 
     NF90_Status = NF90_CLOSE( NC_FileID )
@@ -742,6 +746,18 @@ CONTAINS
 
     IF ( sub_in /= ODPS_ALGORITHM ) THEN
       Message = 'Read_ODSSU_netCDF only supports subAlgorithm=ODPS for now.'
+      Error_Status = FAILURE
+      CALL Display_Message( ROUTINE_NAME, TRIM(Message), Error_Status, Message_Log=Message_Log )
+      RETURN
+    END IF
+
+    ! ODPS%OP_Index is a fixed-size (0:N_PREDICTOR_USED_OPTRAN) array; a file
+    ! with a different n_OPIndex dimension would make the buffer assignment
+    ! below non-conforming (silent corruption in RELEASE builds).
+    IF ( OC > 0 .AND. OI_p1 /= N_PREDICTOR_USED_OPTRAN + 1 ) THEN
+      WRITE( Message,'("OPTRAN n_OPIndex dimension in ",a," is ",i0, &
+             &"; this build expects ",i0)' ) &
+             TRIM(NC_Filename), OI_p1, N_PREDICTOR_USED_OPTRAN + 1
       Error_Status = FAILURE
       CALL Display_Message( ROUTINE_NAME, TRIM(Message), Error_Status, Message_Log=Message_Log )
       RETURN

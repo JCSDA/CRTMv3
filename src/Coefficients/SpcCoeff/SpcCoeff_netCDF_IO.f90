@@ -1176,6 +1176,12 @@ CONTAINS
             msg = 'Antenna correction sensor information is inconsistent with SpcCoeff'
             CALL Read_Cleanup(); RETURN
           END IF
+        ELSE IF ( noisy ) THEN
+          ! Distinguish "sensor has no AC data" from "fix tree is incomplete":
+          ! a missing sibling silently disables the antenna correction.
+          CALL Display_Message( ROUTINE_NAME, &
+            'No ACCoeff sibling found for '//TRIM(Filename)// &
+            '; antenna correction unavailable for this sensor', INFORMATION )
         END IF
 
         ! ----- NLTECoeff sibling file -----
@@ -1202,6 +1208,10 @@ CONTAINS
             msg = 'non-LTE correction sensor information is inconsistent with SpcCoeff'
             CALL Read_Cleanup(); RETURN
           END IF
+        ELSE IF ( noisy ) THEN
+          CALL Display_Message( ROUTINE_NAME, &
+            'No NLTECoeff sibling found for '//TRIM(Filename)// &
+            '; NLTE correction unavailable for this sensor', INFORMATION )
         END IF
       END IF
     END BLOCK
