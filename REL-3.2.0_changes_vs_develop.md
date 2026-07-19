@@ -26,7 +26,7 @@ Code changes:
 * `CRTM_LifeCycle.f90`: the default coefficient format flips from `Binary` to `netCDF` for `SpcCoeff`, `TauCoeff`, `CloudCoeff`, `AerosolCoeff`, and all the IR/VIS/MW EmisCoeff files, with a `Resolve_Coeff_Format` step that falls back to `Binary` if the `.nc` file is absent but the `.bin` equivalent is present.
 * `CRTM_SpcCoeff.f90` / `CRTM_TauCoeff.f90`: the readers default to NetCDF (`netCDF` argument absent ⇒ NetCDF) and probe per-sensor (SpcCoeff) / per-batch (TauCoeff: ODAS/ODPS/ODSSU/ODZeeman loaders take a single `netCDF` flag, so they switch the whole batch), falling back to the alternate format if the requested one isn't on disk. ODZeeman has its own `z<sensor>.TauCoeff.nc` probe.
 
-  *Zeeman netCDF status (verified against `fix_REL-3.2.0.0.tgz`):* the **SSMIS** Zeeman transition is complete — the tarball ships `zssmis_f16..f20.TauCoeff.nc` and SSMIS runs load them with no fallback. **AMSU-A** ships no `zamsua*.TauCoeff` in either format; AMSU-A simply has no Zeeman coefficient and runs without one (its 60 GHz Zeeman correction is not applied — unchanged from prior releases). The probe is hardened (`3da9d3a`) so a sensor that lacks the `.nc` only forces the batch to Binary when it actually has a `.bin`; an AMSU-A with neither format no longer drags a NetCDF-only SSMIS set down to a (nonexistent) Binary and no longer emits a spurious "incomplete; falling back" message. So commit `0fcb7d4`'s "complete NetCDF transition" is accurate **for SSMIS specifically**, not for the entire Zeeman family.
+  *Zeeman netCDF status (verified against `fix_REL-3.2.0.0.tgz`):* the **SSMIS** Zeeman transition is complete — the tarball ships `zssmis_f16..f20.TauCoeff.nc` and SSMIS runs load them with no fallback. **AMSU-A** ships no `zamsua*.TauCoeff` in either format; AMSU-A simply has no Zeeman coefficient and runs without one (its 60 GHz Zeeman correction is not applied — unchanged from prior releases). The probe is hardened (`ed21dc7`) so a sensor that lacks the `.nc` only forces the batch to Binary when it actually has a `.bin`; an AMSU-A with neither format no longer drags a NetCDF-only SSMIS set down to a (nonexistent) Binary and no longer emits a spurious "incomplete; falling back" message. So commit `0fcb7d4`'s "complete NetCDF transition" is accurate **for SSMIS specifically**, not for the entire Zeeman family.
 * New offline `ODSSUBIN2NC` converter and `ODSSU_netCDF_IO` / `ODZeeman_netCDF_IO` modules so the SSU/Zeeman TauCoeff paths exist in NetCDF form.
 * The bytes the tests load are now those in `fix_REL-3.2.0.0.tgz`.
 
@@ -63,7 +63,7 @@ No TB change. The regression comparison includes these `RTSolution` fields, so t
 
 ## 5. Analytic MW-land emissivity Jacobians (issue #281)
 
-Commits: `9358caa` (analytic TL/AD), `57c9911` (`test_CONST_MIXED_Polarization` is unrelated; the Jacobian test is `test_Land_Jacobian`).
+Commits: `9358caa` (analytic TL/AD), `57c9911` (`test_CONST_MIXED_Polarization` is unrelated; the Jacobian test is registered as `test_Unit_Land_Jacobian`, source `test_Land_Jacobian.f90`).
 
 Files: `src/SfcOptics/CRTM_MW_Land_SfcOptics.f90`, `src/SfcOptics/NESDIS_Emissivity/NESDIS_LandEM_Module.f90`, `src/SfcOptics/CRTM_SfcOptics.f90` (3 land dispatcher call-sites), `src/SfcOptics/CRTM_SfcOptics_Define.f90` (`iVar%MWLSOV`), `test/mains/unit/Unit_Test/test_Land_Jacobian.f90`, `docs/design/surface_jacobians_281.md`.
 
@@ -107,7 +107,7 @@ These are on the branch but produce **no TB difference** in the common `ctest` c
   - *Auto-load (`13c7d23`):* `CRTM_Init` resolves `<File_Path>/PARMIO.MWwater.EmisCoeff.nc` and loads it whenever the loaded SpcCoeff set contains at least one microwave sensor (`CRTM_LifeCycle.f90` ~1073, ~1101–1137). The caller may override the filename via the optional `PARMIOCoeff_File` argument. Missing-LUT behavior: with no explicit file, an absent LUT is non-fatal and CRTM silently continues on the FASTEM path (drop-in); an explicitly-supplied-but-absent `PARMIOCoeff_File` is a hard `FAILURE`. The LUT *is* shipped in `fix_REL-3.2.0.0.tgz` (`fix/EmisCoeff/MW_Water/netCDF/PARMIO.MWwater.EmisCoeff.nc`), so in the default deployment the LUT loads and the routing below is active.
   - *Dispatch (`7689efe`):* `CRTM_MW_Water_SfcOptics` routes a channel to PARMIO iff `CRTM_PARMIOCoeff_IsLoaded() .AND. Frequency >= PARMIO_FREQ_THRESHOLD` (= 200 GHz) — forward `:240`, TL `:471`, AD `:692`. Below 200 GHz, or with the LUT not loaded, the code is byte-identical to the original FASTEM path. So for MW-water channels ≥ 200 GHz the default ocean emissivity — and thus `Radiance` / `Brightness_Temperature` and the MW-water Jacobians — now comes from PARMIO rather than FASTEM. This is a genuine default-behavior change, not an inert opt-in.
   - *Why the common ctest suite is unaffected:* no sensor in the regression suite reaches 200 GHz — ATMS 183.31, GMI 183.25, SSMIS 183.31, MHS 190.31, AMSU-A 89, SAPHIR 183.31, AMSR 89; the committed `Simple`/`ClearSky` sweep uses `amsua_metop-a mhs_n18 ssmis_f16 amsre_aqua` (+ `atms_npp` in `check_crtm`). The 200 GHz gate deliberately excludes the ATMS/GMI/SSMIS/MHS 183–190 GHz band (`7689efe`: PARMIO gave no skill there and degraded ~88 GHz, so it was scoped to ≥ 200 GHz). The only MW sensors that cross 200 GHz are `mwr_aws` (~325 GHz) and the TROPICS/`tms_*` family (~204 GHz); their default output now reflects PARMIO. None is in the common-suite reference data, so no `forward` / `tangent_linear` / `k_matrix` / `adjoint` reference TB changed.
-  - *Test coverage / gap:* the ≥ 200 GHz PARMIO path is exercised by self-consistency drivers — `test_PARMIO_TLAD` (two-sided finite-difference TL + adjoint dot-product) and `test_PARMIO_FASTEM_DeltaSweep[_AWS]` (up to 325 GHz), gated on `PARMIO_LUT_PRESENT` / `AWS_COEFFS_PRESENT`. There is **no** stored-reference `forward` / `k_matrix` regression for a ≥ 200 GHz sensor analogous to the standard sensor sweep, so a future regression in the PARMIO default path would not be caught by a truth-file comparison. Adding one AWS or TROPICS reference case is recommended.
+  - *Test coverage:* the ≥ 200 GHz PARMIO path is exercised by self-consistency drivers — `test_PARMIO_TLAD` (two-sided finite-difference TL + adjoint dot-product) and `test_PARMIO_FASTEM_DeltaSweep[_AWS|_TMS]` (up to 325 GHz; the TROPICS 204.8 GHz window channel is the stronger PARMIO-vs-FASTEM witness, `91f5fee`) — and, since `aff03b5` (issue #311), by a stored-reference `mwr_aws` `ClearSky` regression across `forward`/`tangent_linear`/`adjoint`/`k_matrix` (19 channels, 4 at ~325 GHz), gated on `AWS_COEFFS_PRESENT AND PARMIO_LUT_PRESENT`. The gap flagged in earlier drafts of this document (no truth-file comparison for the ≥ 200 GHz default path) is closed.
   - *Thread-safety:* the PARMIO compute path (`CRTM_PARMIO.f90`, `_TL`, `_AD`) holds no writable module `SAVE` state — only the read-only LUT (`PARMIOC`), mirroring FASTEM's `MWwaterC` — so it is safe under the OpenMP-over-channels parallelism. (The bulk of the `CRTM_LifeCycle.f90` diff remains the Binary→NetCDF default-format flip — item 1, not this.)
 * **nvfortran support** — `6bf5757`: new `cmake/compiler_flags_NVHPC_Fortran.cmake`; split the rank-8 PARMIOCoeff `Rdown` LUT into per-polarization rank-7 `Rdown_v` / `Rdown_h` (nvfortran caps array rank at 7).
   - *No numerical difference:* the on-disk file already stores `Rdown` per-polarization, so this is a memory-layout reshape with no value change; touches only PARMIO code plus test files; the `REAL(16)` → `REAL(fp)` edit is in two convergence *unit tests* (tolerance 0.1), not the library.
@@ -187,13 +187,24 @@ legacy when unused. Verified by `test_Downwelling_TLADK` (14 cases: TL-vs-FD,
 adjoint dot-product, K-vs-AD, and the surface-profile==scalar identity, across
 clear/SOI/ADA × overcast/fractional, plus Round-2 grazing-angle cases).
 
-## 11. Pre-release review fixes (Round 1 / Round 2)
+## 11. Pre-release review fixes
 
 A full validity/completeness review of the branch (2026-06-11) produced two
 rounds of pre-tag fixes to branch-only code — see the dedicated comments below
-("Pre-release fix thread"). **None changes any common-suite TB** (the scalar RT
-path is bit-identical throughout; suite 213/213). Summary:
+("Pre-release fix thread"). An earlier review pass (2026-05-29/30), two
+post-doc commits, and the 2026-07-18 comprehensive review are listed here as
+well. **None changes any common-suite TB** except the NLTE-staging repair in
+the 2026-07-18 round (13 cris399_npp/iasi_metop-b baselines regenerated with
+NLTE correctly active; suite 215/215 after). Summary:
 
+* **Earlier review pass, 2026-05-29/30** (`bdc7fb9`+`57c9911`, `9ca8e98`,
+  `aff03b5`, `a84de47`, `91f5fee`, `c89b2e4`, `8bd411c`, `ed21dc7`):
+  CONST_MIXED_POLARIZATION `Distance_Ratio` fix + unit test (§6); repo hygiene
+  for the tag; the `mwr_aws` ≥ 200 GHz stored-reference regression (§8, #311);
+  repair of the PARMIO delta-sweep that compared PARMIO against itself; the
+  TROPICS 204.8 GHz delta-sweep witness; documentation of the shared read-only
+  `Predictor` OMP invariant (H1); PARMIO reflection-correction gating unified
+  across FWD/TL/AD (H2); Zeeman format-probe hardening (§1).
 * **Round 1** (`b19cd61`, `9eda275`, `78aac3d`, `8f75a59`, `fe5104c`, test `1cc9a5b`):
   TL `Down_Radiance` OMP race; SOI `Compute_*` gating; MW-land soil-moisture
   Jacobian `+Inf` at SMC=0 (#281); `Resolve_Coeff_Format` extension authority;
@@ -203,6 +214,79 @@ path is bit-identical throughout; suite 213/213). Summary:
   (`SetValue`/`Inspect`/`Equal`); rank-1 netCDF `n_Channels/=0` parity guard;
   TELSEM2 longitude-wrap + `class1` validation; grazing-angle + ≥200 GHz PARMIO
   test cases + `OMP_Speedup` `RUN_SERIAL`.
+* **Post-doc commits** (`518dd41`, `ef8e7c1`): `ASYMTX` balance-loop
+  non-termination guard in `CRTM_Utility` (robustness only — no result change
+  for previously-converging matrices); per-habit `Reff`→`Dm` conversion in the
+  `CRTM-Exp` MW CloudCoeff reader (opt-in Exp LUT path only; default conversion
+  factor 1.0, so existing Exp LUTs and all non-Exp paths are unaffected).
+* **Comprehensive review, 2026-07-18** (13-area adversarially-verified pass over
+  the full branch diff). Fixes, none of which changes any common-suite TB
+  except where noted:
+  - **Multi-sensor single-call `ln` offset** (Forward/TL/K): per-thread channel
+    counter dropped the previous sensors' cumulative offset, so a single call
+    with `ChannelInfo(1:2+)` overwrote sensor 1's outputs (preexisting on
+    develop; invisible to the suite, which passes one sensor per call). Fixed
+    in all three modules + new `test_Unit_MultiSensor_SingleCall` (FWD/TL/K
+    combined-vs-per-sensor, bit-exact; fails on the unfixed code). Also
+    guarded per-sensor `RTV_Create` re-allocation (the `error in allocate
+    Pff 5014` noise on sensors ≥ 2).
+  - **Split-path coefficient loading**: SpcCoeff/TauCoeff were loaded from
+    `Effective_NC_Path` unconditionally, breaking `File_Path` (Binary) +
+    `NC_File_Path` (netCDF) split trees; now selected per requested format.
+    PARMIO/TELSEM2 drop-in auto-load additionally probes `NC_File_Path`, and
+    CRTM_Init reports the ≥ 200 GHz FASTEM fallback when no PARMIO LUT loads.
+  - **PARMIO physics** (≥ 200 GHz MW-water only): (a) azimuthal harmonics were
+    applied to the invalid-azimuth sentinel (`Sensor_Azimuth_Angle` default
+    999.9 — the common DA configuration); now gated like FastemX (azimuthal
+    mean, FWD/TL/AD-consistent, sentinel case pinned in `test_PARMIO_TLAD`).
+    (b) 3rd/4th-Stokes reflectivity was `1−e` (≈1) instead of the FastemX
+    convention 0 — polarimetric (`n_Stokes=4`) runs would have reflected ~100%
+    of downwelling U/V. Both change TBs only for ≥ 200 GHz MW-water scenes
+    without a valid sensor azimuth (the `mwr_aws` references, which set a
+    valid azimuth, are unchanged). Reader now also loads the group-boundary
+    threshold attributes, and the forward LUT interpolation gained the
+    `Is_Allocated` guard the TL/AD already had.
+  - **VMOM sensor-angle normalization** (`Normalize_Phase`, `n_Stokes>1`,
+    `n_Streams<nZ`): normalized column `nZ*n_Stokes` (the last polarized
+    component) instead of the sensor-angle intensity element
+    `(nZ-1)*n_Stokes+1`; scalar branch and all other blocks confirm the
+    convention. Vector-RT (opt-in) results only.
+  - **NLTE/ACCoeff staging** (test data, TB-affecting for 13 tests): the
+    `crtm_test_input` entries for `cris399_npp`/`iasi_metop-b`/`airs_aqua`
+    NLTECoeff and `amsua_n19` ACCoeff pointed into `SpcCoeff/netCDF/` where
+    the release tree does not keep them → dangling symlinks → NLTE silently
+    off in the stored baselines. Paths corrected to `NLTECoeff|ACCoeff/netCDF/`
+    and the 13 affected references regenerated (CrIS 4.3 µm channels move by
+    up to ~8.5 K on the daytime profile — the correct, NLTE-on radiances).
+    The SpcCoeff reader now emits an INFORMATION message when a sibling
+    AC/NLTE file is absent so this cannot recur silently.
+  - **Exp scheme + non-MW sensors**: the CRTM-Exp branch stomped
+    `n_Legendre_Terms=0` for every sensor, which also truncated the AEROSOL
+    phase expansion for IR/VIS channels in cloudy profiles; the override is
+    now MW-only (non-MW keeps the stream-based order; Exp cloud optics remain
+    zero for non-MW as designed).
+  - **Zeeman mixed-format visibility**: a Zeeman candidate whose coefficient
+    exists only in the format the batch probe did not choose now gets a loud
+    WARNING (was: silent loss of the Zeeman correction).
+  - **Hardening/minor**: TELSEM2 `MODULO` 360.0 longitude edge + netCDF-reader
+    index/geometry validation; ODSSU netCDF WMO fallbacks use the CRTM invalid
+    sentinels (1023/2047) and OPTRAN dimensions are conformance-checked;
+    Surface netCDF reader validates `n_Surface_Fields`; Atmosphere netCDF
+    writer rejects zero-size arrays; level-profile FWD/TL/AD copies clamp to
+    conformant extents; FD probes in `test_VectorRT_TLADK` /
+    `test_Downwelling_TLADK` / `test_MW_O3_TLAD` now check forward
+    `Error_Status`; `find_package(OpenMP REQUIRED)`; `NDEBUG` no longer leaks
+    into `DEBUG` builds (case-insensitive build-type match);
+    `Convert_TELSEM2_Atlas` prints usage instead of defaulting to a personal
+    path; stale testinput header comment rewritten (all-netCDF staging; the
+    tarball ships no `.bin` coefficients, so the binary coefficient read path
+    is suite-untested for this release).
+  - **Reviewed, deliberately unchanged**: `CRTM_Init` forcing 1 OpenMP thread
+    when `OMP_NUM_THREADS` is unset is the documented `bb9991b` design (note
+    for release notes: `OMP_SET_NUM_THREADS` is process-global and affects the
+    host application); the "legacy CloudScatter OOB under vector RT" review
+    finding is refuted — all four entry modules reject cloudy `n_Stokes>1`
+    runs with a `<6`-element LUT before that code can run.
 
 ## Appendix: commits `develop..HEAD` (oldest → newest)
 
