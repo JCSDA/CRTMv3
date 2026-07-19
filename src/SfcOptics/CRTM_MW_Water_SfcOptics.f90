@@ -62,6 +62,8 @@ MODULE CRTM_MW_Water_SfcOptics
   PUBLIC :: Compute_MW_Water_SfcOptics
   PUBLIC :: Compute_MW_Water_SfcOptics_TL
   PUBLIC :: Compute_MW_Water_SfcOptics_AD
+  ! Dispatch threshold (CRTM_LifeCycle reports the FASTEM fallback against it)
+  PUBLIC :: PARMIO_FREQ_THRESHOLD
 
 
   ! -----------------

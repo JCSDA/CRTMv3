@@ -84,6 +84,7 @@ MODULE CRTM_LifeCycle
   USE CRTM_MWlandCoeff       , ONLY: CRTM_MWlandCoeff_Load, &
                                      CRTM_MWlandCoeff_Destroy, &
                                      CRTM_MWlandCoeff_IsLoaded
+  USE CRTM_MW_Water_SfcOptics, ONLY: PARMIO_FREQ_THRESHOLD
   ! ...OpenMP API
 #ifdef _OPENMP
   USE OMP_LIB
@@ -797,16 +798,24 @@ CONTAINS
     END IF
 
     ! Load the spectral coefficients
+    ! ...Search the path matching the requested format, so a caller supplying
+    !    split Binary/netCDF trees (File_Path + NC_File_Path) gets Binary
+    !    Spc/Tau files from File_Path as before, not the netCDF tree.
     netCDF = .FALSE.
     IF (Default_SpcCoeff_Format == 'netCDF' ) THEN
         netCDF = .TRUE.
+    END IF
+    IF ( netCDF ) THEN
+      Effective_Coeff_Path = Effective_NC_Path
+    ELSE
+      Effective_Coeff_Path = Effective_Bin_Path
     END IF
     IF ( .NOT. Quiet_ ) THEN
       WRITE(*,*) "Loading "//TRIM(Default_SpcCoeff_Format)//" spectral coefficients."
     END IF
     err_stat = CRTM_SpcCoeff_Load( &
                  Sensor_ID                                 , &
-                 File_Path         = Effective_NC_Path     , &
+                 File_Path         = Effective_Coeff_Path  , &
                  netCDF            = netCDF                , &
                  Quiet             = Quiet                 , &
                  Process_ID        = Process_ID            , &
@@ -818,16 +827,22 @@ CONTAINS
 
 
     ! Load the transmittance model coefficients
+    ! ...Same per-format path selection as the SpcCoeff load above.
     netCDF = .FALSE.
     IF (Default_TauCoeff_Format == 'netCDF' ) THEN
         netCDF = .TRUE.
+    END IF
+    IF ( netCDF ) THEN
+      Effective_Coeff_Path = Effective_NC_Path
+    ELSE
+      Effective_Coeff_Path = Effective_Bin_Path
     END IF
     IF ( .NOT. Quiet_ ) THEN
       WRITE(*,*) "Loading "//TRIM(Default_TauCoeff_Format)//" transmittance coefficients."
     END IF
     err_stat = CRTM_Load_TauCoeff( &
                  Sensor_ID         = Sensor_ID             , &
-                 File_Path         = Effective_NC_Path     , &
+                 File_Path         = Effective_Coeff_Path  , &
                  Quiet             = iQuiet                , &  ! *** Use of iQuiet temporary
                  netCDF            = netCDF                , &
                  Process_ID        = Process_ID            , &
@@ -1126,6 +1141,13 @@ CONTAINS
         Resolved_PARMIOCoeff_File = TRIM(ADJUSTL(File_Path)) // TRIM(Resolved_PARMIOCoeff_File)
       END IF
       INQUIRE(FILE=TRIM(Resolved_PARMIOCoeff_File), EXIST=parmio_present)
+      ! ...The drop-in default is a netCDF file: when the caller keeps netCDF
+      !    data under a separate NC_File_Path, probe that tree too.
+      IF ( .NOT. parmio_present .AND. .NOT. parmio_explicit .AND. &
+           PRESENT(NC_File_Path) ) THEN
+        Resolved_PARMIOCoeff_File = TRIM(ADJUSTL(NC_File_Path)) // 'PARMIO.MWwater.EmisCoeff.nc'
+        INQUIRE(FILE=TRIM(Resolved_PARMIOCoeff_File), EXIST=parmio_present)
+      END IF
       IF ( parmio_present ) THEN
         IF ( .NOT. Quiet_ ) THEN
           WRITE(*, '("Loading PARMIO MW water emissivity LUT: ", a)') TRIM(Resolved_PARMIOCoeff_File)
@@ -1141,6 +1163,21 @@ CONTAINS
         err_stat = FAILURE
         CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
         RETURN
+      END IF
+      ! ...Make the FASTEM fallback visible: without the LUT, MW-water channels
+      !    at/above the PARMIO dispatch threshold use FASTEM extrapolated
+      !    beyond its tuning band, which changes the physics silently.
+      IF ( .NOT. CRTM_PARMIOCoeff_IsLoaded() .AND. .NOT. Quiet_ ) THEN
+        DO n = 1, n_Sensors
+          IF ( SpcCoeff_IsMicrowaveSensor(SC(n)) ) THEN
+            IF ( ANY(SC(n)%Frequency >= PARMIO_FREQ_THRESHOLD) ) THEN
+              WRITE( msg,'(a," has channels at/above ",f0.0," GHz but no PARMIO LUT is loaded; ",&
+                     &"MW water emissivity there falls back to FASTEM")' ) &
+                     TRIM(SC(n)%Sensor_Id), PARMIO_FREQ_THRESHOLD
+              CALL Display_Message( ROUTINE_NAME, TRIM(msg)//TRIM(pid_msg), INFORMATION )
+            END IF
+          END IF
+        END DO
       END IF
 
       ! ...TELSEM2 MW land emissivity atlas. Same "drop-in when present" policy
@@ -1161,6 +1198,13 @@ CONTAINS
         Resolved_MWlandCoeff_File = TRIM(ADJUSTL(File_Path)) // TRIM(Resolved_MWlandCoeff_File)
       END IF
       INQUIRE(FILE=TRIM(Resolved_MWlandCoeff_File), EXIST=mwland_present)
+      ! ...The drop-in default is a netCDF file: when the caller keeps netCDF
+      !    data under a separate NC_File_Path, probe that tree too.
+      IF ( .NOT. mwland_present .AND. .NOT. mwland_explicit .AND. &
+           PRESENT(NC_File_Path) ) THEN
+        Resolved_MWlandCoeff_File = TRIM(ADJUSTL(NC_File_Path)) // 'TELSEM2.MWland.EmisCoeff.nc'
+        INQUIRE(FILE=TRIM(Resolved_MWlandCoeff_File), EXIST=mwland_present)
+      END IF
       IF ( mwland_present ) THEN
         IF ( .NOT. Quiet_ ) THEN
           WRITE(*, '("Loading TELSEM2 MW land emissivity atlas: ", a)') TRIM(Resolved_MWlandCoeff_File)
