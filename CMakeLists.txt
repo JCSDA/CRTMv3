@@ -58,7 +58,10 @@ include(GNUInstallDirs)
 
 ## Dependencies (unchanged from original)
 if(OPENMP)
-  find_package(OpenMP COMPONENTS Fortran)
+  # REQUIRED: src/CMakeLists.txt links OpenMP::OpenMP_Fortran unconditionally
+  # when OPENMP=ON; without REQUIRED a missing OpenMP fails later at generate
+  # time with a cryptic "target not found" error.
+  find_package(OpenMP REQUIRED COMPONENTS Fortran)
 endif()
 
 # Enable portable Fortran source preprocessing across all supported compilers

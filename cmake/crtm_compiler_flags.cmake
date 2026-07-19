@@ -1,5 +1,6 @@
 
-if( NOT CMAKE_BUILD_TYPE MATCHES "Debug" )
+string( TOUPPER "${CMAKE_BUILD_TYPE}" _crtm_build_type_uc )
+if( NOT _crtm_build_type_uc STREQUAL "DEBUG" )
   add_definitions( -DNDEBUG )
 endif()
 

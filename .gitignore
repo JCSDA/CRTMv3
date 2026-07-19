@@ -14,3 +14,6 @@ build.bash
 rebuild.bash
 *~
 conductor/
+test-data-release/
+.claude/
+test/testinput/*.nc
