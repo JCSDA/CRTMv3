@@ -259,7 +259,14 @@ CONTAINS
     Frequency_MW = SC(SensorIndex)%Frequency(ChannelIndex)
     Frequency_IR = SC(SensorIndex)%Wavenumber(ChannelIndex)
     ! Determine the phase-function truncation order.
-    IF ( Active_Cloud_Scheme == CRTM_EXP_CLOUDCOEFF ) THEN
+    IF ( Active_Cloud_Scheme == CRTM_EXP_CLOUDCOEFF .AND. &
+         .NOT. SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
+      ! Exp scheme is microwave-only in v1: this channel's cloud optics are
+      ! zeroed in the layer loop below. Leave the stream-based
+      ! n_Legendre_Terms alone -- zeroing it here would also truncate the
+      ! AEROSOL phase expansion computed later into the same AtmOptics.
+      CScat%lOffset = 0
+    ELSE IF ( Active_Cloud_Scheme == CRTM_EXP_CLOUDCOEFF ) THEN
       ! Experimental scheme: truncation order is taken from the LUT (running
       ! maximum accumulated in the cloud loop below), DECOUPLED from the RT
       ! stream count. The legacy {4,6,8,16} lOffset block packing is not used.
@@ -1481,7 +1488,8 @@ CONTAINS
   ! Interpolates CloudC_Exp over (Frequency, Dm, Temperature) for the given
   ! habit (cloud_type). The phase-function truncation order (Le) is taken from
   ! the LUT (n_Legendre_Eff) and is DECOUPLED from the RT stream count.
-  ! v1: host Effective_Radius is used directly as Dm (identity map); n_Mu=1.
+  ! Host Effective_Radius is mapped to the LUT Dm axis via the per-habit
+  ! Reff_to_Dm factor (1.0 when the LUT omits the variable); n_Mu=1.
   ! pcoeff convention matches the legacy reader: pcoeff(l,m)=0.5*chi_l, with the
   ! (2l+1) carried in the normalized Legendre polynomials and pcoeff(0,1)=0.5.
   ! ---------------------------------------------
