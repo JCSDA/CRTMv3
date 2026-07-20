@@ -63,14 +63,15 @@ No TB change. The regression comparison includes these `RTSolution` fields, so t
 
 ## 5. Analytic MW-land emissivity Jacobians (issue #281)
 
-Commits: `9358caa` (analytic TL/AD), `57c9911` (`test_CONST_MIXED_Polarization` is unrelated; the Jacobian test is registered as `test_Unit_Land_Jacobian`, source `test_Land_Jacobian.f90`).
+Commits: `9358caa` (LAI/vegetation analytic TL/AD, Phase 1), Phase 2 (soil moisture), `aa31bb7` (soil/land temperature, Phase 3). The Jacobian test is registered as `test_Unit_Land_Jacobian`, source `test_Land_Jacobian.f90`.
 
 Files: `src/SfcOptics/CRTM_MW_Land_SfcOptics.f90`, `src/SfcOptics/NESDIS_Emissivity/NESDIS_LandEM_Module.f90`, `src/SfcOptics/CRTM_SfcOptics.f90` (3 land dispatcher call-sites), `src/SfcOptics/CRTM_SfcOptics_Define.f90` (`iVar%MWLSOV`), `test/mains/unit/Unit_Test/test_Land_Jacobian.f90`, `docs/design/surface_jacobians_281.md`.
 
-* Previously `Compute_MW_{Land,Snow,Ice}_SfcOptics_TL/_AD` were pure zero-stubs. This change gives the **MW-land** path analytic TL/AD by hand-differentiating `NESDIS_LandEM` (canopy `vlai = LAI*Veg_Fraction` optical-depth path, soil-moisture dielectric mixing, the Fresnel/roughness chain), caching the partials in `iVar%MWLSOV`. Snow/ice remain zero-stubs.
+* Previously `Compute_MW_{Land,Snow,Ice}_SfcOptics_TL/_AD` were pure zero-stubs. This change gives the **MW-land** path (NESDIS_LandEM, < 80 GHz) analytic TL/AD for **all** of its physical state variables by hand-differentiating `NESDIS_LandEM`: the canopy `vlai = LAI*Veg_Fraction` optical-depth path, the soil-moisture and soil-temperature soil dielectric, the Fresnel/roughness chain (factored into `Roughened_R23_Deriv`, shared by the moisture and temperature paths), and the canopy/soil thermal-ratio `gsect0` (soil and land temperature). Partials are cached in `iVar%MWLSOV`. Snow/ice remain zero-stubs.
+* **Land/soil temperature (Phase 3, `aa31bb7`):** soil temperature enters via the soil dielectric and `gsect0`; land (skin) temperature via `gsect0`. The soil-temperature out-of-range aliasing (`t_soil <- t_skin`) is resolved in the forward — the aliased input gets a zero derivative and its sensitivity re-attributes to land temperature. The land-temperature emissivity part **accumulates** onto the existing skin-T Planck emission Jacobian (`CRTM_Compute_SurfaceT_AD`). This corrects a latent bug: the forward already depended on skin temperature through `gsect0`, but `Surface_K%Land_Temperature` dropped it, so the below-cutoff land-temperature Jacobian was ~3-4x too large; it now matches finite differences. `Canopy_Water_Content` is never consumed by the forward → its analytic Jacobian is exactly zero (asserted in the test).
 * **Forward emissivity is bit-identical** — the new derivative code is gated behind `PRESENT(...)` optional arguments that the forward never supplies. So radiances/BT do not change.
 
-**TB effect:** none in the common ocean regression sweep. The change is to the **Surface-Jacobian reference data** for MW-over-land scenes: the `LAI` / `Vegetation_Fraction` / `Soil_Moisture_Content` columns of `Surface_K` (and the matching TL/AD outputs) go from identically zero to nonzero. MW-over-land Surface reference files must be regenerated after this change.
+**TB effect:** none in the common ocean regression sweep. The change is to the **Surface-Jacobian reference data** for MW-over-land scenes: the `LAI` / `Vegetation_Fraction` / `Soil_Moisture_Content` / `Soil_Temperature` / `Land_Temperature` columns of `Surface_K` (and the matching TL/AD outputs) change (from zero, except land temperature which had the emission-only value). A field-level diff confirms only those columns move; `Atmosphere_K` and `RTSolution_K` are unchanged. MW-over-land Surface reference files must be regenerated after this change (build-local, self-seeding on a fresh checkout).
 
 ## 6. CONST_MIXED_POLARIZATION (polarization type 13) Distance_Ratio fix
 
@@ -87,7 +88,7 @@ File: `src/SfcOptics/CRTM_SfcOptics.f90`.
 1. Difference is only in `WMO_*` / `Sensor_Id` → §4 (coeff-file metadata).
 2. CrIS-FSR `Radiance` / `Brightness_Temperature` change → §2 (NLTECoeff sibling now loaded).
 3. `v.abi_g18` `SOD` / `Layer_Optical_Depth` / `Single_Scatter_Albedo` / reflective-band `Radiance` / `Brightness_Temperature` → §3 (per-channel `Solar_Irradiance`).
-4. MW-over-land `Surface_K` / Surface TL/AD change in the `LAI` / `Vegetation_Fraction` / `Soil_Moisture_Content` columns (forward BT unchanged) → §5 (analytic MW-land Jacobians, #281).
+4. MW-over-land `Surface_K` / Surface TL/AD change in the `LAI` / `Vegetation_Fraction` / `Soil_Moisture_Content` / `Soil_Temperature` / `Land_Temperature` columns (forward BT unchanged) → §5 (analytic MW-land Jacobians, #281).
 5. `tms_*` / TROPICS pol-13 `Brightness_Temperature` change → §6 (CONST_MIXED_POLARIZATION Distance_Ratio fix).
 6. Difference depends on `OMP_NUM_THREADS` → not expected; that would be a bug, not one of these changes.
 7. MW-water `Radiance` / `Brightness_Temperature` / Jacobian change on a sensor with channels ≥ 200 GHz (e.g. `mwr_aws`, TROPICS/`tms_*`) → §8 (PARMIO backend — now auto-loaded and auto-dispatched at ≥ 200 GHz; no common-suite sensor reaches that frequency).
