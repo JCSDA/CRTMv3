@@ -24,8 +24,29 @@ parameters listed in [JCSDA/CRTMv3#281](https://github.com/JCSDA/CRTMv3/issues/2
   `RTSolution_K` are unchanged; forward radiances are bit-identical. The `.bin`
   references are build-local (not git-tracked, regenerated on first run); fresh
   references must be accepted to green the suite.
-- **Next:** Phase 2 (`Soil_Moisture_Content`) — soil moisture/temperature
-  Jacobians are still zero.
+- **Phase 2 (done):** analytic TL/AD for `Soil_Moisture_Content` (mv -> `Soil_Diel`
+  esoil -> roughened r23 -> two-stream). Validated in `test_Land_Jacobian`
+  (dTb/dSMC ~ -45 K/K at 23.8 GHz; AD == TL == FD).
+- **Phase 3 (done, 2026-07-19):** analytic TL/AD for `Soil_Temperature` and the
+  emissivity part of `Land_Temperature`. Temperature enters the emissivity by two
+  paths: the soil dielectric (`Soil_Diel` `eswo`/`tauw` polynomials, reusing the
+  Phase-2 r23 chain now factored into `Roughened_R23_Deriv`) and the canopy/soil
+  thermal ratio `gsect0` in `Two_Stream_Solution` (the dominant term). The
+  `Soil_Temperature` out-of-range aliasing (`t_soil <- t_skin`) is resolved in the
+  forward: the aliased input gets a zero derivative and its sensitivity is
+  re-attributed to `Land_Temperature`. The `Land_Temperature` emissivity part
+  ACCUMULATES onto the existing skin-T Planck emission Jacobian
+  (`CRTM_Compute_SurfaceT_AD`). Also fixes a latent bug: the forward already
+  depended on skin T via `gsect0`, but that term was dropped from
+  `Surface_K%Land_Temperature`, making the below-cutoff Land_Temperature Jacobian
+  ~3-4x too large; it now matches FD. `Canopy_Water_Content` confirmed as a
+  structural zero (never consumed by the forward; asserted in the test). Branch
+  `feature/btj_landem_temperature_jacobians`, commit `aa31bb7`; suite 215/215
+  after regenerating the MW-over-land Surface references.
+- **Land MW analytic surface Jacobian set is now COMPLETE below 80 GHz**: LAI,
+  Vegetation_Fraction, Soil_Moisture_Content, Soil_Temperature, Land_Temperature
+  all analytic and FD-validated; Canopy_Water_Content structurally zero. Above
+  80 GHz LandEM is gated off (constant emissivity) by design.
 
 ## TL;DR / scope correction
 
@@ -87,12 +108,12 @@ give the TL/AD routines the MW_Water signature, and update the 3 dispatcher call
 
 | Parameter | Flows to emissivity? | Nature of dependence | Difficulty |
 |---|---|---|---|
-| **LAI** | Yes (`vlai = LAI*veg_frac`, `LandEM:210`) | Linear in canopy optical depth; all downstream smooth | **Easy** |
-| **Vegetation_Fraction** | Yes (`LandEM:205,210`) | Linear; only caveat is `MIN/MAX` clip at [0,1] | **Easy** |
-| **Soil_Moisture_Content** | Yes (`Soil_Diel`, `LandEM:220/429/436`) | Smooth dielectric mixing; clip at [0,1] + `vmc>0` guard | **Moderate** |
-| **Soil_Temperature** | Yes, but hard thresholds at 100/350/280 K (`LandEM:141,175`) | Smooth in valid range, branchy at edges | **Hard** |
-| **Land_Temperature** (emissivity part) | Yes (two-stream exponential) | Smooth + override branches | **Hard** |
-| **Canopy_Water_Content** | **No** — never passed into `Compute_MW_Land_SfcOptics`; absent from `NESDIS_LandEM` | n/a | **Not feasible** |
+| **LAI** | Yes (`vlai = LAI*veg_frac`, `LandEM:210`) | Linear in canopy optical depth; all downstream smooth | **Easy — DONE (Phase 1)** |
+| **Vegetation_Fraction** | Yes (`LandEM:205,210`) | Linear; only caveat is `MIN/MAX` clip at [0,1] | **Easy — DONE (Phase 1)** |
+| **Soil_Moisture_Content** | Yes (`Soil_Diel`, `LandEM:220/429/436`) | Smooth dielectric mixing; clip at [0,1] + `vmc>0` guard | **Moderate — DONE (Phase 2)** |
+| **Soil_Temperature** | Yes — soil dielectric + `gsect0` thermal ratio; aliased to skin T when out of [100,350] | Smooth in range; aliasing resolved to a zero derivative + re-attribution to Land_Temperature | **Hard — DONE (Phase 3)** |
+| **Land_Temperature** (emissivity part) | Yes (`gsect0` thermal ratio in two-stream) | Smooth; accumulates onto the skin-T emission Jacobian | **Hard — DONE (Phase 3)** |
+| **Canopy_Water_Content** | **No** — never passed into `Compute_MW_Land_SfcOptics`; absent from `NESDIS_LandEM` | n/a | **Structural zero (asserted in test)** |
 
 `NESDIS_LandEM` is also the fallback for the snow and ice angle corrections, so differentiating
 it once benefits multiple paths.

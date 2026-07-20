@@ -31,8 +31,15 @@ impact) is in `REL-3.2.0_changes_vs_develop.md`.
 - **Vector radiative transfer (`Options%n_Stokes > 1`) usability fixes**,
   including nonzero Jacobians, polarized phase-matrix normalization, and
   SfcOptics Stokes-dimension handling.
-- **Analytic MW-land surface Jacobians** for LAI, vegetation fraction, and
-  soil moisture (issue #281).
+- **Analytic MW-land surface Jacobians** (issue #281) — the NESDIS_LandEM
+  microwave land path (< 80 GHz) now returns analytic TL/AD/K sensitivities for
+  **every physical land-state variable**: LAI, vegetation fraction, soil
+  moisture, soil temperature, and land (skin) temperature. `Canopy_Water_Content`
+  has an exactly-zero Jacobian (the forward never consumes it). This also
+  corrects the `Land_Temperature` Jacobian below 80 GHz, which previously omitted
+  the emissivity's skin-temperature dependence (through the LandEM `gsect0`
+  thermal ratio) and was therefore too large; it now matches finite differences.
+  Forward radiances are unchanged.
 - **MW scene-ozone transmittance component** (`GROUP_MW_O3`, Group_Index=7)
   for microwave sensors.
 - **CRTM-Exp cloud-optics schema (experimental, opt-in).** A new
@@ -71,8 +78,10 @@ impact) is in `REL-3.2.0_changes_vs_develop.md`.
    emissivity physics; removing them restores FASTEM / NESDIS_LandEM.
    `CRTM_Init` prints an INFORMATION message when a sensor with ≥ 200 GHz
    channels initializes without the PARMIO LUT. Note that with TELSEM2 active,
-   land-parameter Jacobians (LAI, vegetation, soil moisture) are zero — the
-   atlas does not depend on them.
+   all land-parameter Jacobians (LAI, vegetation, soil moisture, soil/land
+   temperature) are zero — the atlas is a climatology and does not depend on
+   them; the analytic NESDIS_LandEM Jacobians apply only when the atlas is not
+   loaded.
 7. **OpenMP threading.** `CRTM_Init` reads `OMP_NUM_THREADS` at run time; if
    it is **unset or empty, CRTM defaults to a single thread** via
    `OMP_SET_NUM_THREADS(1)`. Because that call is process-global, it also

@@ -2,11 +2,21 @@
 ! test_Land_Jacobian
 !
 ! Validation oracle for the analytic microwave LAND surface Jacobians
-! (issue #281, Phase 0/1). For a pure-land MW scene it checks the analytic
-! d(Tb)/d(LAI) and d(Tb)/d(Vegetation_Fraction) obtained from both
+! (issue #281, Phases 1/2/3). For a pure-land MW scene it checks the analytic
+! d(Tb)/d{LAI, Vegetation_Fraction, Soil_Moisture_Content, Soil_Temperature,
+! Land_Temperature} obtained from both
 !   * the K-matrix (adjoint path), and
 !   * the tangent-linear model
-! against central finite differences of the forward model.
+! against central finite differences of the forward model. It also asserts that
+! Canopy_Water_Content has an exactly-zero Jacobian (the LandEM forward never
+! consumes it, so a valid analytic Jacobian is zero by construction).
+!
+! Temperature note: Land_Temperature carries TWO contributions -- the dominant
+! skin-T Planck emission term (frequency-independent, via CRTM_Compute_SurfaceT_AD)
+! plus the emissivity part through the LandEM thermal ratio gsect0. Soil_Temperature
+! carries only the emissivity part (it never enters the surface emission), so it is
+! the clean oracle for the Phase-3 dielectric+gsect0 derivative. The FD of the
+! forward captures the full total in each case.
 !
 ! A microwave window sensor is used (amsua_n19: channels 1-2 at 23.8/31.4 GHz
 ! sit below the 80 GHz cutoff of the NESDIS land emissivity model, so they are
@@ -42,13 +52,16 @@ PROGRAM test_Land_Jacobian
   REAL(fp), PARAMETER :: SCAN_ANGLE   = 26.37293341421_fp
 
   ! Base land state (fractions kept inside (0,1) so they are not clipped)
-  REAL(fp), PARAMETER :: LAI0 = 2.0_fp
-  REAL(fp), PARAMETER :: VEG0 = 0.5_fp
-  REAL(fp), PARAMETER :: SMC0 = 0.2_fp
+  REAL(fp), PARAMETER :: LAI0   = 2.0_fp
+  REAL(fp), PARAMETER :: VEG0   = 0.5_fp
+  REAL(fp), PARAMETER :: SMC0   = 0.2_fp
+  REAL(fp), PARAMETER :: TSOIL0 = 290.0_fp   ! in [100,350] -> not aliased to skin
+  REAL(fp), PARAMETER :: TLAND0 = 290.0_fp
   ! Central finite-difference perturbations
   REAL(fp), PARAMETER :: DLAI = 1.0e-3_fp
   REAL(fp), PARAMETER :: DVEG = 1.0e-3_fp
   REAL(fp), PARAMETER :: DSMC = 1.0e-4_fp
+  REAL(fp), PARAMETER :: DTS  = 1.0e-2_fp    ! soil/land temperature perturbation (K)
   ! Agreement tolerances: |analytic - FD| <= TOL_ABS + TOL_REL*|FD|
   REAL(fp), PARAMETER :: TOL_REL = 5.0e-3_fp
   REAL(fp), PARAMETER :: TOL_ABS = 1.0e-4_fp
@@ -80,6 +93,9 @@ PROGRAM test_Land_Jacobian
   REAL(fp), ALLOCATABLE :: ad_lai(:,:), ad_veg(:,:), ad_smc(:,:)   ! K-matrix (adjoint)
   REAL(fp), ALLOCATABLE :: tl_lai(:,:), tl_veg(:,:), tl_smc(:,:)   ! tangent-linear
   REAL(fp), ALLOCATABLE :: fd_lai(:,:), fd_veg(:,:), fd_smc(:,:)   ! finite difference
+  REAL(fp), ALLOCATABLE :: ad_tsoil(:,:), ad_tland(:,:), ad_cwc(:,:)
+  REAL(fp), ALLOCATABLE :: tl_tsoil(:,:), tl_tland(:,:)
+  REAL(fp), ALLOCATABLE :: fd_tsoil(:,:), fd_tland(:,:)
 
 
   ! Header
@@ -108,6 +124,9 @@ PROGRAM test_Land_Jacobian
             ad_lai(n_Channels,N_PROFILES), ad_veg(n_Channels,N_PROFILES), ad_smc(n_Channels,N_PROFILES), &
             tl_lai(n_Channels,N_PROFILES), tl_veg(n_Channels,N_PROFILES), tl_smc(n_Channels,N_PROFILES), &
             fd_lai(n_Channels,N_PROFILES), fd_veg(n_Channels,N_PROFILES), fd_smc(n_Channels,N_PROFILES), &
+            ad_tsoil(n_Channels,N_PROFILES), ad_tland(n_Channels,N_PROFILES), ad_cwc(n_Channels,N_PROFILES), &
+            tl_tsoil(n_Channels,N_PROFILES), tl_tland(n_Channels,N_PROFILES), &
+            fd_tsoil(n_Channels,N_PROFILES), fd_tland(n_Channels,N_PROFILES), &
             STAT = Alloc_Status )
   IF ( Alloc_Status /= 0 ) THEN
     CALL Display_Message( PROGRAM_NAME, 'Error allocating arrays', FAILURE ); STOP 1
@@ -145,9 +164,12 @@ PROGRAM test_Land_Jacobian
   END IF
   DO m = 1, N_PROFILES
     DO l = 1, n_Channels
-      ad_lai(l,m) = Surface_K(l,m)%Lai
-      ad_veg(l,m) = Surface_K(l,m)%Vegetation_Fraction
-      ad_smc(l,m) = Surface_K(l,m)%Soil_Moisture_Content
+      ad_lai(l,m)   = Surface_K(l,m)%Lai
+      ad_veg(l,m)   = Surface_K(l,m)%Vegetation_Fraction
+      ad_smc(l,m)   = Surface_K(l,m)%Soil_Moisture_Content
+      ad_tsoil(l,m) = Surface_K(l,m)%Soil_Temperature
+      ad_tland(l,m) = Surface_K(l,m)%Land_Temperature
+      ad_cwc(l,m)   = Surface_K(l,m)%Canopy_Water_Content
     END DO
   END DO
 
@@ -187,6 +209,28 @@ PROGRAM test_Land_Jacobian
   END IF
   tl_smc = RTSolution_TL%Brightness_Temperature
 
+  ! ...Soil_Temperature direction
+  CALL CRTM_Atmosphere_Zero( Atm_TL )
+  CALL CRTM_Surface_Zero( Sfc_TL )
+  Sfc_TL%Soil_Temperature = ONE
+  Error_Status = CRTM_Tangent_Linear( Atm, Sfc, Atm_TL, Sfc_TL, Geometry, ChannelInfo, &
+                                      RTSolution, RTSolution_TL )
+  IF ( Error_Status /= SUCCESS ) THEN
+    CALL Display_Message( PROGRAM_NAME, 'Error in CRTM Tangent_Linear (Tsoil)', FAILURE ); STOP 1
+  END IF
+  tl_tsoil = RTSolution_TL%Brightness_Temperature
+
+  ! ...Land_Temperature direction (emission + emissivity parts)
+  CALL CRTM_Atmosphere_Zero( Atm_TL )
+  CALL CRTM_Surface_Zero( Sfc_TL )
+  Sfc_TL%Land_Temperature = ONE
+  Error_Status = CRTM_Tangent_Linear( Atm, Sfc, Atm_TL, Sfc_TL, Geometry, ChannelInfo, &
+                                      RTSolution, RTSolution_TL )
+  IF ( Error_Status /= SUCCESS ) THEN
+    CALL Display_Message( PROGRAM_NAME, 'Error in CRTM Tangent_Linear (Tland)', FAILURE ); STOP 1
+  END IF
+  tl_tland = RTSolution_TL%Brightness_Temperature
+
 
   ! 6. Central finite differences of the forward model
   ! --------------------------------------------------
@@ -211,6 +255,20 @@ PROGRAM test_Land_Jacobian
   CALL Run_Forward( RTS_m, 'SMC-' )
   fd_smc = (RTS_p%Brightness_Temperature - RTS_m%Brightness_Temperature)/(2.0_fp*DSMC)
   Sfc%Soil_Moisture_Content = SMC0
+  ! ...Soil_Temperature
+  Sfc%Soil_Temperature = TSOIL0 + DTS
+  CALL Run_Forward( RTS_p, 'Tsoil+' )
+  Sfc%Soil_Temperature = TSOIL0 - DTS
+  CALL Run_Forward( RTS_m, 'Tsoil-' )
+  fd_tsoil = (RTS_p%Brightness_Temperature - RTS_m%Brightness_Temperature)/(2.0_fp*DTS)
+  Sfc%Soil_Temperature = TSOIL0
+  ! ...Land_Temperature
+  Sfc%Land_Temperature = TLAND0 + DTS
+  CALL Run_Forward( RTS_p, 'Tland+' )
+  Sfc%Land_Temperature = TLAND0 - DTS
+  CALL Run_Forward( RTS_m, 'Tland-' )
+  fd_tland = (RTS_p%Brightness_Temperature - RTS_m%Brightness_Temperature)/(2.0_fp*DTS)
+  Sfc%Land_Temperature = TLAND0
 
 
   ! 7. Compare
@@ -237,6 +295,30 @@ PROGRAM test_Land_Jacobian
     END DO
   END DO
 
+  ! ...temperatures (separate table) + Canopy_Water_Content structural zero
+  WRITE(*,'(/5x,a)') 'Temperature Jacobians (K per K). Columns: AD / TL / FD'
+  WRITE(*,'(5x,a)')  '  m  ch     dTb/dTsoil (AD/TL/FD)       dTb/dTland (AD/TL/FD)     K(Canopy_Water)'
+  DO m = 1, N_PROFILES
+    DO l = 1, n_Channels
+      WRITE(*,'(5x,i3,i4,2x,3es12.3,2x,3es12.3,2x,es11.3)') &
+            m, RTSolution(l,m)%Sensor_Channel, &
+            ad_tsoil(l,m), tl_tsoil(l,m), fd_tsoil(l,m), &
+            ad_tland(l,m), tl_tland(l,m), fd_tland(l,m), ad_cwc(l,m)
+      CALL Check( 'AD dTb/dTsoil', m, RTSolution(l,m)%Sensor_Channel, ad_tsoil(l,m), fd_tsoil(l,m), failed )
+      CALL Check( 'TL dTb/dTsoil', m, RTSolution(l,m)%Sensor_Channel, tl_tsoil(l,m), fd_tsoil(l,m), failed )
+      CALL Check( 'AD dTb/dTland', m, RTSolution(l,m)%Sensor_Channel, ad_tland(l,m), fd_tland(l,m), failed )
+      CALL Check( 'TL dTb/dTland', m, RTSolution(l,m)%Sensor_Channel, tl_tland(l,m), fd_tland(l,m), failed )
+      ! Canopy_Water_Content is never consumed by the LandEM forward -> Jacobian
+      ! must be exactly zero (guarded so a future forward change that wires it in
+      ! is flagged here rather than silently producing an unvalidated Jacobian).
+      IF ( ABS(ad_cwc(l,m)) > TOL_ABS ) THEN
+        WRITE(Message,'("Canopy_Water_Content Jacobian expected 0 but got ",es13.5, &
+              &" (profile ",i0," channel ",i0,")")') ad_cwc(l,m), m, RTSolution(l,m)%Sensor_Channel
+        CALL Display_Message( PROGRAM_NAME, TRIM(Message), FAILURE ); failed = .TRUE.
+      END IF
+    END DO
+  END DO
+
   WRITE(*,'(/5x,"Surface-sensitive channel evaluations (|FD|>",es8.1,"): ",i0)') ACTIVE_THRESHOLD, n_active
   IF ( n_active < 1 ) THEN
     CALL Display_Message( PROGRAM_NAME, &
@@ -253,7 +335,8 @@ PROGRAM test_Land_Jacobian
   CALL CRTM_Atmosphere_Destroy( Atmosphere_K )
   DEALLOCATE( RTSolution, RTSolution_TL, RTSolution_K, Atmosphere_K, Surface_K, &
               RTS_p, RTS_m, ad_lai, ad_veg, ad_smc, tl_lai, tl_veg, tl_smc, &
-              fd_lai, fd_veg, fd_smc )
+              fd_lai, fd_veg, fd_smc, ad_tsoil, ad_tland, ad_cwc, &
+              tl_tsoil, tl_tland, fd_tsoil, fd_tland )
 
   IF ( failed ) THEN
     CALL Display_Message( PROGRAM_NAME, 'FAILED: analytic Jacobians disagree with finite differences', FAILURE )
@@ -308,8 +391,8 @@ CONTAINS
       Sfc(mm)%Land_Type            = 1            ! valid NPOESS land type (IR/VIS only)
       Sfc(mm)%Soil_Type            = 1            ! COARSE          (MW land model)
       Sfc(mm)%Vegetation_Type      = 7            ! GROUNDCOVER     (MW land model)
-      Sfc(mm)%Land_Temperature     = 290.0_fp
-      Sfc(mm)%Soil_Temperature     = 290.0_fp
+      Sfc(mm)%Land_Temperature     = TLAND0
+      Sfc(mm)%Soil_Temperature     = TSOIL0
       Sfc(mm)%Soil_Moisture_Content= SMC0
       Sfc(mm)%Lai                  = LAI0
       Sfc(mm)%Vegetation_Fraction  = VEG0
