@@ -566,7 +566,7 @@ CONTAINS
          END IF
          ! ...Optional input
          IF ( Options_Present ) THEN
-            Options_Invalid = .NOT. CRTM_Options_IsValid( Options(m) )
+            Options_Invalid = .NOT. CRTM_Options_IsValid( Opt )
             IF ( Options_Invalid ) THEN
                Error_Status = FAILURE
                WRITE( Message,'("Options data check failed for profile #",i0)' ) m
@@ -574,23 +574,23 @@ CONTAINS
                RETURN
             END IF
             ! Are the channel dimensions consistent if emissivity is passed?
-            IF ( Options(m)%Use_Emissivity ) THEN
-               IF ( Options(m)%n_Channels < n_Channels ) THEN
+            IF ( Opt%Use_Emissivity ) THEN
+               IF ( Opt%n_Channels < n_Channels ) THEN
                   Error_Status = FAILURE
                   WRITE( Message,'( "Input Options channel dimension (", i0, ") is less ", &
                        &"than the number of requested channels (",i0, ")" )' ) &
-                       Options(m)%n_Channels, n_Channels
+                       Opt%n_Channels, n_Channels
                   CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
                   RETURN
                END IF
             END IF
             ! Check value for user-defined n_Streams
-            IF ( Options(m)%Use_N_Streams ) THEN
-               IF ( Options(m)%n_Streams <= 0 .OR. MOD(Options(m)%n_Streams,2) /= 0 .OR. &
-                    Options(m)%n_Streams > MAX_N_STREAMS ) THEN
+            IF ( Opt%Use_N_Streams ) THEN
+               IF ( Opt%n_Streams <= 0 .OR. MOD(Opt%n_Streams,2) /= 0 .OR. &
+                    Opt%n_Streams > MAX_N_STREAMS ) THEN
                   Error_Status = FAILURE
                   WRITE( Message,'( "Input Options n_Streams (", i0, ") is invalid" )' ) &
-                       Options(m)%n_Streams
+                       Opt%n_Streams
                   CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
                   RETURN
                END IF
