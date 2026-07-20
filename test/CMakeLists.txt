@@ -372,6 +372,20 @@ target_link_libraries(Unit_Fastem1_SST_Jacobian PRIVATE crtm)
 add_test(NAME test_Unit_Fastem1_SST_Jacobian
          COMMAND $<TARGET_FILE:Unit_Fastem1_SST_Jacobian>)
 
+# Pins the v3.2.0 DDA-ARTS ICE_CLOUD scattering change (ICE_CLOUD now scatters via
+# the full branch / IconCloudIce habit). Registered only when a DDA-ARTS CloudCoeff
+# is present in the staged fix tree.
+set(_CC_DDA_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2022.nc")
+add_executable(test_DDA_ICE_CLOUD_Forward mains/unit/Unit_Test/test_DDA_ICE_CLOUD_Forward.f90)
+target_link_libraries(test_DDA_ICE_CLOUD_Forward PRIVATE crtm)
+if(EXISTS "${_CC_DDA_FIX}")
+  add_test(NAME test_DDA_ICE_CLOUD_Forward
+           COMMAND $<TARGET_FILE:test_DDA_ICE_CLOUD_Forward>)
+else()
+  message(STATUS "DDA-ARTS CloudCoeff not found at ${_CC_DDA_FIX}; test_DDA_ICE_CLOUD_Forward not registered.")
+endif()
+unset(_CC_DDA_FIX)
+
 # Surface downwelling radiance (RTSolution%Down_Radiance) TL/AD/K correctness:
 # baseline-independent finite-difference, adjoint dot-product, and K-vs-AD checks
 # for a TOA-radiance control plus the surface downwelling output.
