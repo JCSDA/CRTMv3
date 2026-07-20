@@ -366,6 +366,26 @@ target_link_libraries(Unit_Land_Jacobian PRIVATE crtm)
 add_test(NAME test_Unit_Land_Jacobian
          COMMAND $<TARGET_FILE:Unit_Land_Jacobian>)
 
+# Legacy Fastem1 MW-water SST (Water_Temperature) Jacobian vs finite differences.
+add_executable(Unit_Fastem1_SST_Jacobian mains/unit/Unit_Test/test_Fastem1_SST_Jacobian.f90)
+target_link_libraries(Unit_Fastem1_SST_Jacobian PRIVATE crtm)
+add_test(NAME test_Unit_Fastem1_SST_Jacobian
+         COMMAND $<TARGET_FILE:Unit_Fastem1_SST_Jacobian>)
+
+# Pins the v3.2.0 DDA-ARTS ICE_CLOUD scattering change (ICE_CLOUD now scatters via
+# the full branch / IconCloudIce habit). Registered only when a DDA-ARTS CloudCoeff
+# is present in the staged fix tree.
+set(_CC_DDA_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2024.nc")
+add_executable(test_DDA_ICE_CLOUD_Forward mains/unit/Unit_Test/test_DDA_ICE_CLOUD_Forward.f90)
+target_link_libraries(test_DDA_ICE_CLOUD_Forward PRIVATE crtm)
+if(EXISTS "${_CC_DDA_FIX}")
+  add_test(NAME test_DDA_ICE_CLOUD_Forward
+           COMMAND $<TARGET_FILE:test_DDA_ICE_CLOUD_Forward>)
+else()
+  message(STATUS "DDA-ARTS CloudCoeff not found at ${_CC_DDA_FIX}; test_DDA_ICE_CLOUD_Forward not registered.")
+endif()
+unset(_CC_DDA_FIX)
+
 # Surface downwelling radiance (RTSolution%Down_Radiance) TL/AD/K correctness:
 # baseline-independent finite-difference, adjoint dot-product, and K-vs-AD checks
 # for a TOA-radiance control plus the surface downwelling output.
@@ -578,11 +598,16 @@ unset(_TMS_TAU)
 unset(_TMS_SPC)
 
 # test_TELSEM2_MWland
-# Stage the TELSEM2 atlas under a test-only name (NOT the default
-# TELSEM2.MWland.EmisCoeff.nc) so the drop-in default behaviour of the other
-# land tests, which use NESDIS_LandEM, is left unchanged. The test loads it
-# explicitly via the MWlandCoeff_File argument. Registered only when the atlas
-# is present in the staged fix tree.
+# Stage the TELSEM2 atlas under two names in the shared testinput:
+#   * TELSEM2.MWland.test.nc       -- explicit-opt-in path (MWlandCoeff_File).
+#   * TELSEM2.MWland.EmisCoeff.nc  -- the DEFAULT drop-in name, staged ON PURPOSE
+#     so the test can prove the opt-in gate: with the default-named atlas present
+#     on the coefficient path, CRTM_Init must still use NESDIS_LandEM unless the
+#     caller opts in (Use_MWland_Atlas=.TRUE. or MWlandCoeff_File). Because the
+#     atlas is now opt-in rather than presence-activated, staging the default name
+#     is inert for every other land test -- and any regression of the gate would
+#     surface as those tests changing. Registered only when the atlas is present
+#     in the staged fix tree.
 set(_TELSEM2_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/EmisCoeff/MW_Land/netCDF/TELSEM2.MWland.EmisCoeff.nc")
 add_executable(test_TELSEM2_MWland mains/unit/Unit_Test/test_TELSEM2_MWland.f90)
 target_link_libraries(test_TELSEM2_MWland PRIVATE crtm)
@@ -590,6 +615,9 @@ if(EXISTS "${_TELSEM2_FIX}")
   execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
                    "${_TELSEM2_FIX}"
                    "${CMAKE_CURRENT_BINARY_DIR}/testinput/TELSEM2.MWland.test.nc" )
+  execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                   "${_TELSEM2_FIX}"
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/TELSEM2.MWland.EmisCoeff.nc" )
   add_test(NAME test_TELSEM2_MWland
            COMMAND $<TARGET_FILE:test_TELSEM2_MWland>)
 else()
@@ -897,6 +925,7 @@ AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.BRC.kb.v2.nc
 AerosolCoeff/netCDF/AerosolCoeff.CMAQ.nc
 CloudCoeff/netCDF/CloudCoeff.nc
 CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2022.nc
+CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2024.nc
 BeCoeff/netCDF/BeCoeff.nc
 EmisCoeff/MW_Water/netCDF/FASTEM6.MWwater.EmisCoeff.nc
 EmisCoeff/MW_Water/netCDF/FASTEM4.MWwater.EmisCoeff.nc

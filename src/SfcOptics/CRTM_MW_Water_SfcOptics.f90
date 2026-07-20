@@ -71,6 +71,10 @@ MODULE CRTM_MW_Water_SfcOptics
   ! -----------------
   ! Low frequency model threshold
   REAL(fp), PARAMETER :: LOW_F_THRESHOLD = 20.0_fp ! GHz
+  ! Finite-difference step (K) for the Fastem1 emissivity SST derivative. Fastem1
+  ! returns only wind-speed derivatives, so d(emissivity)/d(Water_Temperature) is
+  ! obtained by a central difference around the forward call (see below).
+  REAL(fp), PARAMETER :: FASTEM1_DTS = 0.1_fp
   ! PARMIO LUT is the surface-emissivity backend at and above this frequency
   ! when the LUT has been loaded. Below this threshold the FASTEM/Stogryn
   ! legacy path is used.
@@ -219,6 +223,8 @@ CONTAINS
     REAL(fp) :: Frequency
     REAL(fp) :: Source_Azimuth_Angle, Sensor_Azimuth_Angle
     REAL(fp) :: Reflectivity(N_STOKES)
+    ! Fastem1 SST-derivative finite-difference scratch (V=1, H=2)
+    REAL(fp) :: emis_pTs(2), emis_mTs(2), dwind_h, dwind_v
 
 
     ! Set up
@@ -312,6 +318,15 @@ CONTAINS
                         SfcOptics%Emissivity(i,:), & ! Output
                         iVar%dEH_dWindSpeed(i)   , & ! Output
                         iVar%dEV_dWindSpeed(i)     ) ! Output
+          ! Fastem1 returns no SST derivative; obtain d(emissivity)/d(Water_Temperature)
+          ! by a central finite difference around the forward call so the TL/AD SST
+          ! Jacobian (iVar%dE?_dTs, read below) is not silently zero.
+          CALL Fastem1( Frequency, SfcOptics%Angle(i), Surface%Water_Temperature+FASTEM1_DTS, &
+                        Surface%Wind_Speed, emis_pTs, dwind_h, dwind_v )
+          CALL Fastem1( Frequency, SfcOptics%Angle(i), Surface%Water_Temperature-FASTEM1_DTS, &
+                        Surface%Wind_Speed, emis_mTs, dwind_h, dwind_v )
+          iVar%dEV_dTs(i) = (emis_pTs(1) - emis_mTs(1))/(2.0_fp*FASTEM1_DTS)  ! V (index 1)
+          iVar%dEH_dTs(i) = (emis_pTs(2) - emis_mTs(2))/(2.0_fp*FASTEM1_DTS)  ! H (index 2)
           SfcOptics%Reflectivity(i,1,i,1) = ONE-SfcOptics%Emissivity(i,1)
           SfcOptics%Reflectivity(i,2,i,2) = ONE-SfcOptics%Emissivity(i,2)
         END DO
