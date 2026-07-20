@@ -105,6 +105,15 @@ MODULE CRTM_MW_Land_SfcOptics
     ! Cached d(emissivity)/d(Soil_Moisture_Content) per angle
     REAL(fp), DIMENSION(MAX_N_ANGLES) :: dEV_dmv = ZERO
     REAL(fp), DIMENSION(MAX_N_ANGLES) :: dEH_dmv = ZERO
+    ! Cached d(emissivity)/d(Soil_Temperature) and d(emissivity)/d(Land_Temperature)
+    ! per angle. The soil-temperature aliasing (Soil_Temperature out of range ->
+    ! t_skin) is resolved inside NESDIS_LandEM, so these are applied directly with
+    ! no clip handling here. dE/dLand_Temperature is the emissivity part only; the
+    ! dominant skin-T emission Jacobian is added by CRTM_Compute_SurfaceT_AD.
+    REAL(fp), DIMENSION(MAX_N_ANGLES) :: dEV_dtsoil = ZERO
+    REAL(fp), DIMENSION(MAX_N_ANGLES) :: dEH_dtsoil = ZERO
+    REAL(fp), DIMENSION(MAX_N_ANGLES) :: dEV_dtland = ZERO
+    REAL(fp), DIMENSION(MAX_N_ANGLES) :: dEH_dtland = ZERO
   END TYPE iVar_type
 
 
@@ -300,10 +309,14 @@ CONTAINS
                            ZERO,                          & ! Input, Snow depth, mm
                            SfcOptics%Emissivity(i,2),     & ! Output, H component
                            SfcOptics%Emissivity(i,1),     & ! Output, V component
-                           dEV_dvlai = iVar%dEV_dvlai(i), & ! Optional output, V
-                           dEH_dvlai = iVar%dEH_dvlai(i), & ! Optional output, H
-                           dEV_dmv   = iVar%dEV_dmv(i),   & ! Optional output, V
-                           dEH_dmv   = iVar%dEH_dmv(i)    ) ! Optional output, H
+                           dEV_dvlai  = iVar%dEV_dvlai(i),  & ! Optional output, V
+                           dEH_dvlai  = iVar%dEH_dvlai(i),  & ! Optional output, H
+                           dEV_dmv    = iVar%dEV_dmv(i),    & ! Optional output, V
+                           dEH_dmv    = iVar%dEH_dmv(i),    & ! Optional output, H
+                           dEV_dtsoil = iVar%dEV_dtsoil(i), & ! Optional output, V
+                           dEH_dtsoil = iVar%dEH_dtsoil(i), & ! Optional output, H
+                           dEV_dtland = iVar%dEV_dtland(i), & ! Optional output, V
+                           dEH_dtland = iVar%dEH_dtland(i)  ) ! Optional output, H
         ! Assume specular surface
         SfcOptics%Reflectivity(i,1,i,1) = ONE-SfcOptics%Emissivity(i,1)
         SfcOptics%Reflectivity(i,2,i,2) = ONE-SfcOptics%Emissivity(i,2)
@@ -406,10 +419,17 @@ CONTAINS
       smc_TL = Surface_TL%Soil_Moisture_Content
     END IF
 
-    ! Propagate to the surface emissivity/reflectivity (specular: r = 1 - e)
+    ! Propagate to the surface emissivity/reflectivity (specular: r = 1 - e).
+    ! Temperature terms carry no clip handling: the Soil_Temperature aliasing is
+    ! resolved in the forward (iVar%dE?_dtsoil is zero when the input was aliased,
+    ! its sensitivity already folded into iVar%dE?_dtland).
     DO i = 1, SfcOptics%n_Angles
-      SfcOptics_TL%Emissivity(i,1) = iVar%dEV_dvlai(i)*vlai_TL + iVar%dEV_dmv(i)*smc_TL  ! V
-      SfcOptics_TL%Emissivity(i,2) = iVar%dEH_dvlai(i)*vlai_TL + iVar%dEH_dmv(i)*smc_TL  ! H
+      SfcOptics_TL%Emissivity(i,1) = iVar%dEV_dvlai(i)*vlai_TL + iVar%dEV_dmv(i)*smc_TL &
+                                   + iVar%dEV_dtsoil(i)*Surface_TL%Soil_Temperature &
+                                   + iVar%dEV_dtland(i)*Surface_TL%Land_Temperature  ! V
+      SfcOptics_TL%Emissivity(i,2) = iVar%dEH_dvlai(i)*vlai_TL + iVar%dEH_dmv(i)*smc_TL &
+                                   + iVar%dEH_dtsoil(i)*Surface_TL%Soil_Temperature &
+                                   + iVar%dEH_dtland(i)*Surface_TL%Land_Temperature  ! H
       SfcOptics_TL%Reflectivity(i,1,i,1) = -SfcOptics_TL%Emissivity(i,1)
       SfcOptics_TL%Reflectivity(i,2,i,2) = -SfcOptics_TL%Emissivity(i,2)
     END DO
@@ -481,7 +501,7 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_MW_Land_SfcOptics_AD'
     ! Local variables
     INTEGER  :: i
-    REAL(fp) :: vlai_AD, smc_AD
+    REAL(fp) :: vlai_AD, smc_AD, tsoil_AD, tland_AD
 
 
     ! Set up
@@ -495,20 +515,27 @@ CONTAINS
       RETURN
     END IF
 
-    ! Adjoint of the emissivity/reflectivity -> vlai and soil moisture
-    vlai_AD = ZERO
-    smc_AD  = ZERO
+    ! Adjoint of the emissivity/reflectivity -> vlai, soil moisture, temperatures
+    vlai_AD  = ZERO
+    smc_AD   = ZERO
+    tsoil_AD = ZERO
+    tland_AD = ZERO
     DO i = 1, SfcOptics%n_Angles
       ! Adjoint of specular reflectivity (r = 1 - e): e_AD += -r_AD, then zero r_AD
       SfcOptics_AD%Emissivity(i,1) = SfcOptics_AD%Emissivity(i,1) - SfcOptics_AD%Reflectivity(i,1,i,1)
       SfcOptics_AD%Emissivity(i,2) = SfcOptics_AD%Emissivity(i,2) - SfcOptics_AD%Reflectivity(i,2,i,2)
       SfcOptics_AD%Reflectivity(i,1,i,1) = ZERO
       SfcOptics_AD%Reflectivity(i,2,i,2) = ZERO
-      ! Adjoint of emissivity = dE/dvlai * vlai + dE/dmv * soil_moisture
-      vlai_AD = vlai_AD + iVar%dEV_dvlai(i)*SfcOptics_AD%Emissivity(i,1) &
-                        + iVar%dEH_dvlai(i)*SfcOptics_AD%Emissivity(i,2)
-      smc_AD  = smc_AD  + iVar%dEV_dmv(i)*SfcOptics_AD%Emissivity(i,1) &
-                        + iVar%dEH_dmv(i)*SfcOptics_AD%Emissivity(i,2)
+      ! Adjoint of emissivity = dE/dvlai*vlai + dE/dmv*smc + dE/dtsoil*Tsoil
+      !                       + dE/dtland*Tland
+      vlai_AD  = vlai_AD  + iVar%dEV_dvlai(i)*SfcOptics_AD%Emissivity(i,1) &
+                         + iVar%dEH_dvlai(i)*SfcOptics_AD%Emissivity(i,2)
+      smc_AD   = smc_AD   + iVar%dEV_dmv(i)*SfcOptics_AD%Emissivity(i,1) &
+                         + iVar%dEH_dmv(i)*SfcOptics_AD%Emissivity(i,2)
+      tsoil_AD = tsoil_AD + iVar%dEV_dtsoil(i)*SfcOptics_AD%Emissivity(i,1) &
+                         + iVar%dEH_dtsoil(i)*SfcOptics_AD%Emissivity(i,2)
+      tland_AD = tland_AD + iVar%dEV_dtland(i)*SfcOptics_AD%Emissivity(i,1) &
+                         + iVar%dEH_dtland(i)*SfcOptics_AD%Emissivity(i,2)
       SfcOptics_AD%Emissivity(i,1) = ZERO
       SfcOptics_AD%Emissivity(i,2) = ZERO
     END DO
@@ -523,6 +550,13 @@ CONTAINS
     IF ( .NOT. iVar%Smc_Clipped ) THEN
       Surface_AD%Soil_Moisture_Content = Surface_AD%Soil_Moisture_Content + smc_AD
     END IF
+
+    ! Adjoint of the soil/land temperature EMISSIVITY sensitivity. These
+    ! accumulate (+=): the dominant skin-T emission Jacobian is added separately
+    ! by CRTM_Compute_SurfaceT_AD, so Land_Temperature ends up carrying both.
+    ! Soil_Temperature aliasing is already folded into the cached derivatives.
+    Surface_AD%Soil_Temperature = Surface_AD%Soil_Temperature + tsoil_AD
+    Surface_AD%Land_Temperature = Surface_AD%Land_Temperature + tland_AD
 
     ! Ensure no residual surface-optics adjoints leak downstream
     SfcOptics_AD%Reflectivity = ZERO
