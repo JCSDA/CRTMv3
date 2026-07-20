@@ -375,7 +375,7 @@ add_test(NAME test_Unit_Fastem1_SST_Jacobian
 # Pins the v3.2.0 DDA-ARTS ICE_CLOUD scattering change (ICE_CLOUD now scatters via
 # the full branch / IconCloudIce habit). Registered only when a DDA-ARTS CloudCoeff
 # is present in the staged fix tree.
-set(_CC_DDA_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2022.nc")
+set(_CC_DDA_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2024.nc")
 add_executable(test_DDA_ICE_CLOUD_Forward mains/unit/Unit_Test/test_DDA_ICE_CLOUD_Forward.f90)
 target_link_libraries(test_DDA_ICE_CLOUD_Forward PRIVATE crtm)
 if(EXISTS "${_CC_DDA_FIX}")
@@ -925,6 +925,7 @@ AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.BRC.kb.v2.nc
 AerosolCoeff/netCDF/AerosolCoeff.CMAQ.nc
 CloudCoeff/netCDF/CloudCoeff.nc
 CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2022.nc
+CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2024.nc
 BeCoeff/netCDF/BeCoeff.nc
 EmisCoeff/MW_Water/netCDF/FASTEM6.MWwater.EmisCoeff.nc
 EmisCoeff/MW_Water/netCDF/FASTEM4.MWwater.EmisCoeff.nc

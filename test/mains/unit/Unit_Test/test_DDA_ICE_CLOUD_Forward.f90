@@ -6,7 +6,7 @@
 ! only to Mie-TAMU tables), with the default DDA habit IconCloudIce. This altered
 ! radiances/Jacobians for DDA-ARTS users, and nothing pinned the new values.
 !
-! Loads a DDA-ARTS CloudCoeff (CloudCoeff_DDA_Moradi_2022.nc) and runs atms_n21
+! Loads a DDA-ARTS CloudCoeff (CloudCoeff_DDA_Moradi_2024.nc) and runs atms_n21
 ! (183 GHz channels) over an ocean US-Standard column for three profiles:
 !     1 = clear, 2 = thin ice, 3 = heavy ice
 ! and asserts the ICE_CLOUD scattering path is physical and ACTIVE:
@@ -26,7 +26,7 @@ PROGRAM test_DDA_ICE_CLOUD_Forward
   CHARACTER(*), PARAMETER :: PROGRAM_NAME = 'test_DDA_ICE_CLOUD_Forward'
   CHARACTER(*), PARAMETER :: PATH   = './testinput/'
   CHARACTER(*), PARAMETER :: SENSOR = 'atms_n21'
-  CHARACTER(*), PARAMETER :: LUT    = 'CloudCoeff_DDA_Moradi_2022.nc'
+  CHARACTER(*), PARAMETER :: LUT    = 'CloudCoeff_DDA_Moradi_2024.nc'
 
   INTEGER,  PARAMETER :: N_PROFILES  = 3       ! 1=clear, 2=thin ice, 3=heavy ice
   INTEGER,  PARAMETER :: N_LAYERS    = 100
