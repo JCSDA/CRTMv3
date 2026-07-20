@@ -33,6 +33,7 @@ MODULE CRTM_IRsnowCoeff
   ! -----------------
   ! Module use
   USE Message_Handler  ,  ONLY: SUCCESS, FAILURE, Display_Message
+  USE File_Utility          , ONLY: Join_Path
   USE SEcategory_Define,  ONLY: SEcategory_type, &
                                 SEcategory_Associated, &
                                 SEcategory_Destroy
@@ -203,7 +204,7 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_IRsnowCoeff_Load'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
-    CHARACTER(ML) :: IRsnowCoeff_File
+    CHARACTER(:), ALLOCATABLE :: IRsnowCoeff_File
     LOGICAL :: noisy
     ! Function variables
     LOGICAL :: Binary
@@ -212,9 +213,9 @@ CONTAINS
     ! Setup
     err_stat = SUCCESS
     ! ...Assign the filename to local variable
-    IRsnowCoeff_File = ADJUSTL(Filename)
+    IRsnowCoeff_File = TRIM(ADJUSTL(Filename))
     ! ...Add the file path
-    IF ( PRESENT(File_Path) ) IRsnowCoeff_File = TRIM(ADJUSTL(File_Path))//TRIM(IRsnowCoeff_File)
+    IF ( PRESENT(File_Path) ) IRsnowCoeff_File = Join_Path(File_Path, IRsnowCoeff_File)
     ! ...Check Quiet argument
     noisy = .TRUE.
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet

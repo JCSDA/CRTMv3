@@ -35,7 +35,7 @@ MODULE CRTM_LifeCycle
   ! -----------------
   ! Module usage
   USE Message_Handler
-  USE File_Utility           , ONLY: File_Exists
+  USE File_Utility           , ONLY: File_Exists, Join_Path
   USE CRTM_ChannelInfo_Define, ONLY: CRTM_ChannelInfo_type, &
                                      CRTM_ChannelInfo_Associated, &
                                      CRTM_ChannelInfo_Destroy, &
@@ -701,10 +701,10 @@ CONTAINS
     CHARACTER(SL) :: Default_VISlandCoeff_File
     CHARACTER(SL) :: Default_VISsnowCoeff_File
     CHARACTER(SL) :: Default_VISiceCoeff_File
-    CHARACTER(SL) :: Default_MWwaterCoeff_File
+    CHARACTER(:), ALLOCATABLE :: Default_MWwaterCoeff_File
     CHARACTER(SL) :: Default_MWwaterCoeff_Scheme
-    CHARACTER(SL) :: Resolved_PARMIOCoeff_File
-    CHARACTER(SL) :: Resolved_MWlandCoeff_File
+    CHARACTER(:), ALLOCATABLE :: Resolved_PARMIOCoeff_File
+    CHARACTER(:), ALLOCATABLE :: Resolved_MWlandCoeff_File
     CHARACTER(SL) :: Default_IRwaterCoeff_Format
     CHARACTER(SL) :: Default_IRlandCoeff_Format
     CHARACTER(SL) :: Default_IRsnowCoeff_Format
@@ -849,7 +849,7 @@ CONTAINS
 
     ! ...Was a path specified?
     IF ( PRESENT(File_Path) ) THEN
-      Default_MWwaterCoeff_File  = TRIM(ADJUSTL(File_Path)) // TRIM(Default_MWwaterCoeff_File)
+      Default_MWwaterCoeff_File  = Join_Path(File_Path, Default_MWwaterCoeff_File)
     END IF
 
     ! ...Effective search paths for the format-resolver. NC_File_Path wins for
@@ -1205,14 +1205,14 @@ CONTAINS
         Resolved_PARMIOCoeff_File = 'PARMIO.MWwater.EmisCoeff.nc'
       END IF
       IF ( PRESENT(File_Path) ) THEN
-        Resolved_PARMIOCoeff_File = TRIM(ADJUSTL(File_Path)) // TRIM(Resolved_PARMIOCoeff_File)
+        Resolved_PARMIOCoeff_File = Join_Path(File_Path, Resolved_PARMIOCoeff_File)
       END IF
       INQUIRE(FILE=TRIM(Resolved_PARMIOCoeff_File), EXIST=parmio_present)
       ! ...The drop-in default is a netCDF file: when the caller keeps netCDF
       !    data under a separate NC_File_Path, probe that tree too.
       IF ( .NOT. parmio_present .AND. .NOT. parmio_explicit .AND. &
            PRESENT(NC_File_Path) ) THEN
-        Resolved_PARMIOCoeff_File = TRIM(ADJUSTL(NC_File_Path)) // 'PARMIO.MWwater.EmisCoeff.nc'
+        Resolved_PARMIOCoeff_File = Join_Path(NC_File_Path, 'PARMIO.MWwater.EmisCoeff.nc')
         INQUIRE(FILE=TRIM(Resolved_PARMIOCoeff_File), EXIST=parmio_present)
       END IF
       IF ( parmio_present ) THEN
@@ -1269,14 +1269,14 @@ CONTAINS
           Resolved_MWlandCoeff_File = 'TELSEM2.MWland.EmisCoeff.nc'
         END IF
         IF ( PRESENT(File_Path) ) THEN
-          Resolved_MWlandCoeff_File = TRIM(ADJUSTL(File_Path)) // TRIM(Resolved_MWlandCoeff_File)
+          Resolved_MWlandCoeff_File = Join_Path(File_Path, Resolved_MWlandCoeff_File)
         END IF
         INQUIRE(FILE=TRIM(Resolved_MWlandCoeff_File), EXIST=mwland_present)
         ! ...The default-named atlas is a netCDF file: when the caller keeps
         !    netCDF data under a separate NC_File_Path, probe that tree too.
         IF ( .NOT. mwland_present .AND. .NOT. mwland_explicit .AND. &
              PRESENT(NC_File_Path) ) THEN
-          Resolved_MWlandCoeff_File = TRIM(ADJUSTL(NC_File_Path)) // 'TELSEM2.MWland.EmisCoeff.nc'
+          Resolved_MWlandCoeff_File = Join_Path(NC_File_Path, 'TELSEM2.MWland.EmisCoeff.nc')
           INQUIRE(FILE=TRIM(Resolved_MWlandCoeff_File), EXIST=mwland_present)
         END IF
         IF ( mwland_present ) THEN

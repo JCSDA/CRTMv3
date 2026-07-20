@@ -28,6 +28,7 @@ MODULE CRTM_CloudCoeff
   ! ------------------
   ! Module use
   USE Message_Handler,      ONLY: SUCCESS, FAILURE, INFORMATION, Display_Message
+  USE File_Utility          , ONLY: Join_Path
   USE CloudCoeff_Define,    ONLY: CloudCoeff_type, &
                                   CloudCoeff_Associated, &
                                   CloudCoeff_Destroy, &
@@ -227,7 +228,7 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_CloudCoeff_Load'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
-    CHARACTER(ML) :: CloudCoeff_File
+    CHARACTER(:), ALLOCATABLE :: CloudCoeff_File
     LOGICAL :: noisy
     ! Function variables
     LOGICAL :: Binary
@@ -235,9 +236,9 @@ CONTAINS
     ! Setup
     err_stat = SUCCESS
     ! ...Assign the filename to local variable
-    CloudCoeff_File = ADJUSTL(Filename)
+    CloudCoeff_File = TRIM(ADJUSTL(Filename))
     ! ...Add the file path
-    IF ( PRESENT(File_Path) ) CloudCoeff_File = TRIM(ADJUSTL(File_Path))//TRIM(CloudCoeff_File)
+    IF ( PRESENT(File_Path) ) CloudCoeff_File = Join_Path(File_Path, CloudCoeff_File)
     ! ...Check Quiet argument
     noisy = .TRUE.
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
@@ -266,8 +267,8 @@ CONTAINS
                    CloudC_Exp, &
                    Quiet = .NOT. noisy )
       IF ( err_stat /= SUCCESS ) THEN
-        WRITE( msg,'("Error reading experimental CloudCoeff file ",a)') TRIM(CloudCoeff_File)
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+        CALL Display_Message( ROUTINE_NAME, &
+          'Error reading experimental CloudCoeff file '//TRIM(CloudCoeff_File)//TRIM(pid_msg), err_stat )
         RETURN
       END IF
       Active_Cloud_Scheme = CRTM_EXP_CLOUDCOEFF
@@ -285,8 +286,8 @@ CONTAINS
                    netCDF = .NOT. Binary, &
                    Quiet  = .NOT. noisy )
       IF ( err_stat /= SUCCESS ) THEN
-        WRITE( msg,'("Error reading CloudCoeff file ",a)') TRIM(CloudCoeff_File)
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+        CALL Display_Message( ROUTINE_NAME, &
+          'Error reading CloudCoeff file '//TRIM(CloudCoeff_File)//TRIM(pid_msg), err_stat )
         RETURN
       END IF
       Active_Cloud_Scheme = SCHEME_LEGACY

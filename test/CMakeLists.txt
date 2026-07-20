@@ -386,6 +386,14 @@ else()
 endif()
 unset(_CC_DDA_FIX)
 
+# Issue #238: coefficient file paths must survive a long File_Path without being
+# truncated by fixed-length buffers. Initializes CRTM through a ~300-character
+# symlinked path that exceeds the old 80/128/256 caps.
+add_executable(Unit_Long_Path_Init mains/unit/Unit_Test/test_Long_Path_Init.f90)
+target_link_libraries(Unit_Long_Path_Init PRIVATE crtm)
+add_test(NAME test_Unit_Long_Path_Init
+         COMMAND $<TARGET_FILE:Unit_Long_Path_Init>)
+
 # General TL-vs-FD and AD consistency check across sensor types (from #280).
 # Parameterized by sensor id and mode: "fd" checks the tangent-linear against a
 # central finite difference of the forward (per channel), "ad" checks the TL-AD

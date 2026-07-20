@@ -237,7 +237,7 @@ CONTAINS
     CHARACTER(LEN=:), ALLOCATABLE :: base
     CHARACTER(LEN=1) :: lastch
     CHARACTER(ML) :: msg, pid_msg
-    CHARACTER(ML) :: spccoeff_file
+    CHARACTER(:), ALLOCATABLE :: spccoeff_file
     LOGICAL :: noisy
     INTEGER :: alloc_stat
     INTEGER :: n, n_sensors
@@ -286,8 +286,8 @@ CONTAINS
     ! back to the alternate if only that one exists on disk.
     DO n = 1, n_Sensors
       BLOCK
-        CHARACTER(ML) :: nc_file, bin_file
-        LOGICAL       :: requested_nc, use_netCDF
+        CHARACTER(:), ALLOCATABLE :: nc_file, bin_file
+        LOGICAL                   :: requested_nc, use_netCDF
 
         requested_nc = .TRUE.
         IF ( PRESENT(netCDF) ) requested_nc = netCDF
@@ -323,8 +323,9 @@ CONTAINS
           netCDF = use_netCDF  , &
           Quiet  = .NOT. noisy )
         IF ( err_stat /= SUCCESS ) THEN
-          WRITE( msg,'("Error reading SpcCoeff file #",i0,", ",a)') n, TRIM(spccoeff_file)
-          CALL Display_Message( ROUTINE_NAME, TRIM(msg)//TRIM(pid_msg), err_stat ); RETURN
+          WRITE( msg,'("Error reading SpcCoeff file #",i0)') n
+          CALL Display_Message( ROUTINE_NAME, &
+            TRIM(msg)//', '//TRIM(spccoeff_file)//TRIM(pid_msg), err_stat ); RETURN
         END IF
       END BLOCK
     END DO

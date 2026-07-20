@@ -28,6 +28,7 @@ MODULE CRTM_MWwaterCoeff
   ! -----------------
   ! Module use
   USE Message_Handler    , ONLY: SUCCESS, FAILURE, Display_Message
+  USE File_Utility          , ONLY: Join_Path
   USE MWwaterCoeff_Define, ONLY: MWwaterCoeff_type      , &
                                  MWwaterCoeff_Associated, &
                                  MWwaterCoeff_Destroy   , &
@@ -294,15 +295,15 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_MWwaterCoeff_Load'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
-    CHARACTER(ML) :: MWwaterCoeff_File
+    CHARACTER(:), ALLOCATABLE :: MWwaterCoeff_File
     LOGICAL :: noisy
 
     ! Setup
     err_stat = SUCCESS
     ! ...Assign the filename to local variable
-    MWwaterCoeff_File = ADJUSTL(Filename)
+    MWwaterCoeff_File = TRIM(ADJUSTL(Filename))
     ! ...Add the file path
-    IF ( PRESENT(File_Path) ) MWwaterCoeff_File = TRIM(ADJUSTL(File_Path))//TRIM(MWwaterCoeff_File)
+    IF ( PRESENT(File_Path) ) MWwaterCoeff_File = Join_Path(File_Path, MWwaterCoeff_File)
     ! ...Check Quiet argument
     noisy = .TRUE.
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet

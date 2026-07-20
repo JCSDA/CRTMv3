@@ -32,6 +32,7 @@ MODULE CRTM_VISsnowCoeff
   ! -----------------
   ! Module use
   USE Message_Handler  ,   ONLY: SUCCESS, FAILURE, Display_Message
+  USE File_Utility          , ONLY: Join_Path
   USE SEcategory_Define,   ONLY: SEcategory_type, &
                                  SEcategory_Associated, &
                                  SEcategory_Destroy
@@ -190,7 +191,7 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_VISsnowCoeff_Load'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
-    CHARACTER(ML) :: VISsnowCoeff_File
+    CHARACTER(:), ALLOCATABLE :: VISsnowCoeff_File
     CHARACTER(ML) :: Classification_Name
     LOGICAL :: noisy
     ! Function variables
@@ -199,7 +200,7 @@ CONTAINS
     ! Setup
     err_stat = SUCCESS
     ! ...Assign the filename to local variable
-    VISsnowCoeff_File = ADJUSTL(Filename)
+    VISsnowCoeff_File = TRIM(ADJUSTL(Filename))
     ! ...Get the classification name from the filename
     !Classification_Name = Filename(:index(Filename,'.')-1) !this is the one-line replacement if confident
     pos = index(Filename, '.')
@@ -214,7 +215,7 @@ CONTAINS
     ! PRINT *, 'Loading CRTM visible snow surface emissivity coefficients from file: '//TRIM(VISsnowCoeff_File)//TRIM(pid_msg)
     ! PRINT *, 'Classification Name: '//TRIM(Classification_Name)
     ! ...Add the file path
-    IF ( PRESENT(File_Path) ) VISsnowCoeff_File = TRIM(ADJUSTL(File_Path))//TRIM(VISsnowCoeff_File)
+    IF ( PRESENT(File_Path) ) VISsnowCoeff_File = Join_Path(File_Path, VISsnowCoeff_File)
     ! ...Check Quiet argument
     noisy = .TRUE.
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet

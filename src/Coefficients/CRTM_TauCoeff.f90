@@ -221,8 +221,8 @@ CONTAINS
     ! Local variables
     CHARACTER(256) :: Message
     CHARACTER(256) :: Process_ID_Tag
-    CHARACTER(256) :: local_path
-    CHARACTER(256), DIMENSION(MAX_N_SENSORS) :: TauCoeff_File
+    CHARACTER(:), ALLOCATABLE :: local_path
+    CHARACTER(:), ALLOCATABLE :: TauCoeff_File(:)
     INTEGER :: Allocate_Status, Deallocate_Status
     INTEGER :: n, n_Sensors
     INTEGER :: i, j
@@ -254,6 +254,11 @@ CONTAINS
     !    Binary (or vice versa) is decided per-batch below.
     binary = .FALSE.
     IF ( PRESENT(netCDF) ) binary = .NOT. netCDF
+
+    ! Allocate the filename array with room for the path prefix, so a long
+    ! File_Path is never truncated. The filename portion is bounded (a sensor
+    ! id plus extension); the path portion is sized from the actual argument.
+    ALLOCATE( CHARACTER(LEN_TRIM(local_path)+256) :: TauCoeff_File(MAX_N_SENSORS) )
 
     ! Determine the number of sensors and construct their filenames
     IF ( PRESENT(Sensor_ID) ) THEN
@@ -307,10 +312,11 @@ CONTAINS
     IF ( .NOT. alt_available ) THEN
       ! Try the alternate format for the whole batch.
       BLOCK
-        CHARACTER(256), DIMENSION(MAX_N_SENSORS) :: Alt_File
+        CHARACTER(:), ALLOCATABLE :: Alt_File(:)
         LOGICAL :: alt_complete
         CHARACTER(8) :: alt_ext, req_ext
 
+        ALLOCATE( CHARACTER(LEN_TRIM(local_path)+256) :: Alt_File(MAX_N_SENSORS) )
         IF ( binary ) THEN
           req_ext = '.bin'
           alt_ext = '.nc'
@@ -925,9 +931,8 @@ CONTAINS
     ! ----------------------------------------
     READ( FileID, IOSTAT=IO_Status ) Release_in, Version_in
     IF ( IO_Status /= 0 ) THEN
-      WRITE( Message,'("Error reading Release/Version values from ",a,&
-                      &". IOSTAT = ",i0)' ) &
-                      TRIM(Filename), IO_Status
+      WRITE( Message,'(". IOSTAT = ",i0)' ) IO_Status
+      Message = 'Error reading Release/Version values from '//TRIM(Filename)//TRIM(Message)
       CALL Inquire_Cleanup(Close_File=SET); RETURN
     END IF
 
@@ -936,9 +941,8 @@ CONTAINS
     ! --------------------
     READ( FileID, IOSTAT=IO_Status ) Algorithm_ID_in
     IF ( IO_Status /= 0 ) THEN
-      WRITE( Message,'("Error reading Algorithm ID from ",a,&
-                      &". IOSTAT = ",i0)' ) &
-                      TRIM(Filename), IO_Status
+      WRITE( Message,'(". IOSTAT = ",i0)' ) IO_Status
+      Message = 'Error reading Algorithm ID from '//TRIM(Filename)//TRIM(Message)
       CALL Inquire_Cleanup(Close_File=SET); RETURN
     END IF
 
@@ -949,8 +953,8 @@ CONTAINS
     ! --------------
     CLOSE( FileID, IOSTAT=IO_Status )
     IF ( IO_Status /= 0 ) THEN
-      WRITE( Message,'("Error closing ",a,". IOSTAT = ",i0)' ) &
-                    TRIM(Filename), IO_Status
+      WRITE( Message,'(". IOSTAT = ",i0)' ) IO_Status
+      Message = 'Error closing '//TRIM(Filename)//TRIM(Message)
       CALL Inquire_Cleanup(); RETURN
     END IF
 

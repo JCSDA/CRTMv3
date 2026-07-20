@@ -23,6 +23,7 @@ MODULE CRTM_MWlandCoeff
   ! Environment setup
   ! -----------------
   USE Message_Handler       , ONLY: SUCCESS, FAILURE, INFORMATION, Display_Message
+  USE File_Utility          , ONLY: Join_Path
   USE TELSEM2Atlas_Define   , ONLY: TELSEM2Atlas_type     , &
                                     TELSEM2Atlas_Associated, &
                                     TELSEM2Atlas_Destroy
@@ -122,15 +123,15 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_MWlandCoeff_Load'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
-    CHARACTER(ML) :: MWlandCoeff_File
+    CHARACTER(:), ALLOCATABLE :: MWlandCoeff_File
     LOGICAL :: noisy
 
     ! Setup
     err_stat = SUCCESS
     ! ...Assign the filename to local variable
-    MWlandCoeff_File = ADJUSTL(Filename)
+    MWlandCoeff_File = TRIM(ADJUSTL(Filename))
     ! ...Add the file path
-    IF ( PRESENT(File_Path) ) MWlandCoeff_File = TRIM(ADJUSTL(File_Path))//TRIM(MWlandCoeff_File)
+    IF ( PRESENT(File_Path) ) MWlandCoeff_File = Join_Path(File_Path, MWlandCoeff_File)
     ! ...Check Quiet argument
     noisy = .TRUE.
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
