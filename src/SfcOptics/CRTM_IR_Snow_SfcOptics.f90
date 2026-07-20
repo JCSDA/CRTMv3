@@ -38,10 +38,10 @@ MODULE CRTM_IR_Snow_SfcOptics
                                        CRTM_IRsnowCoeff_SE_IsLoaded, &
                                        IRsnowC, &
                                        IRsnowC_SE
-  USE CRTM_IRSnowEM            , ONLY: IRsnowVar_type => iVar_type, &
-                                       CRTM_Compute_IRSnowEM, &
-                                       CRTM_Compute_IRSnowEM_TL, &
-                                       CRTM_Compute_IRSnowEM_AD
+  USE CRTM_IRsnowEM            , ONLY: IRsnowVar_type => iVar_type, &
+                                       CRTM_Compute_IRsnowEM, &
+                                       CRTM_Compute_IRsnowEM_TL, &
+                                       CRTM_Compute_IRsnowEM_AD
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -223,7 +223,7 @@ CONTAINS
       SfcOptics%Emissivity(1:SfcOptics%n_Angles,1) = emissivity
 
     ELSE IF ( isIRsnowC ) THEN
-      err_stat = CRTM_Compute_IRSnowEM(&
+      err_stat = CRTM_Compute_IRsnowEM(&
                    IRsnowC                      , &  ! Input
                    Surface%Snow_Temperature     , &  ! Input
                    Surface%Snow_Grain_Size      , &  ! Input
@@ -232,7 +232,7 @@ CONTAINS
                    iVar%irsnowvar               , &  ! Internal variable output
                    SfcOptics%Emissivity(1:nZ,1)   )  ! Output
       IF ( err_stat /= SUCCESS ) THEN
-        msg = 'Error occurred in CRTM_Compute_IRSnowEM()'
+        msg = 'Error occurred in CRTM_Compute_IRsnowEM()'
         CALL Display_Message( ROUTINE_NAME, msg, err_stat ); RETURN
       END IF
 
@@ -405,7 +405,7 @@ CONTAINS
     IF ( isIRsnowC ) THEN
 
       ! Compute tangent-linear IR snow surface emissivity
-      err_stat = CRTM_Compute_IRSnowEM_TL( &
+      err_stat = CRTM_Compute_IRsnowEM_TL( &
                    IRsnowC                        , &  ! Input model coefficients
                    Surface_TL%Snow_Temperature    , &  ! Input
                    Surface_TL%Snow_Grain_Size     , &  ! Input
@@ -599,7 +599,7 @@ CONTAINS
       END IF
 
       ! Compute sdjoint IRSSEM sea surface emissivity
-      err_stat = CRTM_Compute_IRSnowEM_AD( &
+      err_stat = CRTM_Compute_IRsnowEM_AD( &
                    IRsnowC                       , &  ! Input model coefficients
                    SfcOptics_AD%Emissivity(1:nZ,1), &  ! Input
                    iVar%irsnowvar                 , &  ! Internal Variable Input

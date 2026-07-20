@@ -35,9 +35,9 @@ MODULE IRsnowCoeff_IO
     ! Visibilities
     ! ------------
     PRIVATE
-    PUBLIC :: IRsnowCoeff_InquireFile
-    PUBLIC :: IRsnowCoeff_ReadFile
-    PUBLIC :: IRsnowCoeff_WriteFile
+    PUBLIC :: IRsnowCoeff_InquireFile_IO
+    PUBLIC :: IRsnowCoeff_ReadFile_IO
+    PUBLIC :: IRsnowCoeff_WriteFile_IO
     PUBLIC :: IRsnowCoeff_netCDF_to_Binary
     PUBLIC :: IRsnowCoeff_Binary_to_netCDF
 
@@ -54,13 +54,13 @@ MODULE IRsnowCoeff_IO
 !:sdoc+:
 !
 ! NAME:
-!       IRsnowCoeff_InquireFile
+!       IRsnowCoeff_InquireFile_IO
 !
 ! PURPOSE:
 !       Function to inquire IRsnowCoeff object files.
 !
 ! CALLING SEQUENCE:
-!       Error_Status = IRsnowCoeff_InquireFile( &
+!       Error_Status = IRsnowCoeff_InquireFile_IO( &
 !                        Filename, &
 !                        netCDF           = netCDF          , &
 !                        n_Angles         = n_Angles        , &
@@ -170,7 +170,7 @@ MODULE IRsnowCoeff_IO
 !:sdoc-:
 !------------------------------------------------------------------------------
 
-  FUNCTION IRsnowCoeff_InquireFile( &
+  FUNCTION IRsnowCoeff_InquireFile_IO( &
     Filename       , &  ! Input
     netCDF         , &  ! Optional input
     n_Angles       , &  ! Optional output
@@ -231,19 +231,19 @@ MODULE IRsnowCoeff_IO
                   Comment         = Comment          )
     END IF
 
-  END FUNCTION IRsnowCoeff_InquireFile
+  END FUNCTION IRsnowCoeff_InquireFile_IO
 
 !------------------------------------------------------------------------------
 !:sdoc+:
 !
 ! NAME:
-!       IRsnowCoeff_ReadFile
+!       IRsnowCoeff_ReadFile_IO
 !
 ! PURPOSE:
 !       Function to read IRsnowCoeff object files.
 !
 ! CALLING SEQUENCE:
-!       Error_Status = IRsnowCoeff_ReadFile( &
+!       Error_Status = IRsnowCoeff_ReadFile_IO( &
 !                        IRsnowCoeff, &
 !                        Filename, &
 !                        netCDF  = netCDF , &
@@ -326,7 +326,7 @@ MODULE IRsnowCoeff_IO
 !
 !:sdoc-:
 !------------------------------------------------------------------------------
-  FUNCTION IRsnowCoeff_ReadFile( &
+  FUNCTION IRsnowCoeff_ReadFile_IO( &
     IRsnowCoeff , &  ! Output
     Filename    , &  ! Input
     netCDF      , &  ! Optional input
@@ -376,13 +376,13 @@ MODULE IRsnowCoeff_IO
                     Debug       )
     END IF
 
-  END FUNCTION IRsnowCoeff_ReadFile
+  END FUNCTION IRsnowCoeff_ReadFile_IO
 
 !------------------------------------------------------------------------------
 !:sdoc+:
 !
 ! NAME:
-!       IRsnowCoeff_WriteFile
+!       IRsnowCoeff_WriteFile_IO
 !
 ! PURPOSE:
 !       Function to write IRsnowCoeff object files.
@@ -482,7 +482,7 @@ MODULE IRsnowCoeff_IO
 !:sdoc-:
 !------------------------------------------------------------------------------
 
-  FUNCTION IRsnowCoeff_WriteFile( &
+  FUNCTION IRsnowCoeff_WriteFile_IO( &
     IRsnowCoeff, &  ! Input
     Filename    , &  ! Input
     netCDF      , &  ! Optional input
@@ -536,7 +536,7 @@ MODULE IRsnowCoeff_IO
                     Debug        )
     END IF
 
-  END FUNCTION IRsnowCoeff_WriteFile
+  END FUNCTION IRsnowCoeff_WriteFile_IO
 
 !------------------------------------------------------------------------------
 !:sdoc+:
@@ -617,7 +617,7 @@ MODULE IRsnowCoeff_IO
     err_stat = SUCCESS
 
     ! Read the netCDF file
-    err_stat = IRsnowCoeff_ReadFile(cc, NC_Filename, Quiet = Quiet, netCDF = .TRUE. )
+    err_stat = IRsnowCoeff_ReadFile_IO(cc, NC_Filename, Quiet = Quiet, netCDF = .TRUE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading netCDF file '//TRIM(NC_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -625,7 +625,7 @@ MODULE IRsnowCoeff_IO
     END IF
 
     ! Write the Binary file
-    err_stat = IRsnowCoeff_WriteFile(cc, BIN_Filename, Quiet = Quiet )
+    err_stat = IRsnowCoeff_WriteFile_IO(cc, BIN_Filename, Quiet = Quiet )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error writing Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -634,7 +634,7 @@ MODULE IRsnowCoeff_IO
 
     ! Check the write was successful
     ! ...Read the Binary file
-    err_stat =  IRsnowCoeff_ReadFile(cc_copy, BIN_Filename, Quiet = Quiet)
+    err_stat =  IRsnowCoeff_ReadFile_IO(cc_copy, BIN_Filename, Quiet = Quiet)
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)//' for test'
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -728,7 +728,7 @@ MODULE IRsnowCoeff_IO
     err_stat = SUCCESS
 
     ! Read the binary file
-    err_stat = IRsnowCoeff_ReadFile(cc, BIN_Filename, Quiet = Quiet)
+    err_stat = IRsnowCoeff_ReadFile_IO(cc, BIN_Filename, Quiet = Quiet)
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -736,7 +736,7 @@ MODULE IRsnowCoeff_IO
     END IF
 
     ! Write the netCDF file
-    err_stat = IRsnowCoeff_WriteFile(cc, NC_Filename, Quiet = Quiet, netCDF = .TRUE.)
+    err_stat = IRsnowCoeff_WriteFile_IO(cc, NC_Filename, Quiet = Quiet, netCDF = .TRUE.)
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error writing netCDF file '//TRIM(NC_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -745,7 +745,7 @@ MODULE IRsnowCoeff_IO
 
     ! Check the write was successful
     ! ...Read the netCDF file
-    err_stat =  IRsnowCoeff_ReadFile(cc_copy, NC_Filename, Quiet = Quiet, netCDF = .TRUE.)
+    err_stat =  IRsnowCoeff_ReadFile_IO(cc_copy, NC_Filename, Quiet = Quiet, netCDF = .TRUE.)
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading netCDF file '//TRIM(NC_Filename)//' for test'
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )

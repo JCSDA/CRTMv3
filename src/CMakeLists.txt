@@ -78,6 +78,9 @@ list( APPEND crtm_src_files
       Coefficients/CRTM_VISlandCoeff.f90
       Coefficients/CRTM_VISsnowCoeff.f90
       Coefficients/CRTM_VISwaterCoeff.f90
+      Coefficients/EmisCoeff/VIS_Snow/VISsnowCoeff_Define.f90
+      Coefficients/EmisCoeff/VIS_Snow/VISsnowCoeff_netCDF_IO.f90
+      Coefficients/EmisCoeff/VIS_Snow/VISsnowCoeff_IO.f90
       Coefficients/EmisCoeff/IR_Land/LSEatlas/LSEatlas_Define.f90
       Coefficients/EmisCoeff/IR_Water/IRwaterCoeff_Define.f90
       Coefficients/EmisCoeff/IR_Water/IRwaterCoeff_IO.f90
@@ -166,6 +169,7 @@ list( APPEND crtm_src_files
       SfcOptics/CRTM_VIS_Land_SfcOptics.f90
       SfcOptics/CRTM_VIS_Snow_SfcOptics.f90
       SfcOptics/CRTM_VIS_Water_SfcOptics.f90
+      SfcOptics/VIS_Snow/CRTM_VISsnowRF.f90
       SfcOptics/IR_Water/IRSSEM/CRTM_IRSSEM.f90
       SfcOptics/IR_Snow/CRTM_IRSnowEM.f90
       SfcOptics/MW_Water/FASTEM_MWSSEM/Azimuth_Emissivity_F6_Module.f90

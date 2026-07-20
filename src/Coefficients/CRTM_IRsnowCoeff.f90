@@ -40,7 +40,7 @@ MODULE CRTM_IRsnowCoeff
   USE IRsnowCoeff_Define, ONLY: IRsnowCoeff_type, &
                                 IRsnowCoeff_Associated, &
                                 IRsnowCoeff_Destroy
-  USE IRsnowCoeff_IO,     ONLY: IRsnowCoeff_ReadFile
+  USE IRsnowCoeff_IO,     ONLY: IRsnowCoeff_ReadFile_IO
   ! Disable all implicit typing
   IMPLICIT NONE
 
@@ -245,7 +245,7 @@ CONTAINS
                    Quiet = .NOT. noisy )
     ELSE
       ! Other classifications
-      err_stat = IRsnowCoeff_ReadFile( &
+      err_stat = IRsnowCoeff_ReadFile_IO( &
                    IRsnowC, &
                    IRsnowCoeff_File, &
                    netCDF = .NOT. Binary, &
@@ -365,9 +365,7 @@ CONTAINS
 
   FUNCTION CRTM_IRsnowCoeff_IsLoaded() RESULT( IsLoaded )
     LOGICAL :: IsLoaded
-
     IsLoaded = IRsnowCoeff_Associated( IRsnowC )
-
   END FUNCTION CRTM_IRsnowCoeff_IsLoaded
 
 !------------------------------------------------------------------------------
@@ -388,9 +386,7 @@ CONTAINS
 
   FUNCTION CRTM_IRsnowCoeff_SE_IsLoaded() RESULT( IsLoaded )
     LOGICAL :: IsLoaded
-
     IsLoaded = SEcategory_Associated( IRsnowC_SE )
-
   END FUNCTION CRTM_IRsnowCoeff_SE_IsLoaded
 
 END MODULE CRTM_IRsnowCoeff
