@@ -386,6 +386,19 @@ else()
 endif()
 unset(_CC_DDA_FIX)
 
+# General TL-vs-FD and AD consistency check across sensor types (from #280).
+# Parameterized by sensor id and mode: "fd" checks the tangent-linear against a
+# central finite difference of the forward (per channel), "ad" checks the TL-AD
+# dot-product adjoint identity. Perturbs atmospheric temperature. Covers the
+# three main sensor types (all present in the common suite): atms_n21 (MW
+# sounder), cris-fsr_n21 (IR sounder), v.abi_g18 (IR imager).
+add_executable(test_FD_consistency mains/unit/Unit_Test/test_FD_consistency.f90)
+target_link_libraries(test_FD_consistency PRIVATE crtm)
+foreach(_fdc_sensor atms_n21 cris-fsr_n21 v.abi_g18)
+  add_test(NAME test_FD_consistency_${_fdc_sensor} COMMAND test_FD_consistency ${_fdc_sensor} fd)
+  add_test(NAME test_AD_consistency_${_fdc_sensor} COMMAND test_FD_consistency ${_fdc_sensor} ad)
+endforeach()
+
 # Surface downwelling radiance (RTSolution%Down_Radiance) TL/AD/K correctness:
 # baseline-independent finite-difference, adjoint dot-product, and K-vs-AD checks
 # for a TOA-radiance control plus the surface downwelling output.
