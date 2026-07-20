@@ -578,11 +578,16 @@ unset(_TMS_TAU)
 unset(_TMS_SPC)
 
 # test_TELSEM2_MWland
-# Stage the TELSEM2 atlas under a test-only name (NOT the default
-# TELSEM2.MWland.EmisCoeff.nc) so the drop-in default behaviour of the other
-# land tests, which use NESDIS_LandEM, is left unchanged. The test loads it
-# explicitly via the MWlandCoeff_File argument. Registered only when the atlas
-# is present in the staged fix tree.
+# Stage the TELSEM2 atlas under two names in the shared testinput:
+#   * TELSEM2.MWland.test.nc       -- explicit-opt-in path (MWlandCoeff_File).
+#   * TELSEM2.MWland.EmisCoeff.nc  -- the DEFAULT drop-in name, staged ON PURPOSE
+#     so the test can prove the opt-in gate: with the default-named atlas present
+#     on the coefficient path, CRTM_Init must still use NESDIS_LandEM unless the
+#     caller opts in (Use_MWland_Atlas=.TRUE. or MWlandCoeff_File). Because the
+#     atlas is now opt-in rather than presence-activated, staging the default name
+#     is inert for every other land test -- and any regression of the gate would
+#     surface as those tests changing. Registered only when the atlas is present
+#     in the staged fix tree.
 set(_TELSEM2_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/EmisCoeff/MW_Land/netCDF/TELSEM2.MWland.EmisCoeff.nc")
 add_executable(test_TELSEM2_MWland mains/unit/Unit_Test/test_TELSEM2_MWland.f90)
 target_link_libraries(test_TELSEM2_MWland PRIVATE crtm)
@@ -590,6 +595,9 @@ if(EXISTS "${_TELSEM2_FIX}")
   execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
                    "${_TELSEM2_FIX}"
                    "${CMAKE_CURRENT_BINARY_DIR}/testinput/TELSEM2.MWland.test.nc" )
+  execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                   "${_TELSEM2_FIX}"
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/TELSEM2.MWland.EmisCoeff.nc" )
   add_test(NAME test_TELSEM2_MWland
            COMMAND $<TARGET_FILE:test_TELSEM2_MWland>)
 else()

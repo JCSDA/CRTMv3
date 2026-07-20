@@ -147,6 +147,7 @@ CONTAINS
 !                                 MWwaterCoeff_File   = MWwaterCoeff_File   , &
 !                                 PARMIOCoeff_File    = PARMIOCoeff_File    , &
 !                                 MWlandCoeff_File    = MWlandCoeff_File    , &
+!                                 Use_MWland_Atlas    = Use_MWland_Atlas    , &
 !                                 IRwaterCoeff_Format = IRwaterCoeff_Format , &
 !                                 IRlandCoeff_Format  = IRlandCoeff_Format  , &
 !                                 IRiceCoeff_Format   = IRiceCoeff_Format   , &
@@ -333,16 +334,33 @@ CONTAINS
 !       MWlandCoeff_File:   Name of the microwave land emissivity atlas file.
 !                           Available datafiles:
 !                           - TELSEM2.MWland.EmisCoeff.nc
-!                           If supplied (or if the default-named file is found
-!                           on the coefficient path) the TELSEM2 climatological
-!                           atlas replaces the NESDIS_LandEM physical model for
-!                           microwave land surfaces. The atlas depends only on
-!                           latitude, longitude and month, so its tangent-linear
-!                           and adjoint are zero; NESDIS_LandEM supplies
-!                           analytic land emissivity Jacobians and is used when
-!                           no atlas is loaded.
+!                           Supplying this argument is an explicit opt-in to the
+!                           TELSEM2 climatological atlas (it may name a
+!                           non-default location); a supplied-but-missing file is
+!                           an error. The atlas is NOT loaded from mere file
+!                           presence on the coefficient path -- opt-in is
+!                           required (this argument, or Use_MWland_Atlas below).
+!                           When loaded, the atlas replaces the NESDIS_LandEM
+!                           physical model for microwave land surfaces.
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
+!                           DIMENSION:  Scalar
+!                           ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+!       Use_MWland_Atlas:   Opt-in switch for the microwave land emissivity
+!                           atlas. Default .FALSE.: microwave land surfaces use
+!                           the NESDIS_LandEM physical model, which supplies
+!                           analytic land-emissivity Jacobians (LAI, vegetation
+!                           fraction, soil moisture). Set .TRUE. to load the
+!                           default-named atlas (TELSEM2.MWland.EmisCoeff.nc)
+!                           from the coefficient path; if it is not found CRTM
+!                           issues a warning and falls back to NESDIS_LandEM
+!                           (non-fatal). Passing MWlandCoeff_File is an
+!                           equivalent opt-in for a non-default location. Note
+!                           the atlas depends only on latitude, longitude and
+!                           month, so its tangent-linear and adjoint are zero.
+!                           UNITS:      N/A
+!                           TYPE:       LOGICAL
 !                           DIMENSION:  Scalar
 !                           ATTRIBUTES: INTENT(IN), OPTIONAL
 !
@@ -601,6 +619,7 @@ CONTAINS
     MWwaterCoeff_Scheme , &  ! Optional input
     PARMIOCoeff_File    , &  ! Optional input
     MWlandCoeff_File    , &  ! Optional input
+    Use_MWland_Atlas    , &  ! Optional input
     IRwaterCoeff_Format , &  ! Optional input
     IRlandCoeff_Format  , &  ! Optional input
     IRsnowCoeff_Format  , &  ! Optional input
@@ -642,6 +661,7 @@ CONTAINS
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: MWwaterCoeff_Scheme
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: PARMIOCoeff_File
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: MWlandCoeff_File
+    LOGICAL     ,      OPTIONAL, INTENT(IN)  :: Use_MWland_Atlas
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRwaterCoeff_Format
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRlandCoeff_Format
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRsnowCoeff_Format
@@ -706,7 +726,7 @@ CONTAINS
     LOGICAL :: netCDF, isSEcategory
     LOGICAL :: Quiet_
     LOGICAL :: parmio_explicit, parmio_present
-    LOGICAL :: mwland_explicit, mwland_present
+    LOGICAL :: mwland_explicit, mwland_present, mwland_opt_in
     INTEGER :: iQuiet ! TODO: iQuiet should be removed once load routine interfaces have been modified
     Quiet_ = .TRUE.
     IF ( PRESENT(Quiet) ) Quiet_ = Quiet
@@ -1227,51 +1247,66 @@ CONTAINS
         END DO
       END IF
 
-      ! ...TELSEM2 MW land emissivity atlas. Same "drop-in when present" policy
-      !    as PARMIO: by default CRTM_Init auto-loads
-      !    File_Path/TELSEM2.MWland.EmisCoeff.nc when present, otherwise the MW
-      !    land surface optics fall back to the NESDIS_LandEM model. Passing
-      !    MWlandCoeff_File explicitly points at a non-default location and a
-      !    missing file is then treated as an error.
+      ! ...TELSEM2 MW land emissivity atlas. OPT-IN (default: NESDIS_LandEM).
+      !    Unlike PARMIO, the atlas is NOT activated by mere file presence on the
+      !    coefficient path: it loads only when the caller explicitly opts in,
+      !    either by setting Use_MWland_Atlas=.TRUE. (auto-resolves the
+      !    default-named TELSEM2.MWland.EmisCoeff.nc from File_Path/NC_File_Path)
+      !    or by passing MWlandCoeff_File (which also opts in and may name a
+      !    non-default location). Without opt-in the atlas is skipped even if the
+      !    file is present, so MW land surface optics use NESDIS_LandEM, which
+      !    carries the analytic land-emissivity Jacobians. Rationale: loading the
+      !    atlas silently zeroes those Jacobians, so it must be a deliberate act.
       mwland_explicit = .FALSE.
       IF ( PRESENT(MWlandCoeff_File) ) THEN
         Resolved_MWlandCoeff_File = TRIM(ADJUSTL(MWlandCoeff_File))
         IF ( LEN_TRIM(Resolved_MWlandCoeff_File) > 0 ) mwland_explicit = .TRUE.
       END IF
-      IF ( .NOT. mwland_explicit ) THEN
-        Resolved_MWlandCoeff_File = 'TELSEM2.MWland.EmisCoeff.nc'
-      END IF
-      IF ( PRESENT(File_Path) ) THEN
-        Resolved_MWlandCoeff_File = TRIM(ADJUSTL(File_Path)) // TRIM(Resolved_MWlandCoeff_File)
-      END IF
-      INQUIRE(FILE=TRIM(Resolved_MWlandCoeff_File), EXIST=mwland_present)
-      ! ...The drop-in default is a netCDF file: when the caller keeps netCDF
-      !    data under a separate NC_File_Path, probe that tree too.
-      IF ( .NOT. mwland_present .AND. .NOT. mwland_explicit .AND. &
-           PRESENT(NC_File_Path) ) THEN
-        Resolved_MWlandCoeff_File = TRIM(ADJUSTL(NC_File_Path)) // 'TELSEM2.MWland.EmisCoeff.nc'
-        INQUIRE(FILE=TRIM(Resolved_MWlandCoeff_File), EXIST=mwland_present)
-      END IF
-      IF ( mwland_present ) THEN
-        IF ( .NOT. Quiet_ ) THEN
-          WRITE(*, '("Loading TELSEM2 MW land emissivity atlas: ", a)') TRIM(Resolved_MWlandCoeff_File)
+      mwland_opt_in = mwland_explicit
+      IF ( PRESENT(Use_MWland_Atlas) ) mwland_opt_in = mwland_opt_in .OR. Use_MWland_Atlas
+      Load_MWland_Atlas: IF ( mwland_opt_in ) THEN
+        IF ( .NOT. mwland_explicit ) THEN
+          Resolved_MWlandCoeff_File = 'TELSEM2.MWland.EmisCoeff.nc'
         END IF
-        err_stat = CRTM_MWlandCoeff_Load( &
-                     TRIM(Resolved_MWlandCoeff_File), &
-                     Quiet             = Quiet            , &
-                     Process_ID        = Process_ID       , &
-                     Output_Process_ID = Output_Process_ID  )
-        IF ( err_stat /= SUCCESS ) THEN
-          msg = 'Error loading MWlandCoeff data from '//TRIM(Resolved_MWlandCoeff_File)
+        IF ( PRESENT(File_Path) ) THEN
+          Resolved_MWlandCoeff_File = TRIM(ADJUSTL(File_Path)) // TRIM(Resolved_MWlandCoeff_File)
+        END IF
+        INQUIRE(FILE=TRIM(Resolved_MWlandCoeff_File), EXIST=mwland_present)
+        ! ...The default-named atlas is a netCDF file: when the caller keeps
+        !    netCDF data under a separate NC_File_Path, probe that tree too.
+        IF ( .NOT. mwland_present .AND. .NOT. mwland_explicit .AND. &
+             PRESENT(NC_File_Path) ) THEN
+          Resolved_MWlandCoeff_File = TRIM(ADJUSTL(NC_File_Path)) // 'TELSEM2.MWland.EmisCoeff.nc'
+          INQUIRE(FILE=TRIM(Resolved_MWlandCoeff_File), EXIST=mwland_present)
+        END IF
+        IF ( mwland_present ) THEN
+          IF ( .NOT. Quiet_ ) THEN
+            WRITE(*, '("Loading TELSEM2 MW land emissivity atlas: ", a)') TRIM(Resolved_MWlandCoeff_File)
+          END IF
+          err_stat = CRTM_MWlandCoeff_Load( &
+                       TRIM(Resolved_MWlandCoeff_File), &
+                       Quiet             = Quiet            , &
+                       Process_ID        = Process_ID       , &
+                       Output_Process_ID = Output_Process_ID  )
+          IF ( err_stat /= SUCCESS ) THEN
+            msg = 'Error loading MWlandCoeff data from '//TRIM(Resolved_MWlandCoeff_File)
+            CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+            RETURN
+          END IF
+        ELSE IF ( mwland_explicit ) THEN
+          ! Named a specific file that isn't there: a hard error.
+          msg = 'MWlandCoeff_File explicitly supplied but file not found: '//TRIM(Resolved_MWlandCoeff_File)
+          err_stat = FAILURE
           CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
           RETURN
+        ELSE
+          ! Opt-in via Use_MWland_Atlas but the default-named atlas is absent:
+          ! non-fatal, fall back to NESDIS_LandEM with a warning.
+          msg = 'Use_MWland_Atlas requested but TELSEM2.MWland.EmisCoeff.nc not '// &
+                'found on the coefficient path; using NESDIS_LandEM.'
+          CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),WARNING )
         END IF
-      ELSE IF ( mwland_explicit ) THEN
-        msg = 'MWlandCoeff_File explicitly supplied but file not found: '//TRIM(Resolved_MWlandCoeff_File)
-        err_stat = FAILURE
-        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
-        RETURN
-      END IF
+      END IF Load_MWland_Atlas
     END IF Microwave_Sensor
 
 

@@ -20,9 +20,16 @@
 !        - an ocean point (no land climatology) falls back to NESDIS_LandEM
 !          through the full CRTM_Forward path, bit-identical to a NESDIS-only run.
 !
-! The atlas is loaded explicitly via the MWlandCoeff_File argument pointing at a
-! test-only staged copy, so the default drop-in behaviour of the other land
-! tests is left unchanged.
+!   4. The opt-in gate: the atlas is NOT activated by file presence. With the
+!      default-named TELSEM2.MWland.EmisCoeff.nc staged on the coefficient path,
+!        - Use_MWland_Atlas=.TRUE. loads it (emissivity matches the explicit-file
+!          run), while
+!        - the default init (no opt-in) ignores it and uses NESDIS_LandEM.
+!
+! The atlas is staged under two names: a test-only TELSEM2.MWland.test.nc (loaded
+! explicitly via MWlandCoeff_File) and the default TELSEM2.MWland.EmisCoeff.nc
+! (present on the path to exercise the opt-in gate). Because the atlas is opt-in,
+! the default-named copy is inert for the other land tests.
 !
 ! Exit status: STOP 0 = success, STOP 1 = failure.
 !
@@ -76,7 +83,7 @@ PROGRAM test_TELSEM2_MWland
   TYPE(CRTM_Surface_type),    ALLOCATABLE :: Surface_K(:,:)
   ! Surface emissivity (profile 1) for each scenario
   REAL(fp), ALLOCATABLE :: emis_A(:), emis_B(:), emis_A_jan(:), emis_O_atlas(:)
-  REAL(fp), ALLOCATABLE :: emis_nesdis_A(:), emis_nesdis_O(:)
+  REAL(fp), ALLOCATABLE :: emis_nesdis_A(:), emis_nesdis_O(:), emis_A_optin(:)
 
   CALL CRTM_Version( Version )
   CALL Program_Message( PROGRAM_NAME, &
@@ -100,6 +107,7 @@ PROGRAM test_TELSEM2_MWland
             Surface_K(n_Channels,N_PROFILES), &
             emis_A(n_Channels), emis_B(n_Channels), emis_A_jan(n_Channels), &
             emis_O_atlas(n_Channels), emis_nesdis_A(n_Channels), emis_nesdis_O(n_Channels), &
+            emis_A_optin(n_Channels), &
             STAT = Alloc_Status )
   IF ( Alloc_Status /= 0 ) THEN
     CALL Display_Message( PROGRAM_NAME, 'Error allocating arrays', FAILURE ); STOP 1
@@ -175,7 +183,27 @@ PROGRAM test_TELSEM2_MWland
   Error_Status = CRTM_Destroy( ChannelInfo )
 
   ! ------------------------------------------------------------------
-  ! 2. Initialise WITHOUT the atlas -> NESDIS_LandEM fallback
+  ! 1B. Opt-in gate (open): Use_MWland_Atlas=.TRUE. with no explicit file must
+  !     auto-resolve the default-named TELSEM2.MWland.EmisCoeff.nc on the path
+  !     and load it -> emissivity matches the explicit-file run in section 1.
+  ! ------------------------------------------------------------------
+  Error_Status = CRTM_Init( (/SENSOR_ID/), ChannelInfo, &
+                            File_Path=COEFFICIENTS_PATH, Use_MWland_Atlas=.TRUE. )
+  IF ( Error_Status /= SUCCESS ) THEN
+    CALL Display_Message( PROGRAM_NAME, 'Error initializing CRTM (Use_MWland_Atlas)', FAILURE ); STOP 1
+  END IF
+  CALL Run_Forward_At( LAT_A, LON_A, MON_SEP, emis_A_optin, 'A/Sep (opt-in boolean)' )
+  Error_Status = CRTM_Destroy( ChannelInfo )
+  CALL Require_Same( emis_A_optin, emis_A, TOL_ZERO, &
+                     'opt-in boolean loads the default-named atlas (== explicit-file run)' )
+
+  ! ------------------------------------------------------------------
+  ! 2. Initialise WITHOUT opt-in -> NESDIS_LandEM. This is also the opt-in gate
+  !    (closed): the default-named TELSEM2.MWland.EmisCoeff.nc is present on the
+  !    coefficient path, but with no opt-in CRTM_Init must ignore it and use
+  !    NESDIS_LandEM. Section 2a (atlas != NESDIS) therefore doubles as the gate
+  !    guard -- if presence alone activated the atlas, emis_nesdis_A would equal
+  !    emis_A and 2a would fail.
   ! ------------------------------------------------------------------
   Error_Status = CRTM_Init( (/SENSOR_ID/), ChannelInfo, File_Path=COEFFICIENTS_PATH )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -185,7 +213,8 @@ PROGRAM test_TELSEM2_MWland
   CALL Run_Forward_At( LAT_O, LON_O, MON_SEP, emis_nesdis_O, 'ocean (NESDIS)' )
   Error_Status = CRTM_Destroy( ChannelInfo )
 
-  ! 2a. Atlas must change the emissivity at cell A (i.e. it was actually used)
+  ! 2a. Atlas must change the emissivity at cell A (i.e. it was actually used),
+  !     AND the default-named atlas present here was correctly gated off.
   CALL Require_Different( emis_A, emis_nesdis_A, MIN_DIFF, 'atlas active (cell A: TELSEM2 vs NESDIS)' )
 
   ! 2b. Ocean fallback: atlas-loaded run must equal the NESDIS-only run (bit-identical)
@@ -204,13 +233,15 @@ PROGRAM test_TELSEM2_MWland
   CALL CRTM_Atmosphere_Destroy( Atm_TL )
   CALL CRTM_Atmosphere_Destroy( Atmosphere_K )
   DEALLOCATE( RTSolution, RTSolution_TL, RTSolution_K, Atmosphere_K, Surface_K, &
-              emis_A, emis_B, emis_A_jan, emis_O_atlas, emis_nesdis_A, emis_nesdis_O )
+              emis_A, emis_B, emis_A_jan, emis_O_atlas, emis_nesdis_A, emis_nesdis_O, &
+              emis_A_optin )
 
   IF ( failed ) THEN
     CALL Display_Message( PROGRAM_NAME, 'FAILED', FAILURE ); STOP 1
   ELSE
     CALL Display_Message( PROGRAM_NAME, &
-      'PASSED: atlas active; spatial/seasonal dependence; ocean fallback; zero surface Jacobians', &
+      'PASSED: atlas active; spatial/seasonal dependence; ocean fallback; '// &
+      'zero surface Jacobians; opt-in gate (present-but-off)', &
       INFORMATION ); STOP 0
   END IF
 
