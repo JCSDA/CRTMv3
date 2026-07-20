@@ -366,6 +366,12 @@ target_link_libraries(Unit_Land_Jacobian PRIVATE crtm)
 add_test(NAME test_Unit_Land_Jacobian
          COMMAND $<TARGET_FILE:Unit_Land_Jacobian>)
 
+# Legacy Fastem1 MW-water SST (Water_Temperature) Jacobian vs finite differences.
+add_executable(Unit_Fastem1_SST_Jacobian mains/unit/Unit_Test/test_Fastem1_SST_Jacobian.f90)
+target_link_libraries(Unit_Fastem1_SST_Jacobian PRIVATE crtm)
+add_test(NAME test_Unit_Fastem1_SST_Jacobian
+         COMMAND $<TARGET_FILE:Unit_Fastem1_SST_Jacobian>)
+
 # Surface downwelling radiance (RTSolution%Down_Radiance) TL/AD/K correctness:
 # baseline-independent finite-difference, adjoint dot-product, and K-vs-AD checks
 # for a TOA-radiance control plus the surface downwelling output.
