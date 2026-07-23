@@ -676,7 +676,7 @@ CONTAINS
 
     ! Write the Binary file
     WRITE(*,'(/5x,"Writing the output binary datafile...")')
-    err_stat = SpcCoeff_WriteFile( BIN_Filename, spccoeff, Quiet = Quiet )
+    err_stat = SpcCoeff_WriteFile( BIN_Filename, spccoeff, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error writing Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -687,7 +687,7 @@ CONTAINS
     ! Check the write was successful
     WRITE(*,'(/5x,"Test reading the output binary datafile...")')
     ! ...Read the Binary file
-    err_stat = SpcCoeff_ReadFile( BIN_Filename, spccoeff_copy, Quiet = Quiet )
+    err_stat = SpcCoeff_ReadFile( BIN_Filename, spccoeff_copy, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)//' for test'
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )

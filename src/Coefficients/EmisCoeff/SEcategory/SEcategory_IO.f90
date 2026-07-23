@@ -600,7 +600,7 @@ CONTAINS
     END IF
 
     ! Write the Binary file
-    err_stat = SEcategory_WriteFile_IO(cc, BIN_Filename, Quiet = Quiet )
+    err_stat = SEcategory_WriteFile_IO(cc, BIN_Filename, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error writing Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -609,7 +609,7 @@ CONTAINS
 
     ! Check the write was successful
     ! ...Read the Binary file
-    err_stat =  SEcategory_ReadFile_IO(cc_copy, BIN_Filename, Quiet = Quiet)
+    err_stat =  SEcategory_ReadFile_IO(cc_copy, BIN_Filename, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)//' for test'
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -703,7 +703,7 @@ CONTAINS
     err_stat = SUCCESS
 
     ! Read the Binary file
-    err_stat = SEcategory_ReadFile_IO(cc, BIN_Filename, Quiet = Quiet)
+    err_stat = SEcategory_ReadFile_IO(cc, BIN_Filename, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )

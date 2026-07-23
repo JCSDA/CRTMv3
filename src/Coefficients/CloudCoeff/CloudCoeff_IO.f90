@@ -672,7 +672,7 @@ CONTAINS
     END IF
 
     ! Write the Binary file
-    err_stat = CloudCoeff_WriteFile( BIN_Filename, cc, Quiet = Quiet )
+    err_stat = CloudCoeff_WriteFile( BIN_Filename, cc, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error writing Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -681,7 +681,7 @@ CONTAINS
 
     ! Check the write was successful
     ! ...Read the Binary file
-    err_stat = CloudCoeff_ReadFile( BIN_Filename, cc_copy, Quiet = Quiet )
+    err_stat = CloudCoeff_ReadFile( BIN_Filename, cc_copy, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)//' for test'
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -776,7 +776,7 @@ CONTAINS
     err_stat = SUCCESS
 
     ! Read the Binary file
-    err_stat = CloudCoeff_ReadFile( BIN_Filename, cc, Quiet = Quiet )
+    err_stat = CloudCoeff_ReadFile( BIN_Filename, cc, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )

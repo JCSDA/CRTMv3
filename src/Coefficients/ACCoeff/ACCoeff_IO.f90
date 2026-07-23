@@ -622,7 +622,7 @@ CONTAINS
     END IF
 
     ! Write the Binary file
-    err_stat = ACCoeff_WriteFile( BIN_Filename, ACCoeff, Quiet = Quiet )
+    err_stat = ACCoeff_WriteFile( BIN_Filename, ACCoeff, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error writing Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -631,7 +631,7 @@ CONTAINS
 
     ! Check the write was successful
     ! ...Read the Binary file
-    err_stat = ACCoeff_ReadFile( BIN_Filename, ACCoeff_copy, Quiet = Quiet )
+    err_stat = ACCoeff_ReadFile( BIN_Filename, ACCoeff_copy, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)//' for test'
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )

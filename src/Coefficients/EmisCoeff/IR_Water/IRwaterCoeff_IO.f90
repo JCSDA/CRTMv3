@@ -627,7 +627,7 @@ MODULE IRwaterCoeff_IO
     END IF
 
     ! Write the Binary file
-    err_stat = IRwaterCoeff_WriteFile_IO(cc, BIN_Filename, Quiet = Quiet )
+    err_stat = IRwaterCoeff_WriteFile_IO(cc, BIN_Filename, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error writing Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -636,7 +636,7 @@ MODULE IRwaterCoeff_IO
 
     ! Check the write was successful
     ! ...Read the Binary file
-    err_stat =  IRwaterCoeff_ReadFile_IO(cc_copy, BIN_Filename, Quiet = Quiet)
+    err_stat =  IRwaterCoeff_ReadFile_IO(cc_copy, BIN_Filename, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)//' for test'
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -730,7 +730,7 @@ MODULE IRwaterCoeff_IO
     err_stat = SUCCESS
 
     ! Read the netCDF file
-    err_stat = IRwaterCoeff_ReadFile_IO(cc, BIN_Filename, Quiet = Quiet)
+    err_stat = IRwaterCoeff_ReadFile_IO(cc, BIN_Filename, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
