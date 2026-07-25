@@ -1068,7 +1068,10 @@ CONTAINS
     END IF Infrared_Sensor
 
     ! ...Visible
-    Visible_Sensor: IF ( ANY(SpcCoeff_IsVisibleSensor(SC)) ) THEN
+    ! UV sensors share the VIS (Lambertian SEcategory) surface optics, so a
+    ! UV-only sensor list must load the VIS emissivity LUTs too.
+    Visible_Sensor: IF ( ANY(SpcCoeff_IsVisibleSensor(SC)) .OR. &
+                         ANY(SpcCoeff_IsUltravioletSensor(SC)) ) THEN
       ! ...VIS land
       CALL Resolve_Coeff_Format( Default_VISlandCoeff_File, Default_VISlandCoeff_Format, &
                                  Effective_NC_Path, Effective_Bin_Path, &
