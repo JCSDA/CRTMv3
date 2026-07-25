@@ -42,6 +42,20 @@ impact) is in `REL-3.2.0_changes_vs_develop.md`.
   Forward radiances are unchanged.
 - **MW scene-ozone transmittance component** (`GROUP_MW_O3`, Group_Index=7)
   for microwave sensors.
+- **UV scene-NO2 transmittance component** (`GROUP_UV_NO2`, Group_Index=8,
+  issue #340) for UV-VIS air-quality spectrometers (TEMPO, GEMS class). A
+  sixth ODPS component carries scene-variable NO2 absorption: supply an NO2
+  profile in the Atmosphere (HITRAN id 10, ppmv) and NO2-sensitive radiances
+  respond; omit it and the coefficient file's reference climatology applies.
+  Full FWD/TL/AD/K support, verified by a machine-precision predictor-level
+  transpose test and an end-to-end TL/AD/K parity test. Group 1/2/3/7
+  coefficient files never reach the new code.
+- **UV sensors can now run the forward operator** (issue #339). The
+  surface-optics dispatch previously had no UV (Sensor_Type 4) branch, so
+  every UV SpcCoeff (the shipped OMPS family included) failed CRTM_Forward
+  with "Unrecognised sensor type". UV channels now share the VIS Lambertian
+  surface-optics path, and a UV-only sensor list loads the VIS surface
+  emissivity LUTs at CRTM_Init. MW/IR/VIS behavior is unchanged.
 - **CRTM-Exp cloud-optics schema (experimental, opt-in).** A new
   habit-resolved cloud LUT format selected explicitly with
   `Cloud_Model='CRTM-Exp'`; the default cloud path is unchanged.
