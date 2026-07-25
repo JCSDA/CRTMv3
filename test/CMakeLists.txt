@@ -724,6 +724,44 @@ else()
   message(STATUS "test_MW_O3_TLAD not registered (needs mwr_aws coeffs).")
 endif()
 
+# test_ODPS_NO2_Predictor_TLAD: machine-precision TL/AD transpose check of the
+# GROUP_UV_NO2 predictor mapping at the ODPS_Compute_Predictor level (no RT,
+# no coefficient files). Complements test_UV_NO2_TLAD, whose RT-level adjoint
+# dot-product is bounded by solar-RT accumulation roundoff. Always registered.
+add_executable(test_ODPS_NO2_Predictor_TLAD mains/unit/Unit_Test/test_ODPS_NO2_Predictor_TLAD.f90)
+target_link_libraries(test_ODPS_NO2_Predictor_TLAD PRIVATE crtm)
+add_test(NAME test_ODPS_NO2_Predictor_TLAD
+         COMMAND $<TARGET_FILE:test_ODPS_NO2_Predictor_TLAD>)
+
+# test_UV_NO2_TLAD: TL/AD/K parity for the UV/VIS scene-NO2 ODPS component
+# (GROUP_UV_NO2, Group_Index=8), the NO2 analog of test_MW_O3_TLAD. Verifies
+# TL-vs-central-FD for NO2/H2O/T column perturbations on a daytime UV solar
+# scene, the adjoint dot-product over T+H2O+NO2, and K-vs-AD on the most
+# NO2-sensitive channel. Self-adapting per variable: any variable the loaded
+# file cannot see (H2O against a parity-gate file with zero-predictor base
+# components; NO2 against a plain group-2 file) must show identically zero
+# TL. The TEMPO UV coefficients are pre-release: registered only when
+# u.tempo_is40e.{Spc,Tau}Coeff.nc are present (symlinked) in the source
+# testinput directory; nothing outside the repo is referenced.
+set(_TEMPO_SPC "${CMAKE_CURRENT_SOURCE_DIR}/testinput/u.tempo_is40e.SpcCoeff.nc")
+set(_TEMPO_TAU "${CMAKE_CURRENT_SOURCE_DIR}/testinput/u.tempo_is40e.TauCoeff.nc")
+add_executable(test_UV_NO2_TLAD mains/unit/Unit_Test/test_UV_NO2_TLAD.f90)
+target_link_libraries(test_UV_NO2_TLAD PRIVATE crtm)
+if(EXISTS "${_TEMPO_SPC}" AND EXISTS "${_TEMPO_TAU}")
+  execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                   "${_TEMPO_SPC}"
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/u.tempo_is40e.SpcCoeff.nc" )
+  execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                   "${_TEMPO_TAU}"
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/u.tempo_is40e.TauCoeff.nc" )
+  add_test(NAME test_UV_NO2_TLAD
+           COMMAND $<TARGET_FILE:test_UV_NO2_TLAD>)
+else()
+  message(STATUS "test_UV_NO2_TLAD not registered (needs u.tempo_is40e coeffs in testinput).")
+endif()
+unset(_TEMPO_SPC)
+unset(_TEMPO_TAU)
+
 # test_Grazing_SfcOptics: regression test for the catastrophic-reflectivity
 # guard in the MW-water surface optics (CRTM_FastemX and CRTM_PARMIO). Drives
 # both backends directly at grazing zenith angles + 325 GHz (where the reflection

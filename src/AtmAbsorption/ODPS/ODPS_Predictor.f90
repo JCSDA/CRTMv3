@@ -76,6 +76,7 @@ MODULE ODPS_Predictor
   PUBLIC :: GROUP_2
   PUBLIC :: GROUP_3
   PUBLIC :: GROUP_MW_O3
+  PUBLIC :: GROUP_UV_NO2
   PUBLIC :: ALLOW_OPTRAN
 
 
@@ -86,15 +87,18 @@ MODULE ODPS_Predictor
   ! Group 7 is the MW+ozone variant of group 3 (indexes 4 - 6 are Zeeman);
   ! entries 4 - 6 in the dimension tables are placeholders (Zeeman has its
   ! own predictor module and never reaches these tables).
-  INTEGER, PARAMETER  :: N_G = 7
-  INTEGER, PARAMETER  :: N_COMPONENTS_G(N_G)     = (/8,   5, 2, 0, 0, 0, 3/)
-  INTEGER, PARAMETER  :: N_ABSORBERS_G(N_G)      = (/6,   3, 1, 0, 0, 0, 2/)
-  INTEGER, PARAMETER  :: MAX_N_PREDICTORS_G(N_G) = (/18, 15, 14, 0, 0, 0, 14/)
+  ! Group 8 is the UV/VIS variant of group 2 with an added scene-NO2 component
+  ! (components [Dry,WLO,WCO,Ozone,CO2,NO2], absorbers [H2O,O3,CO2,NO2]).
+  INTEGER, PARAMETER  :: N_G = 8
+  INTEGER, PARAMETER  :: N_COMPONENTS_G(N_G)     = (/8,   5, 2, 0, 0, 0, 3, 6/)
+  INTEGER, PARAMETER  :: N_ABSORBERS_G(N_G)      = (/6,   3, 1, 0, 0, 0, 2, 4/)
+  INTEGER, PARAMETER  :: MAX_N_PREDICTORS_G(N_G) = (/18, 15, 14, 0, 0, 0, 14, 15/)
   ! Group index (note, group indexes 4 - 6 are reserved for Zeeman sub-algorithms
   INTEGER, PARAMETER :: GROUP_1 = 1
   INTEGER, PARAMETER :: GROUP_2 = 2
   INTEGER, PARAMETER :: GROUP_3 = 3
   INTEGER, PARAMETER :: GROUP_MW_O3 = 7   ! MW with a scene-ozone component
+  INTEGER, PARAMETER :: GROUP_UV_NO2 = 8  ! UV/VIS with a scene-NO2 component
 
   ! Number of predictors for each component
   INTEGER, PARAMETER :: N_PREDICTORS_G1(8) = (/ &
@@ -125,6 +129,15 @@ MODULE ODPS_Predictor
                     14, &  ! water vapor line and continua
                     11 /)  ! ozone (same formulation as the IR ozone component)
 
+  ! Group 8 = group 2 (IR/VIS) predictor counts plus the NO2 component.
+  INTEGER, PARAMETER :: N_PREDICTORS_G8(6) = (/ &
+                     7, &  ! dry gas
+                    15, &  ! water vapor line only, no continua
+                     7, &  ! water vapor continua only, no line absorption
+                    11, &  ! ozone
+                    10, &  ! CO2
+                     3 /)  ! NO2 (scene component: amount*secant, and its T, T^2 terms)
+
 
   ! Component IDs
   INTEGER,  PARAMETER :: TOT_ComID = 10    ! total tau
@@ -137,6 +150,7 @@ MODULE ODPS_Predictor
   INTEGER,  PARAMETER :: N2O_ComID = 120  ! N2O
   INTEGER,  PARAMETER :: CO_ComID  = 119  ! CO
   INTEGER,  PARAMETER :: CH4_ComID = 118  ! CH4
+  INTEGER,  PARAMETER :: NO2_ComID = 122  ! NO2 (scene component, UV/VIS group 8)
 
   ! Microwave sensors
   INTEGER,  PARAMETER :: EDRY_ComID = 113  ! Effective dry
@@ -156,6 +170,9 @@ MODULE ODPS_Predictor
   INTEGER, PARAMETER :: COMP_DRY_MW = 1
   INTEGER, PARAMETER :: COMP_WET_MW = 2
   INTEGER, PARAMETER :: COMP_OZO_MW = 3   ! GROUP_MW_O3 only
+
+  ! UV/VIS group-8 NO2 component index (6th component of the group-2-based set)
+  INTEGER, PARAMETER :: COMP_NO2_G8 = 6   ! GROUP_UV_NO2 only
 
   ! Component index to component ID mapping
   INTEGER, PARAMETER :: COMPONENT_ID_MAP_G1(8) = (/ &
@@ -184,6 +201,14 @@ MODULE ODPS_Predictor
                                    WET_ComID, &
                                    OZO_ComID /)
 
+  INTEGER, PARAMETER :: COMPONENT_ID_MAP_G8(6) = (/ &
+                                DRY_ComID_G2, &
+                                   WLO_ComID, &
+                                   WCO_ComID, &
+                                   OZO_ComID, &
+                                   CO2_ComID, &
+                                   NO2_ComID /)
+
   ! Absorber IDs (HITRAN)
   INTEGER, PARAMETER ::   H2O_ID =  1
   INTEGER, PARAMETER ::   CO2_ID =  2
@@ -191,6 +216,7 @@ MODULE ODPS_Predictor
   INTEGER, PARAMETER ::   N2O_ID =  4
   INTEGER, PARAMETER ::    CO_ID =  5
   INTEGER, PARAMETER ::   CH4_ID =  6
+  INTEGER, PARAMETER ::   NO2_ID = 10
 
   ! Absorber (Molecule) indexes for accessing absorber profile array
   INTEGER,  PARAMETER :: ABS_H2O_IR = 1
@@ -202,6 +228,10 @@ MODULE ODPS_Predictor
 
   INTEGER,  PARAMETER :: ABS_H2O_MW = 1
   INTEGER,  PARAMETER :: ABS_O3_MW  = 2   ! GROUP_MW_O3 only
+
+  ! UV/VIS group-8 absorber array is [H2O,O3,CO2,NO2]; the first three reuse the
+  ! IR indexes (ABS_H2O_IR/ABS_O3_IR/ABS_CO2_IR = 1/2/3), NO2 is the 4th.
+  INTEGER,  PARAMETER :: ABS_NO2_G8 = 4   ! GROUP_UV_NO2 only
 
   ! Absorber index to absorber ID mapping
   INTEGER,  PARAMETER :: ABSORBER_ID_MAP_G1(6) = (/ &
@@ -223,6 +253,12 @@ MODULE ODPS_Predictor
   INTEGER,  PARAMETER :: ABSORBER_ID_MAP_G7(2) = (/ &
                                            H2O_ID, &
                                            O3_ID /)
+
+  INTEGER,  PARAMETER :: ABSORBER_ID_MAP_G8(4) = (/ &
+                                           H2O_ID, &
+                                            O3_ID, &
+                                           CO2_ID, &
+                                           NO2_ID /)
   ! Literal constants
   REAL(fp), PARAMETER :: ZERO      = 0.0_fp
   REAL(fp), PARAMETER :: ONE       = 1.0_fp
@@ -785,7 +821,7 @@ CONTAINS
     !----------------------------------------------------------------
 
     SELECT CASE( Group_ID )
-      CASE( GROUP_1, GROUP_2 )
+      CASE( GROUP_1, GROUP_2, GROUP_UV_NO2 )
          CALL ODPS_Compute_Predictor_IR()
       CASE( GROUP_3, GROUP_MW_O3 )
          CALL ODPS_Compute_Predictor_MW()
@@ -813,6 +849,8 @@ CONTAINS
       REAL(fp) ::    O3
       REAL(fp) ::    O3_A
       REAL(fp) ::    O3_R
+      REAL(fp) ::    NO2
+      REAL(fp) ::    NO2_A
       REAL(fp) ::    CO
       REAL(fp) ::    CO_A
       REAL(fp) ::    CO_R
@@ -889,6 +927,8 @@ CONTAINS
 
           ! set number of predictors
           Predictor%n_CP = N_PREDICTORS_G1
+        ELSE IF( Group_ID == GROUP_UV_NO2 )THEN
+          Predictor%n_CP = N_PREDICTORS_G8
         ELSE
           Predictor%n_CP = N_PREDICTORS_G2
         END IF
@@ -1028,6 +1068,20 @@ CONTAINS
           Predictor%X(k,14, COMP_N2O_IR)   = CO_A*SECANG(k)*GAzp(k, ABS_CO_IR)
 
         END IF IF_Group1
+
+        !  -----------------------
+        !  NO2 predictors (GROUP_UV_NO2 only). Scene NO2 in the UV/VIS is pure
+        !  Beer-Lambert electronic-cross-section extinction: layer OD = sigma(T)*N,
+        !  exactly linear in amount. A compact set suffices: amount*secant, plus
+        !  DT and DT2 terms for the smooth (~3-12%) sigma(T) temperature dependence.
+        !  -----------------------
+        IF( Group_ID == GROUP_UV_NO2 )THEN
+          NO2   = Absorber(k,ABS_NO2_G8)/Ref_Absorber(k, ABS_NO2_G8)
+          NO2_A = SECANG(k)*NO2
+          Predictor%X(k, 1, COMP_NO2_G8) = NO2_A
+          Predictor%X(k, 2, COMP_NO2_G8) = NO2_A*DT
+          Predictor%X(k, 3, COMP_NO2_G8) = NO2_A*DT2
+        END IF
 
       END DO Layer_Loop
 
@@ -1322,7 +1376,7 @@ CONTAINS
     !----------------------------------------------------------------
 
     SELECT CASE( Group_ID )
-      CASE( GROUP_1, GROUP_2 )
+      CASE( GROUP_1, GROUP_2, GROUP_UV_NO2 )
          CALL ODPS_Compute_Predictor_IR_TL()
       CASE( GROUP_3, GROUP_MW_O3 )
          CALL ODPS_Compute_Predictor_MW_TL()
@@ -1352,6 +1406,8 @@ CONTAINS
       REAL(fp) ::    O3,           O3_TL
       REAL(fp) ::    O3_A,         O3_A_TL
       REAL(fp) ::    O3_R,         O3_R_TL
+      REAL(fp) ::    NO2,          NO2_TL
+      REAL(fp) ::    NO2_A,        NO2_A_TL
       REAL(fp) ::    CO,           CO_TL
       REAL(fp) ::    CO_A,         CO_A_TL
       REAL(fp) ::    CO_R,         CO_R_TL
@@ -1482,6 +1538,8 @@ CONTAINS
 
           ! set number of predictors
           Predictor_TL%n_CP = N_PREDICTORS_G1
+        ELSE IF( Group_ID == GROUP_UV_NO2 )THEN
+          Predictor_TL%n_CP = N_PREDICTORS_G8
         ELSE
           Predictor_TL%n_CP = N_PREDICTORS_G2
         END IF
@@ -1630,6 +1688,19 @@ CONTAINS
                                                 CO_A*SECANG(k)*GAzp_TL(k, ABS_CO_IR)
 
         END IF IF_Group1
+
+        !  -----------------------
+        !  NO2 predictors TL (GROUP_UV_NO2 only)
+        !  -----------------------
+        IF( Group_ID == GROUP_UV_NO2 )THEN
+          NO2      = Absorber(k,ABS_NO2_G8)/Ref_Absorber(k, ABS_NO2_G8)
+          NO2_TL   = Absorber_TL(k,ABS_NO2_G8)/Ref_Absorber(k, ABS_NO2_G8)
+          NO2_A    = SECANG(k)*NO2
+          NO2_A_TL = SECANG(k)*NO2_TL
+          Predictor_TL%X(k, 1, COMP_NO2_G8) = NO2_A_TL
+          Predictor_TL%X(k, 2, COMP_NO2_G8) = NO2_A_TL*DT + NO2_A*DT_TL
+          Predictor_TL%X(k, 3, COMP_NO2_G8) = NO2_A_TL*DT2 + NO2_A*DT2_TL
+        END IF
 
       END DO Layer_Loop
 
@@ -1940,7 +2011,7 @@ CONTAINS
     !----------------------------------------------------------------
 
     SELECT CASE( Group_ID )
-      CASE( GROUP_1, GROUP_2 )
+      CASE( GROUP_1, GROUP_2, GROUP_UV_NO2 )
          CALL ODPS_Compute_Predictor_IR_AD()
       CASE( GROUP_3, GROUP_MW_O3 )
          CALL ODPS_Compute_Predictor_MW_AD()
@@ -1996,6 +2067,8 @@ CONTAINS
       REAL(fp) :: O3,            O3_AD
       REAL(fp) :: O3_A,          O3_A_AD
       REAL(fp) :: O3_R,          O3_R_AD
+      REAL(fp) :: NO2,           NO2_AD
+      REAL(fp) :: NO2_A,         NO2_A_AD
       REAL(fp) :: CO,            CO_AD
       REAL(fp) :: CO_A,          CO_A_AD
       REAL(fp) :: CO_R,          CO_R_AD
@@ -2024,6 +2097,8 @@ CONTAINS
       O3_AD          = ZERO
       O3_A_AD        = ZERO
       O3_R_AD        = ZERO
+      NO2_AD         = ZERO
+      NO2_A_AD       = ZERO
       CO_AD          = ZERO
       CO_A_AD        = ZERO
       CO_R_AD        = ZERO
@@ -2140,6 +2215,31 @@ CONTAINS
         Predictor_AD%X(k, 5, COMP_WCO_IR) = ZERO
         Predictor_AD%X(k, 6, COMP_WCO_IR) = ZERO
         Predictor_AD%X(k, 7, COMP_WCO_IR) = ZERO
+
+        !  -----------------------
+        !  NO2 predictors AD (GROUP_UV_NO2 only); adjoint of the compact set
+        !  X1=NO2_A, X2=NO2_A*DT, X3=NO2_A*DT2, NO2_A=secang*NO2, NO2=Abs/Ref.
+        !  -----------------------
+        IF( Group_ID == GROUP_UV_NO2 )THEN
+          NO2   = Absorber(k,ABS_NO2_G8)/Ref_Absorber(k, ABS_NO2_G8)
+          NO2_A = SECANG(k)*NO2
+
+          NO2_A_AD = NO2_A_AD                                       &
+                     + Predictor_AD%X(k, 1, COMP_NO2_G8)            &
+                     + Predictor_AD%X(k, 2, COMP_NO2_G8)*DT         &
+                     + Predictor_AD%X(k, 3, COMP_NO2_G8)*DT2
+          DT_AD    = DT_AD  + Predictor_AD%X(k, 2, COMP_NO2_G8)*NO2_A
+          DT2_AD   = DT2_AD + Predictor_AD%X(k, 3, COMP_NO2_G8)*NO2_A
+          Predictor_AD%X(k, 1, COMP_NO2_G8) = ZERO
+          Predictor_AD%X(k, 2, COMP_NO2_G8) = ZERO
+          Predictor_AD%X(k, 3, COMP_NO2_G8) = ZERO
+
+          NO2_AD   = NO2_AD + NO2_A_AD*SECANG(k)
+          NO2_A_AD = ZERO
+          Absorber_AD(k,ABS_NO2_G8) = Absorber_AD(k,ABS_NO2_G8)     &
+                                    + NO2_AD/Ref_Absorber(k, ABS_NO2_G8)
+          NO2_AD   = ZERO
+        END IF
 
         !  -----------------------
         !  Ozone predictors
@@ -3412,6 +3512,8 @@ CONTAINS
          Component_ID = COMPONENT_ID_MAP_G3(Component_Index)
       CASE( GROUP_MW_O3 )
          Component_ID = COMPONENT_ID_MAP_G7(Component_Index)
+      CASE( GROUP_UV_NO2 )
+         Component_ID = COMPONENT_ID_MAP_G8(Component_Index)
       CASE DEFAULT
          Component_ID = HUGE(Component_ID)  ! Entry not found: Hopefully induce code to fail 
     END SELECT
@@ -3431,6 +3533,8 @@ CONTAINS
           Absorber_ID = ABSORBER_ID_MAP_G3(Absorber_Index)
       CASE( GROUP_MW_O3 )
           Absorber_ID = ABSORBER_ID_MAP_G7(Absorber_Index)
+      CASE( GROUP_UV_NO2 )
+          Absorber_ID = ABSORBER_ID_MAP_G8(Absorber_Index)
       CASE DEFAULT
           Absorber_ID = HUGE(Absorber_ID)  ! Entry not found: Hopefully induce code to fail 
       END SELECT
@@ -3441,7 +3545,7 @@ CONTAINS
     INTEGER, INTENT(IN) :: Group_Index
     INTEGER :: Ozone_Component_ID
     IF( Group_Index == GROUP_1 .OR. Group_Index == GROUP_2 .OR. &
-        Group_Index == GROUP_MW_O3 )THEN
+        Group_Index == GROUP_MW_O3 .OR. Group_Index == GROUP_UV_NO2 )THEN
       Ozone_Component_ID = OZO_ComID
     ELSE
       Ozone_Component_ID = -1

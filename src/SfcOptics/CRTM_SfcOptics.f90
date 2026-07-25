@@ -969,7 +969,9 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) ) THEN
+      ! UV sensors use the same Lambertian (SEcategory) surface optics as VIS
+      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) .OR. &
+                SpcCoeff_IsUltravioletSensor( SC(SensorIndex) ) ) THEN
 
         mth_Azi_Test: IF( SfcOptics%mth_Azi == 0 ) THEN
 
@@ -1740,7 +1742,9 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) ) THEN
+      ! UV sensors use the same Lambertian (SEcategory) surface optics as VIS
+      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) .OR. &
+                SpcCoeff_IsUltravioletSensor( SC(SensorIndex) ) ) THEN
 
 
         ! -------------------
@@ -2430,7 +2434,9 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) ) THEN
+      ! UV sensors use the same Lambertian (SEcategory) surface optics as VIS
+      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) .OR. &
+                SpcCoeff_IsUltravioletSensor( SC(SensorIndex) ) ) THEN
 
 
         ! -------------------
