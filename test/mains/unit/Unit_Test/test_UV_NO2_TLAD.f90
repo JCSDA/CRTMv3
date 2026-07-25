@@ -76,7 +76,7 @@ PROGRAM test_UV_NO2_TLAD
   LOGICAL :: no2_active           ! loaded file responds to scene NO2
   LOGICAL :: ok_fd_no2, ok_fd_h2o, ok_fd_t, ok_adj, ok_adj_no2, ok_k
 
-  REAL(fp) :: no2_clim(N_LAYERS)  ! UARS NO2 climatology, ppmv, 100-layer grid
+  REAL(fp) :: no2_clim(N_LAYERS)  ! daytime NO2 reference, ppmv, 100-layer grid
 
   TYPE(CRTM_ChannelInfo_type) :: ChannelInfo(1)
   TYPE(CRTM_Geometry_type)    :: Geometry(N_PROFILES)
@@ -476,31 +476,33 @@ CONTAINS
     END IF
   END SUBROUTINE check_k
 
-  ! UARS NO2 climatology (Kerr/Louisnard, NO2_vmr_UARS.txt) log-P interpolated
-  ! onto the ECMWF84 100-layer grid; ppmv. Same profile family as the
-  ! Ref_Absorber written into the group-8 TauCoeff.
+  ! Daytime NO2 reference (GEOS-CF mean over the TEMPO O-B validation domain)
+  ! on the ECMWF84 100-layer grid; ppmv. This is the same profile family as
+  ! the group-8 TauCoeff Ref_Absorber, so the test column sits mid-envelope:
+  ! the file's Min/Max_Absorber clamp is non-differentiable and a profile at
+  ! the envelope boundary breaks the TL-vs-FD ladder by construction.
   SUBROUTINE Set_NO2_Climatology()
     no2_clim = (/ &
-      3.793332e-06_fp, 2.282579e-05_fp, 7.604145e-05_fp, 2.653026e-04_fp, 1.458149e-03_fp,  &
-      2.313445e-03_fp, 2.860727e-03_fp, 3.223867e-03_fp, 3.684018e-03_fp, 4.757346e-03_fp,  &
-      5.907983e-03_fp, 7.026512e-03_fp, 6.319363e-03_fp, 3.891646e-03_fp, 2.760278e-03_fp,  &
-      1.903978e-03_fp, 1.352134e-03_fp, 1.132655e-03_fp, 1.005111e-03_fp, 9.050189e-04_fp,  &
-      7.515740e-04_fp, 6.018733e-04_fp, 5.057622e-04_fp, 4.186505e-04_fp, 3.793749e-04_fp,  &
-      3.669254e-04_fp, 3.555738e-04_fp, 3.496207e-04_fp, 3.438747e-04_fp, 3.385942e-04_fp,  &
-      3.340939e-04_fp, 3.297371e-04_fp, 3.252582e-04_fp, 3.197292e-04_fp, 3.143633e-04_fp,  &
-      3.091517e-04_fp, 3.061413e-04_fp, 3.041805e-04_fp, 3.022723e-04_fp, 3.004143e-04_fp,  &
-      3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp,  &
-      3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp,  &
-      3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp,  &
-      3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp,  &
-      3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp,  &
-      3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp,  &
-      3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp,  &
-      3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp,  &
-      3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp,  &
-      3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp,  &
-      3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp,  &
-      3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp, 3.000000e-04_fp /)
+      7.019022e-09_fp, 9.475711e-09_fp, 6.922833e-08_fp, 5.354402e-07_fp, 2.481293e-06_fp,  &
+      8.153599e-06_fp, 2.185519e-05_fp, 5.164744e-05_fp, 1.178604e-04_fp, 2.551657e-04_fp,  &
+      5.161727e-04_fp, 9.991564e-04_fp, 1.839313e-03_fp, 2.953800e-03_fp, 4.047471e-03_fp,  &
+      4.924563e-03_fp, 5.398932e-03_fp, 5.551236e-03_fp, 5.462271e-03_fp, 5.151474e-03_fp,  &
+      4.615022e-03_fp, 4.000497e-03_fp, 3.426450e-03_fp, 2.866598e-03_fp, 2.270770e-03_fp,  &
+      1.883071e-03_fp, 1.616375e-03_fp, 1.534265e-03_fp, 1.441712e-03_fp, 1.342972e-03_fp,  &
+      1.174026e-03_fp, 1.006428e-03_fp, 8.623019e-04_fp, 7.306015e-04_fp, 6.184407e-04_fp,  &
+      4.961050e-04_fp, 3.598377e-04_fp, 2.714093e-04_fp, 2.404335e-04_fp, 2.145286e-04_fp,  &
+      1.967208e-04_fp, 1.784723e-04_fp, 1.568922e-04_fp, 1.358346e-04_fp, 1.082782e-04_fp,  &
+      8.063631e-05_fp, 5.949495e-05_fp, 4.488859e-05_fp, 3.060448e-05_fp, 2.444995e-05_fp,  &
+      1.899578e-05_fp, 1.452061e-05_fp, 1.313692e-05_fp, 1.178142e-05_fp, 1.138935e-05_fp,  &
+      1.277731e-05_fp, 1.413816e-05_fp, 1.577888e-05_fp, 1.818921e-05_fp, 2.055447e-05_fp,  &
+      2.287432e-05_fp, 2.285868e-05_fp, 2.284186e-05_fp, 2.282535e-05_fp, 2.269303e-05_fp,  &
+      2.247449e-05_fp, 2.225972e-05_fp, 2.208659e-05_fp, 2.194654e-05_fp, 2.184646e-05_fp,  &
+      2.192552e-05_fp, 2.200356e-05_fp, 2.202075e-05_fp, 2.203063e-05_fp, 2.206344e-05_fp,  &
+      2.210567e-05_fp, 2.228723e-05_fp, 2.251860e-05_fp, 2.303798e-05_fp, 2.363930e-05_fp,  &
+      2.498871e-05_fp, 2.630772e-05_fp, 2.630885e-05_fp, 2.561118e-05_fp, 2.342883e-05_fp,  &
+      2.000029e-05_fp, 1.652792e-05_fp, 1.373170e-05_fp, 1.182672e-05_fp, 1.070237e-05_fp,  &
+      1.041749e-05_fp, 1.086241e-05_fp, 1.220802e-05_fp, 1.701331e-05_fp, 2.478315e-05_fp,  &
+      3.423267e-05_fp, 4.403548e-05_fp, 4.735015e-05_fp, 4.735015e-05_fp, 4.735015e-05_fp /)
   END SUBROUTINE Set_NO2_Climatology
 
   INCLUDE 'Load_ECMWF84_Atm_Data.inc'
