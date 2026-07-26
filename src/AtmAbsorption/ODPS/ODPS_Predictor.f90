@@ -735,6 +735,17 @@ CONTAINS
     REAL(fp) ::    GATzp_ref(SIZE(Absorber, DIM=2))
     REAL(fp) ::    GATzp_sum (SIZE(Absorber, DIM=2))
     REAL(fp) ::    GATzp(SIZE(Absorber, DIM=1), SIZE(Absorber, DIM=2))
+    ! Kernel dispatch bookkeeping and shared per-layer variables
+    INTEGER  :: ic, np
+    INTEGER  :: ja_h2o, ja_o3, ja_co2, ja_n2o, ja_co, ja_ch4, ja_no2
+    LOGICAL  :: has_trace
+    REAL(fp) :: DT, T, T2, DT2
+    REAL(fp) :: H2O, H2O_A, H2O_R, H2O_S, H2O_R4, H2OdH2OTzp
+    REAL(fp) :: CO2, O3, O3_A, O3_R
+    REAL(fp) :: NO2, NO2_A
+    REAL(fp) :: CO, CO_A, CO_R, CO_S, CO_ACOdCOzp
+    REAL(fp) :: N2O, N2O_A, N2O_R, N2O_S
+    REAL(fp) :: CH4, CH4_A, CH4_R, CH4_ACH4zp
 
     n_Layers = Predictor%n_Layers
 
@@ -810,70 +821,43 @@ CONTAINS
     END DO Layer_Loop
 
     !----------------------------------------------------------------
-    ! Call the group specific routine for remaining computation; all
-    ! variables defined above are passed to the called routine
+    ! Per-component predictor computation. The registry supplies the
+    ! roster; kernels are dispatched per component ID within the basis
+    ! layer loop. Forward X assignments are independent of one another,
+    ! so kernel order does not affect results.
     !----------------------------------------------------------------
 
-    SELECT CASE( Group_ID )
-      CASE( GROUP_1, GROUP_2, GROUP_UV_NO2 )
-         CALL ODPS_Compute_Predictor_IR()
-      CASE( GROUP_3, GROUP_MW_O3 )
-         CALL ODPS_Compute_Predictor_MW()
-    END SELECT
+    ! Number of predictors per component, from the registry roster
+    Predictor%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
 
-CONTAINS
+    ! Resolve each gas's position in this group's absorber roster
+    ! (0 when the gas is not carried; its kernel is then never dispatched)
+    ja_h2o = Absorber_Position(H2O_ID)
+    ja_o3  = Absorber_Position(O3_ID)
+    ja_co2 = Absorber_Position(CO2_ID)
+    ja_n2o = Absorber_Position(N2O_ID)
+    ja_co  = Absorber_Position(CO_ID)
+    ja_ch4 = Absorber_Position(CH4_ID)
+    ja_no2 = Absorber_Position(NO2_ID)
+    has_trace = ( ja_co > 0 )   ! CO/CH4/N2O travel together (group 1)
 
-    SUBROUTINE ODPS_Compute_Predictor_IR()
+    ! Silence gfortran complaints about maybe-used-uninit by init to HUGE()
+    N2O_S       = HUGE(N2O_S)
+    N2O_R       = HUGE(N2O_R)
+    N2O_A       = HUGE(N2O_A)
+    N2O         = HUGE(N2O)
+    CO_S        = HUGE(CO_S)
+    CO_R        = HUGE(CO_R)
+    CO_ACOdCOzp = HUGE(CO_ACOdCOzp)
+    CO_A        = HUGE(CO_A)
+    CH4_R       = HUGE(CH4_R)
+    CH4_ACH4zp  = HUGE(CH4_ACH4zp)
+    CH4_A       = HUGE(CH4_A)
+    CH4         = HUGE(CH4)
 
-      ! ---------------
-      ! Local variables
-      ! ---------------
-      INTEGER    ::    k ! n_Layers, n_Levels
-      REAL(fp) ::    DT
-      REAL(fp) ::    T
-      REAL(fp) ::    T2
-      REAL(fp) ::    DT2
-      REAL(fp) ::    H2O
-      REAL(fp) ::    H2O_A
-      REAL(fp) ::    H2O_R
-      REAL(fp) ::    H2O_S
-      REAL(fp) ::    H2O_R4
-      REAL(fp) ::    H2OdH2OTzp
-      REAL(fp) ::    CO2
-      REAL(fp) ::    O3
-      REAL(fp) ::    O3_A
-      REAL(fp) ::    O3_R
-      REAL(fp) ::    NO2
-      REAL(fp) ::    NO2_A
-      REAL(fp) ::    CO
-      REAL(fp) ::    CO_A
-      REAL(fp) ::    CO_R
-      REAL(fp) ::    CO_S
-      REAL(fp) ::    CO_ACOdCOzp
-      REAL(fp) ::    N2O
-      REAL(fp) ::    N2O_A
-      REAL(fp) ::    N2O_R
-      REAL(fp) ::    N2O_S
-      REAL(fp) ::    CH4
-      REAL(fp) ::    CH4_A
-      REAL(fp) ::    CH4_R
-      REAL(fp) ::    CH4_ACH4zp
+    Basis_Select: IF ( GROUP_REGISTRY(Group_ID)%Basis == BASIS_IR ) THEN
 
-      ! Silence gfortran complaints about maybe-used-uninit by init to HUGE()
-      N2O_S       = HUGE(N2O_S)
-      N2O_R       = HUGE(N2O_R)
-      N2O_A       = HUGE(N2O_A)
-      N2O         = HUGE(N2O)
-      CO_S        = HUGE(CO_S)
-      CO_R        = HUGE(CO_R)
-      CO_ACOdCOzp = HUGE(CO_ACOdCOzp)
-      CO_A        = HUGE(CO_A)
-      CH4_R       = HUGE(CH4_R)
-      CH4_ACH4zp  = HUGE(CH4_ACH4zp)
-      CH4_A       = HUGE(CH4_A)
-      CH4         = HUGE(CH4)
-
-      Layer_Loop : DO k = 1, n_Layers
+      IR_Layer_Loop : DO k = 1, n_Layers
 
         !------------------------------------------
         !  Relative Temperature
@@ -884,9 +868,9 @@ CONTAINS
         !-------------------------------------------
         !  Abosrber amount scalled by the reference
         !-------------------------------------------
-        H2O = Absorber(k,ABS_H2O_IR)/Ref_Absorber(k, ABS_H2O_IR)
-        O3  = Absorber(k,ABS_O3_IR)/Ref_absorber(k,ABS_O3_IR)
-        CO2 = Absorber(k,ABS_CO2_IR)/Ref_absorber(k,ABS_CO2_IR)
+        H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+        O3  = Absorber(k,ja_o3)/Ref_absorber(k,ja_o3)
+        CO2 = Absorber(k,ja_co2)/Ref_absorber(k,ja_co2)
 
         ! Combinations of variables common to all predictor groups
         T2   = T*T
@@ -896,15 +880,15 @@ CONTAINS
         H2O_R  = SQRT( H2O_A )
         H2O_S  = H2O_A*H2O_A
         H2O_R4 = SQRT( H2O_R )
-        H2OdH2OTzp = H2O/GATzp(k, ABS_H2O_IR)
+        H2OdH2OTzp = H2O/GATzp(k, ja_h2o)
 
         O3_A = SECANG(k)*O3
         O3_R = SQRT( O3_A )
 
-        IF( Group_ID == GROUP_1 )THEN
-          CO  = Absorber(k,ABS_CO_IR)/Ref_absorber(k, ABS_CO_IR)
-          N2O = Absorber(k,ABS_N2O_IR)/Ref_absorber(k,ABS_N2O_IR)
-          CH4 = Absorber(k,ABS_CH4_IR)/Ref_absorber(k,ABS_CH4_IR)
+        IF( has_trace )THEN
+          CO  = Absorber(k,ja_co)/Ref_absorber(k, ja_co)
+          N2O = Absorber(k,ja_n2o)/Ref_absorber(k,ja_n2o)
+          CH4 = Absorber(k,ja_ch4)/Ref_absorber(k,ja_ch4)
 
           N2O_A = SECANG(k)*N2O
           N2O_R = SQRT( N2O_A )
@@ -913,195 +897,42 @@ CONTAINS
           CO_A = SECANG(k)*CO
           CO_R = SQRT( CO_A )
           CO_S = CO_A*CO_A
-          CO_ACOdCOzp = CO_A*CO/GAzp(k, ABS_CO_IR)
+          CO_ACOdCOzp = CO_A*CO/GAzp(k, ja_co)
 
           CH4_A = SECANG(k)*CH4
           CH4_R = SQRT(CH4_A)
-          CH4_ACH4zp = SECANG(k)*GAzp(k, ABS_CH4_IR)
-
-          ! set number of predictors
-          Predictor%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
-        ELSE IF( Group_ID == GROUP_UV_NO2 )THEN
-          Predictor%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
-        ELSE
-          Predictor%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
+          CH4_ACH4zp = SECANG(k)*GAzp(k, ja_ch4)
         END IF
 
-       !#-------------------------------------------------------------------#
-       !#        -- Predictors --                                           #
-       !#-------------------------------------------------------------------#
+        IR_Component_Loop : DO ic = 1, GROUP_REGISTRY(Group_ID)%n_Components
+          np = Predictor%n_CP(ic)
+          SELECT CASE ( GROUP_REGISTRY(Group_ID)%Component_ID(ic) )
+            CASE ( DRY_ComID_G1, DRY_ComID_G2 )
+              CALL FWD_Kernel_DRY(k, ic)
+            CASE ( WLO_ComID )
+              CALL FWD_Kernel_WLO(k, ic, np)
+            CASE ( WCO_ComID )
+              CALL FWD_Kernel_WCO(k, ic)
+            CASE ( OZO_ComID )
+              CALL FWD_Kernel_OZO(k, ic)
+            CASE ( CO2_ComID )
+              CALL FWD_Kernel_CO2(k, ic, np)
+            CASE ( N2O_ComID )
+              CALL FWD_Kernel_N2O(k, ic)
+            CASE ( CO_ComID )
+              CALL FWD_Kernel_CO(k, ic)
+            CASE ( CH4_ComID )
+              CALL FWD_Kernel_CH4(k, ic)
+            CASE ( NO2_ComID )
+              CALL FWD_Kernel_NO2(k, ic)
+          END SELECT
+        END DO IR_Component_Loop
 
-        !  ----------------------
-        !   Fixed (Dry) predictors
-        !  ----------------------
-        Predictor%X(k, 1, COMP_DRY_IR)  = SECANG(k)
-        Predictor%X(k, 2, COMP_DRY_IR)  = SECANG(k) * T
-        Predictor%X(k, 3, COMP_DRY_IR)  = SECANG(k) * T2
-        Predictor%X(k, 4, COMP_DRY_IR)  = T
-        Predictor%X(k, 5, COMP_DRY_IR)  = SECANG(k) * SECANG(k)
-        Predictor%X(k, 6, COMP_DRY_IR)  = T2
-        Predictor%X(k, 7, COMP_DRY_IR)  = Tz(k)
+      END DO IR_Layer_Loop
 
-       !  --------------------------
-       !  Water vapor continuum predictors
-       !  --------------------------
-        Predictor%X(k, 1, COMP_WCO_IR) = H2O_A/T
-        Predictor%X(k, 2, COMP_WCO_IR) = H2O_A/T * H2O
-        Predictor%X(k, 3, COMP_WCO_IR) = H2O_A/T2 * H2O/T2
-        Predictor%X(k, 4, COMP_WCO_IR) = H2O_A/T2
-        Predictor%X(k, 5, COMP_WCO_IR) = H2O_A/T2 * H2O
-        Predictor%X(k, 6, COMP_WCO_IR) = H2O_A/T2**2
-        Predictor%X(k, 7, COMP_WCO_IR) = H2O_A
+    ELSE Basis_Select   ! BASIS_MW
 
-        !  -----------------------
-        !  Ozone predictors
-        !  -----------------------
-        Predictor%X(k, 1, COMP_OZO_IR)  = O3_A
-        Predictor%X(k, 2, COMP_OZO_IR)  = O3_A*DT
-        Predictor%X(k, 3, COMP_OZO_IR)  = O3_A*O3*GAzp(k,ABS_O3_IR)
-        Predictor%X(k, 4, COMP_OZO_IR)  = O3_A*O3_A
-        Predictor%X(k, 5, COMP_OZO_IR)  = O3_A*GAzp(k,ABS_O3_IR)
-        Predictor%X(k, 6, COMP_OZO_IR)  = O3_A*SQRT(SECANG(k)*GAzp(k,ABS_O3_IR))
-        Predictor%X(k, 7, COMP_OZO_IR)  = O3_R*DT   !T*T*T
-        Predictor%X(k, 8, COMP_OZO_IR)  = O3_R
-        Predictor%X(k, 9, COMP_OZO_IR)  = O3_R*O3/GAzp(k,ABS_O3_IR)
-        Predictor%X(k,10, COMP_OZO_IR)  = SECANG(k)*GAzp(k,ABS_O3_IR)
-        Predictor%X(k,11, COMP_OZO_IR)  = (SECANG(k)*GAzp(k,ABS_O3_IR))**2
-
-!        Predictor%X(k, 12, COMP_OZO_IR)  = H2O_A
-!        Predictor%X(k, 13, COMP_OZO_IR)  = SECANG(k)*GAzp(k,ABS_H2O_IR)
-
-        !  -----------------------
-        !  Carbon dioxide predictors
-        !  -----------------------
-        Predictor%X(k, 1, COMP_CO2_IR)  = SECANG(k) * T
-        Predictor%X(k, 2, COMP_CO2_IR)  = SECANG(k) * T2
-        Predictor%X(k, 3, COMP_CO2_IR)  = T
-        Predictor%X(k, 4, COMP_CO2_IR)  = T2
-        Predictor%X(k, 5, COMP_CO2_IR)  = SECANG(k)
-        Predictor%X(k, 6, COMP_CO2_IR)  = SECANG(k)*CO2
-        Predictor%X(k, 7, COMP_CO2_IR)  = SECANG(k) * Tzp(k)
-        Predictor%X(k, 8, COMP_CO2_IR)  = (SECANG(k) * GAzp(k, ABS_CO2_IR))**2
-        Predictor%X(k, 9, COMP_CO2_IR)  = Tzp(k)**3
-        Predictor%X(k, 10, COMP_CO2_IR) = SECANG(k) * Tzp(k) * SQRT(T)
-
-        !  --------------------------
-        !  Water-line predictors
-        !  --------------------------
-        Predictor%X(k, 1, COMP_WLO_IR) = H2O_A
-        Predictor%X(k, 2, COMP_WLO_IR) = H2O_A*DT
-        Predictor%X(k, 3, COMP_WLO_IR) = H2O_S
-        Predictor%X(k, 4, COMP_WLO_IR) = H2O_A*DT2
-        Predictor%X(k, 5, COMP_WLO_IR) = H2O_R4
-        Predictor%X(k, 6, COMP_WLO_IR) = H2O_S*H2O_A
-        Predictor%X(k, 7, COMP_WLO_IR) = H2O_R
-        Predictor%X(k, 8, COMP_WLO_IR) = H2O_R*DT
-        Predictor%X(k, 9, COMP_WLO_IR) = H2O_S*H2O_S
-        Predictor%X(k,10, COMP_WLO_IR) = H2OdH2OTzp
-        Predictor%X(k,11, COMP_WLO_IR) = H2O_R*H2OdH2OTzp
-        Predictor%X(k,12, COMP_WLO_IR) = (SECANG(k)*GAzp(k,ABS_H2O_IR))**2
-        Predictor%X(k,13, COMP_WLO_IR) = SECANG(k)*GAzp(k,ABS_H2O_IR)
-        Predictor%X(k,14, COMP_WLO_IR) = SECANG(k)
-        Predictor%X(k,15, COMP_WLO_IR) = SECANG(k) * CO2
-
-        ! Addtional predictors for group 1
-        IF_Group1: IF( Group_ID == GROUP_1 )THEN
-
-          Predictor%X(k, 11, COMP_CO2_IR)  = CO_A
-
-          Predictor%X(k, 16, COMP_WLO_IR) = CH4_A
-          Predictor%X(k, 17, COMP_WLO_IR) = CH4_A*CH4_A*DT
-          Predictor%X(k, 18, COMP_WLO_IR) = CO_A
-
-          !  -----------------------
-          !  Carbon monoxide
-          !  -----------------------
-          Predictor%X(k, 1,  COMP_CO_IR)   = CO_A
-          Predictor%X(k, 2,  COMP_CO_IR)   = CO_A*DT
-          Predictor%X(k, 3,  COMP_CO_IR)   = SQRT( CO_R )
-          Predictor%X(k, 4,  COMP_CO_IR)   = CO_R*DT
-          Predictor%X(k, 5,  COMP_CO_IR)   = CO_S
-          Predictor%X(k, 6,  COMP_CO_IR)   = CO_R
-          Predictor%X(k, 7,  COMP_CO_IR)   = CO_A*DT2
-          Predictor%X(k, 8,  COMP_CO_IR)   = CO_ACOdCOzp
-          Predictor%X(k, 9,  COMP_CO_IR)   = CO_ACOdCOzp/CO_R
-          Predictor%X(k, 10, COMP_CO_IR)   = CO_ACOdCOzp * SQRT( GAzp(k, ABS_CO_IR) )
-
-          !  -----------------------
-          !  Methane predictors
-          !  -----------------------
-          Predictor%X(k, 1,  COMP_CH4_IR)  = CH4_A*DT
-          Predictor%X(k, 2,  COMP_CH4_IR)  = CH4_R
-          Predictor%X(k, 3,  COMP_CH4_IR)  = CH4_A*CH4_A
-          Predictor%X(k, 4,  COMP_CH4_IR)  = CH4_A
-          Predictor%X(k, 5,  COMP_CH4_IR)  = CH4*DT
-          Predictor%X(k, 6,  COMP_CH4_IR)  = CH4_ACH4zp
-          Predictor%X(k, 7,  COMP_CH4_IR)  = CH4_ACH4zp**2
-          Predictor%X(k, 8,  COMP_CH4_IR)  = SQRT(CH4_R)
-          Predictor%X(k, 9,  COMP_CH4_IR)  = GATzp(k, ABS_CH4_IR)
-          Predictor%X(k, 10, COMP_CH4_IR)  = SECANG(k)*GATzp(k, ABS_CH4_IR)
-          Predictor%X(k, 11, COMP_CH4_IR)  = CH4_R * CH4/GAzp(k, ABS_CH4_IR)
-
-          !  -----------------------
-          !    N2O predictors
-          !  -----------------------
-          Predictor%X(k, 1, COMP_N2O_IR)   = N2O_A*DT
-          Predictor%X(k, 2, COMP_N2O_IR)   = N2O_R
-          Predictor%X(k, 3, COMP_N2O_IR)   = N2O*DT
-          Predictor%X(k, 4, COMP_N2O_IR)   = N2O_A**POINT_25
-          Predictor%X(k, 5, COMP_N2O_IR)   = N2O_A
-          Predictor%X(k, 6, COMP_N2O_IR)   = SECANG(k) * GAzp(k, ABS_N2O_IR)
-          Predictor%X(k, 7, COMP_N2O_IR)   = SECANG(k) * GATzp(k, ABS_N2O_IR)
-          Predictor%X(k, 8, COMP_N2O_IR)   = N2O_S
-          Predictor%X(k, 9, COMP_N2O_IR)   = GATzp(k, ABS_N2O_IR)
-          Predictor%X(k,10, COMP_N2O_IR)   = N2O_R*N2O / GAzp(k, ABS_N2O_IR)
-
-          Predictor%X(k,11, COMP_N2O_IR)   = CH4_A
-          Predictor%X(k,12, COMP_N2O_IR)   = CH4_A*GAzp(k, ABS_CH4_IR)
-          Predictor%X(k,13, COMP_N2O_IR)   = CO_A
-          Predictor%X(k,14, COMP_N2O_IR)   = CO_A*SECANG(k)*GAzp(k, ABS_CO_IR)
-
-        END IF IF_Group1
-
-        !  -----------------------
-        !  NO2 predictors (GROUP_UV_NO2 only). Scene NO2 in the UV/VIS is pure
-        !  Beer-Lambert electronic-cross-section extinction: layer OD = sigma(T)*N,
-        !  exactly linear in amount. A compact set suffices: amount*secant, plus
-        !  DT and DT2 terms for the smooth (~3-12%) sigma(T) temperature dependence.
-        !  -----------------------
-        IF( Group_ID == GROUP_UV_NO2 )THEN
-          NO2   = Absorber(k,ABS_NO2_G8)/Ref_Absorber(k, ABS_NO2_G8)
-          NO2_A = SECANG(k)*NO2
-          Predictor%X(k, 1, COMP_NO2_G8) = NO2_A
-          Predictor%X(k, 2, COMP_NO2_G8) = NO2_A*DT
-          Predictor%X(k, 3, COMP_NO2_G8) = NO2_A*DT2
-        END IF
-
-      END DO Layer_Loop
-
-    END SUBROUTINE ODPS_Compute_Predictor_IR
-
-    SUBROUTINE ODPS_Compute_Predictor_MW()
-
-      ! ---------------
-      ! Local variables
-      ! ---------------
-      INTEGER    ::    k ! n_Layers, n_Levels
-      REAL(fp) ::    DT
-      REAL(fp) ::    T
-      REAL(fp) ::    T2
-      REAL(fp) ::    DT2
-      REAL(fp) ::    H2O
-      REAL(fp) ::    H2O_A
-      REAL(fp) ::    H2O_R
-      REAL(fp) ::    H2O_S
-      REAL(fp) ::    H2O_R4
-      REAL(fp) ::    H2OdH2OTzp
-      REAL(fp) ::    O3
-      REAL(fp) ::    O3_A
-      REAL(fp) ::    O3_R
-
-      Layer_Loop : DO k = 1, n_Layers
+      MW_Layer_Loop : DO k = 1, n_Layers
 
         !------------------------------------------
         !  Relative Temperature
@@ -1112,7 +943,7 @@ CONTAINS
         !-------------------------------------------
         !  Abosrber amount scalled by the reference
         !-------------------------------------------
-        H2O = Absorber(k,ABS_H2O_MW)/Ref_Absorber(k, ABS_H2O_MW)
+        H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
 
         ! Combinations of variables common to all predictor groups
         T2  = T*T
@@ -1122,71 +953,232 @@ CONTAINS
         H2O_R  = SQRT( H2O_A )
         H2O_S  = H2O_A*H2O_A
         H2O_R4 = SQRT( H2O_R )
-        H2OdH2OTzp = H2O/GATzp(k, ABS_H2O_MW)
+        H2OdH2OTzp = H2O/GATzp(k, ja_h2o)
 
-       !#-------------------------------------------------------------------#
-       !#        -- Predictors --                                           #
-       !#-------------------------------------------------------------------#
-
-       ! set number of predictors
-        IF ( Group_ID == GROUP_MW_O3 ) THEN
-          Predictor%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
-        ELSE
-          Predictor%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
-        END IF
-
-        !  ----------------------
-        !   Fixed (Dry) predictors
-        !  ----------------------
-        Predictor%X(k, 1, COMP_DRY_MW)  = SECANG(k)
-        Predictor%X(k, 2, COMP_DRY_MW)  = SECANG(k) * T
-        Predictor%X(k, 3, COMP_DRY_MW)  = SECANG(k) * T2
-        Predictor%X(k, 4, COMP_DRY_MW)  = T
-        Predictor%X(k, 5, COMP_DRY_MW)  = SECANG(k) * SECANG(k)
-        Predictor%X(k, 6, COMP_DRY_MW)  = T2
-        Predictor%X(k, 7, COMP_DRY_MW)  = Tz(k)
-
-       !  --------------------------------
-       !  Water vapor (line and continuum)
-       !  --------------------------------
-        Predictor%X(k, 1, COMP_WET_MW) = H2O_A/T
-        Predictor%X(k, 2, COMP_WET_MW) = H2O_A/T * H2O
-        Predictor%X(k, 3, COMP_WET_MW) = H2O_A/T2 * H2O/T2
-        Predictor%X(k, 4, COMP_WET_MW) = H2O_A/T2
-        Predictor%X(k, 5, COMP_WET_MW) = H2O_A/T2 * H2O
-        Predictor%X(k, 6, COMP_WET_MW) = H2O_A/T2**2
-        Predictor%X(k, 7, COMP_WET_MW) = H2O_A
-        Predictor%X(k, 8, COMP_WET_MW) = H2O_A*DT
-        Predictor%X(k, 9, COMP_WET_MW) = (SECANG(k)*GAzp(k,ABS_H2O_MW))**2
-        Predictor%X(k, 10,COMP_WET_MW) = SECANG(k)*GAzp(k,ABS_H2O_MW)
-        Predictor%X(k, 11,COMP_WET_MW) = SECANG(k)
-        Predictor%X(k, 12,COMP_WET_MW) = H2O_S*H2O_A
-        Predictor%X(k, 13,COMP_WET_MW) = H2O_S*H2O_S
-        Predictor%X(k, 14,COMP_WET_MW) = H2OdH2OTzp
-
-        !  -----------------------
-        !  Ozone predictors (GROUP_MW_O3 only; same formulation as IR)
-        !  -----------------------
-        IF ( Group_ID == GROUP_MW_O3 ) THEN
-          O3   = Absorber(k,ABS_O3_MW)/Ref_Absorber(k, ABS_O3_MW)
+        IF ( ja_o3 > 0 ) THEN
+          O3   = Absorber(k,ja_o3)/Ref_Absorber(k, ja_o3)
           O3_A = SECANG(k)*O3
           O3_R = SQRT( O3_A )
-          Predictor%X(k, 1, COMP_OZO_MW)  = O3_A
-          Predictor%X(k, 2, COMP_OZO_MW)  = O3_A*DT
-          Predictor%X(k, 3, COMP_OZO_MW)  = O3_A*O3*GAzp(k,ABS_O3_MW)
-          Predictor%X(k, 4, COMP_OZO_MW)  = O3_A*O3_A
-          Predictor%X(k, 5, COMP_OZO_MW)  = O3_A*GAzp(k,ABS_O3_MW)
-          Predictor%X(k, 6, COMP_OZO_MW)  = O3_A*SQRT(SECANG(k)*GAzp(k,ABS_O3_MW))
-          Predictor%X(k, 7, COMP_OZO_MW)  = O3_R*DT
-          Predictor%X(k, 8, COMP_OZO_MW)  = O3_R
-          Predictor%X(k, 9, COMP_OZO_MW)  = O3_R*O3/GAzp(k,ABS_O3_MW)
-          Predictor%X(k,10, COMP_OZO_MW)  = SECANG(k)*GAzp(k,ABS_O3_MW)
-          Predictor%X(k,11, COMP_OZO_MW)  = (SECANG(k)*GAzp(k,ABS_O3_MW))**2
         END IF
 
-      END DO Layer_Loop
+        MW_Component_Loop : DO ic = 1, GROUP_REGISTRY(Group_ID)%n_Components
+          np = Predictor%n_CP(ic)
+          SELECT CASE ( GROUP_REGISTRY(Group_ID)%Component_ID(ic) )
+            CASE ( EDRY_ComID )
+              CALL FWD_Kernel_DRY(k, ic)
+            CASE ( WET_ComID )
+              CALL FWD_Kernel_WET_MW(k, ic)
+            CASE ( OZO_ComID )
+              CALL FWD_Kernel_OZO(k, ic)
+          END SELECT
+        END DO MW_Component_Loop
 
-    END SUBROUTINE ODPS_Compute_Predictor_MW
+      END DO MW_Layer_Loop
+
+    END IF Basis_Select
+
+CONTAINS
+
+    ! Position of a HITRAN absorber ID in this group's absorber roster
+    PURE FUNCTION Absorber_Position( Absorber_ID ) RESULT( Position )
+      INTEGER, INTENT(IN) :: Absorber_ID
+      INTEGER :: Position
+      INTEGER :: ja
+      Position = 0
+      DO ja = 1, GROUP_REGISTRY(Group_ID)%n_Absorbers
+        IF ( GROUP_REGISTRY(Group_ID)%Absorber_ID(ja) == Absorber_ID ) THEN
+          Position = ja
+          RETURN
+        END IF
+      END DO
+    END FUNCTION Absorber_Position
+
+    !  ----------------------
+    !   Fixed (Dry) predictors (IR and MW use the same formulation)
+    !  ----------------------
+    SUBROUTINE FWD_Kernel_DRY( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      Predictor%X(k, 1, ic)  = SECANG(k)
+      Predictor%X(k, 2, ic)  = SECANG(k) * T
+      Predictor%X(k, 3, ic)  = SECANG(k) * T2
+      Predictor%X(k, 4, ic)  = T
+      Predictor%X(k, 5, ic)  = SECANG(k) * SECANG(k)
+      Predictor%X(k, 6, ic)  = T2
+      Predictor%X(k, 7, ic)  = Tz(k)
+    END SUBROUTINE FWD_Kernel_DRY
+
+    !  --------------------------
+    !  Water vapor continuum predictors
+    !  --------------------------
+    SUBROUTINE FWD_Kernel_WCO( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      Predictor%X(k, 1, ic) = H2O_A/T
+      Predictor%X(k, 2, ic) = H2O_A/T * H2O
+      Predictor%X(k, 3, ic) = H2O_A/T2 * H2O/T2
+      Predictor%X(k, 4, ic) = H2O_A/T2
+      Predictor%X(k, 5, ic) = H2O_A/T2 * H2O
+      Predictor%X(k, 6, ic) = H2O_A/T2**2
+      Predictor%X(k, 7, ic) = H2O_A
+    END SUBROUTINE FWD_Kernel_WCO
+
+    !  -----------------------
+    !  Ozone predictors (same formulation for the IR and MW_O3 groups)
+    !  -----------------------
+    SUBROUTINE FWD_Kernel_OZO( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      Predictor%X(k, 1, ic)  = O3_A
+      Predictor%X(k, 2, ic)  = O3_A*DT
+      Predictor%X(k, 3, ic)  = O3_A*O3*GAzp(k,ja_o3)
+      Predictor%X(k, 4, ic)  = O3_A*O3_A
+      Predictor%X(k, 5, ic)  = O3_A*GAzp(k,ja_o3)
+      Predictor%X(k, 6, ic)  = O3_A*SQRT(SECANG(k)*GAzp(k,ja_o3))
+      Predictor%X(k, 7, ic)  = O3_R*DT   !T*T*T
+      Predictor%X(k, 8, ic)  = O3_R
+      Predictor%X(k, 9, ic)  = O3_R*O3/GAzp(k,ja_o3)
+      Predictor%X(k,10, ic)  = SECANG(k)*GAzp(k,ja_o3)
+      Predictor%X(k,11, ic)  = (SECANG(k)*GAzp(k,ja_o3))**2
+    END SUBROUTINE FWD_Kernel_OZO
+
+    !  -----------------------
+    !  Carbon dioxide predictors; predictor 11 (CO amount) is carried only
+    !  by rosters that request 11 predictors for CO2 (group 1)
+    !  -----------------------
+    SUBROUTINE FWD_Kernel_CO2( k, ic, np )
+      INTEGER, INTENT(IN) :: k, ic, np
+      Predictor%X(k, 1, ic)  = SECANG(k) * T
+      Predictor%X(k, 2, ic)  = SECANG(k) * T2
+      Predictor%X(k, 3, ic)  = T
+      Predictor%X(k, 4, ic)  = T2
+      Predictor%X(k, 5, ic)  = SECANG(k)
+      Predictor%X(k, 6, ic)  = SECANG(k)*CO2
+      Predictor%X(k, 7, ic)  = SECANG(k) * Tzp(k)
+      Predictor%X(k, 8, ic)  = (SECANG(k) * GAzp(k, ja_co2))**2
+      Predictor%X(k, 9, ic)  = Tzp(k)**3
+      Predictor%X(k, 10, ic) = SECANG(k) * Tzp(k) * SQRT(T)
+      IF ( np >= 11 ) THEN
+        Predictor%X(k, 11, ic) = CO_A
+      END IF
+    END SUBROUTINE FWD_Kernel_CO2
+
+    !  --------------------------
+    !  Water-line predictors; predictors 16 - 18 (CH4/CO cross terms) are
+    !  carried only by rosters that request 18 predictors for WLO (group 1)
+    !  --------------------------
+    SUBROUTINE FWD_Kernel_WLO( k, ic, np )
+      INTEGER, INTENT(IN) :: k, ic, np
+      Predictor%X(k, 1, ic) = H2O_A
+      Predictor%X(k, 2, ic) = H2O_A*DT
+      Predictor%X(k, 3, ic) = H2O_S
+      Predictor%X(k, 4, ic) = H2O_A*DT2
+      Predictor%X(k, 5, ic) = H2O_R4
+      Predictor%X(k, 6, ic) = H2O_S*H2O_A
+      Predictor%X(k, 7, ic) = H2O_R
+      Predictor%X(k, 8, ic) = H2O_R*DT
+      Predictor%X(k, 9, ic) = H2O_S*H2O_S
+      Predictor%X(k,10, ic) = H2OdH2OTzp
+      Predictor%X(k,11, ic) = H2O_R*H2OdH2OTzp
+      Predictor%X(k,12, ic) = (SECANG(k)*GAzp(k,ja_h2o))**2
+      Predictor%X(k,13, ic) = SECANG(k)*GAzp(k,ja_h2o)
+      Predictor%X(k,14, ic) = SECANG(k)
+      Predictor%X(k,15, ic) = SECANG(k) * CO2
+      IF ( np >= 18 ) THEN
+        Predictor%X(k,16, ic) = CH4_A
+        Predictor%X(k,17, ic) = CH4_A*CH4_A*DT
+        Predictor%X(k,18, ic) = CO_A
+      END IF
+    END SUBROUTINE FWD_Kernel_WLO
+
+    !  -----------------------
+    !  Carbon monoxide
+    !  -----------------------
+    SUBROUTINE FWD_Kernel_CO( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      Predictor%X(k, 1,  ic)   = CO_A
+      Predictor%X(k, 2,  ic)   = CO_A*DT
+      Predictor%X(k, 3,  ic)   = SQRT( CO_R )
+      Predictor%X(k, 4,  ic)   = CO_R*DT
+      Predictor%X(k, 5,  ic)   = CO_S
+      Predictor%X(k, 6,  ic)   = CO_R
+      Predictor%X(k, 7,  ic)   = CO_A*DT2
+      Predictor%X(k, 8,  ic)   = CO_ACOdCOzp
+      Predictor%X(k, 9,  ic)   = CO_ACOdCOzp/CO_R
+      Predictor%X(k, 10, ic)   = CO_ACOdCOzp * SQRT( GAzp(k, ja_co) )
+    END SUBROUTINE FWD_Kernel_CO
+
+    !  -----------------------
+    !  Methane predictors
+    !  -----------------------
+    SUBROUTINE FWD_Kernel_CH4( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      Predictor%X(k, 1,  ic)  = CH4_A*DT
+      Predictor%X(k, 2,  ic)  = CH4_R
+      Predictor%X(k, 3,  ic)  = CH4_A*CH4_A
+      Predictor%X(k, 4,  ic)  = CH4_A
+      Predictor%X(k, 5,  ic)  = CH4*DT
+      Predictor%X(k, 6,  ic)  = CH4_ACH4zp
+      Predictor%X(k, 7,  ic)  = CH4_ACH4zp**2
+      Predictor%X(k, 8,  ic)  = SQRT(CH4_R)
+      Predictor%X(k, 9,  ic)  = GATzp(k, ja_ch4)
+      Predictor%X(k, 10, ic)  = SECANG(k)*GATzp(k, ja_ch4)
+      Predictor%X(k, 11, ic)  = CH4_R * CH4/GAzp(k, ja_ch4)
+    END SUBROUTINE FWD_Kernel_CH4
+
+    !  -----------------------
+    !    N2O predictors
+    !  -----------------------
+    SUBROUTINE FWD_Kernel_N2O( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      Predictor%X(k, 1, ic)   = N2O_A*DT
+      Predictor%X(k, 2, ic)   = N2O_R
+      Predictor%X(k, 3, ic)   = N2O*DT
+      Predictor%X(k, 4, ic)   = N2O_A**POINT_25
+      Predictor%X(k, 5, ic)   = N2O_A
+      Predictor%X(k, 6, ic)   = SECANG(k) * GAzp(k, ja_n2o)
+      Predictor%X(k, 7, ic)   = SECANG(k) * GATzp(k, ja_n2o)
+      Predictor%X(k, 8, ic)   = N2O_S
+      Predictor%X(k, 9, ic)   = GATzp(k, ja_n2o)
+      Predictor%X(k,10, ic)   = N2O_R*N2O / GAzp(k, ja_n2o)
+      Predictor%X(k,11, ic)   = CH4_A
+      Predictor%X(k,12, ic)   = CH4_A*GAzp(k, ja_ch4)
+      Predictor%X(k,13, ic)   = CO_A
+      Predictor%X(k,14, ic)   = CO_A*SECANG(k)*GAzp(k, ja_co)
+    END SUBROUTINE FWD_Kernel_N2O
+
+    !  -----------------------
+    !  NO2 predictors (GROUP_UV_NO2). Scene NO2 in the UV/VIS is pure
+    !  Beer-Lambert electronic-cross-section extinction: layer OD = sigma(T)*N,
+    !  exactly linear in amount. A compact set suffices: amount*secant, plus
+    !  DT and DT2 terms for the smooth (~3-12%) sigma(T) temperature dependence.
+    !  -----------------------
+    SUBROUTINE FWD_Kernel_NO2( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      NO2   = Absorber(k,ja_no2)/Ref_Absorber(k, ja_no2)
+      NO2_A = SECANG(k)*NO2
+      Predictor%X(k, 1, ic) = NO2_A
+      Predictor%X(k, 2, ic) = NO2_A*DT
+      Predictor%X(k, 3, ic) = NO2_A*DT2
+    END SUBROUTINE FWD_Kernel_NO2
+
+    !  --------------------------------
+    !  Water vapor, MW (line and continuum together)
+    !  --------------------------------
+    SUBROUTINE FWD_Kernel_WET_MW( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      Predictor%X(k, 1, ic) = H2O_A/T
+      Predictor%X(k, 2, ic) = H2O_A/T * H2O
+      Predictor%X(k, 3, ic) = H2O_A/T2 * H2O/T2
+      Predictor%X(k, 4, ic) = H2O_A/T2
+      Predictor%X(k, 5, ic) = H2O_A/T2 * H2O
+      Predictor%X(k, 6, ic) = H2O_A/T2**2
+      Predictor%X(k, 7, ic) = H2O_A
+      Predictor%X(k, 8, ic) = H2O_A*DT
+      Predictor%X(k, 9, ic) = (SECANG(k)*GAzp(k,ja_h2o))**2
+      Predictor%X(k, 10,ic) = SECANG(k)*GAzp(k,ja_h2o)
+      Predictor%X(k, 11,ic) = SECANG(k)
+      Predictor%X(k, 12,ic) = H2O_S*H2O_A
+      Predictor%X(k, 13,ic) = H2O_S*H2O_S
+      Predictor%X(k, 14,ic) = H2OdH2OTzp
+    END SUBROUTINE FWD_Kernel_WET_MW
 
   END SUBROUTINE  ODPS_Compute_Predictor
 
@@ -1319,6 +1311,20 @@ CONTAINS
     REAL(fp) ::    GAzp_TL(SIZE(Absorber, DIM=1), SIZE(Absorber, DIM=2))
     REAL(fp) ::    GATzp_sum_TL(SIZE(Absorber, DIM=2))
     REAL(fp) ::    GATzp_TL(SIZE(Absorber, DIM=1), SIZE(Absorber, DIM=2))
+    ! Kernel dispatch bookkeeping and shared per-layer variables
+    INTEGER  :: ic, np
+    INTEGER  :: ja_h2o, ja_o3, ja_co2, ja_n2o, ja_co, ja_ch4, ja_no2
+    LOGICAL  :: has_trace
+    REAL(fp) :: DT, DT_TL, T, T_TL, T2, T2_TL, DT2, DT2_TL
+    REAL(fp) :: H2O, H2O_TL, H2O_A, H2O_A_TL, H2O_R, H2O_R_TL
+    REAL(fp) :: H2O_S, H2O_S_TL, H2O_R4, H2O_R4_TL, H2OdH2OTzp, H2OdH2OTzp_TL
+    REAL(fp) :: CO2, CO2_TL, O3, O3_TL, O3_A, O3_A_TL, O3_R, O3_R_TL
+    REAL(fp) :: NO2, NO2_TL, NO2_A, NO2_A_TL
+    REAL(fp) :: CO, CO_TL, CO_A, CO_A_TL, CO_R, CO_R_TL, CO_S, CO_S_TL
+    REAL(fp) :: CO_ACOdCOzp, CO_ACOdCOzp_TL
+    REAL(fp) :: N2O, N2O_TL, N2O_A, N2O_A_TL, N2O_R, N2O_R_TL, N2O_S, N2O_S_TL
+    REAL(fp) :: CH4, CH4_TL, CH4_A, CH4_A_TL, CH4_R, CH4_R_TL
+    REAL(fp) :: CH4_ACH4zp, CH4_ACH4zp_TL
 !JR Static initialization means only 1 copy of the variable. OpenMP over profiles
 !JR means $OPENMP_NUM_THREADS copies are needed. So change to run-time initialization
 !JR    TYPE(PAFV_type), POINTER  :: PAFV => NULL()
@@ -1365,85 +1371,53 @@ CONTAINS
     END DO Layer_Loop
 
     !----------------------------------------------------------------
-    ! Call the group specific routine for remaining computation; all
-    ! variables defined above are passed to the called routine
+    ! Per-component tangent-linear predictor computation; mirrors the
+    ! forward kernel dispatch (TL X assignments are independent of one
+    ! another, so kernel order does not affect results).
     !----------------------------------------------------------------
 
-    SELECT CASE( Group_ID )
-      CASE( GROUP_1, GROUP_2, GROUP_UV_NO2 )
-         CALL ODPS_Compute_Predictor_IR_TL()
-      CASE( GROUP_3, GROUP_MW_O3 )
-         CALL ODPS_Compute_Predictor_MW_TL()
-    END SELECT
+    ! Number of predictors per component, from the registry roster
+    Predictor_TL%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
 
-    NULLIFY(PAFV)
+    ! Resolve each gas's position in this group's absorber roster
+    ja_h2o = Absorber_Position(H2O_ID)
+    ja_o3  = Absorber_Position(O3_ID)
+    ja_co2 = Absorber_Position(CO2_ID)
+    ja_n2o = Absorber_Position(N2O_ID)
+    ja_co  = Absorber_Position(CO_ID)
+    ja_ch4 = Absorber_Position(CH4_ID)
+    ja_no2 = Absorber_Position(NO2_ID)
+    has_trace = ( ja_co > 0 )   ! CO/CH4/N2O travel together (group 1)
 
-CONTAINS
+    ! Silence gfortran complaints about maybe-used-uninit by init to HUGE()
+    N2O_TL        = HUGE(N2O_TL)
+    N2O_S_TL      = HUGE(N2O_S_TL)
+    N2O_S         = HUGE(N2O_S)
+    N2O_R         = HUGE(N2O_R)
+    N2O_R_TL      = HUGE(N2O_R_TL)
+    N2O           = HUGE(N2O)
+    N2O_A         = HUGE(N2O_A)
+    N2O_A_TL      = HUGE(N2O_A_TL)
+    CO_S_TL       = HUGE(CO_S_TL)
+    CO_S          = HUGE(CO_S)
+    CO_R          = HUGE(CO_R)
+    CO_R_TL       = HUGE(CO_R_TL)
+    CO_A_TL       = HUGE(CO_A_TL)
+    CO_A          = HUGE(CO_A)
+    CO_ACODCOZP_TL= HUGE(CO_ACODCOZP_TL)
+    CO_ACODCOZP   = HUGE(CO_ACODCOZP)
+    CH4_TL        = HUGE(CH4_TL)
+    CH4_R_TL      = HUGE(CH4_R_TL)
+    CH4_A_TL      = HUGE(CH4_A_TL)
+    CH4_A         = HUGE(CH4_A)
+    CH4_R         = HUGE(CH4_R)
+    CH4           = HUGE(CH4)
+    CH4_ACH4ZP_TL = HUGE(CH4_ACH4ZP_TL)
+    CH4_ACH4ZP    = HUGE(CH4_ACH4ZP)
 
-    SUBROUTINE ODPS_Compute_Predictor_IR_TL()
+    Basis_Select: IF ( GROUP_REGISTRY(Group_ID)%Basis == BASIS_IR ) THEN
 
-      ! ---------------
-      ! Local variables
-      ! ---------------
-      INTEGER    ::    k ! n_Layers, n_Levels
-      REAL(fp) ::    DT,           DT_TL
-      REAL(fp) ::    T,            T_TL
-      REAL(fp) ::    T2,           T2_TL
-      REAL(fp) ::    DT2,          DT2_TL
-      REAL(fp) ::    H2O,          H2O_TL
-      REAL(fp) ::    H2O_A,        H2O_A_TL
-      REAL(fp) ::    H2O_R,        H2O_R_TL
-      REAL(fp) ::    H2O_S,        H2O_S_TL
-      REAL(fp) ::    H2O_R4,       H2O_R4_TL
-      REAL(fp) ::    H2OdH2OTzp,   H2OdH2OTzp_TL
-      REAL(fp) ::    CO2,          CO2_TL
-      REAL(fp) ::    O3,           O3_TL
-      REAL(fp) ::    O3_A,         O3_A_TL
-      REAL(fp) ::    O3_R,         O3_R_TL
-      REAL(fp) ::    NO2,          NO2_TL
-      REAL(fp) ::    NO2_A,        NO2_A_TL
-      REAL(fp) ::    CO,           CO_TL
-      REAL(fp) ::    CO_A,         CO_A_TL
-      REAL(fp) ::    CO_R,         CO_R_TL
-      REAL(fp) ::    CO_S,         CO_S_TL
-      REAL(fp) ::    CO_ACOdCOzp,  CO_ACOdCOzp_TL
-      REAL(fp) ::    N2O,          N2O_TL
-      REAL(fp) ::    N2O_A,        N2O_A_TL
-      REAL(fp) ::    N2O_R,        N2O_R_TL
-      REAL(fp) ::    N2O_S,        N2O_S_TL
-      REAL(fp) ::    CH4,          CH4_TL
-      REAL(fp) ::    CH4_A,        CH4_A_TL
-      REAL(fp) ::    CH4_R,        CH4_R_TL
-      REAL(fp) ::    CH4_ACH4zp,   CH4_ACH4zp_TL
-
-      ! Silence gfortran complaints about maybe-used-uninit by init to HUGE()
-      N2O_TL        = HUGE(N2O_TL)
-      N2O_S_TL      = HUGE(N2O_S_TL)
-      N2O_S         = HUGE(N2O_S)
-      N2O_R         = HUGE(N2O_R)
-      N2O_R_TL      = HUGE(N2O_R_TL)
-      N2O           = HUGE(N2O)
-      N2O_A         = HUGE(N2O_A)
-      N2O_A_TL      = HUGE(N2O_A_TL)
-      CO_S_TL       = HUGE(CO_S_TL)
-      CO_S          = HUGE(CO_S)
-      CO_R          = HUGE(CO_R)
-      CO_R_TL       = HUGE(CO_R_TL)
-      CO_A_TL       = HUGE(CO_A_TL)
-      CO_A          = HUGE(CO_A)
-      CO_R          = HUGE(CO_R)
-      CO_ACODCOZP_TL= HUGE(CO_ACODCOZP_TL)
-      CO_ACODCOZP   = HUGE(CO_ACODCOZP)
-      CH4_TL        = HUGE(CH4_TL)
-      CH4_R_TL      = HUGE(CH4_R_TL)
-      CH4_A_TL      = HUGE(CH4_A_TL)
-      CH4_A         = HUGE(CH4_A)
-      CH4_R         = HUGE(CH4_R)
-      CH4           = HUGE(CH4)
-      CH4_ACH4ZP_TL = HUGE(CH4_ACH4ZP_TL)
-      CH4_ACH4ZP    = HUGE(CH4_ACH4ZP)
-      
-      Layer_Loop : DO k = 1, n_Layers
+      IR_Layer_Loop : DO k = 1, n_Layers
 
         !------------------------------------------
         !  Relative Temperature
@@ -1456,13 +1430,13 @@ CONTAINS
         !-------------------------------------------
         !  Abosrber amount scalled by the reference
         !-------------------------------------------
-        H2O = Absorber(k,ABS_H2O_IR)/Ref_Absorber(k, ABS_H2O_IR)
-        O3  = Absorber(k,ABS_O3_IR)/Ref_absorber(k,ABS_O3_IR)
-        CO2 = Absorber(k,ABS_CO2_IR)/Ref_absorber(k,ABS_CO2_IR)
+        H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+        O3  = Absorber(k,ja_o3)/Ref_absorber(k,ja_o3)
+        CO2 = Absorber(k,ja_co2)/Ref_absorber(k,ja_co2)
 
-        H2O_TL = Absorber_TL(k,ABS_H2O_IR)/Ref_Absorber(k, ABS_H2O_IR)
-        O3_TL  = Absorber_TL(k,ABS_O3_IR)/Ref_absorber(k,ABS_O3_IR)
-        CO2_TL = Absorber_TL(k,ABS_CO2_IR)/Ref_absorber(k,ABS_CO2_IR)
+        H2O_TL = Absorber_TL(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+        O3_TL  = Absorber_TL(k,ja_o3)/Ref_absorber(k,ja_o3)
+        CO2_TL = Absorber_TL(k,ja_co2)/Ref_absorber(k,ja_co2)
 
         ! Combinations of variables common to all predictor groups
         T2   = T*T
@@ -1479,14 +1453,14 @@ CONTAINS
         H2O_R  = SQRT( H2O_A )
         H2O_S  = H2O_A*H2O_A
         H2O_R4 = SQRT( H2O_R )
-        H2OdH2OTzp = H2O/PAFV%GATzp(k, ABS_H2O_IR)
+        H2OdH2OTzp = H2O/PAFV%GATzp(k, ja_h2o)
 
         H2O_A_TL  = SECANG(k)*H2O_TL
         H2O_R_TL  = (POINT_5 / SQRT(H2O_A)) * H2O_A_TL
         H2O_S_TL  = TWO * H2O_A * H2O_A_TL
         H2O_R4_TL = (POINT_5 / SQRT(H2O_R)) * H2O_R_TL
-        H2OdH2OTzp_TL = H2O_TL/PAFV%GATzp(k, ABS_H2O_IR) - &
-                        H2O * GATzp_TL(k, ABS_H2O_IR)/PAFV%GATzp(k, ABS_H2O_IR)**2
+        H2OdH2OTzp_TL = H2O_TL/PAFV%GATzp(k, ja_h2o) - &
+                        H2O * GATzp_TL(k, ja_h2o)/PAFV%GATzp(k, ja_h2o)**2
 
         O3_A = SECANG(k)*O3
         O3_R = SQRT( O3_A )
@@ -1494,14 +1468,14 @@ CONTAINS
         O3_A_TL = SECANG(k)*O3_TL
         O3_R_TL = (POINT_5 / SQRT(O3_A)) * O3_A_TL
 
-        IF( Group_ID == GROUP_1 )THEN
-          CO  = Absorber(k,ABS_CO_IR)/Ref_absorber(k, ABS_CO_IR)
-          N2O = Absorber(k,ABS_N2O_IR)/Ref_absorber(k,ABS_N2O_IR)
-          CH4 = Absorber(k,ABS_CH4_IR)/Ref_absorber(k,ABS_CH4_IR)
+        IF( has_trace )THEN
+          CO  = Absorber(k,ja_co)/Ref_absorber(k, ja_co)
+          N2O = Absorber(k,ja_n2o)/Ref_absorber(k,ja_n2o)
+          CH4 = Absorber(k,ja_ch4)/Ref_absorber(k,ja_ch4)
 
-          CO_TL  = Absorber_TL(k,ABS_CO_IR)/Ref_absorber(k, ABS_CO_IR)
-          N2O_TL = Absorber_TL(k,ABS_N2O_IR)/Ref_absorber(k,ABS_N2O_IR)
-          CH4_TL = Absorber_TL(k,ABS_CH4_IR)/Ref_absorber(k,ABS_CH4_IR)
+          CO_TL  = Absorber_TL(k,ja_co)/Ref_absorber(k, ja_co)
+          N2O_TL = Absorber_TL(k,ja_n2o)/Ref_absorber(k,ja_n2o)
+          CH4_TL = Absorber_TL(k,ja_ch4)/Ref_absorber(k,ja_ch4)
 
           N2O_A = SECANG(k)*N2O
           N2O_R = SQRT( N2O_A )
@@ -1514,213 +1488,52 @@ CONTAINS
           CO_A = SECANG(k)*CO
           CO_R = SQRT( CO_A )
           CO_S = CO_A*CO_A
-          CO_ACOdCOzp = CO_A*CO/PAFV%GAzp(k, ABS_CO_IR)
+          CO_ACOdCOzp = CO_A*CO/PAFV%GAzp(k, ja_co)
 
           CO_A_TL = SECANG(k)*CO_TL
           CO_R_TL = (POINT_5 / SQRT(CO_A)) * CO_A_TL
           CO_S_TL = TWO * CO_A * CO_A_TL
-          CO_ACOdCOzp_TL = CO_A_TL*CO/PAFV%GAzp(k, ABS_CO_IR) + CO_A*CO_TL/PAFV%GAzp(k, ABS_CO_IR) &
-                           - CO_A*CO*GAzp_TL(k, ABS_CO_IR)/PAFV%GAzp(k, ABS_CO_IR)**2
+          CO_ACOdCOzp_TL = CO_A_TL*CO/PAFV%GAzp(k, ja_co) + CO_A*CO_TL/PAFV%GAzp(k, ja_co) &
+                           - CO_A*CO*GAzp_TL(k, ja_co)/PAFV%GAzp(k, ja_co)**2
 
           CH4_A = SECANG(k)*CH4
           CH4_R = SQRT(CH4_A)
-          CH4_ACH4zp = SECANG(k)*PAFV%GAzp(k, ABS_CH4_IR)
+          CH4_ACH4zp = SECANG(k)*PAFV%GAzp(k, ja_ch4)
 
           CH4_A_TL = SECANG(k)*CH4_TL
           CH4_R_TL = (POINT_5 / SQRT(CH4_A)) * CH4_A_TL
-          CH4_ACH4zp_TL = SECANG(k)*GAzp_TL(k, ABS_CH4_IR)
-
-          ! set number of predictors
-          Predictor_TL%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
-        ELSE IF( Group_ID == GROUP_UV_NO2 )THEN
-          Predictor_TL%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
-        ELSE
-          Predictor_TL%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
+          CH4_ACH4zp_TL = SECANG(k)*GAzp_TL(k, ja_ch4)
         END IF
 
-       !#-------------------------------------------------------------------#
-       !#        -- Predictors --                                           #
-       !#-------------------------------------------------------------------#
+        IR_Component_Loop : DO ic = 1, GROUP_REGISTRY(Group_ID)%n_Components
+          np = Predictor_TL%n_CP(ic)
+          SELECT CASE ( GROUP_REGISTRY(Group_ID)%Component_ID(ic) )
+            CASE ( DRY_ComID_G1, DRY_ComID_G2 )
+              CALL TL_Kernel_DRY(k, ic)
+            CASE ( WLO_ComID )
+              CALL TL_Kernel_WLO(k, ic, np)
+            CASE ( WCO_ComID )
+              CALL TL_Kernel_WCO(k, ic)
+            CASE ( OZO_ComID )
+              CALL TL_Kernel_OZO(k, ic)
+            CASE ( CO2_ComID )
+              CALL TL_Kernel_CO2(k, ic, np)
+            CASE ( N2O_ComID )
+              CALL TL_Kernel_N2O(k, ic)
+            CASE ( CO_ComID )
+              CALL TL_Kernel_CO(k, ic)
+            CASE ( CH4_ComID )
+              CALL TL_Kernel_CH4(k, ic)
+            CASE ( NO2_ComID )
+              CALL TL_Kernel_NO2(k, ic)
+          END SELECT
+        END DO IR_Component_Loop
 
-        !  ----------------------
-        !   Fixed (Dry) predictors
-        !  ----------------------
-        Predictor_TL%X(k, 1, COMP_DRY_IR)  = ZERO
-        Predictor_TL%X(k, 2, COMP_DRY_IR)  = SECANG(k) * T_TL
-        Predictor_TL%X(k, 3, COMP_DRY_IR)  = SECANG(k) * T2_TL
-        Predictor_TL%X(k, 4, COMP_DRY_IR)  = T_TL
-        Predictor_TL%X(k, 5, COMP_DRY_IR)  = ZERO
-        Predictor_TL%X(k, 6, COMP_DRY_IR)  = T2_TL
-        Predictor_TL%X(k, 7, COMP_DRY_IR)  = Tz_TL(k)
+      END DO IR_Layer_Loop
 
-       !  --------------------------
-       !  Water vapor continuum predictors
-       !  --------------------------
-        Predictor_TL%X(k, 1, COMP_WCO_IR) = H2O_A_TL/T - H2O_A * T_TL/T**2
-        Predictor_TL%X(k, 2, COMP_WCO_IR) = H2O_A_TL*H2O/T + H2O_A*H2O_TL/T - H2O_A*H2O*T_TL/T**2
-        Predictor_TL%X(k, 3, COMP_WCO_IR) = H2O_A_TL*H2O/T2**2 + H2O_A*H2O_TL/T2**2 - &
-                                            Two*H2O_A*H2O*T2_TL/T2**3
-        Predictor_TL%X(k, 4, COMP_WCO_IR) = H2O_A_TL/T2 - H2O_A * T2_TL/T2**2
-        Predictor_TL%X(k, 5, COMP_WCO_IR) = H2O_A_TL*H2O/T2 + H2O_A*H2O_TL/T2 - H2O_A*H2O*T2_TL/T2**2
-        Predictor_TL%X(k, 6, COMP_WCO_IR) = H2O_A_TL/T2**2 - TWO*H2O_A*T2_TL/T2**3
-        Predictor_TL%X(k, 7, COMP_WCO_IR) = H2O_A_TL
+    ELSE Basis_Select   ! BASIS_MW
 
-        !  -----------------------
-        !  Ozone predictors
-        !  -----------------------
-        Predictor_TL%X(k, 1, COMP_OZO_IR)  = O3_A_TL
-        Predictor_TL%X(k, 2, COMP_OZO_IR)  = O3_A_TL*DT + O3_A*DT_TL
-        Predictor_TL%X(k, 3, COMP_OZO_IR)  = O3_A_TL*O3*PAFV%GAzp(k,ABS_O3_IR) + O3_A*O3_TL*PAFV%GAzp(k,ABS_O3_IR) &
-                                             + O3_A*O3*GAzp_TL(k,ABS_O3_IR)
-        Predictor_TL%X(k, 4, COMP_OZO_IR)  = TWO*O3_A*O3_A_TL
-        Predictor_TL%X(k, 5, COMP_OZO_IR)  = O3_A_TL*PAFV%GAzp(k,ABS_O3_IR) + O3_A*GAzp_TL(k,ABS_O3_IR)
-        Predictor_TL%X(k, 6, COMP_OZO_IR)  = O3_A_TL*SQRT(SECANG(k)*PAFV%GAzp(k,ABS_O3_IR)) + &
-                                             POINT_5*O3_A*SQRT(SECANG(k)/PAFV%GAzp(k,ABS_O3_IR))* &
-                                             GAzp_TL(k,ABS_O3_IR)
-        Predictor_TL%X(k, 7, COMP_OZO_IR)  = O3_R_TL*DT + O3_R*DT_TL  !T*T*T
-        Predictor_TL%X(k, 8, COMP_OZO_IR)  = O3_R_TL
-        Predictor_TL%X(k, 9, COMP_OZO_IR)  = O3_R_TL*O3/PAFV%GAzp(k,ABS_O3_IR) + O3_R*O3_TL/PAFV%GAzp(k,ABS_O3_IR) &
-                                             - O3_R*O3*GAzp_TL(k,ABS_O3_IR)/PAFV%GAzp(k,ABS_O3_IR)**2
-        Predictor_TL%X(k,10, COMP_OZO_IR)  = SECANG(k)*GAzp_TL(k,ABS_O3_IR)
-        Predictor_TL%X(k,11, COMP_OZO_IR)  = TWO*SECANG(k)**2 * PAFV%GAzp(k,ABS_O3_IR)*GAzp_TL(k,ABS_O3_IR)
-!        Predictor_TL%X(k, 12, COMP_OZO_IR)  = H2O_A_TL
-!        Predictor_TL%X(k, 13, COMP_OZO_IR)  = SECANG(k)*GAzp_TL(k,ABS_H2O_IR)
-
-        !  -----------------------
-        !  Carbon dioxide predictors
-        !  -----------------------
-        Predictor_TL%X(k, 1, COMP_CO2_IR)  = SECANG(k) * T_TL
-        Predictor_TL%X(k, 2, COMP_CO2_IR)  = SECANG(k) * T2_TL
-        Predictor_TL%X(k, 3, COMP_CO2_IR)  = T_TL
-        Predictor_TL%X(k, 4, COMP_CO2_IR)  = T2_TL
-        Predictor_TL%X(k, 5, COMP_CO2_IR)  = ZERO
-        Predictor_TL%X(k, 6, COMP_CO2_IR)  = SECANG(k)*CO2_TL
-        Predictor_TL%X(k, 7, COMP_CO2_IR)  = SECANG(k)*Tzp_TL(k)
-        Predictor_TL%X(k, 8, COMP_CO2_IR)  = TWO*SECANG(k)**2 * PAFV%GAzp(k, ABS_CO2_IR)* GAzp_TL(k, ABS_CO2_IR)
-        Predictor_TL%X(k, 9, COMP_CO2_IR)  = THREE*PAFV%Tzp(k)**2*Tzp_TL(k)
-        Predictor_TL%X(k, 10, COMP_CO2_IR) = SECANG(k)*( SQRT(T)*Tzp_TL(k) + (POINT_5*PAFV%Tzp(k)/SQRT(T))*T_TL )
-
-        !  --------------------------
-        !  Water-line predictors
-        !  --------------------------
-        Predictor_TL%X(k, 1, COMP_WLO_IR) = H2O_A_TL
-        Predictor_TL%X(k, 2, COMP_WLO_IR) = H2O_A_TL*DT + H2O_A*DT_TL
-        Predictor_TL%X(k, 3, COMP_WLO_IR) = H2O_S_TL
-        Predictor_TL%X(k, 4, COMP_WLO_IR) = H2O_A_TL*DT2 + H2O_A*DT2_TL
-        Predictor_TL%X(k, 5, COMP_WLO_IR) = H2O_R4_TL
-        Predictor_TL%X(k, 6, COMP_WLO_IR) = H2O_S_TL*H2O_A + H2O_S*H2O_A_TL
-        Predictor_TL%X(k, 7, COMP_WLO_IR) = H2O_R_TL
-        Predictor_TL%X(k, 8, COMP_WLO_IR) = H2O_R_TL*DT + H2O_R*DT_TL
-        Predictor_TL%X(k, 9, COMP_WLO_IR) = TWO*H2O_S*H2O_S_TL
-        Predictor_TL%X(k,10, COMP_WLO_IR) = H2OdH2OTzp_TL
-        Predictor_TL%X(k,11, COMP_WLO_IR) = H2O_R_TL*H2OdH2OTzp + H2O_R*H2OdH2OTzp_TL
-        Predictor_TL%X(k,12, COMP_WLO_IR) = TWO*SECANG(k)**2 * PAFV%GAzp(k,ABS_H2O_IR)*GAzp_TL(k,ABS_H2O_IR)
-        Predictor_TL%X(k,13, COMP_WLO_IR) = SECANG(k)*GAzp_TL(k,ABS_H2O_IR)
-        Predictor_TL%X(k,14, COMP_WLO_IR) = ZERO
-        Predictor_TL%X(k,15, COMP_WLO_IR) = SECANG(k)*CO2_TL
-
-        ! Addtional predictors for group 1
-        IF_Group1: IF( Group_ID == GROUP_1 )THEN
-
-          Predictor_TL%X(k, 11, COMP_CO2_IR) = CO_A_TL
-
-          Predictor_TL%X(k, 16, COMP_WLO_IR) = CH4_A_TL
-          Predictor_TL%X(k, 17, COMP_WLO_IR) = TWO*CH4_A*CH4_A_TL*DT + CH4_A*CH4_A*DT_TL
-          Predictor_TL%X(k, 18, COMP_WLO_IR) = CO_A_TL
-
-          !  -----------------------
-          !  Carbon monoxide
-          !  -----------------------
-          Predictor_TL%X(k, 1,  COMP_CO_IR)   = CO_A_TL
-          Predictor_TL%X(k, 2,  COMP_CO_IR)   = CO_A_TL*DT + CO_A*DT_TL
-          Predictor_TL%X(k, 3,  COMP_CO_IR)   = (POINT_5/SQRT(CO_R))*CO_R_TL
-          Predictor_TL%X(k, 4,  COMP_CO_IR)   = CO_R_TL*DT + CO_R*DT_TL
-          Predictor_TL%X(k, 5,  COMP_CO_IR)   = CO_S_TL
-          Predictor_TL%X(k, 6,  COMP_CO_IR)   = CO_R_TL
-          Predictor_TL%X(k, 7,  COMP_CO_IR)   = CO_A_TL*DT2 + CO_A*DT2_TL
-          Predictor_TL%X(k, 8,  COMP_CO_IR)   = CO_ACOdCOzp_TL
-          Predictor_TL%X(k, 9,  COMP_CO_IR)   = CO_ACOdCOzp_TL/CO_R - CO_ACOdCOzp*CO_R_TL/CO_R**2
-          Predictor_TL%X(k, 10, COMP_CO_IR)   = CO_ACOdCOzp_TL * SQRT( PAFV%GAzp(k, ABS_CO_IR) ) + &
-                                                (POINT_5*CO_ACOdCOzp/SQRT(PAFV%GAzp(k, ABS_CO_IR))) * &
-                                                GAzp_TL(k, ABS_CO_IR)
-
-          !  -----------------------
-          !  Methane predictors
-          !  -----------------------
-          Predictor_TL%X(k, 1,  COMP_CH4_IR)  = CH4_A_TL*DT + CH4_A*DT_TL
-          Predictor_TL%X(k, 2,  COMP_CH4_IR)  = CH4_R_TL
-          Predictor_TL%X(k, 3,  COMP_CH4_IR)  = TWO*CH4_A*CH4_A_TL
-          Predictor_TL%X(k, 4,  COMP_CH4_IR)  = CH4_A_TL
-          Predictor_TL%X(k, 5,  COMP_CH4_IR)  = CH4_TL*DT + CH4*DT_TL
-          Predictor_TL%X(k, 6,  COMP_CH4_IR)  = CH4_ACH4zp_TL
-          Predictor_TL%X(k, 7,  COMP_CH4_IR)  = TWO*CH4_ACH4zp*CH4_ACH4zp_TL
-          Predictor_TL%X(k, 8,  COMP_CH4_IR)  = (POINT_5/SQRT(CH4_R))*CH4_R_TL
-          Predictor_TL%X(k, 9,  COMP_CH4_IR)  = GATzp_TL(k, ABS_CH4_IR)
-          Predictor_TL%X(k, 10, COMP_CH4_IR)  = SECANG(k)*GATzp_TL(k, ABS_CH4_IR)
-          Predictor_TL%X(k, 11, COMP_CH4_IR)  = CH4_R_TL*CH4/PAFV%GAzp(k, ABS_CH4_IR) + &
-                                                CH4_R*CH4_TL/PAFV%GAzp(k, ABS_CH4_IR) - &
-                                                CH4_R*CH4*GAzp_TL(k, ABS_CH4_IR)/PAFV%GAzp(k, ABS_CH4_IR)**2
-          !  -----------------------
-          !    N2O predictors
-          !  -----------------------
-          Predictor_TL%X(k, 1, COMP_N2O_IR)   = N2O_A_TL*DT + N2O_A*DT_TL
-          Predictor_TL%X(k, 2, COMP_N2O_IR)   = N2O_R_TL
-          Predictor_TL%X(k, 3, COMP_N2O_IR)   = N2O_TL*DT + N2O*DT_TL
-          Predictor_TL%X(k, 4, COMP_N2O_IR)   = POINT_25*N2O_A**(-POINT_75) * N2O_A_TL
-          Predictor_TL%X(k, 5, COMP_N2O_IR)   = N2O_A_TL
-          Predictor_TL%X(k, 6, COMP_N2O_IR)   = SECANG(k) * GAzp_TL(k, ABS_N2O_IR)
-          Predictor_TL%X(k, 7, COMP_N2O_IR)   = SECANG(k) * GATzp_TL(k, ABS_N2O_IR)
-          Predictor_TL%X(k, 8, COMP_N2O_IR)   = N2O_S_TL
-          Predictor_TL%X(k, 9, COMP_N2O_IR)   = GATzp_TL(k, ABS_N2O_IR)
-          Predictor_TL%X(k,10, COMP_N2O_IR)   = N2O_R_TL*N2O / PAFV%GAzp(k, ABS_N2O_IR) + &
-                                                N2O_R*N2O_TL / PAFV%GAzp(k, ABS_N2O_IR) - &
-                                                N2O_R*N2O*GAzp_TL(k, ABS_N2O_IR)/PAFV%GAzp(k, ABS_N2O_IR)**2
-          Predictor_TL%X(k,11, COMP_N2O_IR)   = CH4_A_TL
-          Predictor_TL%X(k,12, COMP_N2O_IR)   = CH4_A_TL*PAFV%GAzp(k, ABS_CH4_IR) + CH4_A*GAzp_TL(k, ABS_CH4_IR)
-          Predictor_TL%X(k,13, COMP_N2O_IR)   = CO_A_TL
-          Predictor_TL%X(k,14, COMP_N2O_IR)   = CO_A_TL*SECANG(k)*PAFV%GAzp(k, ABS_CO_IR) + &
-                                                CO_A*SECANG(k)*GAzp_TL(k, ABS_CO_IR)
-
-        END IF IF_Group1
-
-        !  -----------------------
-        !  NO2 predictors TL (GROUP_UV_NO2 only)
-        !  -----------------------
-        IF( Group_ID == GROUP_UV_NO2 )THEN
-          NO2      = Absorber(k,ABS_NO2_G8)/Ref_Absorber(k, ABS_NO2_G8)
-          NO2_TL   = Absorber_TL(k,ABS_NO2_G8)/Ref_Absorber(k, ABS_NO2_G8)
-          NO2_A    = SECANG(k)*NO2
-          NO2_A_TL = SECANG(k)*NO2_TL
-          Predictor_TL%X(k, 1, COMP_NO2_G8) = NO2_A_TL
-          Predictor_TL%X(k, 2, COMP_NO2_G8) = NO2_A_TL*DT + NO2_A*DT_TL
-          Predictor_TL%X(k, 3, COMP_NO2_G8) = NO2_A_TL*DT2 + NO2_A*DT2_TL
-        END IF
-
-      END DO Layer_Loop
-
-    END SUBROUTINE ODPS_Compute_Predictor_IR_TL
-
-    SUBROUTINE ODPS_Compute_Predictor_MW_TL()
-
-      ! ---------------
-      ! Local variables
-      ! ---------------
-      INTEGER    ::    k ! n_Layers, n_Levels
-      REAL(fp) ::    DT,           DT_TL
-      REAL(fp) ::    T,            T_TL
-      REAL(fp) ::    T2,           T2_TL
-      REAL(fp) ::    DT2,          DT2_TL
-      REAL(fp) ::    H2O,          H2O_TL
-      REAL(fp) ::    H2O_A,        H2O_A_TL
-      REAL(fp) ::    H2O_R,        H2O_R_TL
-      REAL(fp) ::    H2O_S,        H2O_S_TL
-      REAL(fp) ::    H2O_R4,       H2O_R4_TL
-      REAL(fp) ::    H2OdH2OTzp,   H2OdH2OTzp_TL
-      REAL(fp) ::    O3,           O3_TL
-      REAL(fp) ::    O3_A,         O3_A_TL
-      REAL(fp) ::    O3_R,         O3_R_TL
-
-      Layer_Loop : DO k = 1, n_Layers
+      MW_Layer_Loop : DO k = 1, n_Layers
 
         !------------------------------------------
         !  Relative Temperature
@@ -1734,8 +1547,8 @@ CONTAINS
         !-------------------------------------------
         !  Abosrber amount scalled by the reference
         !-------------------------------------------
-        H2O = Absorber(k,ABS_H2O_MW)/Ref_Absorber(k, ABS_H2O_MW)
-        H2O_TL = Absorber_TL(k,ABS_H2O_MW)/Ref_Absorber(k, ABS_H2O_MW)
+        H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+        H2O_TL = Absorber_TL(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
 
         ! Combinations of variables common to all predictor groups
         T2  = T*T
@@ -1752,89 +1565,257 @@ CONTAINS
         H2O_R  = SQRT( H2O_A )
         H2O_S  = H2O_A*H2O_A
         H2O_R4 = SQRT( H2O_R )
-        H2OdH2OTzp = H2O/PAFV%GATzp(k, ABS_H2O_MW)
+        H2OdH2OTzp = H2O/PAFV%GATzp(k, ja_h2o)
 
         H2O_A_TL  = SECANG(k)*H2O_TL
         H2O_R_TL  = (POINT_5 / SQRT(H2O_A)) * H2O_A_TL
         H2O_S_TL  = TWO * H2O_A * H2O_A_TL
         H2O_R4_TL = (POINT_5 / SQRT(H2O_R)) * H2O_R_TL
-        H2OdH2OTzp_TL = H2O_TL/PAFV%GATzp(k, ABS_H2O_MW) - &
-                        H2O * GATzp_TL(k, ABS_H2O_IR)/PAFV%GATzp(k, ABS_H2O_MW)**2
+        H2OdH2OTzp_TL = H2O_TL/PAFV%GATzp(k, ja_h2o) - &
+                        H2O * GATzp_TL(k, ja_h2o)/PAFV%GATzp(k, ja_h2o)**2
 
-       !#-------------------------------------------------------------------#
-       !#        -- Predictors --                                           #
-       !#-------------------------------------------------------------------#
-
-       ! set number of predictors
-        IF ( Group_ID == GROUP_MW_O3 ) THEN
-          Predictor_TL%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
-        ELSE
-          Predictor_TL%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
-        END IF
-
-        !  ----------------------
-        !   Fixed (Dry) predictors
-        !  ----------------------
-        Predictor_TL%X(k, 1, COMP_DRY_MW)  = ZERO
-        Predictor_TL%X(k, 2, COMP_DRY_MW)  = SECANG(k) * T_TL
-        Predictor_TL%X(k, 3, COMP_DRY_MW)  = SECANG(k) * T2_TL
-        Predictor_TL%X(k, 4, COMP_DRY_MW)  = T_TL
-        Predictor_TL%X(k, 5, COMP_DRY_MW)  = ZERO
-        Predictor_TL%X(k, 6, COMP_DRY_MW)  = T2_TL
-        Predictor_TL%X(k, 7, COMP_DRY_MW)  = Tz_TL(k)
-        Predictor_TL%X(:, 8:, COMP_DRY_MW) = ZERO
-       !  --------------------------------
-       !  Water vapor (line and continuum)
-       !  --------------------------------
-        Predictor_TL%X(k, 1, COMP_WET_MW) = H2O_A_TL/T - H2O_A*T_TL/T**2
-        Predictor_TL%X(k, 2, COMP_WET_MW) = H2O_A_TL*H2O/T + H2O_A*H2O_TL/T - H2O_A*H2O*T_TL/T**2
-        Predictor_TL%X(k, 3, COMP_WET_MW) = H2O_A_TL*H2O/T2**2 + H2O_A*H2O_TL/T2**2 - &
-                                            Two*H2O_A*H2O*T2_TL/T2**3
-        Predictor_TL%X(k, 4, COMP_WET_MW) = H2O_A_TL/T2 - H2O_A * T2_TL/T2**2
-        Predictor_TL%X(k, 5, COMP_WET_MW) = H2O_A_TL*H2O/T2 + H2O_A*H2O_TL/T2 - H2O_A*H2O*T2_TL/T2**2
-        Predictor_TL%X(k, 6, COMP_WET_MW) = H2O_A_TL/T2**2 - TWO*H2O_A*T2_TL/T2**3
-        Predictor_TL%X(k, 7, COMP_WET_MW) = H2O_A_TL
-        Predictor_TL%X(k, 8, COMP_WET_MW) = H2O_A_TL*DT + H2O_A*DT_TL
-        Predictor_TL%X(k, 9, COMP_WET_MW) = TWO*SECANG(k)**2 * PAFV%GAzp(k,ABS_H2O_MW)*GAzp_TL(k,ABS_H2O_MW)
-        Predictor_TL%X(k, 10,COMP_WET_MW) = SECANG(k)*GAzp_TL(k,ABS_H2O_MW)
-        Predictor_TL%X(k, 11,COMP_WET_MW) = ZERO
-        Predictor_TL%X(k, 12,COMP_WET_MW) = H2O_S_TL*H2O_A + H2O_S*H2O_A_TL
-        Predictor_TL%X(k, 13,COMP_WET_MW) = TWO*H2O_S*H2O_S_TL
-        Predictor_TL%X(k, 14,COMP_WET_MW) = H2OdH2OTzp_TL
-
-        !  -----------------------
-        !  Ozone predictors (GROUP_MW_O3 only)
-        !  -----------------------
-        IF ( Group_ID == GROUP_MW_O3 ) THEN
-          O3      = Absorber(k,ABS_O3_MW)/Ref_Absorber(k, ABS_O3_MW)
-          O3_TL   = Absorber_TL(k,ABS_O3_MW)/Ref_Absorber(k, ABS_O3_MW)
+        IF ( ja_o3 > 0 ) THEN
+          O3      = Absorber(k,ja_o3)/Ref_Absorber(k, ja_o3)
+          O3_TL   = Absorber_TL(k,ja_o3)/Ref_Absorber(k, ja_o3)
           O3_A    = SECANG(k)*O3
           O3_A_TL = SECANG(k)*O3_TL
           O3_R    = SQRT( O3_A )
           O3_R_TL = (POINT_5 / SQRT(O3_A)) * O3_A_TL
-          Predictor_TL%X(k, 1, COMP_OZO_MW)  = O3_A_TL
-          Predictor_TL%X(k, 2, COMP_OZO_MW)  = O3_A_TL*DT + O3_A*DT_TL
-          Predictor_TL%X(k, 3, COMP_OZO_MW)  = O3_A_TL*O3*PAFV%GAzp(k,ABS_O3_MW) &
-                                             + O3_A*O3_TL*PAFV%GAzp(k,ABS_O3_MW) &
-                                             + O3_A*O3*GAzp_TL(k,ABS_O3_MW)
-          Predictor_TL%X(k, 4, COMP_OZO_MW)  = TWO*O3_A*O3_A_TL
-          Predictor_TL%X(k, 5, COMP_OZO_MW)  = O3_A_TL*PAFV%GAzp(k,ABS_O3_MW) &
-                                             + O3_A*GAzp_TL(k,ABS_O3_MW)
-          Predictor_TL%X(k, 6, COMP_OZO_MW)  = O3_A_TL*SQRT(SECANG(k)*PAFV%GAzp(k,ABS_O3_MW)) &
-                                             + O3_A*POINT_5*SQRT(SECANG(k)/PAFV%GAzp(k,ABS_O3_MW)) &
-                                              *GAzp_TL(k,ABS_O3_MW)
-          Predictor_TL%X(k, 7, COMP_OZO_MW)  = O3_R_TL*DT + O3_R*DT_TL
-          Predictor_TL%X(k, 8, COMP_OZO_MW)  = O3_R_TL
-          Predictor_TL%X(k, 9, COMP_OZO_MW)  = O3_R_TL*O3/PAFV%GAzp(k,ABS_O3_MW) &
-                                             + O3_R*O3_TL/PAFV%GAzp(k,ABS_O3_MW) &
-                                             - O3_R*O3*GAzp_TL(k,ABS_O3_MW)/PAFV%GAzp(k,ABS_O3_MW)**2
-          Predictor_TL%X(k,10, COMP_OZO_MW)  = SECANG(k)*GAzp_TL(k,ABS_O3_MW)
-          Predictor_TL%X(k,11, COMP_OZO_MW)  = TWO*SECANG(k)**2 * PAFV%GAzp(k,ABS_O3_MW)*GAzp_TL(k,ABS_O3_MW)
         END IF
 
-      END DO Layer_Loop
+        MW_Component_Loop : DO ic = 1, GROUP_REGISTRY(Group_ID)%n_Components
+          np = Predictor_TL%n_CP(ic)
+          SELECT CASE ( GROUP_REGISTRY(Group_ID)%Component_ID(ic) )
+            CASE ( EDRY_ComID )
+              CALL TL_Kernel_DRY(k, ic)
+              Predictor_TL%X(:, 8:, ic) = ZERO
+            CASE ( WET_ComID )
+              CALL TL_Kernel_WET_MW(k, ic)
+            CASE ( OZO_ComID )
+              CALL TL_Kernel_OZO(k, ic)
+          END SELECT
+        END DO MW_Component_Loop
 
-    END SUBROUTINE ODPS_Compute_Predictor_MW_TL
+      END DO MW_Layer_Loop
+
+    END IF Basis_Select
+
+    NULLIFY(PAFV)
+
+CONTAINS
+
+    ! Position of a HITRAN absorber ID in this group's absorber roster
+    PURE FUNCTION Absorber_Position( Absorber_ID ) RESULT( Position )
+      INTEGER, INTENT(IN) :: Absorber_ID
+      INTEGER :: Position
+      INTEGER :: ja
+      Position = 0
+      DO ja = 1, GROUP_REGISTRY(Group_ID)%n_Absorbers
+        IF ( GROUP_REGISTRY(Group_ID)%Absorber_ID(ja) == Absorber_ID ) THEN
+          Position = ja
+          RETURN
+        END IF
+      END DO
+    END FUNCTION Absorber_Position
+
+    !  ----------------------
+    !   Fixed (Dry) predictors (IR and MW use the same formulation)
+    !  ----------------------
+    SUBROUTINE TL_Kernel_DRY( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      Predictor_TL%X(k, 1, ic)  = ZERO
+      Predictor_TL%X(k, 2, ic)  = SECANG(k) * T_TL
+      Predictor_TL%X(k, 3, ic)  = SECANG(k) * T2_TL
+      Predictor_TL%X(k, 4, ic)  = T_TL
+      Predictor_TL%X(k, 5, ic)  = ZERO
+      Predictor_TL%X(k, 6, ic)  = T2_TL
+      Predictor_TL%X(k, 7, ic)  = Tz_TL(k)
+    END SUBROUTINE TL_Kernel_DRY
+
+    !  --------------------------
+    !  Water vapor continuum predictors
+    !  --------------------------
+    SUBROUTINE TL_Kernel_WCO( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      Predictor_TL%X(k, 1, ic) = H2O_A_TL/T - H2O_A * T_TL/T**2
+      Predictor_TL%X(k, 2, ic) = H2O_A_TL*H2O/T + H2O_A*H2O_TL/T - H2O_A*H2O*T_TL/T**2
+      Predictor_TL%X(k, 3, ic) = H2O_A_TL*H2O/T2**2 + H2O_A*H2O_TL/T2**2 - &
+                                 Two*H2O_A*H2O*T2_TL/T2**3
+      Predictor_TL%X(k, 4, ic) = H2O_A_TL/T2 - H2O_A * T2_TL/T2**2
+      Predictor_TL%X(k, 5, ic) = H2O_A_TL*H2O/T2 + H2O_A*H2O_TL/T2 - H2O_A*H2O*T2_TL/T2**2
+      Predictor_TL%X(k, 6, ic) = H2O_A_TL/T2**2 - TWO*H2O_A*T2_TL/T2**3
+      Predictor_TL%X(k, 7, ic) = H2O_A_TL
+    END SUBROUTINE TL_Kernel_WCO
+
+    !  -----------------------
+    !  Ozone predictors (same formulation for the IR and MW_O3 groups)
+    !  -----------------------
+    SUBROUTINE TL_Kernel_OZO( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      Predictor_TL%X(k, 1, ic)  = O3_A_TL
+      Predictor_TL%X(k, 2, ic)  = O3_A_TL*DT + O3_A*DT_TL
+      Predictor_TL%X(k, 3, ic)  = O3_A_TL*O3*PAFV%GAzp(k,ja_o3) + O3_A*O3_TL*PAFV%GAzp(k,ja_o3) &
+                                   + O3_A*O3*GAzp_TL(k,ja_o3)
+      Predictor_TL%X(k, 4, ic)  = TWO*O3_A*O3_A_TL
+      Predictor_TL%X(k, 5, ic)  = O3_A_TL*PAFV%GAzp(k,ja_o3) + O3_A*GAzp_TL(k,ja_o3)
+      Predictor_TL%X(k, 6, ic)  = O3_A_TL*SQRT(SECANG(k)*PAFV%GAzp(k,ja_o3)) + &
+                                   POINT_5*O3_A*SQRT(SECANG(k)/PAFV%GAzp(k,ja_o3))* &
+                                   GAzp_TL(k,ja_o3)
+      Predictor_TL%X(k, 7, ic)  = O3_R_TL*DT + O3_R*DT_TL  !T*T*T
+      Predictor_TL%X(k, 8, ic)  = O3_R_TL
+      Predictor_TL%X(k, 9, ic)  = O3_R_TL*O3/PAFV%GAzp(k,ja_o3) + O3_R*O3_TL/PAFV%GAzp(k,ja_o3) &
+                                   - O3_R*O3*GAzp_TL(k,ja_o3)/PAFV%GAzp(k,ja_o3)**2
+      Predictor_TL%X(k,10, ic)  = SECANG(k)*GAzp_TL(k,ja_o3)
+      Predictor_TL%X(k,11, ic)  = TWO*SECANG(k)**2 * PAFV%GAzp(k,ja_o3)*GAzp_TL(k,ja_o3)
+    END SUBROUTINE TL_Kernel_OZO
+
+    !  -----------------------
+    !  Carbon dioxide predictors; predictor 11 (CO amount) is carried only
+    !  by rosters that request 11 predictors for CO2 (group 1)
+    !  -----------------------
+    SUBROUTINE TL_Kernel_CO2( k, ic, np )
+      INTEGER, INTENT(IN) :: k, ic, np
+      Predictor_TL%X(k, 1, ic)  = SECANG(k) * T_TL
+      Predictor_TL%X(k, 2, ic)  = SECANG(k) * T2_TL
+      Predictor_TL%X(k, 3, ic)  = T_TL
+      Predictor_TL%X(k, 4, ic)  = T2_TL
+      Predictor_TL%X(k, 5, ic)  = ZERO
+      Predictor_TL%X(k, 6, ic)  = SECANG(k)*CO2_TL
+      Predictor_TL%X(k, 7, ic)  = SECANG(k)*Tzp_TL(k)
+      Predictor_TL%X(k, 8, ic)  = TWO*SECANG(k)**2 * PAFV%GAzp(k, ja_co2)* GAzp_TL(k, ja_co2)
+      Predictor_TL%X(k, 9, ic)  = THREE*PAFV%Tzp(k)**2*Tzp_TL(k)
+      Predictor_TL%X(k, 10, ic) = SECANG(k)*( SQRT(T)*Tzp_TL(k) + (POINT_5*PAFV%Tzp(k)/SQRT(T))*T_TL )
+      IF ( np >= 11 ) THEN
+        Predictor_TL%X(k, 11, ic) = CO_A_TL
+      END IF
+    END SUBROUTINE TL_Kernel_CO2
+
+    !  --------------------------
+    !  Water-line predictors; predictors 16 - 18 (CH4/CO cross terms) are
+    !  carried only by rosters that request 18 predictors for WLO (group 1)
+    !  --------------------------
+    SUBROUTINE TL_Kernel_WLO( k, ic, np )
+      INTEGER, INTENT(IN) :: k, ic, np
+      Predictor_TL%X(k, 1, ic) = H2O_A_TL
+      Predictor_TL%X(k, 2, ic) = H2O_A_TL*DT + H2O_A*DT_TL
+      Predictor_TL%X(k, 3, ic) = H2O_S_TL
+      Predictor_TL%X(k, 4, ic) = H2O_A_TL*DT2 + H2O_A*DT2_TL
+      Predictor_TL%X(k, 5, ic) = H2O_R4_TL
+      Predictor_TL%X(k, 6, ic) = H2O_S_TL*H2O_A + H2O_S*H2O_A_TL
+      Predictor_TL%X(k, 7, ic) = H2O_R_TL
+      Predictor_TL%X(k, 8, ic) = H2O_R_TL*DT + H2O_R*DT_TL
+      Predictor_TL%X(k, 9, ic) = TWO*H2O_S*H2O_S_TL
+      Predictor_TL%X(k,10, ic) = H2OdH2OTzp_TL
+      Predictor_TL%X(k,11, ic) = H2O_R_TL*H2OdH2OTzp + H2O_R*H2OdH2OTzp_TL
+      Predictor_TL%X(k,12, ic) = TWO*SECANG(k)**2 * PAFV%GAzp(k,ja_h2o)*GAzp_TL(k,ja_h2o)
+      Predictor_TL%X(k,13, ic) = SECANG(k)*GAzp_TL(k,ja_h2o)
+      Predictor_TL%X(k,14, ic) = ZERO
+      Predictor_TL%X(k,15, ic) = SECANG(k)*CO2_TL
+      IF ( np >= 18 ) THEN
+        Predictor_TL%X(k,16, ic) = CH4_A_TL
+        Predictor_TL%X(k,17, ic) = TWO*CH4_A*CH4_A_TL*DT + CH4_A*CH4_A*DT_TL
+        Predictor_TL%X(k,18, ic) = CO_A_TL
+      END IF
+    END SUBROUTINE TL_Kernel_WLO
+
+    !  -----------------------
+    !  Carbon monoxide
+    !  -----------------------
+    SUBROUTINE TL_Kernel_CO( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      Predictor_TL%X(k, 1,  ic)   = CO_A_TL
+      Predictor_TL%X(k, 2,  ic)   = CO_A_TL*DT + CO_A*DT_TL
+      Predictor_TL%X(k, 3,  ic)   = (POINT_5/SQRT(CO_R))*CO_R_TL
+      Predictor_TL%X(k, 4,  ic)   = CO_R_TL*DT + CO_R*DT_TL
+      Predictor_TL%X(k, 5,  ic)   = CO_S_TL
+      Predictor_TL%X(k, 6,  ic)   = CO_R_TL
+      Predictor_TL%X(k, 7,  ic)   = CO_A_TL*DT2 + CO_A*DT2_TL
+      Predictor_TL%X(k, 8,  ic)   = CO_ACOdCOzp_TL
+      Predictor_TL%X(k, 9,  ic)   = CO_ACOdCOzp_TL/CO_R - CO_ACOdCOzp*CO_R_TL/CO_R**2
+      Predictor_TL%X(k, 10, ic)   = CO_ACOdCOzp_TL * SQRT( PAFV%GAzp(k, ja_co) ) + &
+                                    (POINT_5*CO_ACOdCOzp/SQRT(PAFV%GAzp(k, ja_co))) * &
+                                    GAzp_TL(k, ja_co)
+    END SUBROUTINE TL_Kernel_CO
+
+    !  -----------------------
+    !  Methane predictors
+    !  -----------------------
+    SUBROUTINE TL_Kernel_CH4( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      Predictor_TL%X(k, 1,  ic)  = CH4_A_TL*DT + CH4_A*DT_TL
+      Predictor_TL%X(k, 2,  ic)  = CH4_R_TL
+      Predictor_TL%X(k, 3,  ic)  = TWO*CH4_A*CH4_A_TL
+      Predictor_TL%X(k, 4,  ic)  = CH4_A_TL
+      Predictor_TL%X(k, 5,  ic)  = CH4_TL*DT + CH4*DT_TL
+      Predictor_TL%X(k, 6,  ic)  = CH4_ACH4zp_TL
+      Predictor_TL%X(k, 7,  ic)  = TWO*CH4_ACH4zp*CH4_ACH4zp_TL
+      Predictor_TL%X(k, 8,  ic)  = (POINT_5/SQRT(CH4_R))*CH4_R_TL
+      Predictor_TL%X(k, 9,  ic)  = GATzp_TL(k, ja_ch4)
+      Predictor_TL%X(k, 10, ic)  = SECANG(k)*GATzp_TL(k, ja_ch4)
+      Predictor_TL%X(k, 11, ic)  = CH4_R_TL*CH4/PAFV%GAzp(k, ja_ch4) + &
+                                   CH4_R*CH4_TL/PAFV%GAzp(k, ja_ch4) - &
+                                   CH4_R*CH4*GAzp_TL(k, ja_ch4)/PAFV%GAzp(k, ja_ch4)**2
+    END SUBROUTINE TL_Kernel_CH4
+
+    !  -----------------------
+    !    N2O predictors
+    !  -----------------------
+    SUBROUTINE TL_Kernel_N2O( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      Predictor_TL%X(k, 1, ic)   = N2O_A_TL*DT + N2O_A*DT_TL
+      Predictor_TL%X(k, 2, ic)   = N2O_R_TL
+      Predictor_TL%X(k, 3, ic)   = N2O_TL*DT + N2O*DT_TL
+      Predictor_TL%X(k, 4, ic)   = POINT_25*N2O_A**(-POINT_75) * N2O_A_TL
+      Predictor_TL%X(k, 5, ic)   = N2O_A_TL
+      Predictor_TL%X(k, 6, ic)   = SECANG(k) * GAzp_TL(k, ja_n2o)
+      Predictor_TL%X(k, 7, ic)   = SECANG(k) * GATzp_TL(k, ja_n2o)
+      Predictor_TL%X(k, 8, ic)   = N2O_S_TL
+      Predictor_TL%X(k, 9, ic)   = GATzp_TL(k, ja_n2o)
+      Predictor_TL%X(k,10, ic)   = N2O_R_TL*N2O / PAFV%GAzp(k, ja_n2o) + &
+                                   N2O_R*N2O_TL / PAFV%GAzp(k, ja_n2o) - &
+                                   N2O_R*N2O*GAzp_TL(k, ja_n2o)/PAFV%GAzp(k, ja_n2o)**2
+      Predictor_TL%X(k,11, ic)   = CH4_A_TL
+      Predictor_TL%X(k,12, ic)   = CH4_A_TL*PAFV%GAzp(k, ja_ch4) + CH4_A*GAzp_TL(k, ja_ch4)
+      Predictor_TL%X(k,13, ic)   = CO_A_TL
+      Predictor_TL%X(k,14, ic)   = CO_A_TL*SECANG(k)*PAFV%GAzp(k, ja_co) + &
+                                   CO_A*SECANG(k)*GAzp_TL(k, ja_co)
+    END SUBROUTINE TL_Kernel_N2O
+
+    !  -----------------------
+    !  NO2 predictors TL (GROUP_UV_NO2)
+    !  -----------------------
+    SUBROUTINE TL_Kernel_NO2( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      NO2      = Absorber(k,ja_no2)/Ref_Absorber(k, ja_no2)
+      NO2_TL   = Absorber_TL(k,ja_no2)/Ref_Absorber(k, ja_no2)
+      NO2_A    = SECANG(k)*NO2
+      NO2_A_TL = SECANG(k)*NO2_TL
+      Predictor_TL%X(k, 1, ic) = NO2_A_TL
+      Predictor_TL%X(k, 2, ic) = NO2_A_TL*DT + NO2_A*DT_TL
+      Predictor_TL%X(k, 3, ic) = NO2_A_TL*DT2 + NO2_A*DT2_TL
+    END SUBROUTINE TL_Kernel_NO2
+
+    !  --------------------------------
+    !  Water vapor, MW (line and continuum together)
+    !  --------------------------------
+    SUBROUTINE TL_Kernel_WET_MW( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      Predictor_TL%X(k, 1, ic) = H2O_A_TL/T - H2O_A*T_TL/T**2
+      Predictor_TL%X(k, 2, ic) = H2O_A_TL*H2O/T + H2O_A*H2O_TL/T - H2O_A*H2O*T_TL/T**2
+      Predictor_TL%X(k, 3, ic) = H2O_A_TL*H2O/T2**2 + H2O_A*H2O_TL/T2**2 - &
+                                 Two*H2O_A*H2O*T2_TL/T2**3
+      Predictor_TL%X(k, 4, ic) = H2O_A_TL/T2 - H2O_A * T2_TL/T2**2
+      Predictor_TL%X(k, 5, ic) = H2O_A_TL*H2O/T2 + H2O_A*H2O_TL/T2 - H2O_A*H2O*T2_TL/T2**2
+      Predictor_TL%X(k, 6, ic) = H2O_A_TL/T2**2 - TWO*H2O_A*T2_TL/T2**3
+      Predictor_TL%X(k, 7, ic) = H2O_A_TL
+      Predictor_TL%X(k, 8, ic) = H2O_A_TL*DT + H2O_A*DT_TL
+      Predictor_TL%X(k, 9, ic) = TWO*SECANG(k)**2 * PAFV%GAzp(k,ja_h2o)*GAzp_TL(k,ja_h2o)
+      Predictor_TL%X(k, 10,ic) = SECANG(k)*GAzp_TL(k,ja_h2o)
+      Predictor_TL%X(k, 11,ic) = ZERO
+      Predictor_TL%X(k, 12,ic) = H2O_S_TL*H2O_A + H2O_S*H2O_A_TL
+      Predictor_TL%X(k, 13,ic) = TWO*H2O_S*H2O_S_TL
+      Predictor_TL%X(k, 14,ic) = H2OdH2OTzp_TL
+    END SUBROUTINE TL_Kernel_WET_MW
 
   END SUBROUTINE  ODPS_Compute_Predictor_TL
 
@@ -1970,6 +1951,21 @@ CONTAINS
     REAL(fp) ::    GAzp_AD(SIZE(Absorber, DIM=1), SIZE(Absorber, DIM=2))
     REAL(fp) ::    GATzp_sum_AD(SIZE(Absorber, DIM=2))
     REAL(fp) ::    GATzp_AD(SIZE(Absorber, DIM=1), SIZE(Absorber, DIM=2))
+    ! Kernel dispatch bookkeeping and shared per-layer variables
+    INTEGER  :: ic_dry, ic_wlo, ic_wco, ic_ozo, ic_co2
+    INTEGER  :: ic_n2o, ic_co, ic_ch4, ic_no2, ic_wet
+    INTEGER  :: ja_h2o, ja_o3, ja_co2, ja_n2o, ja_co, ja_ch4, ja_no2
+    LOGICAL  :: has_trace
+    REAL(fp) :: DT, DT_AD, T, T_AD, T2, T2_AD, DT2, DT2_AD
+    REAL(fp) :: H2O, H2O_AD, H2O_A, H2O_A_AD, H2O_R, H2O_R_AD
+    REAL(fp) :: H2O_S, H2O_S_AD, H2O_R4, H2O_R4_AD, H2OdH2OTzp, H2OdH2OTzp_AD
+    REAL(fp) :: CO2, CO2_AD, O3, O3_AD, O3_A, O3_A_AD, O3_R, O3_R_AD
+    REAL(fp) :: NO2, NO2_AD, NO2_A, NO2_A_AD
+    REAL(fp) :: CO, CO_AD, CO_A, CO_A_AD, CO_R, CO_R_AD, CO_S, CO_S_AD
+    REAL(fp) :: CO_ACOdCOzp, CO_ACOdCOzp_AD
+    REAL(fp) :: N2O, N2O_AD, N2O_A, N2O_A_AD, N2O_R, N2O_R_AD, N2O_S, N2O_S_AD
+    REAL(fp) :: CH4, CH4_AD, CH4_A, CH4_A_AD, CH4_R, CH4_R_AD
+    REAL(fp) :: CH4_ACH4zp, CH4_ACH4zp_AD
 !JR Static initialization means only 1 copy of the variable. OpenMP over profiles
 !JR means $OPENMP_NUM_THREADS copies are needed. So change to run-time initialization
 !    TYPE(PAFV_type), POINTER  :: PAFV => NULL()
@@ -2000,16 +1996,307 @@ CONTAINS
     Tz_AD    = ZERO
 
     !----------------------------------------------------------------
-    ! Call the group specific routine for remaining computation; all
-    ! variables defined above are passed to the called routine
+    ! Per-component adjoint predictor computation. Unlike the forward
+    ! and tangent-linear cases, the ORDER of the adjoint kernels is
+    ! bit-significant: adjoint contributions accumulate into shared
+    ! variables, and floating-point sums depend on evaluation order.
+    ! The kernel call sequence below reproduces the heritage monolith
+    ! order exactly: DRY, WCO, NO2, OZO, CO2, WLO (with the group-1
+    ! extension), CO, CH4, N2O, then the trace-gas variable chains,
+    ! then the common variable chains. Do not reorder.
     !----------------------------------------------------------------
 
-    SELECT CASE( Group_ID )
-      CASE( GROUP_1, GROUP_2, GROUP_UV_NO2 )
-         CALL ODPS_Compute_Predictor_IR_AD()
-      CASE( GROUP_3, GROUP_MW_O3 )
-         CALL ODPS_Compute_Predictor_MW_AD()
-    END SELECT
+    ! Resolve each gas's position in this group's absorber roster
+    ja_h2o = Absorber_Position(H2O_ID)
+    ja_o3  = Absorber_Position(O3_ID)
+    ja_co2 = Absorber_Position(CO2_ID)
+    ja_n2o = Absorber_Position(N2O_ID)
+    ja_co  = Absorber_Position(CO_ID)
+    ja_ch4 = Absorber_Position(CH4_ID)
+    ja_no2 = Absorber_Position(NO2_ID)
+    has_trace = ( ja_co > 0 )   ! CO/CH4/N2O travel together (group 1)
+
+    ! Resolve each component's position in this group's roster
+    ic_dry = Component_Position(DRY_ComID_G1)
+    IF ( ic_dry == 0 ) ic_dry = Component_Position(DRY_ComID_G2)
+    IF ( ic_dry == 0 ) ic_dry = Component_Position(EDRY_ComID)
+    ic_wlo = Component_Position(WLO_ComID)
+    ic_wco = Component_Position(WCO_ComID)
+    ic_ozo = Component_Position(OZO_ComID)
+    ic_co2 = Component_Position(CO2_ComID)
+    ic_n2o = Component_Position(N2O_ComID)
+    ic_co  = Component_Position(CO_ComID)
+    ic_ch4 = Component_Position(CH4_ComID)
+    ic_no2 = Component_Position(NO2_ComID)
+    ic_wet = Component_Position(WET_ComID)
+
+    ! Zero the adjoint accumulators (once per call, as in the heritage code)
+    DT_AD          = ZERO
+    T_AD           = ZERO
+    T2_AD          = ZERO
+    DT2_AD         = ZERO
+    H2O_AD         = ZERO
+    H2O_A_AD       = ZERO
+    H2O_R_AD       = ZERO
+    H2O_S_AD       = ZERO
+    H2O_R4_AD      = ZERO
+    H2OdH2OTzp_AD  = ZERO
+    CO2_AD         = ZERO
+    O3_AD          = ZERO
+    O3_A_AD        = ZERO
+    O3_R_AD        = ZERO
+    NO2_AD         = ZERO
+    NO2_A_AD       = ZERO
+    CO_AD          = ZERO
+    CO_A_AD        = ZERO
+    CO_R_AD        = ZERO
+    CO_S_AD        = ZERO
+    CO_ACOdCOzp_AD = ZERO
+    N2O_AD         = ZERO
+    N2O_A_AD       = ZERO
+    N2O_R_AD       = ZERO
+    N2O_S_AD       = ZERO
+    CH4_AD         = ZERO
+    CH4_A_AD       = ZERO
+    CH4_R_AD       = ZERO
+    CH4_ACH4zp_AD  = ZERO
+
+    Basis_Select: IF ( GROUP_REGISTRY(Group_ID)%Basis == BASIS_IR ) THEN
+
+      IR_Layer_Loop : DO k = n_Layers, 1, -1
+
+        !------------------------------------------
+        !  Relative Temperature
+        !------------------------------------------
+        dT = Temperature(k) - Ref_Temperature(k)
+        T = Temperature(k) / Ref_Temperature(k)
+
+        !-------------------------------------------
+        !  Abosrber amount scalled by the reference
+        !-------------------------------------------
+        H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+        O3  = Absorber(k,ja_o3)/Ref_absorber(k,ja_o3)
+        CO2 = Absorber(k,ja_co2)/Ref_absorber(k,ja_co2)
+
+        ! Combinations of variables common to all predictor groups
+        T2   = T*T
+        DT2  = DT*ABS( DT )
+
+        H2O_A = SECANG(k)*H2O
+        H2O_R  = SQRT( H2O_A )
+        H2O_S  = H2O_A*H2O_A
+        H2O_R4 = SQRT( H2O_R )
+        H2OdH2OTzp = H2O/PAFV%GATzp(k, ja_h2o)
+
+        O3_A = SECANG(k)*O3
+        O3_R = SQRT( O3_A )
+
+        IF( has_trace )THEN
+          CO  = Absorber(k,ja_co)/Ref_absorber(k, ja_co)
+          N2O = Absorber(k,ja_n2o)/Ref_absorber(k,ja_n2o)
+          CH4 = Absorber(k,ja_ch4)/Ref_absorber(k,ja_ch4)
+
+          N2O_A = SECANG(k)*N2O
+          N2O_R = SQRT( N2O_A )
+          N2O_S = N2O_A*N2O_A
+
+          CO_A = SECANG(k)*CO
+          CO_R = SQRT( CO_A )
+          CO_S = CO_A*CO_A
+          CO_ACOdCOzp = CO_A*CO/PAFV%GAzp(k, ja_co)
+
+          CH4_A = SECANG(k)*CH4
+          CH4_R = SQRT(CH4_A)
+          CH4_ACH4zp = SECANG(k)*PAFV%GAzp(k, ja_ch4)
+
+        END IF
+
+        ! Adjoint kernels in the heritage monolith order (see note above)
+        CALL AD_Kernel_DRY(k, ic_dry)
+        CALL AD_Kernel_WCO(k, ic_wco)
+        IF ( ic_no2 > 0 ) CALL AD_Kernel_NO2(k, ic_no2)
+        CALL AD_Kernel_OZO_IR(k, ic_ozo)
+        CALL AD_Kernel_CO2(k, ic_co2)
+        CALL AD_Kernel_WLO(k, ic_wlo, GROUP_REGISTRY(Group_ID)%n_Predictors(ic_wlo))
+        IF ( has_trace ) THEN
+          CALL AD_Kernel_CO(k, ic_co)
+          CALL AD_Kernel_CH4(k, ic_ch4)
+          CALL AD_Kernel_N2O(k, ic_n2o)
+
+          ! Trace-gas variable chains (group 1)
+          GAzp_AD(k, ja_ch4) = GAzp_AD(k, ja_ch4) + SECANG(k)*CH4_ACH4zp_AD
+          CH4_A_AD = CH4_A_AD + (POINT_5/SQRT(CH4_A)) * CH4_R_AD
+          CH4_AD = CH4_AD + SECANG(k)*CH4_A_AD
+          CH4_ACH4zp_AD = ZERO
+          CH4_R_AD =      ZERO
+          CH4_A_AD =      ZERO
+
+          GAzp_AD(k, ja_co) = GAzp_AD(k, ja_co)                                      &
+                              - CO_ACOdCOzp_AD*CO_A*CO/PAFV%GAzp(k, ja_co)**2
+          CO_A_AD = CO_A_AD + CO_ACOdCOzp_AD*CO/PAFV%GAzp(k, ja_co)                  &
+                            + CO_S_AD*TWO * CO_A                                     &
+                            + CO_R_AD*POINT_5/SQRT(CO_A)
+          CO_AD = CO_AD + CO_ACOdCOzp_AD*CO_A/PAFV%GAzp(k, ja_co)                    &
+                        + CO_A_AD*SECANG(k)
+          CO_ACOdCOzp_AD = ZERO
+          CO_S_AD        = ZERO
+          CO_R_AD        = ZERO
+          CO_A_AD        = ZERO
+
+          N2O_A_AD = N2O_A_AD + N2O_R_AD * POINT_5 / SQRT(N2O_A)                    &
+                              + N2O_S_AD * TWO * N2O_A
+          N2O_AD = N2O_AD + N2O_A_AD * SECANG(k)
+          N2O_A_AD = ZERO
+          N2O_R_AD = ZERO
+          N2O_S_AD = ZERO
+
+          Absorber_AD(k,ja_ch4) = Absorber_AD(k,ja_ch4)                              &
+                                    + CH4_AD/Ref_absorber(k,ja_ch4)
+          Absorber_AD(k,ja_n2o) = Absorber_AD(k,ja_n2o)                              &
+                                    + N2O_AD/Ref_absorber(k,ja_n2o)
+          Absorber_AD(k,ja_co)  = Absorber_AD(k,ja_co)                               &
+                                    + CO_AD/Ref_absorber(k, ja_co)
+          CO_AD  = ZERO
+          N2O_AD = ZERO
+          CH4_AD = ZERO
+
+        END IF
+
+        ! Combinations of variables common to all predictor groups
+
+        O3_A_AD = O3_A_AD + O3_R_AD * POINT_5 / SQRT(O3_A)
+        O3_AD = O3_AD + O3_A_AD * SECANG(k)
+        O3_A_AD = ZERO
+        O3_R_AD = ZERO
+
+        GATzp_AD(k, ja_h2o) = GATzp_AD(k, ja_h2o)                                    &
+                                - H2OdH2OTzp_AD*H2O/PAFV%GATzp(k, ja_h2o)**2
+        H2O_R_AD = H2O_R_AD + H2O_R4_AD * POINT_5 / SQRT(H2O_R)
+        H2O_A_AD = H2O_A_AD + H2O_S_AD * TWO * H2O_A                                 &
+                 + H2O_R_AD * POINT_5 / SQRT(H2O_A)
+        H2O_AD = H2O_AD + H2O_A_AD * SECANG(k)                                       &
+               + H2OdH2OTzp_AD / PAFV%GATzp(k, ja_h2o)
+
+        H2O_A_AD      = ZERO
+        H2O_R_AD      = ZERO
+        H2O_S_AD      = ZERO
+        H2O_R4_AD     = ZERO
+        H2OdH2OTzp_AD = ZERO
+
+        IF( DT > ZERO) THEN
+          DT_AD = DT_AD + DT2_AD*TWO*DT
+        ELSE
+          DT_AD = DT_AD - DT2_AD*TWO*DT
+        ENDIF
+        T_AD = T_AD + T2_AD*TWO*T
+        T2_AD   = ZERO
+        DT2_AD  = ZERO
+
+        !-------------------------------------------
+        !  Abosrber amount scalled by the reference
+        !-------------------------------------------
+        Absorber_AD(k,ja_co2) = Absorber_AD(k,ja_co2)            &
+                                  + CO2_AD / Ref_absorber(k,ja_co2)
+        Absorber_AD(k,ja_o3)  = Absorber_AD(k,ja_o3)             &
+                                  + O3_AD / Ref_absorber(k,ja_o3)
+        Absorber_AD(k,ja_h2o) = Absorber_AD(k,ja_h2o)            &
+                                  + H2O_AD / Ref_Absorber(k, ja_h2o)
+        H2O_AD = ZERO
+        O3_AD  = ZERO
+        CO2_AD = ZERO
+
+        !------------------------------------------
+        !  Relative Temperature
+        !------------------------------------------
+        Temperature_AD(k) = Temperature_AD(k) + T_AD/Ref_Temperature(k) &
+                          + dT_AD
+        dT_AD = ZERO
+        T_AD  = ZERO
+
+      END DO IR_Layer_Loop
+
+    ELSE Basis_Select   ! BASIS_MW
+
+      ! set number of predictors
+      Predictor_AD%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
+
+      MW_Layer_Loop : DO k = n_Layers, 1, -1
+
+        !------------------------------------------
+        !  Relative Temperature
+        !------------------------------------------
+        dT = Temperature(k) - Ref_Temperature(k)
+        T = Temperature(k) / Ref_Temperature(k)
+
+        !-------------------------------------------
+        !  Abosrber amount scalled by the reference
+        !-------------------------------------------
+        H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+
+        ! Combinations of variables common to all predictor groups
+        T2  = T*T
+        DT2 = DT*ABS( DT )
+
+        H2O_A = SECANG(k)*H2O
+        H2O_R  = SQRT( H2O_A )
+        H2O_S  = H2O_A*H2O_A
+        H2O_R4 = SQRT( H2O_R )
+        H2OdH2OTzp = H2O/PAFV%GATzp(k, ja_h2o)
+
+        IF ( ja_o3 > 0 ) THEN
+          O3   = Absorber(k,ja_o3)/Ref_Absorber(k, ja_o3)
+          O3_A = SECANG(k)*O3
+          O3_R = SQRT( O3_A )
+        END IF
+
+        ! Adjoint kernels in the heritage monolith order (see note above)
+        CALL AD_Kernel_DRY(k, ic_dry)
+        CALL AD_Kernel_WET_MW(k, ic_wet)
+        IF ( ic_ozo > 0 ) CALL AD_Kernel_OZO_MW(k, ic_ozo)
+
+        !-------------------------------------------
+        !  Abosrber amount scalled by the reference
+        !-------------------------------------------
+
+        ! Combinations of variables common to all predictor groups
+
+        GATzp_AD(k, ja_h2o) = GATzp_AD(k, ja_h2o)                                    &
+                                - H2OdH2OTzp_AD*H2O/PAFV%GATzp(k, ja_h2o)**2
+        H2O_R_AD = H2O_R_AD + H2O_R4_AD * POINT_5 / SQRT(H2O_R)
+        H2O_A_AD = H2O_A_AD + H2O_S_AD * TWO * H2O_A                                 &
+                 + H2O_R_AD * POINT_5 / SQRT(H2O_A)
+        H2O_AD = H2O_AD + H2O_A_AD * SECANG(k)                                       &
+               + H2OdH2OTzp_AD / PAFV%GATzp(k, ja_h2o)
+        H2O_A_AD      = ZERO
+        H2O_R_AD      = ZERO
+        H2O_S_AD      = ZERO
+        H2O_R4_AD     = ZERO
+        H2OdH2OTzp_AD = ZERO
+
+        IF( DT > ZERO) THEN
+          DT_AD = DT_AD + DT2_AD*TWO*DT
+        ELSE
+          DT_AD = DT_AD - DT2_AD*TWO*DT
+        ENDIF
+        T_AD = T_AD + T2_AD*TWO*T
+        T2_AD   = ZERO
+        DT2_AD  = ZERO
+
+        Absorber_AD(k,ja_h2o) = Absorber_AD(k,ja_h2o)            &
+                                  + H2O_AD / Ref_Absorber(k, ja_h2o)
+        H2O_AD = ZERO
+
+        !------------------------------------------
+        !  Relative Temperature
+        !------------------------------------------
+        Temperature_AD(k) = Temperature_AD(k) + T_AD/Ref_Temperature(k) &
+                          + dT_AD
+        dT_AD = ZERO
+        T_AD  = ZERO
+
+      END DO MW_Layer_Loop
+
+    END IF Basis_Select
 
     Adjoint_Layer_Loop : DO k = n_Layers, 1, -1
 
@@ -2041,845 +2328,545 @@ CONTAINS
 
 CONTAINS
 
-    SUBROUTINE ODPS_Compute_Predictor_IR_AD()
-
-      ! ---------------
-      ! Local variables
-      ! ---------------
-      INTEGER  :: k ! n_Layers, n_Levels
-      REAL(fp) :: DT,            DT_AD
-      REAL(fp) :: T,             T_AD
-      REAL(fp) :: T2,            T2_AD
-      REAL(fp) :: DT2,           DT2_AD
-      REAL(fp) :: H2O,           H2O_AD
-      REAL(fp) :: H2O_A,         H2O_A_AD
-      REAL(fp) :: H2O_R,         H2O_R_AD
-      REAL(fp) :: H2O_S,         H2O_S_AD
-      REAL(fp) :: H2O_R4,        H2O_R4_AD
-      REAL(fp) :: H2OdH2OTzp,    H2OdH2OTzp_AD
-      REAL(fp) :: CO2,           CO2_AD
-      REAL(fp) :: O3,            O3_AD
-      REAL(fp) :: O3_A,          O3_A_AD
-      REAL(fp) :: O3_R,          O3_R_AD
-      REAL(fp) :: NO2,           NO2_AD
-      REAL(fp) :: NO2_A,         NO2_A_AD
-      REAL(fp) :: CO,            CO_AD
-      REAL(fp) :: CO_A,          CO_A_AD
-      REAL(fp) :: CO_R,          CO_R_AD
-      REAL(fp) :: CO_S,          CO_S_AD
-      REAL(fp) :: CO_ACOdCOzp,   CO_ACOdCOzp_AD
-      REAL(fp) :: N2O,           N2O_AD
-      REAL(fp) :: N2O_A,         N2O_A_AD
-      REAL(fp) :: N2O_R,         N2O_R_AD
-      REAL(fp) :: N2O_S,         N2O_S_AD
-      REAL(fp) :: CH4,           CH4_AD
-      REAL(fp) :: CH4_A,         CH4_A_AD
-      REAL(fp) :: CH4_R,         CH4_R_AD
-      REAL(fp) :: CH4_ACH4zp,    CH4_ACH4zp_AD
-
-      DT_AD          = ZERO
-      T_AD           = ZERO
-      T2_AD          = ZERO
-      DT2_AD         = ZERO
-      H2O_AD         = ZERO
-      H2O_A_AD       = ZERO
-      H2O_R_AD       = ZERO
-      H2O_S_AD       = ZERO
-      H2O_R4_AD      = ZERO
-      H2OdH2OTzp_AD  = ZERO
-      CO2_AD         = ZERO
-      O3_AD          = ZERO
-      O3_A_AD        = ZERO
-      O3_R_AD        = ZERO
-      NO2_AD         = ZERO
-      NO2_A_AD       = ZERO
-      CO_AD          = ZERO
-      CO_A_AD        = ZERO
-      CO_R_AD        = ZERO
-      CO_S_AD        = ZERO
-      CO_ACOdCOzp_AD = ZERO
-      N2O_AD         = ZERO
-      N2O_A_AD       = ZERO
-      N2O_R_AD       = ZERO
-      N2O_S_AD       = ZERO
-      CH4_AD         = ZERO
-      CH4_A_AD       = ZERO
-      CH4_R_AD       = ZERO
-      CH4_ACH4zp_AD  = ZERO
-
-      Layer_Loop : DO k = n_Layers, 1, -1
-
-        !------------------------------------------
-        !  Relative Temperature
-        !------------------------------------------
-        dT = Temperature(k) - Ref_Temperature(k)
-        T = Temperature(k) / Ref_Temperature(k)
-
-        !-------------------------------------------
-        !  Abosrber amount scalled by the reference
-        !-------------------------------------------
-        H2O = Absorber(k,ABS_H2O_IR)/Ref_Absorber(k, ABS_H2O_IR)
-        O3  = Absorber(k,ABS_O3_IR)/Ref_absorber(k,ABS_O3_IR)
-        CO2 = Absorber(k,ABS_CO2_IR)/Ref_absorber(k,ABS_CO2_IR)
-
-        ! Combinations of variables common to all predictor groups
-        T2   = T*T
-        DT2  = DT*ABS( DT )
-
-        H2O_A = SECANG(k)*H2O
-        H2O_R  = SQRT( H2O_A )
-        H2O_S  = H2O_A*H2O_A
-        H2O_R4 = SQRT( H2O_R )
-        H2OdH2OTzp = H2O/PAFV%GATzp(k, ABS_H2O_IR)
-
-        O3_A = SECANG(k)*O3
-        O3_R = SQRT( O3_A )
-
-        IF( Group_ID == GROUP_1 )THEN
-          CO  = Absorber(k,ABS_CO_IR)/Ref_absorber(k, ABS_CO_IR)
-          N2O = Absorber(k,ABS_N2O_IR)/Ref_absorber(k,ABS_N2O_IR)
-          CH4 = Absorber(k,ABS_CH4_IR)/Ref_absorber(k,ABS_CH4_IR)
-
-          N2O_A = SECANG(k)*N2O
-          N2O_R = SQRT( N2O_A )
-          N2O_S = N2O_A*N2O_A
-
-          CO_A = SECANG(k)*CO
-          CO_R = SQRT( CO_A )
-          CO_S = CO_A*CO_A
-          CO_ACOdCOzp = CO_A*CO/PAFV%GAzp(k, ABS_CO_IR)
-
-          CH4_A = SECANG(k)*CH4
-          CH4_R = SQRT(CH4_A)
-          CH4_ACH4zp = SECANG(k)*PAFV%GAzp(k, ABS_CH4_IR)
-
+    ! Position of a HITRAN absorber ID in this group's absorber roster
+    PURE FUNCTION Absorber_Position( Absorber_ID ) RESULT( Position )
+      INTEGER, INTENT(IN) :: Absorber_ID
+      INTEGER :: Position
+      INTEGER :: ja
+      Position = 0
+      DO ja = 1, GROUP_REGISTRY(Group_ID)%n_Absorbers
+        IF ( GROUP_REGISTRY(Group_ID)%Absorber_ID(ja) == Absorber_ID ) THEN
+          Position = ja
+          RETURN
         END IF
+      END DO
+    END FUNCTION Absorber_Position
 
-       !#-------------------------------------------------------------------#
-       !#        -- Predictors --                                           #
-       !#-------------------------------------------------------------------#
-
-        !  ----------------------
-        !   Fixed (Dry) predictors
-        !  ----------------------
-        T_AD     = T_AD                                            &
-                   + Predictor_AD%X(k, 2, COMP_DRY_IR) * SECANG(k) &
-                   + Predictor_AD%X(k, 4, COMP_DRY_IR)
-        T2_AD    = T2_AD                                           &
-                   + Predictor_AD%X(k, 3, COMP_DRY_IR) * SECANG(k) &
-                   + Predictor_AD%X(k, 6, COMP_DRY_IR)
-        Tz_AD(k) = Tz_AD(k) + Predictor_AD%X(k, 7, COMP_DRY_IR)
-
-        Predictor_AD%X(k, 1, COMP_DRY_IR)  = ZERO
-        Predictor_AD%X(k, 2, COMP_DRY_IR)  = ZERO
-        Predictor_AD%X(k, 3, COMP_DRY_IR)  = ZERO
-        Predictor_AD%X(k, 4, COMP_DRY_IR)  = ZERO
-        Predictor_AD%X(k, 5, COMP_DRY_IR)  = ZERO
-        Predictor_AD%X(k, 6, COMP_DRY_IR)  = ZERO
-        Predictor_AD%X(k, 7, COMP_DRY_IR)  = ZERO
-
-       !  --------------------------
-       !  Water vapor continuum predictors
-       !  --------------------------
-        H2O_A_AD = H2O_A_AD                                         &
-                   + Predictor_AD%X(k, 1, COMP_WCO_IR)/T            &
-                   + Predictor_AD%X(k, 2, COMP_WCO_IR)*H2O/T        &
-                   + Predictor_AD%X(k, 3, COMP_WCO_IR)*H2O/T2**2    &
-                   + Predictor_AD%X(k, 4, COMP_WCO_IR)/T2           &
-                   + Predictor_AD%X(k, 5, COMP_WCO_IR)*H2O/T2       &
-                   + Predictor_AD%X(k, 6, COMP_WCO_IR)/T2**2        &
-                   + Predictor_AD%X(k, 7, COMP_WCO_IR)
-        T_AD     = T_AD                                                &
-                   - Predictor_AD%X(k, 1, COMP_WCO_IR)*H2O_A/T**2      &
-                   - Predictor_AD%X(k, 2, COMP_WCO_IR)*H2O_A*H2O/T**2
-        H2O_AD   = H2O_AD                                          &
-                   + Predictor_AD%X(k, 2, COMP_WCO_IR)*H2O_A/T     &
-                   + Predictor_AD%X(k, 3, COMP_WCO_IR)*H2O_A/T2**2 &
-                   + Predictor_AD%X(k, 5, COMP_WCO_IR)*H2O_A/T2
-        T2_AD    = T2_AD                                                   &
-                   - Predictor_AD%X(k, 3, COMP_WCO_IR)*TWO*H2O_A*H2O/T2**3 &
-                   - Predictor_AD%X(k, 4, COMP_WCO_IR)*H2O_A/T2**2         &
-                   - Predictor_AD%X(k, 5, COMP_WCO_IR)*H2O_A*H2O/T2**2     &
-                   - Predictor_AD%X(k, 6, COMP_WCO_IR)*TWO*H2O_A/T2**3
-
-        Predictor_AD%X(k, 1, COMP_WCO_IR) = ZERO
-        Predictor_AD%X(k, 2, COMP_WCO_IR) = ZERO
-        Predictor_AD%X(k, 3, COMP_WCO_IR) = ZERO
-        Predictor_AD%X(k, 4, COMP_WCO_IR) = ZERO
-        Predictor_AD%X(k, 5, COMP_WCO_IR) = ZERO
-        Predictor_AD%X(k, 6, COMP_WCO_IR) = ZERO
-        Predictor_AD%X(k, 7, COMP_WCO_IR) = ZERO
-
-        !  -----------------------
-        !  NO2 predictors AD (GROUP_UV_NO2 only); adjoint of the compact set
-        !  X1=NO2_A, X2=NO2_A*DT, X3=NO2_A*DT2, NO2_A=secang*NO2, NO2=Abs/Ref.
-        !  -----------------------
-        IF( Group_ID == GROUP_UV_NO2 )THEN
-          NO2   = Absorber(k,ABS_NO2_G8)/Ref_Absorber(k, ABS_NO2_G8)
-          NO2_A = SECANG(k)*NO2
-
-          NO2_A_AD = NO2_A_AD                                       &
-                     + Predictor_AD%X(k, 1, COMP_NO2_G8)            &
-                     + Predictor_AD%X(k, 2, COMP_NO2_G8)*DT         &
-                     + Predictor_AD%X(k, 3, COMP_NO2_G8)*DT2
-          DT_AD    = DT_AD  + Predictor_AD%X(k, 2, COMP_NO2_G8)*NO2_A
-          DT2_AD   = DT2_AD + Predictor_AD%X(k, 3, COMP_NO2_G8)*NO2_A
-          Predictor_AD%X(k, 1, COMP_NO2_G8) = ZERO
-          Predictor_AD%X(k, 2, COMP_NO2_G8) = ZERO
-          Predictor_AD%X(k, 3, COMP_NO2_G8) = ZERO
-
-          NO2_AD   = NO2_AD + NO2_A_AD*SECANG(k)
-          NO2_A_AD = ZERO
-          Absorber_AD(k,ABS_NO2_G8) = Absorber_AD(k,ABS_NO2_G8)     &
-                                    + NO2_AD/Ref_Absorber(k, ABS_NO2_G8)
-          NO2_AD   = ZERO
+    ! Position of a component ID in this group's component roster
+    PURE FUNCTION Component_Position( Component_ID ) RESULT( Position )
+      INTEGER, INTENT(IN) :: Component_ID
+      INTEGER :: Position
+      INTEGER :: jc
+      Position = 0
+      DO jc = 1, GROUP_REGISTRY(Group_ID)%n_Components
+        IF ( GROUP_REGISTRY(Group_ID)%Component_ID(jc) == Component_ID ) THEN
+          Position = jc
+          RETURN
         END IF
-
-        !  -----------------------
-        !  Ozone predictors
-        !  -----------------------
-
-        O3_A_AD = O3_A_AD                                                               &
-                  + Predictor_AD%X(k, 1, COMP_OZO_IR)                                   &
-                  + Predictor_AD%X(k, 2, COMP_OZO_IR)*DT                                &
-                  + Predictor_AD%X(k, 3, COMP_OZO_IR)*O3*PAFV%GAzp(k,ABS_O3_IR)         &
-                  + Predictor_AD%X(k, 4, COMP_OZO_IR)*TWO*O3_A                          &
-                  + Predictor_AD%X(k, 5, COMP_OZO_IR)*PAFV%GAzp(k,ABS_O3_IR)            &
-                  + Predictor_AD%X(k, 6, COMP_OZO_IR)*SQRT(SECANG(k)*PAFV%GAzp(k,ABS_O3_IR))
-
-        DT_AD   = DT_AD                                                                 &
-                  + Predictor_AD%X(k, 2, COMP_OZO_IR)*O3_A                              &
-                  + Predictor_AD%X(k, 7, COMP_OZO_IR)*O3_R
-
-        O3_AD   = O3_AD                                                                 &
-                  + Predictor_AD%X(k, 3, COMP_OZO_IR)*O3_A*PAFV%GAzp(k,ABS_O3_IR)       &
-                  + Predictor_AD%X(k, 9, COMP_OZO_IR)*O3_R/PAFV%GAzp(k,ABS_O3_IR)
-
-        GAzp_AD(k,ABS_O3_IR) = GAzp_AD(k,ABS_O3_IR)                                     &
-                  + Predictor_AD%X(k, 3, COMP_OZO_IR)*O3_A*O3                           &
-                  + Predictor_AD%X(k, 5, COMP_OZO_IR)*O3_A                              &
-                  + Predictor_AD%X(k, 6, COMP_OZO_IR)*POINT_5*O3_A*SQRT(SECANG(k)/PAFV%GAzp(k,ABS_O3_IR)) &
-                  - Predictor_AD%X(k, 9, COMP_OZO_IR)*O3_R*O3/PAFV%GAzp(k,ABS_O3_IR)**2 &
-                  + Predictor_AD%X(k,10, COMP_OZO_IR)*SECANG(k)                         &
-                  + Predictor_AD%X(k,11, COMP_OZO_IR)*TWO*SECANG(k)**2*PAFV%GAzp(k,ABS_O3_IR)
-
-        O3_R_AD = O3_R_AD                                                               &
-                  + Predictor_AD%X(k, 7, COMP_OZO_IR)*DT                                &
-                  + Predictor_AD%X(k, 8, COMP_OZO_IR)                                   &
-                  + Predictor_AD%X(k, 9, COMP_OZO_IR)*O3/PAFV%GAzp(k,ABS_O3_IR)
-
-!        H2O_A_AD= H2O_A_AD + Predictor_AD%X(k, 12, COMP_OZO_IR)
-
-!        GAzp_AD(k,ABS_H2O_IR) = GAzp_AD(k,ABS_H2O_IR)                                   &
-!                  + Predictor_AD%X(k, 13, COMP_OZO_IR)*SECANG(k)
-
-        Predictor_AD%X(k, 1, COMP_OZO_IR)  = ZERO
-        Predictor_AD%X(k, 2, COMP_OZO_IR)  = ZERO
-        Predictor_AD%X(k, 3, COMP_OZO_IR)  = ZERO
-        Predictor_AD%X(k, 4, COMP_OZO_IR)  = ZERO
-        Predictor_AD%X(k, 5, COMP_OZO_IR)  = ZERO
-        Predictor_AD%X(k, 6, COMP_OZO_IR)  = ZERO
-        Predictor_AD%X(k, 7, COMP_OZO_IR)  = ZERO
-        Predictor_AD%X(k, 8, COMP_OZO_IR)  = ZERO
-        Predictor_AD%X(k, 9, COMP_OZO_IR)  = ZERO
-        Predictor_AD%X(k,10, COMP_OZO_IR)  = ZERO
-        Predictor_AD%X(k,11, COMP_OZO_IR)  = ZERO
-
-        Predictor_AD%X(k,12, COMP_OZO_IR)  = ZERO
-        Predictor_AD%X(k,13, COMP_OZO_IR)  = ZERO
-
-        !  -----------------------
-        !  Carbon dioxide predictors
-        !  -----------------------
-        T_AD      = T_AD                                                &
-                    + Predictor_AD%X(k, 1, COMP_CO2_IR)*SECANG(k)       &
-                    + Predictor_AD%X(k, 3, COMP_CO2_IR)                 &
-                    + Predictor_AD%X(k, 10, COMP_CO2_IR)*SECANG(k)*(POINT_5*PAFV%Tzp(k)/SQRT(T))
-
-        T2_AD     = T2_AD                                               &
-                    + Predictor_AD%X(k, 2, COMP_CO2_IR)*SECANG(k)       &
-                    + Predictor_AD%X(k, 4, COMP_CO2_IR)
-
-        CO2_AD    = CO2_AD + Predictor_AD%X(k, 6, COMP_CO2_IR)*SECANG(k)
-
-        Tzp_AD(k) = Tzp_AD(k)                                           &
-                    + Predictor_AD%X(k, 7, COMP_CO2_IR)*SECANG(k)       &
-                    + Predictor_AD%X(k, 9, COMP_CO2_IR)*THREE*PAFV%Tzp(k)**2 &
-                    + Predictor_AD%X(k, 10, COMP_CO2_IR)*SECANG(k)*SQRT(T)
-
-        GAzp_AD(k, ABS_CO2_IR) = GAzp_AD(k, ABS_CO2_IR)                 &
-                    + Predictor_AD%X(k, 8, COMP_CO2_IR)*TWO*SECANG(k)**2*PAFV%GAzp(k, ABS_CO2_IR)
-
-
-        Predictor_AD%X(k, 1, COMP_CO2_IR)  = ZERO
-        Predictor_AD%X(k, 2, COMP_CO2_IR)  = ZERO
-        Predictor_AD%X(k, 3, COMP_CO2_IR)  = ZERO
-        Predictor_AD%X(k, 4, COMP_CO2_IR)  = ZERO
-        Predictor_AD%X(k, 5, COMP_CO2_IR)  = ZERO
-        Predictor_AD%X(k, 6, COMP_CO2_IR)  = ZERO
-        Predictor_AD%X(k, 7, COMP_CO2_IR)  = ZERO
-        Predictor_AD%X(k, 8, COMP_CO2_IR)  = ZERO
-        Predictor_AD%X(k, 9, COMP_CO2_IR)  = ZERO
-        Predictor_AD%X(k,10, COMP_CO2_IR)  = ZERO
-
-        !  --------------------------
-        !  Water-line predictors
-        !  --------------------------
-
-        H2O_A_AD = H2O_A_AD                                          &
-                   + Predictor_AD%X(k, 1, COMP_WLO_IR)               &
-                   + Predictor_AD%X(k, 2, COMP_WLO_IR)*DT            &
-                   + Predictor_AD%X(k, 4, COMP_WLO_IR)*DT2           &
-                   + Predictor_AD%X(k, 6, COMP_WLO_IR)*H2O_S
-
-        DT_AD    = DT_AD                                             &
-                   + Predictor_AD%X(k, 2, COMP_WLO_IR)*H2O_A         &
-                   + Predictor_AD%X(k, 8, COMP_WLO_IR)*H2O_R
-
-        H2O_S_AD = H2O_S_AD                                          &
-                   + Predictor_AD%X(k, 3, COMP_WLO_IR)               &
-                   + Predictor_AD%X(k, 6, COMP_WLO_IR)*H2O_A         &
-                   + Predictor_AD%X(k, 9, COMP_WLO_IR)*TWO*H2O_S
-
-        DT2_AD   = DT2_AD + Predictor_AD%X(k, 4, COMP_WLO_IR)*H2O_A
-
-        H2O_R4_AD= H2O_R4_AD + Predictor_AD%X(k, 5, COMP_WLO_IR)
-
-        H2O_R_AD = H2O_R_AD                                          &
-                   + Predictor_AD%X(k, 7, COMP_WLO_IR)               &
-                   + Predictor_AD%X(k, 8, COMP_WLO_IR)*DT            &
-                   + Predictor_AD%X(k,11, COMP_WLO_IR)*H2OdH2OTzp
-
-        H2OdH2OTzp_AD = H2OdH2OTzp_AD                                &
-                   + Predictor_AD%X(k,10, COMP_WLO_IR)               &
-                   + Predictor_AD%X(k,11, COMP_WLO_IR)*H2O_R
-
-        GAzp_AD(k,ABS_H2O_IR) = GAzp_AD(k,ABS_H2O_IR)                                            &
-                   + Predictor_AD%X(k,12, COMP_WLO_IR)*TWO*SECANG(k)**2*PAFV%GAzp(k,ABS_H2O_IR)  &
-                   + Predictor_AD%X(k,13, COMP_WLO_IR)*SECANG(k)
-
-        CO2_AD   = CO2_AD + Predictor_AD%X(k,15, COMP_WLO_IR)*SECANG(k)
-
-        Predictor_AD%X(k, 1, COMP_WLO_IR) = ZERO
-        Predictor_AD%X(k, 2, COMP_WLO_IR) = ZERO
-        Predictor_AD%X(k, 3, COMP_WLO_IR) = ZERO
-        Predictor_AD%X(k, 4, COMP_WLO_IR) = ZERO
-        Predictor_AD%X(k, 5, COMP_WLO_IR) = ZERO
-        Predictor_AD%X(k, 6, COMP_WLO_IR) = ZERO
-        Predictor_AD%X(k, 7, COMP_WLO_IR) = ZERO
-        Predictor_AD%X(k, 8, COMP_WLO_IR) = ZERO
-        Predictor_AD%X(k, 9, COMP_WLO_IR) = ZERO
-        Predictor_AD%X(k,10, COMP_WLO_IR) = ZERO
-        Predictor_AD%X(k,11, COMP_WLO_IR) = ZERO
-        Predictor_AD%X(k,12, COMP_WLO_IR) = ZERO
-        Predictor_AD%X(k,13, COMP_WLO_IR) = ZERO
-        Predictor_AD%X(k,14, COMP_WLO_IR) = ZERO
-        Predictor_AD%X(k,15, COMP_WLO_IR) = ZERO
-
-        ! Addtional predictors for group 1
-        IF_Group1: IF( Group_ID == GROUP_1 )THEN
-
-          CO_A_AD  = CO_A_AD   + Predictor_AD%X(k, 18, COMP_WLO_IR)         &
-                               + Predictor_AD%X(k, 11, COMP_CO2_IR)
-          CH4_A_AD = CH4_A_AD                                               &
-                     + Predictor_AD%X(k, 16, COMP_WLO_IR)                   &
-                     + Predictor_AD%X(k, 17, COMP_WLO_IR)*TWO*CH4_A*DT
-          DT_AD    = DT_AD + Predictor_AD%X(k, 17, COMP_WLO_IR)*CH4_A*CH4_A
-
-          Predictor_AD%X(k, 16, COMP_WLO_IR) = ZERO
-          Predictor_AD%X(k, 17, COMP_WLO_IR) = ZERO
-          Predictor_AD%X(k, 18, COMP_WLO_IR) = ZERO
-          Predictor_AD%X(k, 11, COMP_CO2_IR) = ZERO
-
-          !  -----------------------
-          !  Carbon monoxide
-          !  -----------------------
-
-          CO_A_AD = CO_A_AD                                                      &
-                    + Predictor_AD%X(k, 1,  COMP_CO_IR)                          &
-                    + Predictor_AD%X(k, 2,  COMP_CO_IR)*DT                       &
-                    + Predictor_AD%X(k, 7,  COMP_CO_IR)*DT2
-
-          DT_AD   = DT_AD                                                        &
-                    + Predictor_AD%X(k, 2,  COMP_CO_IR)*CO_A                     &
-                    + Predictor_AD%X(k, 4,  COMP_CO_IR)*CO_R
-
-          CO_R_AD = CO_R_AD                                                      &
-                    + Predictor_AD%X(k, 3,  COMP_CO_IR)*POINT_5/SQRT(CO_R)       &
-                    + Predictor_AD%X(k, 4,  COMP_CO_IR)*DT                       &
-                    + Predictor_AD%X(k, 6,  COMP_CO_IR)                          &
-                    - Predictor_AD%X(k, 9,  COMP_CO_IR)*CO_ACOdCOzp/CO_R**2
-
-          CO_S_AD = CO_S_AD + Predictor_AD%X(k, 5,  COMP_CO_IR)
-
-          DT2_AD  = DT2_AD + Predictor_AD%X(k, 7,  COMP_CO_IR)*CO_A
-
-          CO_ACOdCOzp_AD = CO_ACOdCOzp_AD                                        &
-                     + Predictor_AD%X(k, 8,  COMP_CO_IR)                         &
-                     + Predictor_AD%X(k, 9,  COMP_CO_IR)/CO_R                    &
-                     + Predictor_AD%X(k,10,  COMP_CO_IR)*SQRT(PAFV%GAzp(k, ABS_CO_IR))
-
-          GAzp_AD(k, ABS_CO_IR) = GAzp_AD(k, ABS_CO_IR)                          &
-                     + Predictor_AD%X(k, 10, COMP_CO_IR)*                        &
-                       POINT_5*CO_ACOdCOzp/SQRT(PAFV%GAzp(k, ABS_CO_IR))
-
-          Predictor_AD%X(k, 1,  COMP_CO_IR)   = ZERO
-          Predictor_AD%X(k, 2,  COMP_CO_IR)   = ZERO
-          Predictor_AD%X(k, 3,  COMP_CO_IR)   = ZERO
-          Predictor_AD%X(k, 4,  COMP_CO_IR)   = ZERO
-          Predictor_AD%X(k, 5,  COMP_CO_IR)   = ZERO
-          Predictor_AD%X(k, 6,  COMP_CO_IR)   = ZERO
-          Predictor_AD%X(k, 7,  COMP_CO_IR)   = ZERO
-          Predictor_AD%X(k, 8,  COMP_CO_IR)   = ZERO
-          Predictor_AD%X(k, 9,  COMP_CO_IR)   = ZERO
-          Predictor_AD%X(k, 10, COMP_CO_IR)   = ZERO
-
-          !  -----------------------
-          !  Methane predictors
-          !  -----------------------
-
-          CH4_A_AD = CH4_A_AD                                                       &
-                     + Predictor_AD%X(k, 1,  COMP_CH4_IR)*DT                        &
-                     + Predictor_AD%X(k, 3,  COMP_CH4_IR)*TWO*CH4_A                 &
-                     + Predictor_AD%X(k, 4,  COMP_CH4_IR)
-
-          DT_AD    = DT_AD                                                          &
-                     + Predictor_AD%X(k, 1,  COMP_CH4_IR)*CH4_A                     &
-                     + Predictor_AD%X(k, 5,  COMP_CH4_IR)*CH4
-
-          CH4_R_AD = CH4_R_AD                                                       &
-                     + Predictor_AD%X(k, 2,  COMP_CH4_IR)                           &
-                     + Predictor_AD%X(k, 8,  COMP_CH4_IR)*POINT_5/SQRT(CH4_R)       &
-                     + Predictor_AD%X(k, 11, COMP_CH4_IR)*CH4/PAFV%GAzp(k, ABS_CH4_IR)
-
-          CH4_AD   = CH4_AD                                                         &
-                     + Predictor_AD%X(k, 5,  COMP_CH4_IR)*DT                        &
-                     + Predictor_AD%X(k, 11, COMP_CH4_IR)*CH4_R/PAFV%GAzp(k, ABS_CH4_IR)
-
-          CH4_ACH4zp_AD = CH4_ACH4zp_AD                                             &
-                     + Predictor_AD%X(k, 6,  COMP_CH4_IR)                           &
-                     + Predictor_AD%X(k, 7,  COMP_CH4_IR)*TWO*CH4_ACH4zp
-
-          GATzp_AD(k, ABS_CH4_IR) = GATzp_AD(k, ABS_CH4_IR)                         &
-                     + Predictor_AD%X(k, 9,  COMP_CH4_IR)                           &
-                     + Predictor_AD%X(k,10,  COMP_CH4_IR)*SECANG(k)
-
-          GAzp_AD(k, ABS_CH4_IR) = GAzp_AD(k, ABS_CH4_IR)                           &
-                     - Predictor_AD%X(k, 11, COMP_CH4_IR)*                          &
-                       CH4_R*CH4/PAFV%GAzp(k, ABS_CH4_IR)**2
-
-          Predictor_AD%X(k, 1,  COMP_CH4_IR)  = ZERO
-          Predictor_AD%X(k, 2,  COMP_CH4_IR)  = ZERO
-          Predictor_AD%X(k, 3,  COMP_CH4_IR)  = ZERO
-          Predictor_AD%X(k, 4,  COMP_CH4_IR)  = ZERO
-          Predictor_AD%X(k, 5,  COMP_CH4_IR)  = ZERO
-          Predictor_AD%X(k, 6,  COMP_CH4_IR)  = ZERO
-          Predictor_AD%X(k, 7,  COMP_CH4_IR)  = ZERO
-          Predictor_AD%X(k, 8,  COMP_CH4_IR)  = ZERO
-          Predictor_AD%X(k, 9,  COMP_CH4_IR)  = ZERO
-          Predictor_AD%X(k, 10, COMP_CH4_IR)  = ZERO
-          Predictor_AD%X(k, 11, COMP_CH4_IR)  = ZERO
-
-          !  -----------------------
-          !    N2O predictors
-          !  -----------------------
-
-          N2O_A_AD = N2O_A_AD                                                        &
-                     + Predictor_AD%X(k, 1, COMP_N2O_IR)*DT                          &
-                     + Predictor_AD%X(k, 4, COMP_N2O_IR)*POINT_25*N2O_A**(-POINT_75) &
-                     + Predictor_AD%X(k, 5, COMP_N2O_IR)
-
-          DT_AD    = DT_AD                                                           &
-                     + Predictor_AD%X(k, 1, COMP_N2O_IR)*N2O_A                       &
-                     + Predictor_AD%X(k, 3, COMP_N2O_IR)*N2O
-
-          N2O_R_AD = N2O_R_AD                                                        &
-                     + Predictor_AD%X(k, 2, COMP_N2O_IR)                             &
-                     + Predictor_AD%X(k,10, COMP_N2O_IR)*N2O/PAFV%GAzp(k, ABS_N2O_IR)
-
-          N2O_AD   = N2O_AD                                                          &
-                     + Predictor_AD%X(k, 3, COMP_N2O_IR)*DT                          &
-                     + Predictor_AD%X(k,10, COMP_N2O_IR)*N2O_R/PAFV%GAzp(k, ABS_N2O_IR)
-
-          GAzp_AD(k, ABS_N2O_IR) = GAzp_AD(k, ABS_N2O_IR)                            &
-                     + Predictor_AD%X(k, 6, COMP_N2O_IR)*SECANG(k)                   &
-                     - Predictor_AD%X(k,10, COMP_N2O_IR)*N2O_R*N2O/PAFV%GAzp(k, ABS_N2O_IR)**2
-
-          GATzp_AD(k, ABS_N2O_IR) = GATzp_AD(k, ABS_N2O_IR)                          &
-                     + Predictor_AD%X(k, 7, COMP_N2O_IR)*SECANG(k)                   &
-                     + Predictor_AD%X(k, 9, COMP_N2O_IR)
-
-          N2O_S_AD = N2O_S_AD + Predictor_AD%X(k, 8, COMP_N2O_IR)
-
-          CH4_A_AD = CH4_A_AD                                                        &
-                     + Predictor_AD%X(k,11, COMP_N2O_IR)                             &
-                     + Predictor_AD%X(k,12, COMP_N2O_IR)*PAFV%GAzp(k, ABS_CH4_IR)
-
-          GAzp_AD(k, ABS_CH4_IR) = GAzp_AD(k, ABS_CH4_IR)                            &
-                     + Predictor_AD%X(k,12, COMP_N2O_IR)*CH4_A
-
-          CO_A_AD = CO_A_AD                                                          &
-                    + Predictor_AD%X(k,13, COMP_N2O_IR)                              &
-                    + Predictor_AD%X(k,14, COMP_N2O_IR)*SECANG(k)*PAFV%GAzp(k, ABS_CO_IR)
-
-          GAzp_AD(k, ABS_CO_IR) = GAzp_AD(k, ABS_CO_IR)                              &
-                    + Predictor_AD%X(k,14, COMP_N2O_IR)*CO_A*SECANG(k)
-
-          Predictor_AD%X(k, 1, COMP_N2O_IR)   = ZERO
-          Predictor_AD%X(k, 2, COMP_N2O_IR)   = ZERO
-          Predictor_AD%X(k, 3, COMP_N2O_IR)   = ZERO
-          Predictor_AD%X(k, 4, COMP_N2O_IR)   = ZERO
-          Predictor_AD%X(k, 5, COMP_N2O_IR)   = ZERO
-          Predictor_AD%X(k, 6, COMP_N2O_IR)   = ZERO
-          Predictor_AD%X(k, 7, COMP_N2O_IR)   = ZERO
-          Predictor_AD%X(k, 8, COMP_N2O_IR)   = ZERO
-          Predictor_AD%X(k, 9, COMP_N2O_IR)   = ZERO
-          Predictor_AD%X(k,10, COMP_N2O_IR)   = ZERO
-
-          Predictor_AD%X(k,11, COMP_N2O_IR)   = ZERO
-          Predictor_AD%X(k,12, COMP_N2O_IR)   = ZERO
-          Predictor_AD%X(k,13, COMP_N2O_IR)   = ZERO
-          Predictor_AD%X(k,14, COMP_N2O_IR)   = ZERO
-
-        END IF IF_Group1
-
-        IF( Group_ID == GROUP_1 )THEN
-
-          GAzp_AD(k, ABS_CH4_IR) = GAzp_AD(k, ABS_CH4_IR) + SECANG(k)*CH4_ACH4zp_AD
-          CH4_A_AD = CH4_A_AD + (POINT_5/SQRT(CH4_A)) * CH4_R_AD
-          CH4_AD = CH4_AD + SECANG(k)*CH4_A_AD
-          CH4_ACH4zp_AD = ZERO
-          CH4_R_AD =      ZERO
-          CH4_A_AD =      ZERO
-
-          GAzp_AD(k, ABS_CO_IR) = GAzp_AD(k, ABS_CO_IR)                              &
-                                  - CO_ACOdCOzp_AD*CO_A*CO/PAFV%GAzp(k, ABS_CO_IR)**2
-          CO_A_AD = CO_A_AD + CO_ACOdCOzp_AD*CO/PAFV%GAzp(k, ABS_CO_IR)              &
-                            + CO_S_AD*TWO * CO_A                                     &
-                            + CO_R_AD*POINT_5/SQRT(CO_A)
-          CO_AD = CO_AD + CO_ACOdCOzp_AD*CO_A/PAFV%GAzp(k, ABS_CO_IR)                &
-                        + CO_A_AD*SECANG(k)
-          CO_ACOdCOzp_AD = ZERO
-          CO_S_AD        = ZERO
-          CO_R_AD        = ZERO
-          CO_A_AD        = ZERO
-
-          N2O_A_AD = N2O_A_AD + N2O_R_AD * POINT_5 / SQRT(N2O_A)                    &
-                              + N2O_S_AD * TWO * N2O_A
-          N2O_AD = N2O_AD + N2O_A_AD * SECANG(k)
-          N2O_A_AD = ZERO
-          N2O_R_AD = ZERO
-          N2O_S_AD = ZERO
-
-          Absorber_AD(k,ABS_CH4_IR) = Absorber_AD(k,ABS_CH4_IR)                      &
-                                    + CH4_AD/Ref_absorber(k,ABS_CH4_IR)
-          Absorber_AD(k,ABS_N2O_IR) = Absorber_AD(k,ABS_N2O_IR)                      &
-                                    + N2O_AD/Ref_absorber(k,ABS_N2O_IR)
-          Absorber_AD(k,ABS_CO_IR)  = Absorber_AD(k,ABS_CO_IR)                       &
-                                    + CO_AD/Ref_absorber(k, ABS_CO_IR)
-          CO_AD  = ZERO
-          N2O_AD = ZERO
-          CH4_AD = ZERO
-
-        END IF
-
-        ! Combinations of variables common to all predictor groups
-
-        O3_A_AD = O3_A_AD + O3_R_AD * POINT_5 / SQRT(O3_A)
-        O3_AD = O3_AD + O3_A_AD * SECANG(k)
-        O3_A_AD = ZERO
-        O3_R_AD = ZERO
-
-        GATzp_AD(k, ABS_H2O_IR) = GATzp_AD(k, ABS_H2O_IR)                            &
-                                - H2OdH2OTzp_AD*H2O/PAFV%GATzp(k, ABS_H2O_IR)**2
-        H2O_R_AD = H2O_R_AD + H2O_R4_AD * POINT_5 / SQRT(H2O_R)
-        H2O_A_AD = H2O_A_AD + H2O_S_AD * TWO * H2O_A                                 &
-                 + H2O_R_AD * POINT_5 / SQRT(H2O_A)
-        H2O_AD = H2O_AD + H2O_A_AD * SECANG(k)                                       &
-               + H2OdH2OTzp_AD / PAFV%GATzp(k, ABS_H2O_IR)
-
-        H2O_A_AD      = ZERO
-        H2O_R_AD      = ZERO
-        H2O_S_AD      = ZERO
-        H2O_R4_AD     = ZERO
-        H2OdH2OTzp_AD = ZERO
-
-        IF( DT > ZERO) THEN
-          DT_AD = DT_AD + DT2_AD*TWO*DT
-        ELSE
-          DT_AD = DT_AD - DT2_AD*TWO*DT
-        ENDIF
-        T_AD = T_AD + T2_AD*TWO*T
-        T2_AD   = ZERO
-        DT2_AD  = ZERO
-
-        !-------------------------------------------
-        !  Abosrber amount scalled by the reference
-        !-------------------------------------------
-        Absorber_AD(k,ABS_CO2_IR) = Absorber_AD(k,ABS_CO2_IR)            &
-                                  + CO2_AD / Ref_absorber(k,ABS_CO2_IR)
-        Absorber_AD(k,ABS_O3_IR)  = Absorber_AD(k,ABS_O3_IR)             &
-                                  + O3_AD / Ref_absorber(k,ABS_O3_IR)
-        Absorber_AD(k,ABS_H2O_IR) = Absorber_AD(k,ABS_H2O_IR)            &
-                                  + H2O_AD / Ref_Absorber(k, ABS_H2O_IR)
-        H2O_AD = ZERO
-        O3_AD  = ZERO
-        CO2_AD = ZERO
-
-        !------------------------------------------
-        !  Relative Temperature
-        !------------------------------------------
-        Temperature_AD(k) = Temperature_AD(k) + T_AD/Ref_Temperature(k) &
-                          + dT_AD
-        dT_AD = ZERO
-        T_AD  = ZERO
-
-      END DO Layer_Loop
-
-    END SUBROUTINE ODPS_Compute_Predictor_IR_AD
-
-    SUBROUTINE ODPS_Compute_Predictor_MW_AD()
-
-      ! ---------------
-      ! Local variables
-      ! ---------------
-      INTEGER  :: k ! n_Layers, n_Levels
-      REAL(fp) :: DT,           DT_AD
-      REAL(fp) :: T,            T_AD
-      REAL(fp) :: T2,           T2_AD
-      REAL(fp) :: DT2,          DT2_AD
-      REAL(fp) :: H2O,          H2O_AD
-      REAL(fp) :: H2O_A,        H2O_A_AD
-      REAL(fp) :: H2O_R,        H2O_R_AD
-      REAL(fp) :: H2O_S,        H2O_S_AD
-      REAL(fp) :: H2O_R4,       H2O_R4_AD
-      REAL(fp) :: H2OdH2OTzp,   H2OdH2OTzp_AD
-      REAL(fp) :: O3,           O3_AD
-      REAL(fp) :: O3_A,         O3_A_AD
-      REAL(fp) :: O3_R,         O3_R_AD
-
-      DT_AD         = ZERO
-      T_AD          = ZERO
-      T2_AD         = ZERO
-      DT2_AD        = ZERO
-      H2O_AD        = ZERO
-      H2O_A_AD      = ZERO
-      H2O_R_AD      = ZERO
-      H2O_S_AD      = ZERO
-      H2O_R4_AD     = ZERO
-      H2OdH2OTzp_AD = ZERO
-      O3_AD         = ZERO
-      O3_A_AD       = ZERO
-      O3_R_AD       = ZERO
-
-      Layer_Loop : DO k = n_Layers, 1, -1
-
-        !------------------------------------------
-        !  Relative Temperature
-        !------------------------------------------
-        dT = Temperature(k) - Ref_Temperature(k)
-        T = Temperature(k) / Ref_Temperature(k)
-
-        !-------------------------------------------
-        !  Abosrber amount scalled by the reference
-        !-------------------------------------------
-        H2O = Absorber(k,ABS_H2O_MW)/Ref_Absorber(k, ABS_H2O_MW)
-
-        ! Combinations of variables common to all predictor groups
-        T2  = T*T
-        DT2 = DT*ABS( DT )
-
-        H2O_A = SECANG(k)*H2O
-        H2O_R  = SQRT( H2O_A )
-        H2O_S  = H2O_A*H2O_A
-        H2O_R4 = SQRT( H2O_R )
-        H2OdH2OTzp = H2O/PAFV%GATzp(k, ABS_H2O_MW)
-
-        IF ( Group_ID == GROUP_MW_O3 ) THEN
-          O3   = Absorber(k,ABS_O3_MW)/Ref_Absorber(k, ABS_O3_MW)
-          O3_A = SECANG(k)*O3
-          O3_R = SQRT( O3_A )
-        END IF
-
-       !#-------------------------------------------------------------------#
-       !#        -- Predictors --                                           #
-       !#-------------------------------------------------------------------#
-
-       ! set number of predictors
-        IF ( Group_ID == GROUP_MW_O3 ) THEN
-          Predictor_AD%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
-        ELSE
-          Predictor_AD%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
-        END IF
-
-        !  ----------------------
-        !   Fixed (Dry) predictors
-        !  ----------------------
-
-        T_AD  = T_AD                                                          &
-                + Predictor_AD%X(k, 2, COMP_DRY_MW)*SECANG(k)                 &
-                + Predictor_AD%X(k, 4, COMP_DRY_MW)
-
-        T2_AD = T2_AD                                                         &
-                + Predictor_AD%X(k, 3, COMP_DRY_MW)*SECANG(k)                 &
-                + Predictor_AD%X(k, 6, COMP_DRY_MW)
-
-        Tz_AD(k) = Tz_AD(k) + Predictor_AD%X(k, 7, COMP_DRY_MW)
-
-        Predictor_AD%X(k, 1, COMP_DRY_MW)  = ZERO
-        Predictor_AD%X(k, 2, COMP_DRY_MW)  = ZERO
-        Predictor_AD%X(k, 3, COMP_DRY_MW)  = ZERO
-        Predictor_AD%X(k, 4, COMP_DRY_MW)  = ZERO
-        Predictor_AD%X(k, 5, COMP_DRY_MW)  = ZERO
-        Predictor_AD%X(k, 6, COMP_DRY_MW)  = ZERO
-        Predictor_AD%X(k, 7, COMP_DRY_MW)  = ZERO
-
-       !  --------------------------------
-       !  Water vapor (line and continuum)
-       !  --------------------------------
-
-        H2O_A_AD = H2O_A_AD                                                   &
-                   + Predictor_AD%X(k, 1, COMP_WET_MW)/T                      &
-                   + Predictor_AD%X(k, 2, COMP_WET_MW)*H2O/T                  &
-                   + Predictor_AD%X(k, 3, COMP_WET_MW)*H2O/T2**2              &
-                   + Predictor_AD%X(k, 4, COMP_WET_MW)/T2                     &
-                   + Predictor_AD%X(k, 5, COMP_WET_MW)*H2O/T2                 &
-                   + Predictor_AD%X(k, 6, COMP_WET_MW)/T2**2                  &
-                   + Predictor_AD%X(k, 7, COMP_WET_MW)                        &
-                   + Predictor_AD%X(k, 8, COMP_WET_MW)*DT                     &
-                   + Predictor_AD%X(k,12, COMP_WET_MW)*H2O_S
-
-        T_AD     = T_AD                                                       &
-                   - Predictor_AD%X(k, 1, COMP_WET_MW)*H2O_A/T**2             &
-                   - Predictor_AD%X(k, 2, COMP_WET_MW)*H2O_A*H2O/T**2
-
-        H2O_AD   = H2O_AD                                                     &
-                   + Predictor_AD%X(k, 2, COMP_WET_MW)*H2O_A/T                &
-                   + Predictor_AD%X(k, 3, COMP_WET_MW)*H2O_A/T2**2            &
-                   + Predictor_AD%X(k, 5, COMP_WET_MW)*H2O_A/T2
-
-        T2_AD    = T2_AD                                                      &
-                   - Predictor_AD%X(k, 3, COMP_WET_MW)*Two*H2O_A*H2O/T2**3    &
-                   - Predictor_AD%X(k, 4, COMP_WET_MW)*H2O_A/T2**2            &
-                   - Predictor_AD%X(k, 5, COMP_WET_MW)*H2O_A*H2O/T2**2        &
-                   - Predictor_AD%X(k, 6, COMP_WET_MW)*TWO*H2O_A/T2**3
-
-        DT_AD    = DT_AD + Predictor_AD%X(k, 8, COMP_WET_MW)*H2O_A
-
-        GAzp_AD(k,ABS_H2O_MW) = GAzp_AD(k,ABS_H2O_MW)                                           &
-                   + Predictor_AD%X(k, 9, COMP_WET_MW)*TWO*SECANG(k)**2*PAFV%GAzp(k,ABS_H2O_MW) &
-                   + Predictor_AD%X(k, 10,COMP_WET_MW)*SECANG(k)
-
-        H2O_S_AD = H2O_S_AD                                                   &
-                   + Predictor_AD%X(k, 12,COMP_WET_MW)*H2O_A                  &
-                   + Predictor_AD%X(k, 13,COMP_WET_MW)*TWO*H2O_S
-
-        H2OdH2OTzp_AD = H2OdH2OTzp_AD + Predictor_AD%X(k, 14,COMP_WET_MW)
-
-        Predictor_AD%X(k, 1, COMP_WET_MW) = ZERO
-        Predictor_AD%X(k, 2, COMP_WET_MW) = ZERO
-        Predictor_AD%X(k, 3, COMP_WET_MW) = ZERO
-        Predictor_AD%X(k, 4, COMP_WET_MW) = ZERO
-        Predictor_AD%X(k, 5, COMP_WET_MW) = ZERO
-        Predictor_AD%X(k, 6, COMP_WET_MW) = ZERO
-        Predictor_AD%X(k, 7, COMP_WET_MW) = ZERO
-        Predictor_AD%X(k, 8, COMP_WET_MW) = ZERO
-        Predictor_AD%X(k, 9, COMP_WET_MW) = ZERO
-        Predictor_AD%X(k, 10,COMP_WET_MW) = ZERO
-        Predictor_AD%X(k, 11,COMP_WET_MW) = ZERO
-        Predictor_AD%X(k, 12,COMP_WET_MW) = ZERO
-        Predictor_AD%X(k, 13,COMP_WET_MW) = ZERO
-        Predictor_AD%X(k, 14,COMP_WET_MW) = ZERO
-
-        !  -----------------------
-        !  Ozone predictors (GROUP_MW_O3 only)
-        !  -----------------------
-        IF ( Group_ID == GROUP_MW_O3 ) THEN
-
-          O3_A_AD = O3_A_AD                                                       &
-                    + Predictor_AD%X(k, 1, COMP_OZO_MW)                           &
-                    + Predictor_AD%X(k, 2, COMP_OZO_MW)*DT                        &
-                    + Predictor_AD%X(k, 3, COMP_OZO_MW)*O3*PAFV%GAzp(k,ABS_O3_MW) &
-                    + Predictor_AD%X(k, 4, COMP_OZO_MW)*TWO*O3_A                  &
-                    + Predictor_AD%X(k, 5, COMP_OZO_MW)*PAFV%GAzp(k,ABS_O3_MW)    &
-                    + Predictor_AD%X(k, 6, COMP_OZO_MW)*SQRT(SECANG(k)*PAFV%GAzp(k,ABS_O3_MW))
-
-          DT_AD   = DT_AD                                                         &
-                    + Predictor_AD%X(k, 2, COMP_OZO_MW)*O3_A                      &
-                    + Predictor_AD%X(k, 7, COMP_OZO_MW)*O3_R
-
-          O3_AD   = O3_AD                                                         &
-                    + Predictor_AD%X(k, 3, COMP_OZO_MW)*O3_A*PAFV%GAzp(k,ABS_O3_MW) &
-                    + Predictor_AD%X(k, 9, COMP_OZO_MW)*O3_R/PAFV%GAzp(k,ABS_O3_MW)
-
-          GAzp_AD(k,ABS_O3_MW) = GAzp_AD(k,ABS_O3_MW)                             &
-                    + Predictor_AD%X(k, 3, COMP_OZO_MW)*O3_A*O3                   &
-                    + Predictor_AD%X(k, 5, COMP_OZO_MW)*O3_A                      &
-                    + Predictor_AD%X(k, 6, COMP_OZO_MW)*POINT_5*O3_A*SQRT(SECANG(k)/PAFV%GAzp(k,ABS_O3_MW)) &
-                    - Predictor_AD%X(k, 9, COMP_OZO_MW)*O3_R*O3/PAFV%GAzp(k,ABS_O3_MW)**2 &
-                    + Predictor_AD%X(k,10, COMP_OZO_MW)*SECANG(k)                 &
-                    + Predictor_AD%X(k,11, COMP_OZO_MW)*TWO*SECANG(k)**2*PAFV%GAzp(k,ABS_O3_MW)
-
-          O3_R_AD = O3_R_AD                                                       &
-                    + Predictor_AD%X(k, 7, COMP_OZO_MW)*DT                        &
-                    + Predictor_AD%X(k, 8, COMP_OZO_MW)                           &
-                    + Predictor_AD%X(k, 9, COMP_OZO_MW)*O3/PAFV%GAzp(k,ABS_O3_MW)
-
-          Predictor_AD%X(k, 1:11, COMP_OZO_MW) = ZERO
-
-          O3_A_AD = O3_A_AD + O3_R_AD * POINT_5 / SQRT(O3_A)
-          O3_AD   = O3_AD + O3_A_AD * SECANG(k)
-          O3_R_AD = ZERO
-          O3_A_AD = ZERO
-          Absorber_AD(k,ABS_O3_MW) = Absorber_AD(k,ABS_O3_MW)            &
-                                   + O3_AD / Ref_Absorber(k, ABS_O3_MW)
-          O3_AD   = ZERO
-
-        END IF
-
-        !-------------------------------------------
-        !  Abosrber amount scalled by the reference
-        !-------------------------------------------
-
-        ! Combinations of variables common to all predictor groups
-
-        GATzp_AD(k, ABS_H2O_MW) = GATzp_AD(k, ABS_H2O_MW)                            &
-                                - H2OdH2OTzp_AD*H2O/PAFV%GATzp(k, ABS_H2O_MW)**2
-        H2O_R_AD = H2O_R_AD + H2O_R4_AD * POINT_5 / SQRT(H2O_R)
-        H2O_A_AD = H2O_A_AD + H2O_S_AD * TWO * H2O_A                                 &
-                 + H2O_R_AD * POINT_5 / SQRT(H2O_A)
-        H2O_AD = H2O_AD + H2O_A_AD * SECANG(k)                                       &
-               + H2OdH2OTzp_AD / PAFV%GATzp(k, ABS_H2O_MW)
-        H2O_A_AD      = ZERO
-        H2O_R_AD      = ZERO
-        H2O_S_AD      = ZERO
-        H2O_R4_AD     = ZERO
-        H2OdH2OTzp_AD = ZERO
-
-        IF( DT > ZERO) THEN
-          DT_AD = DT_AD + DT2_AD*TWO*DT
-        ELSE
-          DT_AD = DT_AD - DT2_AD*TWO*DT
-        ENDIF
-        T_AD = T_AD + T2_AD*TWO*T
-        T2_AD   = ZERO
-        DT2_AD  = ZERO
-
-        Absorber_AD(k,ABS_H2O_MW) = Absorber_AD(k,ABS_H2O_MW)            &
-                                  + H2O_AD / Ref_Absorber(k, ABS_H2O_MW)
-        H2O_AD = ZERO
-
-        !------------------------------------------
-        !  Relative Temperature
-        !------------------------------------------
-        Temperature_AD(k) = Temperature_AD(k) + T_AD/Ref_Temperature(k) &
-                          + dT_AD
-        dT_AD = ZERO
-        T_AD  = ZERO
-
-      END DO Layer_Loop
-
-    END SUBROUTINE ODPS_Compute_Predictor_MW_AD
+      END DO
+    END FUNCTION Component_Position
+
+    !  ----------------------
+    !   Fixed (Dry) predictors (IR and MW use the same formulation)
+    !  ----------------------
+    SUBROUTINE AD_Kernel_DRY( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      T_AD     = T_AD                                    &
+                 + Predictor_AD%X(k, 2, ic) * SECANG(k)  &
+                 + Predictor_AD%X(k, 4, ic)
+      T2_AD    = T2_AD                                   &
+                 + Predictor_AD%X(k, 3, ic) * SECANG(k)  &
+                 + Predictor_AD%X(k, 6, ic)
+      Tz_AD(k) = Tz_AD(k) + Predictor_AD%X(k, 7, ic)
+
+      Predictor_AD%X(k, 1, ic)  = ZERO
+      Predictor_AD%X(k, 2, ic)  = ZERO
+      Predictor_AD%X(k, 3, ic)  = ZERO
+      Predictor_AD%X(k, 4, ic)  = ZERO
+      Predictor_AD%X(k, 5, ic)  = ZERO
+      Predictor_AD%X(k, 6, ic)  = ZERO
+      Predictor_AD%X(k, 7, ic)  = ZERO
+    END SUBROUTINE AD_Kernel_DRY
+
+    !  --------------------------
+    !  Water vapor continuum predictors
+    !  --------------------------
+    SUBROUTINE AD_Kernel_WCO( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      H2O_A_AD = H2O_A_AD                                &
+                 + Predictor_AD%X(k, 1, ic)/T            &
+                 + Predictor_AD%X(k, 2, ic)*H2O/T        &
+                 + Predictor_AD%X(k, 3, ic)*H2O/T2**2    &
+                 + Predictor_AD%X(k, 4, ic)/T2           &
+                 + Predictor_AD%X(k, 5, ic)*H2O/T2       &
+                 + Predictor_AD%X(k, 6, ic)/T2**2        &
+                 + Predictor_AD%X(k, 7, ic)
+      T_AD     = T_AD                                       &
+                 - Predictor_AD%X(k, 1, ic)*H2O_A/T**2      &
+                 - Predictor_AD%X(k, 2, ic)*H2O_A*H2O/T**2
+      H2O_AD   = H2O_AD                                 &
+                 + Predictor_AD%X(k, 2, ic)*H2O_A/T     &
+                 + Predictor_AD%X(k, 3, ic)*H2O_A/T2**2 &
+                 + Predictor_AD%X(k, 5, ic)*H2O_A/T2
+      T2_AD    = T2_AD                                          &
+                 - Predictor_AD%X(k, 3, ic)*TWO*H2O_A*H2O/T2**3 &
+                 - Predictor_AD%X(k, 4, ic)*H2O_A/T2**2         &
+                 - Predictor_AD%X(k, 5, ic)*H2O_A*H2O/T2**2     &
+                 - Predictor_AD%X(k, 6, ic)*TWO*H2O_A/T2**3
+
+      Predictor_AD%X(k, 1, ic) = ZERO
+      Predictor_AD%X(k, 2, ic) = ZERO
+      Predictor_AD%X(k, 3, ic) = ZERO
+      Predictor_AD%X(k, 4, ic) = ZERO
+      Predictor_AD%X(k, 5, ic) = ZERO
+      Predictor_AD%X(k, 6, ic) = ZERO
+      Predictor_AD%X(k, 7, ic) = ZERO
+    END SUBROUTINE AD_Kernel_WCO
+
+    !  -----------------------
+    !  NO2 predictors AD (GROUP_UV_NO2); adjoint of the compact set
+    !  X1=NO2_A, X2=NO2_A*DT, X3=NO2_A*DT2, NO2_A=secang*NO2, NO2=Abs/Ref.
+    !  Self-contained through to Absorber_AD, as in the heritage code.
+    !  -----------------------
+    SUBROUTINE AD_Kernel_NO2( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      NO2   = Absorber(k,ja_no2)/Ref_Absorber(k, ja_no2)
+      NO2_A = SECANG(k)*NO2
+
+      NO2_A_AD = NO2_A_AD                            &
+                 + Predictor_AD%X(k, 1, ic)          &
+                 + Predictor_AD%X(k, 2, ic)*DT       &
+                 + Predictor_AD%X(k, 3, ic)*DT2
+      DT_AD    = DT_AD  + Predictor_AD%X(k, 2, ic)*NO2_A
+      DT2_AD   = DT2_AD + Predictor_AD%X(k, 3, ic)*NO2_A
+      Predictor_AD%X(k, 1, ic) = ZERO
+      Predictor_AD%X(k, 2, ic) = ZERO
+      Predictor_AD%X(k, 3, ic) = ZERO
+
+      NO2_AD   = NO2_AD + NO2_A_AD*SECANG(k)
+      NO2_A_AD = ZERO
+      Absorber_AD(k,ja_no2) = Absorber_AD(k,ja_no2)     &
+                                + NO2_AD/Ref_Absorber(k, ja_no2)
+      NO2_AD   = ZERO
+    END SUBROUTINE AD_Kernel_NO2
+
+    !  -----------------------
+    !  Ozone predictors (IR groups; chain propagation happens in the
+    !  common epilogue)
+    !  -----------------------
+    SUBROUTINE AD_Kernel_OZO_IR( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      O3_A_AD = O3_A_AD                                                       &
+                + Predictor_AD%X(k, 1, ic)                                    &
+                + Predictor_AD%X(k, 2, ic)*DT                                 &
+                + Predictor_AD%X(k, 3, ic)*O3*PAFV%GAzp(k,ja_o3)              &
+                + Predictor_AD%X(k, 4, ic)*TWO*O3_A                           &
+                + Predictor_AD%X(k, 5, ic)*PAFV%GAzp(k,ja_o3)                 &
+                + Predictor_AD%X(k, 6, ic)*SQRT(SECANG(k)*PAFV%GAzp(k,ja_o3))
+
+      DT_AD   = DT_AD                                                         &
+                + Predictor_AD%X(k, 2, ic)*O3_A                               &
+                + Predictor_AD%X(k, 7, ic)*O3_R
+
+      O3_AD   = O3_AD                                                         &
+                + Predictor_AD%X(k, 3, ic)*O3_A*PAFV%GAzp(k,ja_o3)            &
+                + Predictor_AD%X(k, 9, ic)*O3_R/PAFV%GAzp(k,ja_o3)
+
+      GAzp_AD(k,ja_o3) = GAzp_AD(k,ja_o3)                                     &
+                + Predictor_AD%X(k, 3, ic)*O3_A*O3                            &
+                + Predictor_AD%X(k, 5, ic)*O3_A                               &
+                + Predictor_AD%X(k, 6, ic)*POINT_5*O3_A*SQRT(SECANG(k)/PAFV%GAzp(k,ja_o3)) &
+                - Predictor_AD%X(k, 9, ic)*O3_R*O3/PAFV%GAzp(k,ja_o3)**2      &
+                + Predictor_AD%X(k,10, ic)*SECANG(k)                          &
+                + Predictor_AD%X(k,11, ic)*TWO*SECANG(k)**2*PAFV%GAzp(k,ja_o3)
+
+      O3_R_AD = O3_R_AD                                                       &
+                + Predictor_AD%X(k, 7, ic)*DT                                 &
+                + Predictor_AD%X(k, 8, ic)                                    &
+                + Predictor_AD%X(k, 9, ic)*O3/PAFV%GAzp(k,ja_o3)
+
+      Predictor_AD%X(k, 1, ic)  = ZERO
+      Predictor_AD%X(k, 2, ic)  = ZERO
+      Predictor_AD%X(k, 3, ic)  = ZERO
+      Predictor_AD%X(k, 4, ic)  = ZERO
+      Predictor_AD%X(k, 5, ic)  = ZERO
+      Predictor_AD%X(k, 6, ic)  = ZERO
+      Predictor_AD%X(k, 7, ic)  = ZERO
+      Predictor_AD%X(k, 8, ic)  = ZERO
+      Predictor_AD%X(k, 9, ic)  = ZERO
+      Predictor_AD%X(k,10, ic)  = ZERO
+      Predictor_AD%X(k,11, ic)  = ZERO
+
+      Predictor_AD%X(k,12, ic)  = ZERO
+      Predictor_AD%X(k,13, ic)  = ZERO
+    END SUBROUTINE AD_Kernel_OZO_IR
+
+    !  -----------------------
+    !  Ozone predictors (GROUP_MW_O3; self-contained through to
+    !  Absorber_AD, as in the heritage code)
+    !  -----------------------
+    SUBROUTINE AD_Kernel_OZO_MW( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      O3_A_AD = O3_A_AD                                                  &
+                + Predictor_AD%X(k, 1, ic)                               &
+                + Predictor_AD%X(k, 2, ic)*DT                            &
+                + Predictor_AD%X(k, 3, ic)*O3*PAFV%GAzp(k,ja_o3)         &
+                + Predictor_AD%X(k, 4, ic)*TWO*O3_A                      &
+                + Predictor_AD%X(k, 5, ic)*PAFV%GAzp(k,ja_o3)            &
+                + Predictor_AD%X(k, 6, ic)*SQRT(SECANG(k)*PAFV%GAzp(k,ja_o3))
+
+      DT_AD   = DT_AD                                                    &
+                + Predictor_AD%X(k, 2, ic)*O3_A                          &
+                + Predictor_AD%X(k, 7, ic)*O3_R
+
+      O3_AD   = O3_AD                                                    &
+                + Predictor_AD%X(k, 3, ic)*O3_A*PAFV%GAzp(k,ja_o3)       &
+                + Predictor_AD%X(k, 9, ic)*O3_R/PAFV%GAzp(k,ja_o3)
+
+      GAzp_AD(k,ja_o3) = GAzp_AD(k,ja_o3)                                &
+                + Predictor_AD%X(k, 3, ic)*O3_A*O3                       &
+                + Predictor_AD%X(k, 5, ic)*O3_A                          &
+                + Predictor_AD%X(k, 6, ic)*POINT_5*O3_A*SQRT(SECANG(k)/PAFV%GAzp(k,ja_o3)) &
+                - Predictor_AD%X(k, 9, ic)*O3_R*O3/PAFV%GAzp(k,ja_o3)**2 &
+                + Predictor_AD%X(k,10, ic)*SECANG(k)                     &
+                + Predictor_AD%X(k,11, ic)*TWO*SECANG(k)**2*PAFV%GAzp(k,ja_o3)
+
+      O3_R_AD = O3_R_AD                                                  &
+                + Predictor_AD%X(k, 7, ic)*DT                            &
+                + Predictor_AD%X(k, 8, ic)                               &
+                + Predictor_AD%X(k, 9, ic)*O3/PAFV%GAzp(k,ja_o3)
+
+      Predictor_AD%X(k, 1:11, ic) = ZERO
+
+      O3_A_AD = O3_A_AD + O3_R_AD * POINT_5 / SQRT(O3_A)
+      O3_AD   = O3_AD + O3_A_AD * SECANG(k)
+      O3_R_AD = ZERO
+      O3_A_AD = ZERO
+      Absorber_AD(k,ja_o3) = Absorber_AD(k,ja_o3)            &
+                               + O3_AD / Ref_Absorber(k, ja_o3)
+      O3_AD   = ZERO
+    END SUBROUTINE AD_Kernel_OZO_MW
+
+    !  -----------------------
+    !  Carbon dioxide predictors (1 - 10; the group-1 predictor 11 adjoint
+    !  is handled with the WLO extension to preserve the heritage
+    !  accumulation order)
+    !  -----------------------
+    SUBROUTINE AD_Kernel_CO2( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      T_AD      = T_AD                                          &
+                  + Predictor_AD%X(k, 1, ic)*SECANG(k)          &
+                  + Predictor_AD%X(k, 3, ic)                    &
+                  + Predictor_AD%X(k, 10, ic)*SECANG(k)*(POINT_5*PAFV%Tzp(k)/SQRT(T))
+
+      T2_AD     = T2_AD                                         &
+                  + Predictor_AD%X(k, 2, ic)*SECANG(k)          &
+                  + Predictor_AD%X(k, 4, ic)
+
+      CO2_AD    = CO2_AD + Predictor_AD%X(k, 6, ic)*SECANG(k)
+
+      Tzp_AD(k) = Tzp_AD(k)                                     &
+                  + Predictor_AD%X(k, 7, ic)*SECANG(k)          &
+                  + Predictor_AD%X(k, 9, ic)*THREE*PAFV%Tzp(k)**2 &
+                  + Predictor_AD%X(k, 10, ic)*SECANG(k)*SQRT(T)
+
+      GAzp_AD(k, ja_co2) = GAzp_AD(k, ja_co2)                   &
+                  + Predictor_AD%X(k, 8, ic)*TWO*SECANG(k)**2*PAFV%GAzp(k, ja_co2)
+
+
+      Predictor_AD%X(k, 1, ic)  = ZERO
+      Predictor_AD%X(k, 2, ic)  = ZERO
+      Predictor_AD%X(k, 3, ic)  = ZERO
+      Predictor_AD%X(k, 4, ic)  = ZERO
+      Predictor_AD%X(k, 5, ic)  = ZERO
+      Predictor_AD%X(k, 6, ic)  = ZERO
+      Predictor_AD%X(k, 7, ic)  = ZERO
+      Predictor_AD%X(k, 8, ic)  = ZERO
+      Predictor_AD%X(k, 9, ic)  = ZERO
+      Predictor_AD%X(k,10, ic)  = ZERO
+    END SUBROUTINE AD_Kernel_CO2
+
+    !  --------------------------
+    !  Water-line predictors (1 - 15), plus the group-1 extension
+    !  (WLO predictors 16 - 18 AND the CO2 component's predictor 11)
+    !  when the roster requests 18 WLO predictors. The CO2 predictor-11
+    !  adjoint lives here, not in AD_Kernel_CO2, because the heritage
+    !  monolith accumulates it at exactly this point in the sequence.
+    !  --------------------------
+    SUBROUTINE AD_Kernel_WLO( k, ic, np )
+      INTEGER, INTENT(IN) :: k, ic, np
+      H2O_A_AD = H2O_A_AD                                 &
+                 + Predictor_AD%X(k, 1, ic)               &
+                 + Predictor_AD%X(k, 2, ic)*DT            &
+                 + Predictor_AD%X(k, 4, ic)*DT2           &
+                 + Predictor_AD%X(k, 6, ic)*H2O_S
+
+      DT_AD    = DT_AD                                    &
+                 + Predictor_AD%X(k, 2, ic)*H2O_A         &
+                 + Predictor_AD%X(k, 8, ic)*H2O_R
+
+      H2O_S_AD = H2O_S_AD                                 &
+                 + Predictor_AD%X(k, 3, ic)               &
+                 + Predictor_AD%X(k, 6, ic)*H2O_A         &
+                 + Predictor_AD%X(k, 9, ic)*TWO*H2O_S
+
+      DT2_AD   = DT2_AD + Predictor_AD%X(k, 4, ic)*H2O_A
+
+      H2O_R4_AD= H2O_R4_AD + Predictor_AD%X(k, 5, ic)
+
+      H2O_R_AD = H2O_R_AD                                 &
+                 + Predictor_AD%X(k, 7, ic)               &
+                 + Predictor_AD%X(k, 8, ic)*DT            &
+                 + Predictor_AD%X(k,11, ic)*H2OdH2OTzp
+
+      H2OdH2OTzp_AD = H2OdH2OTzp_AD                       &
+                 + Predictor_AD%X(k,10, ic)               &
+                 + Predictor_AD%X(k,11, ic)*H2O_R
+
+      GAzp_AD(k,ja_h2o) = GAzp_AD(k,ja_h2o)                                            &
+                 + Predictor_AD%X(k,12, ic)*TWO*SECANG(k)**2*PAFV%GAzp(k,ja_h2o)  &
+                 + Predictor_AD%X(k,13, ic)*SECANG(k)
+
+      CO2_AD   = CO2_AD + Predictor_AD%X(k,15, ic)*SECANG(k)
+
+      Predictor_AD%X(k, 1, ic) = ZERO
+      Predictor_AD%X(k, 2, ic) = ZERO
+      Predictor_AD%X(k, 3, ic) = ZERO
+      Predictor_AD%X(k, 4, ic) = ZERO
+      Predictor_AD%X(k, 5, ic) = ZERO
+      Predictor_AD%X(k, 6, ic) = ZERO
+      Predictor_AD%X(k, 7, ic) = ZERO
+      Predictor_AD%X(k, 8, ic) = ZERO
+      Predictor_AD%X(k, 9, ic) = ZERO
+      Predictor_AD%X(k,10, ic) = ZERO
+      Predictor_AD%X(k,11, ic) = ZERO
+      Predictor_AD%X(k,12, ic) = ZERO
+      Predictor_AD%X(k,13, ic) = ZERO
+      Predictor_AD%X(k,14, ic) = ZERO
+      Predictor_AD%X(k,15, ic) = ZERO
+
+      ! Addtional predictors for group 1
+      IF ( np >= 18 ) THEN
+
+        CO_A_AD  = CO_A_AD   + Predictor_AD%X(k, 18, ic)          &
+                             + Predictor_AD%X(k, 11, ic_co2)
+        CH4_A_AD = CH4_A_AD                                       &
+                   + Predictor_AD%X(k, 16, ic)                    &
+                   + Predictor_AD%X(k, 17, ic)*TWO*CH4_A*DT
+        DT_AD    = DT_AD + Predictor_AD%X(k, 17, ic)*CH4_A*CH4_A
+
+        Predictor_AD%X(k, 16, ic) = ZERO
+        Predictor_AD%X(k, 17, ic) = ZERO
+        Predictor_AD%X(k, 18, ic) = ZERO
+        Predictor_AD%X(k, 11, ic_co2) = ZERO
+
+      END IF
+    END SUBROUTINE AD_Kernel_WLO
+
+    !  -----------------------
+    !  Carbon monoxide
+    !  -----------------------
+    SUBROUTINE AD_Kernel_CO( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      CO_A_AD = CO_A_AD                                               &
+                + Predictor_AD%X(k, 1,  ic)                           &
+                + Predictor_AD%X(k, 2,  ic)*DT                        &
+                + Predictor_AD%X(k, 7,  ic)*DT2
+
+      DT_AD   = DT_AD                                                 &
+                + Predictor_AD%X(k, 2,  ic)*CO_A                      &
+                + Predictor_AD%X(k, 4,  ic)*CO_R
+
+      CO_R_AD = CO_R_AD                                               &
+                + Predictor_AD%X(k, 3,  ic)*POINT_5/SQRT(CO_R)        &
+                + Predictor_AD%X(k, 4,  ic)*DT                        &
+                + Predictor_AD%X(k, 6,  ic)                           &
+                - Predictor_AD%X(k, 9,  ic)*CO_ACOdCOzp/CO_R**2
+
+      CO_S_AD = CO_S_AD + Predictor_AD%X(k, 5,  ic)
+
+      DT2_AD  = DT2_AD + Predictor_AD%X(k, 7,  ic)*CO_A
+
+      CO_ACOdCOzp_AD = CO_ACOdCOzp_AD                                 &
+                 + Predictor_AD%X(k, 8,  ic)                          &
+                 + Predictor_AD%X(k, 9,  ic)/CO_R                     &
+                 + Predictor_AD%X(k,10,  ic)*SQRT(PAFV%GAzp(k, ja_co))
+
+      GAzp_AD(k, ja_co) = GAzp_AD(k, ja_co)                           &
+                 + Predictor_AD%X(k, 10, ic)*                         &
+                   POINT_5*CO_ACOdCOzp/SQRT(PAFV%GAzp(k, ja_co))
+
+      Predictor_AD%X(k, 1,  ic)   = ZERO
+      Predictor_AD%X(k, 2,  ic)   = ZERO
+      Predictor_AD%X(k, 3,  ic)   = ZERO
+      Predictor_AD%X(k, 4,  ic)   = ZERO
+      Predictor_AD%X(k, 5,  ic)   = ZERO
+      Predictor_AD%X(k, 6,  ic)   = ZERO
+      Predictor_AD%X(k, 7,  ic)   = ZERO
+      Predictor_AD%X(k, 8,  ic)   = ZERO
+      Predictor_AD%X(k, 9,  ic)   = ZERO
+      Predictor_AD%X(k, 10, ic)   = ZERO
+    END SUBROUTINE AD_Kernel_CO
+
+    !  -----------------------
+    !  Methane predictors
+    !  -----------------------
+    SUBROUTINE AD_Kernel_CH4( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      CH4_A_AD = CH4_A_AD                                                &
+                 + Predictor_AD%X(k, 1,  ic)*DT                          &
+                 + Predictor_AD%X(k, 3,  ic)*TWO*CH4_A                   &
+                 + Predictor_AD%X(k, 4,  ic)
+
+      DT_AD    = DT_AD                                                   &
+                 + Predictor_AD%X(k, 1,  ic)*CH4_A                       &
+                 + Predictor_AD%X(k, 5,  ic)*CH4
+
+      CH4_R_AD = CH4_R_AD                                                &
+                 + Predictor_AD%X(k, 2,  ic)                             &
+                 + Predictor_AD%X(k, 8,  ic)*POINT_5/SQRT(CH4_R)         &
+                 + Predictor_AD%X(k, 11, ic)*CH4/PAFV%GAzp(k, ja_ch4)
+
+      CH4_AD   = CH4_AD                                                  &
+                 + Predictor_AD%X(k, 5,  ic)*DT                          &
+                 + Predictor_AD%X(k, 11, ic)*CH4_R/PAFV%GAzp(k, ja_ch4)
+
+      CH4_ACH4zp_AD = CH4_ACH4zp_AD                                      &
+                 + Predictor_AD%X(k, 6,  ic)                             &
+                 + Predictor_AD%X(k, 7,  ic)*TWO*CH4_ACH4zp
+
+      GATzp_AD(k, ja_ch4) = GATzp_AD(k, ja_ch4)                          &
+                 + Predictor_AD%X(k, 9,  ic)                             &
+                 + Predictor_AD%X(k,10,  ic)*SECANG(k)
+
+      GAzp_AD(k, ja_ch4) = GAzp_AD(k, ja_ch4)                            &
+                 - Predictor_AD%X(k, 11, ic)*                            &
+                   CH4_R*CH4/PAFV%GAzp(k, ja_ch4)**2
+
+      Predictor_AD%X(k, 1,  ic)  = ZERO
+      Predictor_AD%X(k, 2,  ic)  = ZERO
+      Predictor_AD%X(k, 3,  ic)  = ZERO
+      Predictor_AD%X(k, 4,  ic)  = ZERO
+      Predictor_AD%X(k, 5,  ic)  = ZERO
+      Predictor_AD%X(k, 6,  ic)  = ZERO
+      Predictor_AD%X(k, 7,  ic)  = ZERO
+      Predictor_AD%X(k, 8,  ic)  = ZERO
+      Predictor_AD%X(k, 9,  ic)  = ZERO
+      Predictor_AD%X(k, 10, ic)  = ZERO
+      Predictor_AD%X(k, 11, ic)  = ZERO
+    END SUBROUTINE AD_Kernel_CH4
+
+    !  -----------------------
+    !    N2O predictors
+    !  -----------------------
+    SUBROUTINE AD_Kernel_N2O( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      N2O_A_AD = N2O_A_AD                                                 &
+                 + Predictor_AD%X(k, 1, ic)*DT                            &
+                 + Predictor_AD%X(k, 4, ic)*POINT_25*N2O_A**(-POINT_75)   &
+                 + Predictor_AD%X(k, 5, ic)
+
+      DT_AD    = DT_AD                                                    &
+                 + Predictor_AD%X(k, 1, ic)*N2O_A                         &
+                 + Predictor_AD%X(k, 3, ic)*N2O
+
+      N2O_R_AD = N2O_R_AD                                                 &
+                 + Predictor_AD%X(k, 2, ic)                               &
+                 + Predictor_AD%X(k,10, ic)*N2O/PAFV%GAzp(k, ja_n2o)
+
+      N2O_AD   = N2O_AD                                                   &
+                 + Predictor_AD%X(k, 3, ic)*DT                            &
+                 + Predictor_AD%X(k,10, ic)*N2O_R/PAFV%GAzp(k, ja_n2o)
+
+      GAzp_AD(k, ja_n2o) = GAzp_AD(k, ja_n2o)                             &
+                 + Predictor_AD%X(k, 6, ic)*SECANG(k)                     &
+                 - Predictor_AD%X(k,10, ic)*N2O_R*N2O/PAFV%GAzp(k, ja_n2o)**2
+
+      GATzp_AD(k, ja_n2o) = GATzp_AD(k, ja_n2o)                           &
+                 + Predictor_AD%X(k, 7, ic)*SECANG(k)                     &
+                 + Predictor_AD%X(k, 9, ic)
+
+      N2O_S_AD = N2O_S_AD + Predictor_AD%X(k, 8, ic)
+
+      CH4_A_AD = CH4_A_AD                                                 &
+                 + Predictor_AD%X(k,11, ic)                               &
+                 + Predictor_AD%X(k,12, ic)*PAFV%GAzp(k, ja_ch4)
+
+      GAzp_AD(k, ja_ch4) = GAzp_AD(k, ja_ch4)                             &
+                 + Predictor_AD%X(k,12, ic)*CH4_A
+
+      CO_A_AD = CO_A_AD                                                   &
+                + Predictor_AD%X(k,13, ic)                                &
+                + Predictor_AD%X(k,14, ic)*SECANG(k)*PAFV%GAzp(k, ja_co)
+
+      GAzp_AD(k, ja_co) = GAzp_AD(k, ja_co)                               &
+                + Predictor_AD%X(k,14, ic)*CO_A*SECANG(k)
+
+      Predictor_AD%X(k, 1, ic)   = ZERO
+      Predictor_AD%X(k, 2, ic)   = ZERO
+      Predictor_AD%X(k, 3, ic)   = ZERO
+      Predictor_AD%X(k, 4, ic)   = ZERO
+      Predictor_AD%X(k, 5, ic)   = ZERO
+      Predictor_AD%X(k, 6, ic)   = ZERO
+      Predictor_AD%X(k, 7, ic)   = ZERO
+      Predictor_AD%X(k, 8, ic)   = ZERO
+      Predictor_AD%X(k, 9, ic)   = ZERO
+      Predictor_AD%X(k,10, ic)   = ZERO
+
+      Predictor_AD%X(k,11, ic)   = ZERO
+      Predictor_AD%X(k,12, ic)   = ZERO
+      Predictor_AD%X(k,13, ic)   = ZERO
+      Predictor_AD%X(k,14, ic)   = ZERO
+    END SUBROUTINE AD_Kernel_N2O
+
+    !  --------------------------------
+    !  Water vapor, MW (line and continuum together)
+    !  --------------------------------
+    SUBROUTINE AD_Kernel_WET_MW( k, ic )
+      INTEGER, INTENT(IN) :: k, ic
+      H2O_A_AD = H2O_A_AD                                            &
+                 + Predictor_AD%X(k, 1, ic)/T                        &
+                 + Predictor_AD%X(k, 2, ic)*H2O/T                    &
+                 + Predictor_AD%X(k, 3, ic)*H2O/T2**2                &
+                 + Predictor_AD%X(k, 4, ic)/T2                       &
+                 + Predictor_AD%X(k, 5, ic)*H2O/T2                   &
+                 + Predictor_AD%X(k, 6, ic)/T2**2                    &
+                 + Predictor_AD%X(k, 7, ic)                          &
+                 + Predictor_AD%X(k, 8, ic)*DT                       &
+                 + Predictor_AD%X(k,12, ic)*H2O_S
+
+      T_AD     = T_AD                                                &
+                 - Predictor_AD%X(k, 1, ic)*H2O_A/T**2               &
+                 - Predictor_AD%X(k, 2, ic)*H2O_A*H2O/T**2
+
+      H2O_AD   = H2O_AD                                              &
+                 + Predictor_AD%X(k, 2, ic)*H2O_A/T                  &
+                 + Predictor_AD%X(k, 3, ic)*H2O_A/T2**2              &
+                 + Predictor_AD%X(k, 5, ic)*H2O_A/T2
+
+      T2_AD    = T2_AD                                               &
+                 - Predictor_AD%X(k, 3, ic)*Two*H2O_A*H2O/T2**3      &
+                 - Predictor_AD%X(k, 4, ic)*H2O_A/T2**2              &
+                 - Predictor_AD%X(k, 5, ic)*H2O_A*H2O/T2**2          &
+                 - Predictor_AD%X(k, 6, ic)*TWO*H2O_A/T2**3
+
+      DT_AD    = DT_AD + Predictor_AD%X(k, 8, ic)*H2O_A
+
+      GAzp_AD(k,ja_h2o) = GAzp_AD(k,ja_h2o)                                       &
+                 + Predictor_AD%X(k, 9, ic)*TWO*SECANG(k)**2*PAFV%GAzp(k,ja_h2o)  &
+                 + Predictor_AD%X(k, 10,ic)*SECANG(k)
+
+      H2O_S_AD = H2O_S_AD                                            &
+                 + Predictor_AD%X(k, 12,ic)*H2O_A                    &
+                 + Predictor_AD%X(k, 13,ic)*TWO*H2O_S
+
+      H2OdH2OTzp_AD = H2OdH2OTzp_AD + Predictor_AD%X(k, 14,ic)
+
+      Predictor_AD%X(k, 1, ic) = ZERO
+      Predictor_AD%X(k, 2, ic) = ZERO
+      Predictor_AD%X(k, 3, ic) = ZERO
+      Predictor_AD%X(k, 4, ic) = ZERO
+      Predictor_AD%X(k, 5, ic) = ZERO
+      Predictor_AD%X(k, 6, ic) = ZERO
+      Predictor_AD%X(k, 7, ic) = ZERO
+      Predictor_AD%X(k, 8, ic) = ZERO
+      Predictor_AD%X(k, 9, ic) = ZERO
+      Predictor_AD%X(k, 10,ic) = ZERO
+      Predictor_AD%X(k, 11,ic) = ZERO
+      Predictor_AD%X(k, 12,ic) = ZERO
+      Predictor_AD%X(k, 13,ic) = ZERO
+      Predictor_AD%X(k, 14,ic) = ZERO
+    END SUBROUTINE AD_Kernel_WET_MW
 
   END SUBROUTINE  ODPS_Compute_Predictor_AD
 

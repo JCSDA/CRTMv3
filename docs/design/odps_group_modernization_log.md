@@ -71,7 +71,55 @@ zssmis: unaffected, they use the ODZeeman path).
 
 ## Tier 1: group registry and per-component predictor kernels
 
-Status: in design; key verified facts recorded here for the implementation.
+Status: implemented (two commits); full-suite verification in progress.
+
+Tier 1a (registry): `ODPS_Group_Spec_type` plus the `GROUP_REGISTRY`
+parameter array replace the six families of parallel tables
+(N_COMPONENTS_G, N_ABSORBERS_G, MAX_N_PREDICTORS_G, N_PREDICTORS_G*,
+COMPONENT_ID_MAP_G*, ABSORBER_ID_MAP_G*). Each row carries: group name,
+basis class (BASIS_IR = groups 1/2/8, BASIS_MW = groups 3/7,
+BASIS_RESERVED = rows 4 to 6), n_Components, n_Absorbers,
+Max_n_Predictors, the component roster, the absorber roster, and the
+per-component predictor counts. Accessors became bounds-checked registry
+lookups; ODPS_Validate_Group compares against registry rosters; the
+driver absorber loops and n_CP assignments read the registry. Adding a
+group is now one registry row plus its named constant.
+
+Tier 1b (kernelization): the three predictor monoliths
+(ODPS_Compute_Predictor and its TL and AD companions) were decomposed
+into per-component kernel subroutines dispatched from the registry
+roster inside a single per-basis layer loop.
+
+- FWD and TL: kernels are dispatched by Component_ID in roster order
+  (assignments are independent, so order is bit-irrelevant); the group-1
+  variants live inside the WLO and CO2 kernels keyed on the roster's
+  predictor count (np >= 18 adds WLO 16-18; np >= 11 adds CO2 11), not
+  on the group index. Shared per-layer scalars are computed once in the
+  basis loop; the trace-gas block (CO/CH4/N2O) is guarded by roster
+  presence (has_trace), the MW ozone block by absorber presence.
+- AD: kernel call order is bit-significant (adjoint accumulations are
+  floating-point sums), so the dispatch reproduces the heritage monolith
+  order exactly and documents it as load-bearing: DRY, WCO, NO2, OZO,
+  CO2, WLO (with the group-1 extension, which also owns the CO2
+  predictor-11 adjoint to preserve the heritage accumulation point),
+  CO, CH4, N2O, trace-gas variable chains, common variable chains.
+- Absorber array positions (ja_h2o, ja_o3, ...) are resolved from the
+  registry roster by HITRAN ID at dispatch setup instead of hardwired
+  ABS_* index constants, which is the seam Tier 2 uses to resolve them
+  from the file instead.
+- Duplicate formulations collapsed: IR dry and MW effective-dry use one
+  kernel (identical formulas), as do IR ozone and MW_O3 ozone.
+- Quirks preserved verbatim: the MW TL dry-slot zeroing
+  (X(:, 8:, dry) = ZERO inside the layer loop), the warning-silencing
+  HUGE() initializations, and the AD zeroing of the relic ozone
+  predictor slots 12 and 13.
+
+Verification: 82/82 forward tests after the FWD stage; 20/20
+tangent-linear plus both machine-precision parity tests after the TL
+stage; full suite after the AD stage: 227/227 (ctest exit 0), plus a 91-test
+adjoint/k-matrix/parity re-run after switching the AD WLO variant
+selector from the forward-filled n_CP to the deterministic registry
+value.
 
 Verified structure of the current monoliths (needed to preserve bit-identical
 results):
