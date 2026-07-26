@@ -87,18 +87,20 @@ MODULE ODPS_Predictor
   ! -----------------
   ! Module parameters
   ! -----------------
-  ! Dimensions of each predictor group.
+  ! The ODPS groups. The complete definition of every group (its predictor
+  ! basis, component roster, absorber roster, and per-component predictor
+  ! counts) lives in the single GROUP_REGISTRY table declared below, after
+  ! the component and absorber ID constants it references.
   ! Group 7 is the MW+ozone variant of group 3 (indexes 4 - 6 are Zeeman);
-  ! entries 4 - 6 in the dimension tables are placeholders (Zeeman has its
-  ! own predictor module and never reaches these tables).
-  ! Group 8 is the UV/VIS variant of group 2 with an added scene-NO2 component
-  ! (components [Dry,WLO,WCO,Ozone,CO2,NO2], absorbers [H2O,O3,CO2,NO2]).
+  ! group 8 is the UV/VIS variant of group 2 with an added scene-NO2
+  ! component.
   INTEGER, PARAMETER  :: N_G = 8
-  INTEGER, PARAMETER  :: N_COMPONENTS_G(N_G)     = (/8,   5, 2, 0, 0, 0, 3, 6/)
-  INTEGER, PARAMETER  :: N_ABSORBERS_G(N_G)      = (/6,   3, 1, 0, 0, 0, 2, 4/)
-  INTEGER, PARAMETER  :: MAX_N_PREDICTORS_G(N_G) = (/18, 15, 14, 0, 0, 0, 14, 15/)
-  INTEGER, PARAMETER  :: MAX_COMPONENTS_ANY_GROUP = MAXVAL(N_COMPONENTS_G)
-  INTEGER, PARAMETER  :: MAX_ABSORBERS_ANY_GROUP  = MAXVAL(N_ABSORBERS_G)
+  INTEGER, PARAMETER  :: MAX_COMPONENTS_ANY_GROUP = 8
+  INTEGER, PARAMETER  :: MAX_ABSORBERS_ANY_GROUP  = 6
+  ! Predictor basis classes: which shared per-layer formulation a group uses
+  INTEGER, PARAMETER :: BASIS_RESERVED = 0  ! Zeeman-reserved; never dispatched here
+  INTEGER, PARAMETER :: BASIS_IR       = 1  ! IR/VIS/UV formulation (groups 1, 2, 8)
+  INTEGER, PARAMETER :: BASIS_MW       = 2  ! MW formulation (groups 3, 7)
   ! Group index. Group indexes 4 - 6 are RESERVED for the Zeeman sub-algorithms
   ! and are never valid in a standard ODPS TauCoeff file: 4 is Zeeman SSMIS,
   ! 5 is Zeeman AMSU-A, 6 is an unassigned Zeeman reserve. This module is the
@@ -117,45 +119,6 @@ MODULE ODPS_Predictor
   ! The groups a standard ODPS TauCoeff file may legitimately carry
   INTEGER, PARAMETER :: VALID_GROUPS(5) = &
     (/ GROUP_1, GROUP_2, GROUP_3, GROUP_MW_O3, GROUP_UV_NO2 /)
-
-  ! Number of predictors for each component
-  INTEGER, PARAMETER :: N_PREDICTORS_G1(8) = (/ &
-                     7, &  ! dry gas
-                    18, &  ! water vapor line only, no continua
-                     7, &  ! water vapor continua only, no line absorption
-!                    13, &  ! ozone
-                    11, &  ! ozone
-                    11, &  ! CO2
-                    14, &  ! N2O
-                    10, &  ! CO
-                    11 /)  ! CH4
-
-  INTEGER, PARAMETER :: N_PREDICTORS_G2(5) = (/ &
-                     7, &  ! dry gas
-                    15, &  ! water vapor line only, no continua
-                     7, &  ! water vapor continua only, no line absorption
-!                    13, &  ! ozone
-                    11, &  ! ozone
-                    10 /)  ! CO2
-
-  INTEGER, PARAMETER :: N_PREDICTORS_G3(2) = (/ &
-                     7, &  ! dry gas
-                    14 /)  ! water vapor line and continua
-
-  INTEGER, PARAMETER :: N_PREDICTORS_G7(3) = (/ &
-                     7, &  ! effective dry gas (climatological trace gases folded in)
-                    14, &  ! water vapor line and continua
-                    11 /)  ! ozone (same formulation as the IR ozone component)
-
-  ! Group 8 = group 2 (IR/VIS) predictor counts plus the NO2 component.
-  INTEGER, PARAMETER :: N_PREDICTORS_G8(6) = (/ &
-                     7, &  ! dry gas
-                    15, &  ! water vapor line only, no continua
-                     7, &  ! water vapor continua only, no line absorption
-                    11, &  ! ozone
-                    10, &  ! CO2
-                     3 /)  ! NO2 (scene component: amount*secant, and its T, T^2 terms)
-
 
   ! Component IDs.
   !
@@ -211,41 +174,6 @@ MODULE ODPS_Predictor
   ! UV/VIS group-8 NO2 component index (6th component of the group-2-based set)
   INTEGER, PARAMETER :: COMP_NO2_G8 = 6   ! GROUP_UV_NO2 only
 
-  ! Component index to component ID mapping
-  INTEGER, PARAMETER :: COMPONENT_ID_MAP_G1(8) = (/ &
-                                DRY_ComID_G1, &
-                                   WLO_ComID, &
-                                   WCO_ComID, &
-                                   OZO_ComID, &
-                                   CO2_ComID, &
-                                   N2O_ComID, &
-                                   CO_ComID , &
-                                   CH4_ComID /)
-
-  INTEGER, PARAMETER :: COMPONENT_ID_MAP_G2(5) = (/ &
-                                DRY_ComID_G2, &
-                                   WLO_ComID, &
-                                   WCO_ComID, &
-                                   OZO_ComID, &
-                                   CO2_ComID /)
-
-  INTEGER, PARAMETER :: COMPONENT_ID_MAP_G3(2) = (/ &
-                                  EDRY_ComID, &
-                                   WET_ComID /)
-
-  INTEGER, PARAMETER :: COMPONENT_ID_MAP_G7(3) = (/ &
-                                  EDRY_ComID, &
-                                   WET_ComID, &
-                                   OZO_ComID /)
-
-  INTEGER, PARAMETER :: COMPONENT_ID_MAP_G8(6) = (/ &
-                                DRY_ComID_G2, &
-                                   WLO_ComID, &
-                                   WCO_ComID, &
-                                   OZO_ComID, &
-                                   CO2_ComID, &
-                                   NO2_ComID /)
-
   ! Absorber IDs (HITRAN)
   INTEGER, PARAMETER ::   H2O_ID =  1
   INTEGER, PARAMETER ::   CO2_ID =  2
@@ -270,32 +198,61 @@ MODULE ODPS_Predictor
   ! IR indexes (ABS_H2O_IR/ABS_O3_IR/ABS_CO2_IR = 1/2/3), NO2 is the 4th.
   INTEGER,  PARAMETER :: ABS_NO2_G8 = 4   ! GROUP_UV_NO2 only
 
-  ! Absorber index to absorber ID mapping
-  INTEGER,  PARAMETER :: ABSORBER_ID_MAP_G1(6) = (/ &
-                                    H2O_ID, &
-                                    O3_ID,  &
-                                    CO2_ID, &
-                                    N2O_ID, &
-                                    CO_ID,  &
-                                    CH4_ID /)
+  ! ---------------------------------------------------------------------
+  ! THE GROUP REGISTRY: one row per ODPS group, the complete definition in
+  ! one place (basis class, component roster, absorber roster, and the
+  ! per-component predictor counts). Rows 4 to 6 are the Zeeman-reserved
+  ! placeholders (BASIS_RESERVED, all-zero rosters). The rosters are padded
+  ! with zeros to the fixed component/absorber maximums; only the first
+  ! n_Components / n_Absorbers entries are meaningful.
+  !
+  ! To add a group: add one row here, extend N_G, add the group's named
+  ! index constant above, add it to VALID_GROUPS, and provide predictor
+  ! kernels for any component ID not already handled (see the kernel
+  ! dispatch in ODPS_Compute_Predictor and its TL/AD companions).
+  ! ---------------------------------------------------------------------
+  TYPE :: ODPS_Group_Spec_type
+    CHARACTER(12) :: Name
+    INTEGER       :: Basis
+    INTEGER       :: n_Components
+    INTEGER       :: n_Absorbers
+    INTEGER       :: Max_n_Predictors
+    INTEGER       :: Component_ID(MAX_COMPONENTS_ANY_GROUP)
+    INTEGER       :: Absorber_ID(MAX_ABSORBERS_ANY_GROUP)
+    INTEGER       :: n_Predictors(MAX_COMPONENTS_ANY_GROUP)
+  END TYPE ODPS_Group_Spec_type
 
-  INTEGER,  PARAMETER :: ABSORBER_ID_MAP_G2(3) = (/ &
-                                    H2O_ID, &
-                                    O3_ID,  &
-                                    CO2_ID /)
+  TYPE(ODPS_Group_Spec_type), PARAMETER :: GROUP_REGISTRY(N_G) = (/ &
+    ODPS_Group_Spec_type( 'IR_HIRES    ', BASIS_IR, 8, 6, 18, &
+      (/ DRY_ComID_G1, WLO_ComID, WCO_ComID, OZO_ComID, CO2_ComID, N2O_ComID, CO_ComID, CH4_ComID /), &
+      (/ H2O_ID, O3_ID, CO2_ID, N2O_ID, CO_ID, CH4_ID /), &
+      (/ 7, 18, 7, 11, 11, 14, 10, 11 /) ), &
+    ODPS_Group_Spec_type( 'IR_BROAD    ', BASIS_IR, 5, 3, 15, &
+      (/ DRY_ComID_G2, WLO_ComID, WCO_ComID, OZO_ComID, CO2_ComID, 0, 0, 0 /), &
+      (/ H2O_ID, O3_ID, CO2_ID, 0, 0, 0 /), &
+      (/ 7, 15, 7, 11, 10, 0, 0, 0 /) ), &
+    ODPS_Group_Spec_type( 'MW          ', BASIS_MW, 2, 1, 14, &
+      (/ EDRY_ComID, WET_ComID, 0, 0, 0, 0, 0, 0 /), &
+      (/ H2O_ID, 0, 0, 0, 0, 0 /), &
+      (/ 7, 14, 0, 0, 0, 0, 0, 0 /) ), &
+    ODPS_Group_Spec_type( 'RSVD_ZSSMIS ', BASIS_RESERVED, 0, 0, 0, &
+      (/ 0, 0, 0, 0, 0, 0, 0, 0 /), (/ 0, 0, 0, 0, 0, 0 /), &
+      (/ 0, 0, 0, 0, 0, 0, 0, 0 /) ), &
+    ODPS_Group_Spec_type( 'RSVD_ZAMSUA ', BASIS_RESERVED, 0, 0, 0, &
+      (/ 0, 0, 0, 0, 0, 0, 0, 0 /), (/ 0, 0, 0, 0, 0, 0 /), &
+      (/ 0, 0, 0, 0, 0, 0, 0, 0 /) ), &
+    ODPS_Group_Spec_type( 'RSVD_ZEEMAN3', BASIS_RESERVED, 0, 0, 0, &
+      (/ 0, 0, 0, 0, 0, 0, 0, 0 /), (/ 0, 0, 0, 0, 0, 0 /), &
+      (/ 0, 0, 0, 0, 0, 0, 0, 0 /) ), &
+    ODPS_Group_Spec_type( 'MW_O3       ', BASIS_MW, 3, 2, 14, &
+      (/ EDRY_ComID, WET_ComID, OZO_ComID, 0, 0, 0, 0, 0 /), &
+      (/ H2O_ID, O3_ID, 0, 0, 0, 0 /), &
+      (/ 7, 14, 11, 0, 0, 0, 0, 0 /) ), &
+    ODPS_Group_Spec_type( 'UV_NO2      ', BASIS_IR, 6, 4, 15, &
+      (/ DRY_ComID_G2, WLO_ComID, WCO_ComID, OZO_ComID, CO2_ComID, NO2_ComID, 0, 0 /), &
+      (/ H2O_ID, O3_ID, CO2_ID, NO2_ID, 0, 0 /), &
+      (/ 7, 15, 7, 11, 10, 3, 0, 0 /) ) /)
 
-  INTEGER,  PARAMETER :: ABSORBER_ID_MAP_G3(1) = (/ &
-                                           H2O_ID /)
-
-  INTEGER,  PARAMETER :: ABSORBER_ID_MAP_G7(2) = (/ &
-                                           H2O_ID, &
-                                           O3_ID /)
-
-  INTEGER,  PARAMETER :: ABSORBER_ID_MAP_G8(4) = (/ &
-                                           H2O_ID, &
-                                            O3_ID, &
-                                           CO2_ID, &
-                                           NO2_ID /)
   ! Literal constants
   REAL(fp), PARAMETER :: ZERO      = 0.0_fp
   REAL(fp), PARAMETER :: ONE       = 1.0_fp
@@ -820,7 +777,7 @@ CONTAINS
       Tzp(k)  = Tzp_sum/Tzp_ref
 
       ! absorbers
-      DO j = 1, N_ABSORBERS_G(Group_ID)
+      DO j = 1, GROUP_REGISTRY(Group_ID)%n_Absorbers
         GAz_ref(j)   = GAz_ref(j) + Ref_absorber(k, j)
         GAz_sum(j)   = GAz_sum(j) + Absorber(k, j)
         GAz(k, j)    = GAz_sum(j) / GAz_ref(j)
@@ -963,11 +920,11 @@ CONTAINS
           CH4_ACH4zp = SECANG(k)*GAzp(k, ABS_CH4_IR)
 
           ! set number of predictors
-          Predictor%n_CP = N_PREDICTORS_G1
+          Predictor%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
         ELSE IF( Group_ID == GROUP_UV_NO2 )THEN
-          Predictor%n_CP = N_PREDICTORS_G8
+          Predictor%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
         ELSE
-          Predictor%n_CP = N_PREDICTORS_G2
+          Predictor%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
         END IF
 
        !#-------------------------------------------------------------------#
@@ -1173,9 +1130,9 @@ CONTAINS
 
        ! set number of predictors
         IF ( Group_ID == GROUP_MW_O3 ) THEN
-          Predictor%n_CP = N_PREDICTORS_G7
+          Predictor%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
         ELSE
-          Predictor%n_CP = N_PREDICTORS_G3
+          Predictor%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
         END IF
 
         !  ----------------------
@@ -1395,7 +1352,7 @@ CONTAINS
       Tzp_TL(k)  = Tzp_sum_TL/PAFV%Tzp_ref(k)
 
       ! absorbers
-      DO j = 1, N_ABSORBERS_G(Group_ID)
+      DO j = 1, GROUP_REGISTRY(Group_ID)%n_Absorbers
         GAz_sum_TL(j)   = GAz_sum_TL(j) + Absorber_TL(k, j)
         GAz_TL(k, j)    = GAz_sum_TL(j) / PAFV%GAz_ref(k,j)
         GAzp_sum_TL(j)  = GAzp_sum_TL(j) + PAFV%PDP(k)*Absorber_TL(k, j)
@@ -1574,11 +1531,11 @@ CONTAINS
           CH4_ACH4zp_TL = SECANG(k)*GAzp_TL(k, ABS_CH4_IR)
 
           ! set number of predictors
-          Predictor_TL%n_CP = N_PREDICTORS_G1
+          Predictor_TL%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
         ELSE IF( Group_ID == GROUP_UV_NO2 )THEN
-          Predictor_TL%n_CP = N_PREDICTORS_G8
+          Predictor_TL%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
         ELSE
-          Predictor_TL%n_CP = N_PREDICTORS_G2
+          Predictor_TL%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
         END IF
 
        !#-------------------------------------------------------------------#
@@ -1810,9 +1767,9 @@ CONTAINS
 
        ! set number of predictors
         IF ( Group_ID == GROUP_MW_O3 ) THEN
-          Predictor_TL%n_CP = N_PREDICTORS_G7
+          Predictor_TL%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
         ELSE
-          Predictor_TL%n_CP = N_PREDICTORS_G3
+          Predictor_TL%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
         END IF
 
         !  ----------------------
@@ -2057,7 +2014,7 @@ CONTAINS
     Adjoint_Layer_Loop : DO k = n_Layers, 1, -1
 
       ! absorbers
-      DO j = N_ABSORBERS_G(Group_ID), 1, -1
+      DO j = GROUP_REGISTRY(Group_ID)%n_Absorbers, 1, -1
 
         GATzp_sum_AD(j) = GATzp_sum_AD(j) + GATzp_AD(k, j)/PAFV%GATzp_ref(k,j)
         GAzp_sum_AD(j) = GAzp_sum_AD(j) + GAzp_AD(k, j)/PAFV%GAzp_ref(k,j)
@@ -2750,9 +2707,9 @@ CONTAINS
 
        ! set number of predictors
         IF ( Group_ID == GROUP_MW_O3 ) THEN
-          Predictor_AD%n_CP = N_PREDICTORS_G7
+          Predictor_AD%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
         ELSE
-          Predictor_AD%n_CP = N_PREDICTORS_G3
+          Predictor_AD%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
         END IF
 
         !  ----------------------
@@ -3515,24 +3472,40 @@ CONTAINS
   END SUBROUTINE ODPS_Compute_Predictor_ODAS_AD
 
 
+  ! Registry accessors. Out-of-range or Zeeman-reserved group queries return
+  ! 0 (dimensions) or ODPS_INVALID_ID (IDs); ODPS_Validate_Group is the
+  ! load-time gate that makes such queries unreachable in normal operation.
+
   PURE FUNCTION ODPS_Get_max_n_Predictors( Group_Index ) RESULT( max_n_Predictors )
     INTEGER, INTENT( IN ) :: Group_Index
     INTEGER :: max_n_Predictors
-    max_n_Predictors = MAX_N_PREDICTORS_G( Group_Index )
+    IF ( Group_Index >= 1 .AND. Group_Index <= N_G ) THEN
+      max_n_Predictors = GROUP_REGISTRY(Group_Index)%Max_n_Predictors
+    ELSE
+      max_n_Predictors = 0
+    END IF
   END FUNCTION ODPS_Get_max_n_Predictors
 
 
   PURE FUNCTION ODPS_Get_n_Components( Group_Index ) RESULT( n_Components )
     INTEGER, INTENT( IN ) :: Group_Index
     INTEGER :: n_Components
-    n_Components = N_COMPONENTS_G( Group_Index )
+    IF ( Group_Index >= 1 .AND. Group_Index <= N_G ) THEN
+      n_Components = GROUP_REGISTRY(Group_Index)%n_Components
+    ELSE
+      n_Components = 0
+    END IF
   END FUNCTION ODPS_Get_n_Components
 
 
   PURE FUNCTION ODPS_Get_n_Absorbers( Group_Index ) RESULT( n_Absorbers )
     INTEGER, INTENT( IN ) :: Group_Index
     INTEGER :: n_Absorbers
-    n_Absorbers = N_ABSORBERS_G( Group_Index )
+    IF ( Group_Index >= 1 .AND. Group_Index <= N_G ) THEN
+      n_Absorbers = GROUP_REGISTRY(Group_Index)%n_Absorbers
+    ELSE
+      n_Absorbers = 0
+    END IF
   END FUNCTION ODPS_Get_n_Absorbers
 
 
@@ -3540,20 +3513,14 @@ CONTAINS
     INTEGER, INTENT( IN ) :: Component_Index
     INTEGER, INTENT( IN ) :: Group_Index
     INTEGER :: Component_ID
-    SELECT CASE( Group_Index )
-      CASE( GROUP_1 )
-         Component_ID = COMPONENT_ID_MAP_G1(Component_Index)
-      CASE( GROUP_2 )
-         Component_ID = COMPONENT_ID_MAP_G2(Component_Index)
-      CASE( GROUP_3 )
-         Component_ID = COMPONENT_ID_MAP_G3(Component_Index)
-      CASE( GROUP_MW_O3 )
-         Component_ID = COMPONENT_ID_MAP_G7(Component_Index)
-      CASE( GROUP_UV_NO2 )
-         Component_ID = COMPONENT_ID_MAP_G8(Component_Index)
-      CASE DEFAULT
-         Component_ID = ODPS_INVALID_ID  ! Out-of-range query; see ODPS_Validate_Group
-    END SELECT
+    IF ( Group_Index >= 1 .AND. Group_Index <= N_G ) THEN
+      IF ( Component_Index >= 1 .AND. &
+           Component_Index <= GROUP_REGISTRY(Group_Index)%n_Components ) THEN
+        Component_ID = GROUP_REGISTRY(Group_Index)%Component_ID(Component_Index)
+        RETURN
+      END IF
+    END IF
+    Component_ID = ODPS_INVALID_ID  ! Out-of-range query; see ODPS_Validate_Group
   END FUNCTION ODPS_Get_Component_ID
 
 
@@ -3561,20 +3528,14 @@ CONTAINS
     INTEGER, INTENT( IN ) :: Absorber_Index
     INTEGER, INTENT( IN ) :: Group_Index
     INTEGER :: Absorber_ID
-    SELECT CASE( Group_Index )
-      CASE( GROUP_1 )
-          Absorber_ID = ABSORBER_ID_MAP_G1(Absorber_Index)
-      CASE( GROUP_2 )
-          Absorber_ID = ABSORBER_ID_MAP_G2(Absorber_Index)
-      CASE( GROUP_3 )
-          Absorber_ID = ABSORBER_ID_MAP_G3(Absorber_Index)
-      CASE( GROUP_MW_O3 )
-          Absorber_ID = ABSORBER_ID_MAP_G7(Absorber_Index)
-      CASE( GROUP_UV_NO2 )
-          Absorber_ID = ABSORBER_ID_MAP_G8(Absorber_Index)
-      CASE DEFAULT
-          Absorber_ID = ODPS_INVALID_ID  ! Out-of-range query; see ODPS_Validate_Group
-      END SELECT
+    IF ( Group_Index >= 1 .AND. Group_Index <= N_G ) THEN
+      IF ( Absorber_Index >= 1 .AND. &
+           Absorber_Index <= GROUP_REGISTRY(Group_Index)%n_Absorbers ) THEN
+        Absorber_ID = GROUP_REGISTRY(Group_Index)%Absorber_ID(Absorber_Index)
+        RETURN
+      END IF
+    END IF
+    Absorber_ID = ODPS_INVALID_ID  ! Out-of-range query; see ODPS_Validate_Group
   END FUNCTION ODPS_Get_Absorber_ID
 
 
@@ -3658,29 +3619,11 @@ CONTAINS
       RETURN
     END IF
 
-    ! Fetch the expected rosters for this group
-    SELECT CASE ( Group_Index )
-      CASE ( GROUP_1 )
-        nc = SIZE(COMPONENT_ID_MAP_G1); na = SIZE(ABSORBER_ID_MAP_G1)
-        Expected_Component_ID(1:nc) = COMPONENT_ID_MAP_G1
-        Expected_Absorber_ID(1:na)  = ABSORBER_ID_MAP_G1
-      CASE ( GROUP_2 )
-        nc = SIZE(COMPONENT_ID_MAP_G2); na = SIZE(ABSORBER_ID_MAP_G2)
-        Expected_Component_ID(1:nc) = COMPONENT_ID_MAP_G2
-        Expected_Absorber_ID(1:na)  = ABSORBER_ID_MAP_G2
-      CASE ( GROUP_3 )
-        nc = SIZE(COMPONENT_ID_MAP_G3); na = SIZE(ABSORBER_ID_MAP_G3)
-        Expected_Component_ID(1:nc) = COMPONENT_ID_MAP_G3
-        Expected_Absorber_ID(1:na)  = ABSORBER_ID_MAP_G3
-      CASE ( GROUP_MW_O3 )
-        nc = SIZE(COMPONENT_ID_MAP_G7); na = SIZE(ABSORBER_ID_MAP_G7)
-        Expected_Component_ID(1:nc) = COMPONENT_ID_MAP_G7
-        Expected_Absorber_ID(1:na)  = ABSORBER_ID_MAP_G7
-      CASE ( GROUP_UV_NO2 )
-        nc = SIZE(COMPONENT_ID_MAP_G8); na = SIZE(ABSORBER_ID_MAP_G8)
-        Expected_Component_ID(1:nc) = COMPONENT_ID_MAP_G8
-        Expected_Absorber_ID(1:na)  = ABSORBER_ID_MAP_G8
-    END SELECT
+    ! Fetch the expected rosters for this group from the registry
+    nc = GROUP_REGISTRY(Group_Index)%n_Components
+    na = GROUP_REGISTRY(Group_Index)%n_Absorbers
+    Expected_Component_ID(1:nc) = GROUP_REGISTRY(Group_Index)%Component_ID(1:nc)
+    Expected_Absorber_ID(1:na)  = GROUP_REGISTRY(Group_Index)%Absorber_ID(1:na)
 
     ! Roster sizes
     IF ( SIZE(Component_ID) /= nc .OR. SIZE(Absorber_ID) /= na ) THEN
