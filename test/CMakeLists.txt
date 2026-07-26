@@ -372,6 +372,14 @@ target_link_libraries(Unit_Fastem1_SST_Jacobian PRIVATE crtm)
 add_test(NAME test_Unit_Fastem1_SST_Jacobian
          COMMAND $<TARGET_FILE:Unit_Fastem1_SST_Jacobian>)
 
+# ODPS group modernization (Tier 0): load-time validation of Group_Index and
+# the Component_ID/Absorber_ID rosters, including rejection of the
+# Zeeman-reserved indexes (the OMPS Group-4 failure mode).
+add_executable(Unit_ODPS_Group_Validation mains/unit/Unit_Test/test_ODPS_Group_Validation.f90)
+target_link_libraries(Unit_ODPS_Group_Validation PRIVATE crtm)
+add_test(NAME test_Unit_ODPS_Group_Validation
+         COMMAND $<TARGET_FILE:Unit_ODPS_Group_Validation>)
+
 # Pins the v3.2.0 DDA-ARTS ICE_CLOUD scattering change (ICE_CLOUD now scatters via
 # the full branch / IconCloudIce habit). Registered only when a DDA-ARTS CloudCoeff
 # is present in the staged fix tree.

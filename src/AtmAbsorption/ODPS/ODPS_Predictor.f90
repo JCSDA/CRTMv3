@@ -67,6 +67,7 @@ MODULE ODPS_Predictor
   PUBLIC :: ODPS_Get_Absorber_ID
   PUBLIC :: ODPS_Get_Ozone_Component_ID
   PUBLIC :: ODPS_Get_SaveFWVFlag
+  PUBLIC :: ODPS_Validate_Group
   ! Parameters
   PUBLIC :: TOT_ComID
   PUBLIC :: WLO_ComID
@@ -77,6 +78,9 @@ MODULE ODPS_Predictor
   PUBLIC :: GROUP_3
   PUBLIC :: GROUP_MW_O3
   PUBLIC :: GROUP_UV_NO2
+  PUBLIC :: RESERVED_ZSSMIS_GROUP
+  PUBLIC :: RESERVED_ZAMSUA_GROUP
+  PUBLIC :: ODPS_INVALID_ID
   PUBLIC :: ALLOW_OPTRAN
 
 
@@ -93,12 +97,26 @@ MODULE ODPS_Predictor
   INTEGER, PARAMETER  :: N_COMPONENTS_G(N_G)     = (/8,   5, 2, 0, 0, 0, 3, 6/)
   INTEGER, PARAMETER  :: N_ABSORBERS_G(N_G)      = (/6,   3, 1, 0, 0, 0, 2, 4/)
   INTEGER, PARAMETER  :: MAX_N_PREDICTORS_G(N_G) = (/18, 15, 14, 0, 0, 0, 14, 15/)
-  ! Group index (note, group indexes 4 - 6 are reserved for Zeeman sub-algorithms
+  INTEGER, PARAMETER  :: MAX_COMPONENTS_ANY_GROUP = MAXVAL(N_COMPONENTS_G)
+  INTEGER, PARAMETER  :: MAX_ABSORBERS_ANY_GROUP  = MAXVAL(N_ABSORBERS_G)
+  ! Group index. Group indexes 4 - 6 are RESERVED for the Zeeman sub-algorithms
+  ! and are never valid in a standard ODPS TauCoeff file: 4 is Zeeman SSMIS,
+  ! 5 is Zeeman AMSU-A, 6 is an unassigned Zeeman reserve. This module is the
+  ! single owner of the group index space; the ODZeeman code derives its
+  ! ODPS_gINDEX_* constants from the RESERVED_* parameters below. The zero
+  ! entries at positions 4 - 6 in the dimension tables above are placeholders
+  ! for these reserved indexes (Zeeman has its own predictor module and never
+  ! reaches these tables).
   INTEGER, PARAMETER :: GROUP_1 = 1
   INTEGER, PARAMETER :: GROUP_2 = 2
   INTEGER, PARAMETER :: GROUP_3 = 3
+  INTEGER, PARAMETER :: RESERVED_ZSSMIS_GROUP = 4  ! Zeeman SSMIS (ODZeeman only)
+  INTEGER, PARAMETER :: RESERVED_ZAMSUA_GROUP = 5  ! Zeeman AMSU-A (ODZeeman only)
   INTEGER, PARAMETER :: GROUP_MW_O3 = 7   ! MW with a scene-ozone component
   INTEGER, PARAMETER :: GROUP_UV_NO2 = 8  ! UV/VIS with a scene-NO2 component
+  ! The groups a standard ODPS TauCoeff file may legitimately carry
+  INTEGER, PARAMETER :: VALID_GROUPS(5) = &
+    (/ GROUP_1, GROUP_2, GROUP_3, GROUP_MW_O3, GROUP_UV_NO2 /)
 
   ! Number of predictors for each component
   INTEGER, PARAMETER :: N_PREDICTORS_G1(8) = (/ &
@@ -139,7 +157,24 @@ MODULE ODPS_Predictor
                      3 /)  ! NO2 (scene component: amount*secant, and its T, T^2 terms)
 
 
-  ! Component IDs
+  ! Component IDs.
+  !
+  ! REGISTRY NOTE: component IDs are inherited from the heritage transmittance
+  ! production "molecule set" numbering (see CRTM_coef,
+  ! src/apps/TauProd/Infrared/Check_ProcessControl_File/Tau_Production_Parameters.f90):
+  !   1 - 7   individual molecules (HITRAN order; 7 is O2)
+  !   8/9/10  all-no-continua / continua-only / all-with-continua
+  !   12      wet (water vapor, line and continua)
+  !   13      dry
+  !   14      ozone
+  !   15      wco (water vapor continua only)
+  !   20      dry, group-2 formulation
+  !   101     effective molecule 1 (water vapor line only, "wlo")
+  !   112-121 effective single-gas components (112 wet, 113 dry, 114 ozone,
+  !           118 CH4, 119 CO, 120 N2O, 121 CO2)
+  !   122     NO2 (CRTM extension, added with GROUP_UV_NO2)
+  ! New component IDs must be coordinated with the coefficient generation
+  ! package (crtm-coeffgen) and recorded here.
   INTEGER,  PARAMETER :: TOT_ComID = 10    ! total tau
   INTEGER,  PARAMETER :: DRY_ComID_G1 =  7   ! dry gas for Group-1 sensors
   INTEGER,  PARAMETER :: DRY_ComID_G2 = 20   ! dry gas, for Gorup-2 sensors
@@ -151,6 +186,8 @@ MODULE ODPS_Predictor
   INTEGER,  PARAMETER :: CO_ComID  = 119  ! CO
   INTEGER,  PARAMETER :: CH4_ComID = 118  ! CH4
   INTEGER,  PARAMETER :: NO2_ComID = 122  ! NO2 (scene component, UV/VIS group 8)
+  ! Sentinel returned by the ID accessors for an out-of-range query
+  INTEGER,  PARAMETER :: ODPS_INVALID_ID = -1
 
   ! Microwave sensors
   INTEGER,  PARAMETER :: EDRY_ComID = 113  ! Effective dry
@@ -3515,7 +3552,7 @@ CONTAINS
       CASE( GROUP_UV_NO2 )
          Component_ID = COMPONENT_ID_MAP_G8(Component_Index)
       CASE DEFAULT
-         Component_ID = HUGE(Component_ID)  ! Entry not found: Hopefully induce code to fail 
+         Component_ID = ODPS_INVALID_ID  ! Out-of-range query; see ODPS_Validate_Group
     END SELECT
   END FUNCTION ODPS_Get_Component_ID
 
@@ -3536,7 +3573,7 @@ CONTAINS
       CASE( GROUP_UV_NO2 )
           Absorber_ID = ABSORBER_ID_MAP_G8(Absorber_Index)
       CASE DEFAULT
-          Absorber_ID = HUGE(Absorber_ID)  ! Entry not found: Hopefully induce code to fail 
+          Absorber_ID = ODPS_INVALID_ID  ! Out-of-range query; see ODPS_Validate_Group
       END SELECT
   END FUNCTION ODPS_Get_Absorber_ID
 
@@ -3548,9 +3585,127 @@ CONTAINS
         Group_Index == GROUP_MW_O3 .OR. Group_Index == GROUP_UV_NO2 )THEN
       Ozone_Component_ID = OZO_ComID
     ELSE
-      Ozone_Component_ID = -1
+      Ozone_Component_ID = ODPS_INVALID_ID
     END IF
   END FUNCTION ODPS_Get_Ozone_Component_ID
+
+
+!------------------------------------------------------------------------------
+!:sdoc+:
+!
+! NAME:
+!       ODPS_Validate_Group
+!
+! PURPOSE:
+!       Validate the group metadata of a loaded ODPS TauCoeff structure
+!       against the supported group definitions: the Group_Index must be a
+!       supported (non-Zeeman-reserved) group, and the file's Component_ID
+!       and Absorber_ID rosters must match that group's compiled maps
+!       exactly, in content and order (the predictor code addresses
+!       components positionally).
+!
+! CALLING SEQUENCE:
+!       Is_Valid = ODPS_Validate_Group( Group_Index,  &
+!                                       Component_ID, &
+!                                       Absorber_ID,  &
+!                                       Message       )
+!
+! INPUTS:
+!       Group_Index:   The file's ODPS group index.
+!       Component_ID:  The file's component ID roster.
+!       Absorber_ID:   The file's absorber ID roster.
+!
+! OUTPUTS:
+!       Message:       Explanation of the failure (blank when valid).
+!
+! FUNCTION RESULT:
+!       Is_Valid:      .TRUE. when the metadata is consistent with a
+!                      supported group; .FALSE. otherwise.
+!
+!:sdoc-:
+!------------------------------------------------------------------------------
+
+  FUNCTION ODPS_Validate_Group( Group_Index, Component_ID, Absorber_ID, Message ) &
+    RESULT( Is_Valid )
+    INTEGER,      INTENT(IN)  :: Group_Index
+    INTEGER,      INTENT(IN)  :: Component_ID(:)
+    INTEGER,      INTENT(IN)  :: Absorber_ID(:)
+    CHARACTER(*), INTENT(OUT) :: Message
+    LOGICAL :: Is_Valid
+    ! Local variables
+    INTEGER :: Expected_Component_ID(MAX_COMPONENTS_ANY_GROUP)
+    INTEGER :: Expected_Absorber_ID(MAX_ABSORBERS_ANY_GROUP)
+    INTEGER :: nc, na
+
+    Is_Valid = .FALSE.
+    Message  = ''
+
+    ! Reserved (Zeeman) indexes get a specific explanation
+    IF ( Group_Index >= RESERVED_ZSSMIS_GROUP .AND. &
+         Group_Index <= RESERVED_ZAMSUA_GROUP + 1 ) THEN
+      WRITE( Message, '("Group_Index ",i0," is reserved for the Zeeman ", &
+        &"sub-algorithms. Zeeman companion coefficients (z*.TauCoeff) are ", &
+        &"loaded via the ODZeeman path for SSMIS/AMSU-A sensors only; a ", &
+        &"standard ODPS TauCoeff must use group 1, 2, 3, 7, or 8.")' ) &
+        Group_Index
+      RETURN
+    END IF
+
+    ! Unknown group index
+    IF ( .NOT. ANY( VALID_GROUPS == Group_Index ) ) THEN
+      WRITE( Message, '("Group_Index ",i0," is not a supported ODPS group ", &
+        &"(supported: 1, 2, 3, 7, 8).")' ) Group_Index
+      RETURN
+    END IF
+
+    ! Fetch the expected rosters for this group
+    SELECT CASE ( Group_Index )
+      CASE ( GROUP_1 )
+        nc = SIZE(COMPONENT_ID_MAP_G1); na = SIZE(ABSORBER_ID_MAP_G1)
+        Expected_Component_ID(1:nc) = COMPONENT_ID_MAP_G1
+        Expected_Absorber_ID(1:na)  = ABSORBER_ID_MAP_G1
+      CASE ( GROUP_2 )
+        nc = SIZE(COMPONENT_ID_MAP_G2); na = SIZE(ABSORBER_ID_MAP_G2)
+        Expected_Component_ID(1:nc) = COMPONENT_ID_MAP_G2
+        Expected_Absorber_ID(1:na)  = ABSORBER_ID_MAP_G2
+      CASE ( GROUP_3 )
+        nc = SIZE(COMPONENT_ID_MAP_G3); na = SIZE(ABSORBER_ID_MAP_G3)
+        Expected_Component_ID(1:nc) = COMPONENT_ID_MAP_G3
+        Expected_Absorber_ID(1:na)  = ABSORBER_ID_MAP_G3
+      CASE ( GROUP_MW_O3 )
+        nc = SIZE(COMPONENT_ID_MAP_G7); na = SIZE(ABSORBER_ID_MAP_G7)
+        Expected_Component_ID(1:nc) = COMPONENT_ID_MAP_G7
+        Expected_Absorber_ID(1:na)  = ABSORBER_ID_MAP_G7
+      CASE ( GROUP_UV_NO2 )
+        nc = SIZE(COMPONENT_ID_MAP_G8); na = SIZE(ABSORBER_ID_MAP_G8)
+        Expected_Component_ID(1:nc) = COMPONENT_ID_MAP_G8
+        Expected_Absorber_ID(1:na)  = ABSORBER_ID_MAP_G8
+    END SELECT
+
+    ! Roster sizes
+    IF ( SIZE(Component_ID) /= nc .OR. SIZE(Absorber_ID) /= na ) THEN
+      WRITE( Message, '("Group ",i0," expects ",i0," components and ",i0, &
+        &" absorbers; file has ",i0," and ",i0,".")' ) &
+        Group_Index, nc, na, SIZE(Component_ID), SIZE(Absorber_ID)
+      RETURN
+    END IF
+
+    ! Roster content and order (the predictor code is positional)
+    IF ( ANY( Component_ID /= Expected_Component_ID(1:nc) ) ) THEN
+      WRITE( Message, '("Group ",i0," Component_ID mismatch: expected ", &
+        &8(i0,:,", "))' ) Group_Index, Expected_Component_ID(1:nc)
+      Message = TRIM(Message)//'; file order must match exactly.'
+      RETURN
+    END IF
+    IF ( ANY( Absorber_ID /= Expected_Absorber_ID(1:na) ) ) THEN
+      WRITE( Message, '("Group ",i0," Absorber_ID mismatch: expected ", &
+        &6(i0,:,", "))' ) Group_Index, Expected_Absorber_ID(1:na)
+      Message = TRIM(Message)//'; file order must match exactly.'
+      RETURN
+    END IF
+
+    Is_Valid = .TRUE.
+  END FUNCTION ODPS_Validate_Group
 
 
   ! This function gets a flag (true or false) indicating the

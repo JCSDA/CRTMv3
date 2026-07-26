@@ -40,6 +40,7 @@ MODULE CRTM_TauCoeff
                                   ODPS_Destroy_TauCoeff => Destroy_TauCoeff, &
                                   ODPS_TC => TC
   USE ODPS_Define         , ONLY: ODPS_type, ODPS_ALGORITHM
+  USE ODPS_Predictor      , ONLY: ODPS_Validate_Group
   USE ODSSU_TauCoeff      , ONLY: ODSSU_Load_TauCoeff    => Load_TauCoeff   , &
                                   ODSSU_Destroy_TauCoeff => Destroy_TauCoeff, &
                                   ODSSU_TC => TC
@@ -225,7 +226,8 @@ CONTAINS
     CHARACTER(:), ALLOCATABLE :: TauCoeff_File(:)
     INTEGER :: Allocate_Status, Deallocate_Status
     INTEGER :: n, n_Sensors
-    INTEGER :: i, j
+    INTEGER :: i, j, k
+    CHARACTER(512) :: GroupMessage
     INTEGER, PARAMETER :: SL = 128
     INTEGER            :: Algorithm_ID
     CHARACTER(SL), ALLOCATABLE :: SensorIDs(:)
@@ -548,15 +550,35 @@ CONTAINS
       ! set the pointer pointing to the local (algorithm specific) TC array
       TC%ODPS => ODPS_TC
 
-      ! Copy over sensor types and IDs 
-      DO i = 1, n  
-        j = SensorIndex(i)   
-        TC%Sensor_ID(j)        = TC%ODPS(i)%Sensor_ID  
+      ! Copy over sensor types and IDs
+      DO i = 1, n
+        j = SensorIndex(i)
+        TC%Sensor_ID(j)        = TC%ODPS(i)%Sensor_ID
         TC%WMO_Satellite_ID(j) = TC%ODPS(i)%WMO_Satellite_ID
         TC%WMO_Sensor_ID(j)    = TC%ODPS(i)%WMO_Sensor_ID
         TC%Sensor_Type(j)      = TC%ODPS(i)%Sensor_Type
-      END DO     
-        
+      END DO
+
+      ! Validate each loaded structure against the supported ODPS group
+      ! definitions (Group_Index plus the Component_ID/Absorber_ID rosters).
+      ! Zeeman companion files (z*.TauCoeff) are loaded separately via the
+      ! ODZeeman path below and are not subject to this check.
+      DO i = 1, n
+        IF ( .NOT. ODPS_Validate_Group( TC%ODPS(i)%Group_Index , &
+                                        TC%ODPS(i)%Component_ID, &
+                                        TC%ODPS(i)%Absorber_ID , &
+                                        GroupMessage ) ) THEN
+          Error_Status = FAILURE
+          CALL Display_Message( ROUTINE_NAME, &
+                                'Invalid ODPS TauCoeff for sensor '// &
+                                TRIM(TC%ODPS(i)%Sensor_ID)//': '// &
+                                TRIM(GroupMessage), &
+                                Error_Status, &
+                                Message_Log=Message_Log )
+          RETURN
+        END IF
+      END DO
+
     END IF
 
     ! *** ODSSU algorithm  ***
@@ -597,15 +619,36 @@ CONTAINS
       ! set the pointer pointing to the local (algorithm specific) TC array
       TC%ODSSU => ODSSU_TC
         
-      ! Copy over sensor types and IDs 
-      DO i = 1, n  
-        j = SensorIndex(i) 
-        TC%Sensor_ID(j)        = TC%ODSSU(i)%Sensor_ID  
+      ! Copy over sensor types and IDs
+      DO i = 1, n
+        j = SensorIndex(i)
+        TC%Sensor_ID(j)        = TC%ODSSU(i)%Sensor_ID
         TC%WMO_Satellite_ID(j) = TC%ODSSU(i)%WMO_Satellite_ID
         TC%WMO_Sensor_ID(j)    = TC%ODSSU(i)%WMO_Sensor_ID
         TC%Sensor_Type(j)      = TC%ODSSU(i)%Sensor_Type
-      END DO   
-        
+      END DO
+
+      ! Validate every nested ODPS sub-structure of each ODSSU sensor
+      ! (ODSSU may instead carry ODAS sub-structures, hence the guard)
+      DO i = 1, n
+        IF ( .NOT. ASSOCIATED(TC%ODSSU(i)%ODPS) ) CYCLE
+        DO k = 1, SIZE(TC%ODSSU(i)%ODPS)
+          IF ( .NOT. ODPS_Validate_Group( TC%ODSSU(i)%ODPS(k)%Group_Index , &
+                                          TC%ODSSU(i)%ODPS(k)%Component_ID, &
+                                          TC%ODSSU(i)%ODPS(k)%Absorber_ID , &
+                                          GroupMessage ) ) THEN
+            Error_Status = FAILURE
+            CALL Display_Message( ROUTINE_NAME, &
+                                  'Invalid ODPS sub-structure in ODSSU TauCoeff for sensor '// &
+                                  TRIM(TC%ODSSU(i)%Sensor_ID)//': '// &
+                                  TRIM(GroupMessage), &
+                                  Error_Status, &
+                                  Message_Log=Message_Log )
+            RETURN
+          END IF
+        END DO
+      END DO
+
     END IF
 
     !----------------------------------------------------------------------------------
