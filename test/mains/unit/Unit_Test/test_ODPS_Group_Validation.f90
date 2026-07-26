@@ -63,23 +63,52 @@ PROGRAM test_ODPS_Group_Validation
   CALL Expect_Invalid( -1, (/ 113, 12 /), (/ 1 /), 'negative group' )
 
   ! ---------------------------------------------------------------
-  ! Roster mismatches within a supported group: all must be rejected
+  ! Kernel-capability semantics (Tier 2): well-formed subset, reordered,
+  ! or extended rosters whose components all map to kernels (with their
+  ! required gases) are ACCEPTED; the compute path dispatches by the
+  ! file's own roster.
   ! ---------------------------------------------------------------
-  ! Wrong component count
-  CALL Expect_Invalid( GROUP_3, (/ 113, 12, 114 /), (/ 1 /), &
-    'group 3 with an extra component' )
-  ! Wrong absorber count
-  CALL Expect_Invalid( GROUP_3, (/ 113, 12 /), (/ 1, 3 /), &
-    'group 3 with an extra absorber' )
-  ! Wrong component content (correct count)
+  ! A group-3 file carrying an ozone component with the O3 gas (G7-style)
+  CALL Expect_Valid( GROUP_3, (/ 113, 12, 114 /), (/ 1, 3 /), &
+    'group 3 with an ozone component and the O3 gas' )
+  ! Extra known absorber (harmlessly mapped, consumed by no kernel)
+  CALL Expect_Valid( GROUP_3, (/ 113, 12 /), (/ 1, 3 /), &
+    'group 3 with an extra known absorber' )
+  ! Reordered roster (dispatch is by ID, not position)
+  CALL Expect_Valid( GROUP_3, (/ 12, 113 /), (/ 1 /), &
+    'group 3 roster reordered' )
+  ! A dry+ozone UV subset: the physics the OMPS files actually contain,
+  ! expressible as a legitimate group-8 subset roster
+  CALL Expect_Valid( GROUP_UV_NO2, (/ 20, 114 /), (/ 3 /), &
+    'group 8 dry+ozone subset (regenerated-OMPS shape)' )
+
+  ! ---------------------------------------------------------------
+  ! Malformed rosters: all must be rejected
+  ! ---------------------------------------------------------------
+  ! Unknown component ID (raw molecule set 13 has no CRTM kernel)
   CALL Expect_Invalid( GROUP_3, (/ 13, 12 /), (/ 1 /), &
     'group 3 with molecule-set dry (13) instead of effective dry (113)' )
-  ! Wrong component ORDER (same set; positional dispatch makes this invalid)
-  CALL Expect_Invalid( GROUP_3, (/ 12, 113 /), (/ 1 /), &
-    'group 3 roster out of order' )
-  ! Wrong absorber content
+  ! Component whose required gas is missing
   CALL Expect_Invalid( GROUP_MW_O3, (/ 113, 12, 114 /), (/ 1, 2 /), &
-    'group 7 with CO2 in place of O3' )
+    'group 7 ozone component without the O3 gas' )
+  ! Duplicate component
+  CALL Expect_Invalid( GROUP_3, (/ 113, 113 /), (/ 1 /), &
+    'duplicate component ID' )
+  ! Duplicate absorber
+  CALL Expect_Invalid( GROUP_3, (/ 113, 12 /), (/ 1, 1 /), &
+    'duplicate absorber ID' )
+  ! Unknown absorber ID
+  CALL Expect_Invalid( GROUP_3, (/ 113, 12 /), (/ 1, 99 /), &
+    'unknown absorber ID' )
+  ! Partial trace trio (CO without CH4/N2O)
+  CALL Expect_Invalid( GROUP_1, (/ 7, 101, 15, 114, 121, 119 /), &
+    (/ 1, 3, 2, 5 /), 'partial trace trio (CO without CH4 and N2O)' )
+  ! IR component on the MW basis
+  CALL Expect_Invalid( GROUP_3, (/ 113, 101 /), (/ 1 /), &
+    'IR water-line component (101) on the MW basis' )
+  ! WLO without the CO2 gas its predictor 15 consumes
+  CALL Expect_Invalid( GROUP_2, (/ 20, 101, 15, 114, 121 /), (/ 1, 3 /), &
+    'group 2 WLO without the CO2 gas' )
 
   ! ---------------------------------------------------------------
   ! Report

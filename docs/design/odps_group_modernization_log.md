@@ -158,4 +158,67 @@ subroutines host-associating the shared per-layer scalars.
 
 ## Tier 2: file-driven allocation and dispatch, Zeeman dual-acceptance
 
-Status: pending.
+Status: implemented and verified: full suite 227/227.
+
+Implementation note for reviewers: the first Tier-2 build failed 38
+hyperspectral-IR (group 1) forward tests with BT errors up to 0.5 K. The
+cause was an ordering bug introduced while switching n_CP to the kernel
+capability function: the n_CP loop consumed has_trace before it was
+computed, so the group-1 WLO capability collapsed from 18 to 15 and
+predictors 16 to 18 went stale. Fixed by computing has_trace immediately
+before the n_CP loop in the FWD and TL drivers (the AD driver already
+ordered them correctly). This is exactly the class of defect the
+regression suite exists to catch, and it did.
+
+1. Compute dispatch from the file's own rosters. The three compute drivers
+   (`ODPS_Compute_Predictor` and TL/AD) take two new arguments, the file's
+   `Component_ID(:)` and `Absorber_ID(:)` (passed from the TC by the
+   assemble routines). Kernel dispatch loops over the file roster; gas
+   positions (ja_h2o, ...) are resolved from the file's absorber list; the
+   AD's position lookups search the file roster; per-component predictor
+   counts (n_CP) come from the new `ODPS_Kernel_n_Predictors(Basis,
+   Component_ID, Has_Trace)` capability function. For every canonical
+   roster these all yield exactly the Tier-1 values.
+
+2. Allocation from the file. `CRTM_Predictor_Define.f90` sizes the
+   predictor structure from `SIZE(TC%...%Component_ID)`,
+   `SIZE(TC%...%Absorber_ID)`, and the new
+   `ODPS_Max_n_Predictors_For(Group_Index, Component_ID)` (maximum kernel
+   capability over the file's components), for both plain ODPS sensors and
+   ODSSU's nested ODPS sub-structures. Identical dimensions for all
+   canonical rosters.
+
+3. Validation semantics widen from "exact registry roster" to kernel
+   capability: a file is valid when its Group_Index is a supported group
+   (which fixes the basis), every component ID maps to a compiled kernel
+   for that basis, rosters carry no duplicates, absorber IDs are gases
+   CRTM knows, the group-1 trace trio (CO/CH4/N2O) appears all-or-none
+   (and then requires the WLO and CO2 components that carry its extension
+   predictors), and every gas a present kernel consumes is in the file's
+   absorber roster. Consequences: subset and reordered rosters become
+   loadable (for example a dry+ozone UV file, the physics the OMPS files
+   actually contain, as a group-8 subset), while unknown component IDs
+   (raw molecule sets 13/14 from externally trained files) remain
+   rejected: a kernel is a trained CRTM predictor formulation, not just a
+   gas label. Shared-scalar blocks and the AD epilogue chains gained
+   gas-presence guards so subset rosters never touch an absent gas.
+
+4. Zeeman dual-acceptance. A sensor is Zeeman-eligible through the
+   heritage WMO gate (SSMIS, AMSU-A) OR when its netCDF companion
+   z<Sensor_ID>.TauCoeff.nc exists and carries global attribute
+   `Zeeman_Algorithm = 1` (new `Zeeman_Metadata_OptIn` probe in
+   `CRTM_TauCoeff.f90`). Existing coefficient sets carry no such
+   attribute and behave exactly as before; future Zeeman-corrected
+   sensors opt in via metadata instead of hardwired WMO IDs. No
+   coefficient file changes.
+
+5. Unit test updated to the Tier-2 semantics: 8 accepted rosters
+   (canonical five plus G7-style group-3, reordered, and the dry+ozone
+   UV subset) and 15 rejected (reserved/unknown groups, unknown component
+   IDs including the literal OMPS 13/14 roster, duplicates, partial trace
+   trio, missing required gases, basis mismatches, unknown absorber).
+
+Compatibility: no coefficient file changes anywhere in Tiers 0 through 2.
+Canonical rosters produce bit-identical results (dimensions, dispatch
+order, and n_CP all reduce to the Tier-1 values); the widened validation
+only adds acceptance, never removes it.

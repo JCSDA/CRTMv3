@@ -68,6 +68,8 @@ MODULE ODPS_Predictor
   PUBLIC :: ODPS_Get_Ozone_Component_ID
   PUBLIC :: ODPS_Get_SaveFWVFlag
   PUBLIC :: ODPS_Validate_Group
+  PUBLIC :: ODPS_Kernel_n_Predictors
+  PUBLIC :: ODPS_Max_n_Predictors_For
   ! Parameters
   PUBLIC :: TOT_ComID
   PUBLIC :: WLO_ComID
@@ -182,6 +184,9 @@ MODULE ODPS_Predictor
   INTEGER, PARAMETER ::    CO_ID =  5
   INTEGER, PARAMETER ::   CH4_ID =  6
   INTEGER, PARAMETER ::   NO2_ID = 10
+  ! All gases CRTM's ODPS kernels know how to consume
+  INTEGER, PARAMETER :: KNOWN_GAS_IDS(7) = &
+    (/ H2O_ID, CO2_ID, O3_ID, N2O_ID, CO_ID, CH4_ID, NO2_ID /)
 
   ! Absorber (Molecule) indexes for accessing absorber profile array
   INTEGER,  PARAMETER :: ABS_H2O_IR = 1
@@ -377,6 +382,8 @@ CONTAINS
     ! Compute predictor
     CALL ODPS_Compute_Predictor( &
       TC%Group_index         , &
+      TC%Component_ID        , &
+      TC%Absorber_ID         , &
       Temperature            , &
       Absorber               , &
       TC%Ref_Level_Pressure  , &
@@ -484,6 +491,8 @@ CONTAINS
     ! Compute predictor
     CALL ODPS_Compute_Predictor_TL( &
       TC%Group_index            , &
+      TC%Component_ID           , &
+      TC%Absorber_ID            , &
       Predictor%PAFV%Temperature, &
       Predictor%PAFV%Absorber   , &
       TC%Ref_Temperature        , &
@@ -599,6 +608,8 @@ CONTAINS
     ! ...The main ODPS predictor
     CALL ODPS_Compute_Predictor_AD( &
       TC%Group_index            , &
+      TC%Component_ID           , &
+      TC%Absorber_ID            , &
       Predictor%PAFV%Temperature, &
       Predictor%PAFV%Absorber   , &
       TC%Ref_Temperature        , &
@@ -695,6 +706,8 @@ CONTAINS
 
   SUBROUTINE ODPS_Compute_Predictor( &
     Group_ID,           &
+    Component_ID,       &
+    Absorber_ID,        &
     Temperature,        &
     Absorber,           &
     Ref_Level_Pressure, &
@@ -704,6 +717,8 @@ CONTAINS
     Predictor )
 
     INTEGER,                   INTENT(IN)     :: Group_ID
+    INTEGER,                   INTENT(IN)     :: Component_ID(:)
+    INTEGER,                   INTENT(IN)     :: Absorber_ID(:)
     REAL(fp),                  INTENT(IN)     :: Temperature(:)
     REAL(fp),                  INTENT(IN)     :: Absorber(:, :)
     REAL(fp),                  INTENT(IN)     :: Ref_Level_Pressure(0:)
@@ -788,7 +803,7 @@ CONTAINS
       Tzp(k)  = Tzp_sum/Tzp_ref
 
       ! absorbers
-      DO j = 1, GROUP_REGISTRY(Group_ID)%n_Absorbers
+      DO j = 1, SIZE(Absorber, DIM=2)
         GAz_ref(j)   = GAz_ref(j) + Ref_absorber(k, j)
         GAz_sum(j)   = GAz_sum(j) + Absorber(k, j)
         GAz(k, j)    = GAz_sum(j) / GAz_ref(j)
@@ -827,8 +842,13 @@ CONTAINS
     ! so kernel order does not affect results.
     !----------------------------------------------------------------
 
-    ! Number of predictors per component, from the registry roster
-    Predictor%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
+    ! Number of predictors per component (kernel capability). has_trace
+    ! selects the group-1 style WLO/CO2 variants and must be set first.
+    has_trace = ANY( Component_ID == CO_ComID )   ! validation guarantees the trio
+    DO ic = 1, SIZE(Component_ID)
+      Predictor%n_CP(ic) = ODPS_Kernel_n_Predictors( &
+        GROUP_REGISTRY(Group_ID)%Basis, Component_ID(ic), has_trace )
+    END DO
 
     ! Resolve each gas's position in this group's absorber roster
     ! (0 when the gas is not carried; its kernel is then never dispatched)
@@ -839,7 +859,6 @@ CONTAINS
     ja_co  = Absorber_Position(CO_ID)
     ja_ch4 = Absorber_Position(CH4_ID)
     ja_no2 = Absorber_Position(NO2_ID)
-    has_trace = ( ja_co > 0 )   ! CO/CH4/N2O travel together (group 1)
 
     ! Silence gfortran complaints about maybe-used-uninit by init to HUGE()
     N2O_S       = HUGE(N2O_S)
@@ -868,22 +887,26 @@ CONTAINS
         !-------------------------------------------
         !  Abosrber amount scalled by the reference
         !-------------------------------------------
-        H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
-        O3  = Absorber(k,ja_o3)/Ref_absorber(k,ja_o3)
-        CO2 = Absorber(k,ja_co2)/Ref_absorber(k,ja_co2)
+        IF ( ja_h2o > 0 ) H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+        IF ( ja_o3  > 0 ) O3  = Absorber(k,ja_o3)/Ref_absorber(k,ja_o3)
+        IF ( ja_co2 > 0 ) CO2 = Absorber(k,ja_co2)/Ref_absorber(k,ja_co2)
 
         ! Combinations of variables common to all predictor groups
         T2   = T*T
         DT2  = DT*ABS( DT )
 
-        H2O_A = SECANG(k)*H2O
-        H2O_R  = SQRT( H2O_A )
-        H2O_S  = H2O_A*H2O_A
-        H2O_R4 = SQRT( H2O_R )
-        H2OdH2OTzp = H2O/GATzp(k, ja_h2o)
+        IF ( ja_h2o > 0 ) THEN
+          H2O_A = SECANG(k)*H2O
+          H2O_R  = SQRT( H2O_A )
+          H2O_S  = H2O_A*H2O_A
+          H2O_R4 = SQRT( H2O_R )
+          H2OdH2OTzp = H2O/GATzp(k, ja_h2o)
+        END IF
 
-        O3_A = SECANG(k)*O3
-        O3_R = SQRT( O3_A )
+        IF ( ja_o3 > 0 ) THEN
+          O3_A = SECANG(k)*O3
+          O3_R = SQRT( O3_A )
+        END IF
 
         IF( has_trace )THEN
           CO  = Absorber(k,ja_co)/Ref_absorber(k, ja_co)
@@ -904,9 +927,9 @@ CONTAINS
           CH4_ACH4zp = SECANG(k)*GAzp(k, ja_ch4)
         END IF
 
-        IR_Component_Loop : DO ic = 1, GROUP_REGISTRY(Group_ID)%n_Components
+        IR_Component_Loop : DO ic = 1, SIZE(Component_ID)
           np = Predictor%n_CP(ic)
-          SELECT CASE ( GROUP_REGISTRY(Group_ID)%Component_ID(ic) )
+          SELECT CASE ( Component_ID(ic) )
             CASE ( DRY_ComID_G1, DRY_ComID_G2 )
               CALL FWD_Kernel_DRY(k, ic)
             CASE ( WLO_ComID )
@@ -943,17 +966,18 @@ CONTAINS
         !-------------------------------------------
         !  Abosrber amount scalled by the reference
         !-------------------------------------------
-        H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
-
         ! Combinations of variables common to all predictor groups
         T2  = T*T
         DT2 = DT*ABS( DT )
 
-        H2O_A = SECANG(k)*H2O
-        H2O_R  = SQRT( H2O_A )
-        H2O_S  = H2O_A*H2O_A
-        H2O_R4 = SQRT( H2O_R )
-        H2OdH2OTzp = H2O/GATzp(k, ja_h2o)
+        IF ( ja_h2o > 0 ) THEN
+          H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+          H2O_A = SECANG(k)*H2O
+          H2O_R  = SQRT( H2O_A )
+          H2O_S  = H2O_A*H2O_A
+          H2O_R4 = SQRT( H2O_R )
+          H2OdH2OTzp = H2O/GATzp(k, ja_h2o)
+        END IF
 
         IF ( ja_o3 > 0 ) THEN
           O3   = Absorber(k,ja_o3)/Ref_Absorber(k, ja_o3)
@@ -961,9 +985,9 @@ CONTAINS
           O3_R = SQRT( O3_A )
         END IF
 
-        MW_Component_Loop : DO ic = 1, GROUP_REGISTRY(Group_ID)%n_Components
+        MW_Component_Loop : DO ic = 1, SIZE(Component_ID)
           np = Predictor%n_CP(ic)
-          SELECT CASE ( GROUP_REGISTRY(Group_ID)%Component_ID(ic) )
+          SELECT CASE ( Component_ID(ic) )
             CASE ( EDRY_ComID )
               CALL FWD_Kernel_DRY(k, ic)
             CASE ( WET_ComID )
@@ -979,14 +1003,14 @@ CONTAINS
 
 CONTAINS
 
-    ! Position of a HITRAN absorber ID in this group's absorber roster
-    PURE FUNCTION Absorber_Position( Absorber_ID ) RESULT( Position )
-      INTEGER, INTENT(IN) :: Absorber_ID
+    ! Position of a HITRAN absorber ID in the file's absorber roster
+    PURE FUNCTION Absorber_Position( Gas_ID ) RESULT( Position )
+      INTEGER, INTENT(IN) :: Gas_ID
       INTEGER :: Position
       INTEGER :: ja
       Position = 0
-      DO ja = 1, GROUP_REGISTRY(Group_ID)%n_Absorbers
-        IF ( GROUP_REGISTRY(Group_ID)%Absorber_ID(ja) == Absorber_ID ) THEN
+      DO ja = 1, SIZE(Absorber_ID)
+        IF ( Absorber_ID(ja) == Gas_ID ) THEN
           Position = ja
           RETURN
         END IF
@@ -1273,6 +1297,8 @@ CONTAINS
 
   SUBROUTINE ODPS_Compute_Predictor_TL( &
     Group_ID,           &
+    Component_ID,       &
+    Absorber_ID,        &
     Temperature,        &
     Absorber,           &
     Ref_Temperature,    &
@@ -1284,6 +1310,8 @@ CONTAINS
     Predictor_TL )
 
     INTEGER,                           INTENT(IN)     :: Group_ID
+    INTEGER,                           INTENT(IN)     :: Component_ID(:)
+    INTEGER,                           INTENT(IN)     :: Absorber_ID(:)
     REAL(fp),                          INTENT(IN)     :: Temperature(:)
     REAL(fp),                          INTENT(IN)     :: Absorber(:, :)
     REAL(fp),                          INTENT(IN)     :: Ref_Temperature(:)
@@ -1358,7 +1386,7 @@ CONTAINS
       Tzp_TL(k)  = Tzp_sum_TL/PAFV%Tzp_ref(k)
 
       ! absorbers
-      DO j = 1, GROUP_REGISTRY(Group_ID)%n_Absorbers
+      DO j = 1, SIZE(Absorber, DIM=2)
         GAz_sum_TL(j)   = GAz_sum_TL(j) + Absorber_TL(k, j)
         GAz_TL(k, j)    = GAz_sum_TL(j) / PAFV%GAz_ref(k,j)
         GAzp_sum_TL(j)  = GAzp_sum_TL(j) + PAFV%PDP(k)*Absorber_TL(k, j)
@@ -1376,8 +1404,13 @@ CONTAINS
     ! another, so kernel order does not affect results).
     !----------------------------------------------------------------
 
-    ! Number of predictors per component, from the registry roster
-    Predictor_TL%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
+    ! Number of predictors per component (kernel capability). has_trace
+    ! selects the group-1 style WLO/CO2 variants and must be set first.
+    has_trace = ANY( Component_ID == CO_ComID )   ! validation guarantees the trio
+    DO ic = 1, SIZE(Component_ID)
+      Predictor_TL%n_CP(ic) = ODPS_Kernel_n_Predictors( &
+        GROUP_REGISTRY(Group_ID)%Basis, Component_ID(ic), has_trace )
+    END DO
 
     ! Resolve each gas's position in this group's absorber roster
     ja_h2o = Absorber_Position(H2O_ID)
@@ -1387,7 +1420,6 @@ CONTAINS
     ja_co  = Absorber_Position(CO_ID)
     ja_ch4 = Absorber_Position(CH4_ID)
     ja_no2 = Absorber_Position(NO2_ID)
-    has_trace = ( ja_co > 0 )   ! CO/CH4/N2O travel together (group 1)
 
     ! Silence gfortran complaints about maybe-used-uninit by init to HUGE()
     N2O_TL        = HUGE(N2O_TL)
@@ -1430,13 +1462,18 @@ CONTAINS
         !-------------------------------------------
         !  Abosrber amount scalled by the reference
         !-------------------------------------------
-        H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
-        O3  = Absorber(k,ja_o3)/Ref_absorber(k,ja_o3)
-        CO2 = Absorber(k,ja_co2)/Ref_absorber(k,ja_co2)
-
-        H2O_TL = Absorber_TL(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
-        O3_TL  = Absorber_TL(k,ja_o3)/Ref_absorber(k,ja_o3)
-        CO2_TL = Absorber_TL(k,ja_co2)/Ref_absorber(k,ja_co2)
+        IF ( ja_h2o > 0 ) THEN
+          H2O    = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+          H2O_TL = Absorber_TL(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+        END IF
+        IF ( ja_o3 > 0 ) THEN
+          O3    = Absorber(k,ja_o3)/Ref_absorber(k,ja_o3)
+          O3_TL = Absorber_TL(k,ja_o3)/Ref_absorber(k,ja_o3)
+        END IF
+        IF ( ja_co2 > 0 ) THEN
+          CO2    = Absorber(k,ja_co2)/Ref_absorber(k,ja_co2)
+          CO2_TL = Absorber_TL(k,ja_co2)/Ref_absorber(k,ja_co2)
+        END IF
 
         ! Combinations of variables common to all predictor groups
         T2   = T*T
@@ -1449,24 +1486,28 @@ CONTAINS
           DT2_TL = - TWO*DT*DT_TL
         ENDIF
 
-        H2O_A  = SECANG(k)*H2O
-        H2O_R  = SQRT( H2O_A )
-        H2O_S  = H2O_A*H2O_A
-        H2O_R4 = SQRT( H2O_R )
-        H2OdH2OTzp = H2O/PAFV%GATzp(k, ja_h2o)
+        IF ( ja_h2o > 0 ) THEN
+          H2O_A  = SECANG(k)*H2O
+          H2O_R  = SQRT( H2O_A )
+          H2O_S  = H2O_A*H2O_A
+          H2O_R4 = SQRT( H2O_R )
+          H2OdH2OTzp = H2O/PAFV%GATzp(k, ja_h2o)
 
-        H2O_A_TL  = SECANG(k)*H2O_TL
-        H2O_R_TL  = (POINT_5 / SQRT(H2O_A)) * H2O_A_TL
-        H2O_S_TL  = TWO * H2O_A * H2O_A_TL
-        H2O_R4_TL = (POINT_5 / SQRT(H2O_R)) * H2O_R_TL
-        H2OdH2OTzp_TL = H2O_TL/PAFV%GATzp(k, ja_h2o) - &
-                        H2O * GATzp_TL(k, ja_h2o)/PAFV%GATzp(k, ja_h2o)**2
+          H2O_A_TL  = SECANG(k)*H2O_TL
+          H2O_R_TL  = (POINT_5 / SQRT(H2O_A)) * H2O_A_TL
+          H2O_S_TL  = TWO * H2O_A * H2O_A_TL
+          H2O_R4_TL = (POINT_5 / SQRT(H2O_R)) * H2O_R_TL
+          H2OdH2OTzp_TL = H2O_TL/PAFV%GATzp(k, ja_h2o) - &
+                          H2O * GATzp_TL(k, ja_h2o)/PAFV%GATzp(k, ja_h2o)**2
+        END IF
 
-        O3_A = SECANG(k)*O3
-        O3_R = SQRT( O3_A )
+        IF ( ja_o3 > 0 ) THEN
+          O3_A = SECANG(k)*O3
+          O3_R = SQRT( O3_A )
 
-        O3_A_TL = SECANG(k)*O3_TL
-        O3_R_TL = (POINT_5 / SQRT(O3_A)) * O3_A_TL
+          O3_A_TL = SECANG(k)*O3_TL
+          O3_R_TL = (POINT_5 / SQRT(O3_A)) * O3_A_TL
+        END IF
 
         IF( has_trace )THEN
           CO  = Absorber(k,ja_co)/Ref_absorber(k, ja_co)
@@ -1505,9 +1546,9 @@ CONTAINS
           CH4_ACH4zp_TL = SECANG(k)*GAzp_TL(k, ja_ch4)
         END IF
 
-        IR_Component_Loop : DO ic = 1, GROUP_REGISTRY(Group_ID)%n_Components
+        IR_Component_Loop : DO ic = 1, SIZE(Component_ID)
           np = Predictor_TL%n_CP(ic)
-          SELECT CASE ( GROUP_REGISTRY(Group_ID)%Component_ID(ic) )
+          SELECT CASE ( Component_ID(ic) )
             CASE ( DRY_ComID_G1, DRY_ComID_G2 )
               CALL TL_Kernel_DRY(k, ic)
             CASE ( WLO_ComID )
@@ -1547,8 +1588,10 @@ CONTAINS
         !-------------------------------------------
         !  Abosrber amount scalled by the reference
         !-------------------------------------------
-        H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
-        H2O_TL = Absorber_TL(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+        IF ( ja_h2o > 0 ) THEN
+          H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+          H2O_TL = Absorber_TL(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+        END IF
 
         ! Combinations of variables common to all predictor groups
         T2  = T*T
@@ -1561,18 +1604,20 @@ CONTAINS
           DT2_TL = - TWO*DT*DT_TL
         ENDIF
 
-        H2O_A = SECANG(k)*H2O
-        H2O_R  = SQRT( H2O_A )
-        H2O_S  = H2O_A*H2O_A
-        H2O_R4 = SQRT( H2O_R )
-        H2OdH2OTzp = H2O/PAFV%GATzp(k, ja_h2o)
+        IF ( ja_h2o > 0 ) THEN
+          H2O_A = SECANG(k)*H2O
+          H2O_R  = SQRT( H2O_A )
+          H2O_S  = H2O_A*H2O_A
+          H2O_R4 = SQRT( H2O_R )
+          H2OdH2OTzp = H2O/PAFV%GATzp(k, ja_h2o)
 
-        H2O_A_TL  = SECANG(k)*H2O_TL
-        H2O_R_TL  = (POINT_5 / SQRT(H2O_A)) * H2O_A_TL
-        H2O_S_TL  = TWO * H2O_A * H2O_A_TL
-        H2O_R4_TL = (POINT_5 / SQRT(H2O_R)) * H2O_R_TL
-        H2OdH2OTzp_TL = H2O_TL/PAFV%GATzp(k, ja_h2o) - &
-                        H2O * GATzp_TL(k, ja_h2o)/PAFV%GATzp(k, ja_h2o)**2
+          H2O_A_TL  = SECANG(k)*H2O_TL
+          H2O_R_TL  = (POINT_5 / SQRT(H2O_A)) * H2O_A_TL
+          H2O_S_TL  = TWO * H2O_A * H2O_A_TL
+          H2O_R4_TL = (POINT_5 / SQRT(H2O_R)) * H2O_R_TL
+          H2OdH2OTzp_TL = H2O_TL/PAFV%GATzp(k, ja_h2o) - &
+                          H2O * GATzp_TL(k, ja_h2o)/PAFV%GATzp(k, ja_h2o)**2
+        END IF
 
         IF ( ja_o3 > 0 ) THEN
           O3      = Absorber(k,ja_o3)/Ref_Absorber(k, ja_o3)
@@ -1583,9 +1628,9 @@ CONTAINS
           O3_R_TL = (POINT_5 / SQRT(O3_A)) * O3_A_TL
         END IF
 
-        MW_Component_Loop : DO ic = 1, GROUP_REGISTRY(Group_ID)%n_Components
+        MW_Component_Loop : DO ic = 1, SIZE(Component_ID)
           np = Predictor_TL%n_CP(ic)
-          SELECT CASE ( GROUP_REGISTRY(Group_ID)%Component_ID(ic) )
+          SELECT CASE ( Component_ID(ic) )
             CASE ( EDRY_ComID )
               CALL TL_Kernel_DRY(k, ic)
               Predictor_TL%X(:, 8:, ic) = ZERO
@@ -1604,14 +1649,14 @@ CONTAINS
 
 CONTAINS
 
-    ! Position of a HITRAN absorber ID in this group's absorber roster
-    PURE FUNCTION Absorber_Position( Absorber_ID ) RESULT( Position )
-      INTEGER, INTENT(IN) :: Absorber_ID
+    ! Position of a HITRAN absorber ID in the file's absorber roster
+    PURE FUNCTION Absorber_Position( Gas_ID ) RESULT( Position )
+      INTEGER, INTENT(IN) :: Gas_ID
       INTEGER :: Position
       INTEGER :: ja
       Position = 0
-      DO ja = 1, GROUP_REGISTRY(Group_ID)%n_Absorbers
-        IF ( GROUP_REGISTRY(Group_ID)%Absorber_ID(ja) == Absorber_ID ) THEN
+      DO ja = 1, SIZE(Absorber_ID)
+        IF ( Absorber_ID(ja) == Gas_ID ) THEN
           Position = ja
           RETURN
         END IF
@@ -1913,6 +1958,8 @@ CONTAINS
 
   SUBROUTINE ODPS_Compute_Predictor_AD( &
     Group_ID,           &
+    Component_ID,       &
+    Absorber_ID,        &
     Temperature,        &
     Absorber,           &
     Ref_Temperature,    &
@@ -1924,6 +1971,8 @@ CONTAINS
     Absorber_AD )
 
     INTEGER,                           INTENT(IN)     :: Group_ID
+    INTEGER,                           INTENT(IN)     :: Component_ID(:)
+    INTEGER,                           INTENT(IN)     :: Absorber_ID(:)
     REAL(fp),                          INTENT(IN)     :: Temperature(:)
     REAL(fp),                          INTENT(IN)     :: Absorber(:, :)
     REAL(fp),                          INTENT(IN)     :: Ref_Temperature(:)
@@ -1952,6 +2001,7 @@ CONTAINS
     REAL(fp) ::    GATzp_sum_AD(SIZE(Absorber, DIM=2))
     REAL(fp) ::    GATzp_AD(SIZE(Absorber, DIM=1), SIZE(Absorber, DIM=2))
     ! Kernel dispatch bookkeeping and shared per-layer variables
+    INTEGER  :: ic
     INTEGER  :: ic_dry, ic_wlo, ic_wco, ic_ozo, ic_co2
     INTEGER  :: ic_n2o, ic_co, ic_ch4, ic_no2, ic_wet
     INTEGER  :: ja_h2o, ja_o3, ja_co2, ja_n2o, ja_co, ja_ch4, ja_no2
@@ -2014,7 +2064,7 @@ CONTAINS
     ja_co  = Absorber_Position(CO_ID)
     ja_ch4 = Absorber_Position(CH4_ID)
     ja_no2 = Absorber_Position(NO2_ID)
-    has_trace = ( ja_co > 0 )   ! CO/CH4/N2O travel together (group 1)
+    has_trace = ANY( Component_ID == CO_ComID )   ! validation guarantees the trio
 
     ! Resolve each component's position in this group's roster
     ic_dry = Component_Position(DRY_ComID_G1)
@@ -2074,22 +2124,26 @@ CONTAINS
         !-------------------------------------------
         !  Abosrber amount scalled by the reference
         !-------------------------------------------
-        H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
-        O3  = Absorber(k,ja_o3)/Ref_absorber(k,ja_o3)
-        CO2 = Absorber(k,ja_co2)/Ref_absorber(k,ja_co2)
+        IF ( ja_h2o > 0 ) H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+        IF ( ja_o3  > 0 ) O3  = Absorber(k,ja_o3)/Ref_absorber(k,ja_o3)
+        IF ( ja_co2 > 0 ) CO2 = Absorber(k,ja_co2)/Ref_absorber(k,ja_co2)
 
         ! Combinations of variables common to all predictor groups
         T2   = T*T
         DT2  = DT*ABS( DT )
 
-        H2O_A = SECANG(k)*H2O
-        H2O_R  = SQRT( H2O_A )
-        H2O_S  = H2O_A*H2O_A
-        H2O_R4 = SQRT( H2O_R )
-        H2OdH2OTzp = H2O/PAFV%GATzp(k, ja_h2o)
+        IF ( ja_h2o > 0 ) THEN
+          H2O_A = SECANG(k)*H2O
+          H2O_R  = SQRT( H2O_A )
+          H2O_S  = H2O_A*H2O_A
+          H2O_R4 = SQRT( H2O_R )
+          H2OdH2OTzp = H2O/PAFV%GATzp(k, ja_h2o)
+        END IF
 
-        O3_A = SECANG(k)*O3
-        O3_R = SQRT( O3_A )
+        IF ( ja_o3 > 0 ) THEN
+          O3_A = SECANG(k)*O3
+          O3_R = SQRT( O3_A )
+        END IF
 
         IF( has_trace )THEN
           CO  = Absorber(k,ja_co)/Ref_absorber(k, ja_co)
@@ -2112,12 +2166,13 @@ CONTAINS
         END IF
 
         ! Adjoint kernels in the heritage monolith order (see note above)
-        CALL AD_Kernel_DRY(k, ic_dry)
-        CALL AD_Kernel_WCO(k, ic_wco)
+        IF ( ic_dry > 0 ) CALL AD_Kernel_DRY(k, ic_dry)
+        IF ( ic_wco > 0 ) CALL AD_Kernel_WCO(k, ic_wco)
         IF ( ic_no2 > 0 ) CALL AD_Kernel_NO2(k, ic_no2)
-        CALL AD_Kernel_OZO_IR(k, ic_ozo)
-        CALL AD_Kernel_CO2(k, ic_co2)
-        CALL AD_Kernel_WLO(k, ic_wlo, GROUP_REGISTRY(Group_ID)%n_Predictors(ic_wlo))
+        IF ( ic_ozo > 0 ) CALL AD_Kernel_OZO_IR(k, ic_ozo)
+        IF ( ic_co2 > 0 ) CALL AD_Kernel_CO2(k, ic_co2)
+        IF ( ic_wlo > 0 ) CALL AD_Kernel_WLO(k, ic_wlo, ODPS_Kernel_n_Predictors( &
+          GROUP_REGISTRY(Group_ID)%Basis, WLO_ComID, has_trace ))
         IF ( has_trace ) THEN
           CALL AD_Kernel_CO(k, ic_co)
           CALL AD_Kernel_CH4(k, ic_ch4)
@@ -2164,24 +2219,28 @@ CONTAINS
 
         ! Combinations of variables common to all predictor groups
 
-        O3_A_AD = O3_A_AD + O3_R_AD * POINT_5 / SQRT(O3_A)
-        O3_AD = O3_AD + O3_A_AD * SECANG(k)
-        O3_A_AD = ZERO
-        O3_R_AD = ZERO
+        IF ( ja_o3 > 0 ) THEN
+          O3_A_AD = O3_A_AD + O3_R_AD * POINT_5 / SQRT(O3_A)
+          O3_AD = O3_AD + O3_A_AD * SECANG(k)
+          O3_A_AD = ZERO
+          O3_R_AD = ZERO
+        END IF
 
-        GATzp_AD(k, ja_h2o) = GATzp_AD(k, ja_h2o)                                    &
-                                - H2OdH2OTzp_AD*H2O/PAFV%GATzp(k, ja_h2o)**2
-        H2O_R_AD = H2O_R_AD + H2O_R4_AD * POINT_5 / SQRT(H2O_R)
-        H2O_A_AD = H2O_A_AD + H2O_S_AD * TWO * H2O_A                                 &
-                 + H2O_R_AD * POINT_5 / SQRT(H2O_A)
-        H2O_AD = H2O_AD + H2O_A_AD * SECANG(k)                                       &
-               + H2OdH2OTzp_AD / PAFV%GATzp(k, ja_h2o)
+        IF ( ja_h2o > 0 ) THEN
+          GATzp_AD(k, ja_h2o) = GATzp_AD(k, ja_h2o)                                  &
+                                  - H2OdH2OTzp_AD*H2O/PAFV%GATzp(k, ja_h2o)**2
+          H2O_R_AD = H2O_R_AD + H2O_R4_AD * POINT_5 / SQRT(H2O_R)
+          H2O_A_AD = H2O_A_AD + H2O_S_AD * TWO * H2O_A                               &
+                   + H2O_R_AD * POINT_5 / SQRT(H2O_A)
+          H2O_AD = H2O_AD + H2O_A_AD * SECANG(k)                                     &
+                 + H2OdH2OTzp_AD / PAFV%GATzp(k, ja_h2o)
 
-        H2O_A_AD      = ZERO
-        H2O_R_AD      = ZERO
-        H2O_S_AD      = ZERO
-        H2O_R4_AD     = ZERO
-        H2OdH2OTzp_AD = ZERO
+          H2O_A_AD      = ZERO
+          H2O_R_AD      = ZERO
+          H2O_S_AD      = ZERO
+          H2O_R4_AD     = ZERO
+          H2OdH2OTzp_AD = ZERO
+        END IF
 
         IF( DT > ZERO) THEN
           DT_AD = DT_AD + DT2_AD*TWO*DT
@@ -2195,12 +2254,18 @@ CONTAINS
         !-------------------------------------------
         !  Abosrber amount scalled by the reference
         !-------------------------------------------
-        Absorber_AD(k,ja_co2) = Absorber_AD(k,ja_co2)            &
-                                  + CO2_AD / Ref_absorber(k,ja_co2)
-        Absorber_AD(k,ja_o3)  = Absorber_AD(k,ja_o3)             &
-                                  + O3_AD / Ref_absorber(k,ja_o3)
-        Absorber_AD(k,ja_h2o) = Absorber_AD(k,ja_h2o)            &
-                                  + H2O_AD / Ref_Absorber(k, ja_h2o)
+        IF ( ja_co2 > 0 ) THEN
+          Absorber_AD(k,ja_co2) = Absorber_AD(k,ja_co2)            &
+                                    + CO2_AD / Ref_absorber(k,ja_co2)
+        END IF
+        IF ( ja_o3 > 0 ) THEN
+          Absorber_AD(k,ja_o3)  = Absorber_AD(k,ja_o3)             &
+                                    + O3_AD / Ref_absorber(k,ja_o3)
+        END IF
+        IF ( ja_h2o > 0 ) THEN
+          Absorber_AD(k,ja_h2o) = Absorber_AD(k,ja_h2o)            &
+                                    + H2O_AD / Ref_Absorber(k, ja_h2o)
+        END IF
         H2O_AD = ZERO
         O3_AD  = ZERO
         CO2_AD = ZERO
@@ -2218,7 +2283,10 @@ CONTAINS
     ELSE Basis_Select   ! BASIS_MW
 
       ! set number of predictors
-      Predictor_AD%n_CP = GROUP_REGISTRY(Group_ID)%n_Predictors(1:GROUP_REGISTRY(Group_ID)%n_Components)
+      DO ic = 1, SIZE(Component_ID)
+        Predictor_AD%n_CP(ic) = ODPS_Kernel_n_Predictors( &
+          GROUP_REGISTRY(Group_ID)%Basis, Component_ID(ic), has_trace )
+      END DO
 
       MW_Layer_Loop : DO k = n_Layers, 1, -1
 
@@ -2231,17 +2299,18 @@ CONTAINS
         !-------------------------------------------
         !  Abosrber amount scalled by the reference
         !-------------------------------------------
-        H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
-
         ! Combinations of variables common to all predictor groups
         T2  = T*T
         DT2 = DT*ABS( DT )
 
-        H2O_A = SECANG(k)*H2O
-        H2O_R  = SQRT( H2O_A )
-        H2O_S  = H2O_A*H2O_A
-        H2O_R4 = SQRT( H2O_R )
-        H2OdH2OTzp = H2O/PAFV%GATzp(k, ja_h2o)
+        IF ( ja_h2o > 0 ) THEN
+          H2O = Absorber(k,ja_h2o)/Ref_Absorber(k, ja_h2o)
+          H2O_A = SECANG(k)*H2O
+          H2O_R  = SQRT( H2O_A )
+          H2O_S  = H2O_A*H2O_A
+          H2O_R4 = SQRT( H2O_R )
+          H2OdH2OTzp = H2O/PAFV%GATzp(k, ja_h2o)
+        END IF
 
         IF ( ja_o3 > 0 ) THEN
           O3   = Absorber(k,ja_o3)/Ref_Absorber(k, ja_o3)
@@ -2250,8 +2319,8 @@ CONTAINS
         END IF
 
         ! Adjoint kernels in the heritage monolith order (see note above)
-        CALL AD_Kernel_DRY(k, ic_dry)
-        CALL AD_Kernel_WET_MW(k, ic_wet)
+        IF ( ic_dry > 0 ) CALL AD_Kernel_DRY(k, ic_dry)
+        IF ( ic_wet > 0 ) CALL AD_Kernel_WET_MW(k, ic_wet)
         IF ( ic_ozo > 0 ) CALL AD_Kernel_OZO_MW(k, ic_ozo)
 
         !-------------------------------------------
@@ -2260,18 +2329,20 @@ CONTAINS
 
         ! Combinations of variables common to all predictor groups
 
-        GATzp_AD(k, ja_h2o) = GATzp_AD(k, ja_h2o)                                    &
-                                - H2OdH2OTzp_AD*H2O/PAFV%GATzp(k, ja_h2o)**2
-        H2O_R_AD = H2O_R_AD + H2O_R4_AD * POINT_5 / SQRT(H2O_R)
-        H2O_A_AD = H2O_A_AD + H2O_S_AD * TWO * H2O_A                                 &
-                 + H2O_R_AD * POINT_5 / SQRT(H2O_A)
-        H2O_AD = H2O_AD + H2O_A_AD * SECANG(k)                                       &
-               + H2OdH2OTzp_AD / PAFV%GATzp(k, ja_h2o)
-        H2O_A_AD      = ZERO
-        H2O_R_AD      = ZERO
-        H2O_S_AD      = ZERO
-        H2O_R4_AD     = ZERO
-        H2OdH2OTzp_AD = ZERO
+        IF ( ja_h2o > 0 ) THEN
+          GATzp_AD(k, ja_h2o) = GATzp_AD(k, ja_h2o)                                  &
+                                  - H2OdH2OTzp_AD*H2O/PAFV%GATzp(k, ja_h2o)**2
+          H2O_R_AD = H2O_R_AD + H2O_R4_AD * POINT_5 / SQRT(H2O_R)
+          H2O_A_AD = H2O_A_AD + H2O_S_AD * TWO * H2O_A                               &
+                   + H2O_R_AD * POINT_5 / SQRT(H2O_A)
+          H2O_AD = H2O_AD + H2O_A_AD * SECANG(k)                                     &
+                 + H2OdH2OTzp_AD / PAFV%GATzp(k, ja_h2o)
+          H2O_A_AD      = ZERO
+          H2O_R_AD      = ZERO
+          H2O_S_AD      = ZERO
+          H2O_R4_AD     = ZERO
+          H2OdH2OTzp_AD = ZERO
+        END IF
 
         IF( DT > ZERO) THEN
           DT_AD = DT_AD + DT2_AD*TWO*DT
@@ -2282,8 +2353,10 @@ CONTAINS
         T2_AD   = ZERO
         DT2_AD  = ZERO
 
-        Absorber_AD(k,ja_h2o) = Absorber_AD(k,ja_h2o)            &
-                                  + H2O_AD / Ref_Absorber(k, ja_h2o)
+        IF ( ja_h2o > 0 ) THEN
+          Absorber_AD(k,ja_h2o) = Absorber_AD(k,ja_h2o)            &
+                                    + H2O_AD / Ref_Absorber(k, ja_h2o)
+        END IF
         H2O_AD = ZERO
 
         !------------------------------------------
@@ -2301,7 +2374,7 @@ CONTAINS
     Adjoint_Layer_Loop : DO k = n_Layers, 1, -1
 
       ! absorbers
-      DO j = GROUP_REGISTRY(Group_ID)%n_Absorbers, 1, -1
+      DO j = SIZE(Absorber, DIM=2), 1, -1
 
         GATzp_sum_AD(j) = GATzp_sum_AD(j) + GATzp_AD(k, j)/PAFV%GATzp_ref(k,j)
         GAzp_sum_AD(j) = GAzp_sum_AD(j) + GAzp_AD(k, j)/PAFV%GAzp_ref(k,j)
@@ -2328,28 +2401,28 @@ CONTAINS
 
 CONTAINS
 
-    ! Position of a HITRAN absorber ID in this group's absorber roster
-    PURE FUNCTION Absorber_Position( Absorber_ID ) RESULT( Position )
-      INTEGER, INTENT(IN) :: Absorber_ID
+    ! Position of a HITRAN absorber ID in the file's absorber roster
+    PURE FUNCTION Absorber_Position( Gas_ID ) RESULT( Position )
+      INTEGER, INTENT(IN) :: Gas_ID
       INTEGER :: Position
       INTEGER :: ja
       Position = 0
-      DO ja = 1, GROUP_REGISTRY(Group_ID)%n_Absorbers
-        IF ( GROUP_REGISTRY(Group_ID)%Absorber_ID(ja) == Absorber_ID ) THEN
+      DO ja = 1, SIZE(Absorber_ID)
+        IF ( Absorber_ID(ja) == Gas_ID ) THEN
           Position = ja
           RETURN
         END IF
       END DO
     END FUNCTION Absorber_Position
 
-    ! Position of a component ID in this group's component roster
-    PURE FUNCTION Component_Position( Component_ID ) RESULT( Position )
-      INTEGER, INTENT(IN) :: Component_ID
+    ! Position of a component ID in the file's component roster
+    PURE FUNCTION Component_Position( Com_ID ) RESULT( Position )
+      INTEGER, INTENT(IN) :: Com_ID
       INTEGER :: Position
       INTEGER :: jc
       Position = 0
-      DO jc = 1, GROUP_REGISTRY(Group_ID)%n_Components
-        IF ( GROUP_REGISTRY(Group_ID)%Component_ID(jc) == Component_ID ) THEN
+      DO jc = 1, SIZE(Component_ID)
+        IF ( Component_ID(jc) == Com_ID ) THEN
           Position = jc
           RETURN
         END IF
@@ -3581,9 +3654,8 @@ CONTAINS
     CHARACTER(*), INTENT(OUT) :: Message
     LOGICAL :: Is_Valid
     ! Local variables
-    INTEGER :: Expected_Component_ID(MAX_COMPONENTS_ANY_GROUP)
-    INTEGER :: Expected_Absorber_ID(MAX_ABSORBERS_ANY_GROUP)
-    INTEGER :: nc, na
+    INTEGER :: nc, na, i, n_trace
+    LOGICAL :: Has_Trace
 
     Is_Valid = .FALSE.
     Message  = ''
@@ -3606,36 +3678,188 @@ CONTAINS
       RETURN
     END IF
 
-    ! Fetch the expected rosters for this group from the registry
-    nc = GROUP_REGISTRY(Group_Index)%n_Components
-    na = GROUP_REGISTRY(Group_Index)%n_Absorbers
-    Expected_Component_ID(1:nc) = GROUP_REGISTRY(Group_Index)%Component_ID(1:nc)
-    Expected_Absorber_ID(1:na)  = GROUP_REGISTRY(Group_Index)%Absorber_ID(1:na)
-
-    ! Roster sizes
-    IF ( SIZE(Component_ID) /= nc .OR. SIZE(Absorber_ID) /= na ) THEN
-      WRITE( Message, '("Group ",i0," expects ",i0," components and ",i0, &
-        &" absorbers; file has ",i0," and ",i0,".")' ) &
-        Group_Index, nc, na, SIZE(Component_ID), SIZE(Absorber_ID)
+    ! Kernel-capability validation. A file's roster is valid when every
+    ! component ID maps to a compiled predictor kernel for this group's
+    ! basis and every gas those kernels consume is present in the file's
+    ! absorber roster. Order and subsetting are free: the compute path
+    ! dispatches by the file's own roster. Unknown component IDs (for
+    ! example raw molecule-set 13/14 from externally trained files) are
+    ! rejected: a kernel is a trained CRTM predictor formulation, not
+    ! just a gas label.
+    nc = SIZE(Component_ID)
+    na = SIZE(Absorber_ID)
+    IF ( nc < 1 .OR. na < 1 ) THEN
+      WRITE( Message, '("Empty roster: ",i0," components, ",i0, &
+        &" absorbers.")' ) nc, na
       RETURN
     END IF
 
-    ! Roster content and order (the predictor code is positional)
-    IF ( ANY( Component_ID /= Expected_Component_ID(1:nc) ) ) THEN
-      WRITE( Message, '("Group ",i0," Component_ID mismatch: expected ", &
-        &8(i0,:,", "))' ) Group_Index, Expected_Component_ID(1:nc)
-      Message = TRIM(Message)//'; file order must match exactly.'
+    ! Duplicates
+    DO i = 1, nc
+      IF ( ANY( Component_ID(1:i-1) == Component_ID(i) ) ) THEN
+        WRITE( Message, '("Duplicate Component_ID ",i0,".")' ) Component_ID(i)
+        RETURN
+      END IF
+    END DO
+    DO i = 1, na
+      IF ( ANY( Absorber_ID(1:i-1) == Absorber_ID(i) ) ) THEN
+        WRITE( Message, '("Duplicate Absorber_ID ",i0,".")' ) Absorber_ID(i)
+        RETURN
+      END IF
+    END DO
+
+    ! Known absorbers only
+    DO i = 1, na
+      IF ( .NOT. ANY( KNOWN_GAS_IDS == Absorber_ID(i) ) ) THEN
+        WRITE( Message, '("Absorber_ID ",i0," is not a gas CRTM knows ", &
+          &"(known HITRAN IDs: 1, 2, 3, 4, 5, 6, 10).")' ) Absorber_ID(i)
+        RETURN
+      END IF
+    END DO
+
+    ! The group-1 trace components travel together, and their extension
+    ! predictors live in the WLO and CO2 kernels
+    n_trace = COUNT( (/ ANY(Component_ID == CO_ComID),  &
+                        ANY(Component_ID == CH4_ComID), &
+                        ANY(Component_ID == N2O_ComID) /) )
+    Has_Trace = ( n_trace == 3 )
+    IF ( n_trace > 0 .AND. .NOT. Has_Trace ) THEN
+      Message = 'The trace components (CO 119, CH4 118, N2O 120) must '// &
+                'appear together or not at all.'
       RETURN
     END IF
-    IF ( ANY( Absorber_ID /= Expected_Absorber_ID(1:na) ) ) THEN
-      WRITE( Message, '("Group ",i0," Absorber_ID mismatch: expected ", &
-        &6(i0,:,", "))' ) Group_Index, Expected_Absorber_ID(1:na)
-      Message = TRIM(Message)//'; file order must match exactly.'
+    IF ( Has_Trace .AND. .NOT. ( ANY(Component_ID == WLO_ComID) .AND. &
+                                 ANY(Component_ID == CO2_ComID) ) ) THEN
+      Message = 'A roster with the trace components also requires the '// &
+                'WLO (101) and CO2 (121) components (their kernels carry '// &
+                'the trace cross-term predictors).'
       RETURN
     END IF
+
+    ! Every component must have a kernel for this basis, and every gas its
+    ! kernel consumes must be in the absorber roster
+    DO i = 1, nc
+      IF ( ODPS_Kernel_n_Predictors( GROUP_REGISTRY(Group_Index)%Basis, &
+                                     Component_ID(i), Has_Trace ) == 0 ) THEN
+        WRITE( Message, '("Component_ID ",i0," has no predictor kernel for ", &
+          &"the ",a," basis (supported IR: 7, 20, 101, 15, 114, 121, 120, ", &
+          &"119, 118, 122; MW: 113, 12, 114).")' ) Component_ID(i), &
+          TRIM(Basis_Name(GROUP_REGISTRY(Group_Index)%Basis))
+        RETURN
+      END IF
+      IF ( .NOT. Required_Gases_Present( Component_ID(i), Absorber_ID ) ) THEN
+        WRITE( Message, '("Component_ID ",i0," requires a gas that is not ", &
+          &"in the file''s absorber roster.")' ) Component_ID(i)
+        RETURN
+      END IF
+    END DO
 
     Is_Valid = .TRUE.
+
+  CONTAINS
+
+    PURE FUNCTION Basis_Name( Basis ) RESULT( Name )
+      INTEGER, INTENT(IN) :: Basis
+      CHARACTER(8) :: Name
+      SELECT CASE ( Basis )
+        CASE ( BASIS_IR ); Name = 'IR/UV'
+        CASE ( BASIS_MW ); Name = 'MW'
+        CASE DEFAULT;      Name = 'RESERVED'
+      END SELECT
+    END FUNCTION Basis_Name
+
+    PURE FUNCTION Required_Gases_Present( Com_ID, Gases ) RESULT( Present )
+      INTEGER, INTENT(IN) :: Com_ID
+      INTEGER, INTENT(IN) :: Gases(:)
+      LOGICAL :: Present
+      SELECT CASE ( Com_ID )
+        CASE ( WLO_ComID )
+          Present = ANY(Gases == H2O_ID) .AND. ANY(Gases == CO2_ID)
+        CASE ( WCO_ComID, WET_ComID )
+          Present = ANY(Gases == H2O_ID)
+        CASE ( OZO_ComID )
+          Present = ANY(Gases == O3_ID)
+        CASE ( CO2_ComID )
+          Present = ANY(Gases == CO2_ID)
+        CASE ( N2O_ComID )
+          Present = ANY(Gases == N2O_ID) .AND. ANY(Gases == CH4_ID) &
+                    .AND. ANY(Gases == CO_ID)
+        CASE ( CO_ComID )
+          Present = ANY(Gases == CO_ID)
+        CASE ( CH4_ComID )
+          Present = ANY(Gases == CH4_ID)
+        CASE ( NO2_ComID )
+          Present = ANY(Gases == NO2_ID)
+        CASE DEFAULT   ! dry components consume no variable gas
+          Present = .TRUE.
+      END SELECT
+    END FUNCTION Required_Gases_Present
+
   END FUNCTION ODPS_Validate_Group
+
+
+!------------------------------------------------------------------------------
+! Kernel capability: the number of predictors CRTM's compiled kernel
+! computes for a component ID under a given basis (0 = no kernel; the
+! component is unsupported). Has_Trace selects the group-1 style variants
+! (WLO 18 vs 15, CO2 11 vs 10) that add trace-gas cross terms.
+!------------------------------------------------------------------------------
+  PURE FUNCTION ODPS_Kernel_n_Predictors( Basis, Component_ID, Has_Trace ) &
+    RESULT( n_Predictors )
+    INTEGER, INTENT(IN) :: Basis
+    INTEGER, INTENT(IN) :: Component_ID
+    LOGICAL, INTENT(IN) :: Has_Trace
+    INTEGER :: n_Predictors
+    n_Predictors = 0
+    SELECT CASE ( Basis )
+      CASE ( BASIS_IR )
+        SELECT CASE ( Component_ID )
+          CASE ( DRY_ComID_G1, DRY_ComID_G2 ); n_Predictors = 7
+          CASE ( WLO_ComID );  n_Predictors = MERGE( 18, 15, Has_Trace )
+          CASE ( WCO_ComID );  n_Predictors = 7
+          CASE ( OZO_ComID );  n_Predictors = 11
+          CASE ( CO2_ComID );  n_Predictors = MERGE( 11, 10, Has_Trace )
+          CASE ( N2O_ComID );  n_Predictors = 14
+          CASE ( CO_ComID );   n_Predictors = 10
+          CASE ( CH4_ComID );  n_Predictors = 11
+          CASE ( NO2_ComID );  n_Predictors = 3
+        END SELECT
+      CASE ( BASIS_MW )
+        SELECT CASE ( Component_ID )
+          CASE ( EDRY_ComID ); n_Predictors = 7
+          CASE ( WET_ComID );  n_Predictors = 14
+          CASE ( OZO_ComID );  n_Predictors = 11
+        END SELECT
+    END SELECT
+  END FUNCTION ODPS_Kernel_n_Predictors
+
+
+!------------------------------------------------------------------------------
+! The predictor-array capacity a file's roster needs: the maximum kernel
+! predictor count over its components. Returns 0 for an unsupported group
+! or any unsupported component (the load-time validation reports the
+! specific reason).
+!------------------------------------------------------------------------------
+  PURE FUNCTION ODPS_Max_n_Predictors_For( Group_Index, Component_ID ) &
+    RESULT( Max_n_Predictors )
+    INTEGER, INTENT(IN) :: Group_Index
+    INTEGER, INTENT(IN) :: Component_ID(:)
+    INTEGER :: Max_n_Predictors
+    INTEGER :: i, np
+    LOGICAL :: Has_Trace
+    Max_n_Predictors = 0
+    IF ( Group_Index < 1 .OR. Group_Index > N_G ) RETURN
+    Has_Trace = ANY( Component_ID == CO_ComID )
+    DO i = 1, SIZE(Component_ID)
+      np = ODPS_Kernel_n_Predictors( GROUP_REGISTRY(Group_Index)%Basis, &
+                                     Component_ID(i), Has_Trace )
+      IF ( np == 0 ) THEN
+        Max_n_Predictors = 0
+        RETURN
+      END IF
+      Max_n_Predictors = MAX( Max_n_Predictors, np )
+    END DO
+  END FUNCTION ODPS_Max_n_Predictors_For
 
 
   ! This function gets a flag (true or false) indicating the

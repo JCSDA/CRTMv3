@@ -232,6 +232,7 @@ CONTAINS
     INTEGER            :: Algorithm_ID
     CHARACTER(SL), ALLOCATABLE :: SensorIDs(:)
     CHARACTER(SL), ALLOCATABLE :: zfnames(:)
+    LOGICAL,       ALLOCATABLE :: zeeman_candidate(:)
     INTEGER,       ALLOCATABLE :: SensorIndex(:)
     LOGICAL :: binary
     LOGICAL :: use_netCDF
@@ -368,6 +369,7 @@ CONTAINS
     ! Allocate memory for the local arrays    
     ALLOCATE( SensorIDs( n_Sensors ),   &                                                                 
               zfnames( n_Sensors ),     & 
+              zeeman_candidate( n_Sensors ), & 
               SensorIndex( n_Sensors ), &                                                                
               STAT = Allocate_Status )                                                                    
     IF ( Allocate_Status /= 0 ) THEN                                                                      
@@ -671,9 +673,24 @@ CONTAINS
     ! and no .bin) silently lose its Zeeman correction, because the per-file
     ! existence guard below would then find no zssmis*.TauCoeff.bin. Sensors
     ! with no Zeeman file in either format are simply skipped by that guard.
+    ! A sensor is a Zeeman candidate through the heritage WMO gate (SSMIS,
+    ! AMSU-A) OR, dual-acceptance, when a netCDF companion z-file exists and
+    ! opts in via the global attribute Zeeman_Algorithm = 1. Existing
+    ! coefficient sets carry no such attribute and behave exactly as before;
+    ! future Zeeman-corrected sensors can opt in via metadata instead of
+    ! having their WMO IDs hardwired here.
+    DO n = 1, n_Sensors
+      zeeman_candidate(n) = ( TC%WMO_Sensor_ID(n) == WMO_SSMIS .OR. &
+                              TC%WMO_Sensor_ID(n) == WMO_AMSUA )
+      IF ( .NOT. zeeman_candidate(n) ) THEN
+        zeeman_candidate(n) = Zeeman_Metadata_OptIn( &
+          TRIM(local_path)//'z'//TRIM(TC%Sensor_ID(n))//'.TauCoeff.nc' )
+      END IF
+    END DO
+
     zeeman_use_netCDF = .TRUE.
     DO n = 1, n_Sensors
-      IF ( TC%WMO_Sensor_ID(n) == WMO_SSMIS .OR. TC%WMO_Sensor_ID(n) == WMO_AMSUA ) THEN
+      IF ( zeeman_candidate(n) ) THEN
         zeeman_nc_exists  = File_Exists( TRIM(local_path) // 'z' // TRIM(TC%Sensor_ID(n)) // '.TauCoeff.nc'  )
         zeeman_bin_exists = File_Exists( TRIM(local_path) // 'z' // TRIM(TC%Sensor_ID(n)) // '.TauCoeff.bin' )
         IF ( ( .NOT. zeeman_nc_exists ) .AND. zeeman_bin_exists ) THEN
@@ -695,7 +712,7 @@ CONTAINS
     END IF
 
     DO n = 1, n_Sensors
-      IF(TC%WMO_Sensor_ID(n) == WMO_SSMIS .OR. TC%WMO_Sensor_ID(n) == WMO_AMSUA )THEN
+      IF( zeeman_candidate(n) )THEN
 
           ! file name: e.g. zssmis_f16.TauCoeff.nc (or .bin if NetCDF set incomplete)
         zfnames(i) = 'z'//TRIM(TC%Sensor_ID(n))//TRIM(zeeman_ext)
@@ -742,6 +759,7 @@ CONTAINS
 
     DEALLOCATE(SensorIDs,   &                 
                zfnames,     &
+               zeeman_candidate, &
                SensorIndex, &                                                                
                 STAT  = Deallocate_Status)
     IF ( Deallocate_Status /= 0 ) THEN                                   
@@ -924,6 +942,25 @@ CONTAINS
     END IF                                                    
 
   END FUNCTION CRTM_Destroy_TauCoeff
+
+  ! Dual-acceptance Zeeman opt-in probe: .TRUE. only when the named netCDF
+  ! companion file exists and carries global attribute Zeeman_Algorithm = 1.
+  ! Any missing file, unreadable file, or absent attribute means .FALSE.
+  ! (the heritage WMO gate then decides alone).
+  FUNCTION Zeeman_Metadata_OptIn( zFilename ) RESULT( OptIn )
+    CHARACTER(*), INTENT(IN) :: zFilename
+    LOGICAL :: OptIn
+    INTEGER :: status, FileID
+    INTEGER(Long) :: zeeman_flag
+    OptIn = .FALSE.
+    IF ( .NOT. File_Exists( zFilename ) ) RETURN
+    status = NF90_OPEN( zFilename, NF90_NOWRITE, FileID )
+    IF ( status /= NF90_NOERR ) RETURN
+    status = NF90_GET_ATT( FileID, NF90_GLOBAL, 'Zeeman_Algorithm', zeeman_flag )
+    IF ( status == NF90_NOERR ) OptIn = ( zeeman_flag == 1 )
+    status = NF90_CLOSE( FileID )
+  END FUNCTION Zeeman_Metadata_OptIn
+
 
   FUNCTION Inquire_AlgorithmID(  Filename        , &  ! Input
                                  Algorithm_ID    , &  ! Output
