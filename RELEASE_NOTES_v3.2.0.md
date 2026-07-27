@@ -5,7 +5,11 @@
 time (or via `Get_CRTM_Binary_Files.sh`).
 
 Developer-facing detail for every item below (commits, affected tests, TB
-impact) is in `REL-3.2.0_changes_vs_develop.md`.
+impact) is in `REL-3.2.0_changes_vs_develop.md`. Changes are stated relative
+to CRTM v3.1.4; the v3.1.4 tag and the `develop` branch point differ only in
+the default coefficient-data location (no library code differences), so the
+same catalog applies against either baseline. A per-sensor inventory of the
+shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
 
 ## Highlights
 
@@ -19,9 +23,12 @@ impact) is in `REL-3.2.0_changes_vs_develop.md`.
   (`CRTM_Init` auto-loads it; it ships in the fix tarball), MW-water channels
   at or above 200 GHz route to PARMIO; below 200 GHz (every legacy sensor)
   the FASTEM path is byte-identical to v3.1.x.
-- **TELSEM2 MW-land emissivity atlas (new, drop-in).** When
-  `TELSEM2.MWland.EmisCoeff.nc` is present, MW land emissivity comes from the
-  TELSEM2 atlas; otherwise NESDIS_LandEM is used as before.
+- **TELSEM2 MW-land emissivity atlas (new, opt-in).** Enabled by the new
+  `CRTM_Init` argument `Use_MWland_Atlas=.TRUE.` (which auto-resolves the
+  default-named `TELSEM2.MWland.EmisCoeff.nc` from the coefficient path) or by
+  passing an explicit `MWlandCoeff_File`. Without the opt-in, MW land
+  emissivity uses NESDIS_LandEM exactly as before, even if the atlas file is
+  present in the coefficient directory.
 - **Level-resolved downwelling/upwelling radiance profiles (new outputs).**
   Opt-in via `Options%Compute_Down_Radiance_Profile` /
   `Compute_Up_Radiance_Profile`; fully differentiated (FWD/TL/AD/K) and
@@ -59,8 +66,36 @@ impact) is in `REL-3.2.0_changes_vs_develop.md`.
 - **CRTM-Exp cloud-optics schema (experimental, opt-in).** A new
   habit-resolved cloud LUT format selected explicitly with
   `Cloud_Model='CRTM-Exp'`; the default cloud path is unchanged.
+- **SNICAR visible snow emissivity scheme (new, opt-in).** A SNICAR-based
+  VIS-snow reflectance LUT (`SNICAR.VISsnow.EmisCoeff.nc`, shipped in the fix
+  tarball) selectable through the VISsnowCoeff scheme machinery, alongside
+  updated IR snow emissivity modules. The default (NPOESS) snow surface path
+  is unchanged.
+- **ODPS transmittance-algorithm modernization** (issue #343). The ODPS group
+  system was rebuilt on a single group registry with load-time validation of
+  `Group_Index` and the `Component_ID`/`Absorber_ID` rosters (malformed or
+  mislabeled coefficient files are now rejected at load with a clear message
+  instead of computing garbage), per-component predictor kernels for FWD, TL,
+  and AD, and file-roster-driven dispatch. Results are bit-identical for valid
+  coefficient files; Zeeman-reserved group indexes are refused (the historical
+  OMPS "Group 4" failure mode).
+- **Long coefficient paths** (issue #238). Coefficient file paths are now
+  carried in deferred-length strings instead of fixed 80/128/256-character
+  buffers, so deep installation paths no longer truncate silently;
+  initialization through a ~300-character path is regression-tested.
+- **Fastem1 SST Jacobian corrected.** On the legacy Fastem1 MW-water path
+  (`Options%Use_Old_MWSSEM=.TRUE.`, frequency >= 20 GHz) the emissivity's
+  sea-surface-temperature derivative was silently dropped, so
+  `Surface_K%Water_Temperature` carried only the skin-emission term. The
+  Jacobian is now complete and validated against finite differences. The
+  default (FastemX) path was never affected.
 - **Runtime OpenMP control.** `OMP_NUM_THREADS` is honored at run time (no
   longer captured at configure time).
+- **Expanded self-checking test coverage.** New baseline-independent checks
+  include general TL-vs-FD and adjoint-consistency tests across the three
+  main sensor types (#280), multi-sensor single-call bit-consistency, ODPS
+  group-validation and long-path initialization tests, a DDA-ARTS ICE_CLOUD
+  behavior pin, and OpenMP thread-count consistency tests (#111).
 
 ## Breaking and behavior changes
 
@@ -86,16 +121,17 @@ impact) is in `REL-3.2.0_changes_vs_develop.md`.
    brightness temperatures (validated against a sub-mm sounder; tropical O−B
    at 325 GHz moved from ~+13 K to ~−0.6 K). Default (Mie-TAMU) cloud optics
    are bit-identical.
-6. **MW emissivity backends are presence-activated.** Placing
-   `PARMIO.MWwater.EmisCoeff.nc` or `TELSEM2.MWland.EmisCoeff.nc` in the
-   coefficient directory switches the MW water (≥ 200 GHz) or MW land
-   emissivity physics; removing them restores FASTEM / NESDIS_LandEM.
+6. **PARMIO is presence-activated; TELSEM2 is opt-in.** Placing
+   `PARMIO.MWwater.EmisCoeff.nc` in the coefficient directory switches MW
+   water emissivity physics at and above 200 GHz; removing it restores FASTEM.
    `CRTM_Init` prints an INFORMATION message when a sensor with ≥ 200 GHz
-   channels initializes without the PARMIO LUT. Note that with TELSEM2 active,
-   all land-parameter Jacobians (LAI, vegetation, soil moisture, soil/land
-   temperature) are zero — the atlas is a climatology and does not depend on
-   them; the analytic NESDIS_LandEM Jacobians apply only when the atlas is not
-   loaded.
+   channels initializes without the PARMIO LUT. The TELSEM2 MW-land atlas, by
+   contrast, is **never** loaded unless requested (`Use_MWland_Atlas=.TRUE.`
+   or an explicit `MWlandCoeff_File`); a present-but-not-requested atlas file
+   is ignored. Note that with TELSEM2 opted in, all land-parameter Jacobians
+   (LAI, vegetation, soil moisture, soil/land temperature) are zero; the
+   atlas is a climatology and does not depend on them; the analytic
+   NESDIS_LandEM Jacobians apply only when the atlas is not loaded.
 7. **OpenMP threading.** `CRTM_Init` reads `OMP_NUM_THREADS` at run time; if
    it is **unset or empty, CRTM defaults to a single thread** via
    `OMP_SET_NUM_THREADS(1)`. Because that call is process-global, it also
