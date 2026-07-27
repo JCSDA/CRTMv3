@@ -15,7 +15,7 @@
 !          zssmis_fxx.TauCoeff.bin
 !        must be present, used together with the coefficient file
 !          ssmis_fxx.TauCoeff.bin
-!        where xx is 16, 17, 18, 19 or 20.  If zssmis_fxx.TauCoeff.bin is
+!        where xx is 16, 17, 18 or 19.  If zssmis_fxx.TauCoeff.bin is
 !        not present, the Forward calculations will use the coefficients
 !        in the file ssmis_fxx.TauCoeff.bin for all channels. In this case,
 !        the Zeeman and Doppler effects will not be taken into account.

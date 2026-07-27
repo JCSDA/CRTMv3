@@ -210,7 +210,6 @@ list( APPEND AOD_Sensor_Ids
 
 # Create list of sensor ids for testing
 list( APPEND Zeeman_Sensor_Ids
-      ssmis_f20
       ssmis_f19
       ssmis_f18
       ssmis_f17
@@ -1077,17 +1076,14 @@ SpcCoeff/netCDF/v.viirs-m_npp.SpcCoeff.nc
 TauCoeff/ODAS/netCDF/v.viirs-m_npp.TauCoeff.nc
 SpcCoeff/netCDF/v.abi_gr.SpcCoeff.nc
 TauCoeff/ODAS/netCDF/v.abi_gr.TauCoeff.nc
-TauCoeff/ODPS/netCDF/zssmis_f20.TauCoeff.nc
 TauCoeff/ODPS/netCDF/zssmis_f19.TauCoeff.nc
 TauCoeff/ODPS/netCDF/zssmis_f18.TauCoeff.nc
 TauCoeff/ODPS/netCDF/zssmis_f17.TauCoeff.nc
 TauCoeff/ODPS/netCDF/zssmis_f16.TauCoeff.nc
-TauCoeff/ODPS/netCDF/ssmis_f20.TauCoeff.nc
 TauCoeff/ODPS/netCDF/ssmis_f19.TauCoeff.nc
 TauCoeff/ODPS/netCDF/ssmis_f18.TauCoeff.nc
 TauCoeff/ODPS/netCDF/ssmis_f17.TauCoeff.nc
 TauCoeff/ODPS/netCDF/ssmis_f16.TauCoeff.nc
-SpcCoeff/netCDF/ssmis_f20.SpcCoeff.nc
 SpcCoeff/netCDF/ssmis_f18.SpcCoeff.nc
 SpcCoeff/netCDF/ssmis_f19.SpcCoeff.nc
 SpcCoeff/netCDF/ssmis_f16.SpcCoeff.nc
