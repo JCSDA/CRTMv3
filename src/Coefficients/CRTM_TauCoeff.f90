@@ -40,6 +40,7 @@ MODULE CRTM_TauCoeff
                                   ODPS_Destroy_TauCoeff => Destroy_TauCoeff, &
                                   ODPS_TC => TC
   USE ODPS_Define         , ONLY: ODPS_type, ODPS_ALGORITHM
+  USE ODPS_Predictor      , ONLY: ODPS_Validate_Group
   USE ODSSU_TauCoeff      , ONLY: ODSSU_Load_TauCoeff    => Load_TauCoeff   , &
                                   ODSSU_Destroy_TauCoeff => Destroy_TauCoeff, &
                                   ODSSU_TC => TC
@@ -225,11 +226,13 @@ CONTAINS
     CHARACTER(:), ALLOCATABLE :: TauCoeff_File(:)
     INTEGER :: Allocate_Status, Deallocate_Status
     INTEGER :: n, n_Sensors
-    INTEGER :: i, j
+    INTEGER :: i, j, k
+    CHARACTER(512) :: GroupMessage
     INTEGER, PARAMETER :: SL = 128
     INTEGER            :: Algorithm_ID
     CHARACTER(SL), ALLOCATABLE :: SensorIDs(:)
     CHARACTER(SL), ALLOCATABLE :: zfnames(:)
+    LOGICAL,       ALLOCATABLE :: zeeman_candidate(:)
     INTEGER,       ALLOCATABLE :: SensorIndex(:)
     LOGICAL :: binary
     LOGICAL :: use_netCDF
@@ -366,6 +369,7 @@ CONTAINS
     ! Allocate memory for the local arrays    
     ALLOCATE( SensorIDs( n_Sensors ),   &                                                                 
               zfnames( n_Sensors ),     & 
+              zeeman_candidate( n_Sensors ), & 
               SensorIndex( n_Sensors ), &                                                                
               STAT = Allocate_Status )                                                                    
     IF ( Allocate_Status /= 0 ) THEN                                                                      
@@ -548,15 +552,35 @@ CONTAINS
       ! set the pointer pointing to the local (algorithm specific) TC array
       TC%ODPS => ODPS_TC
 
-      ! Copy over sensor types and IDs 
-      DO i = 1, n  
-        j = SensorIndex(i)   
-        TC%Sensor_ID(j)        = TC%ODPS(i)%Sensor_ID  
+      ! Copy over sensor types and IDs
+      DO i = 1, n
+        j = SensorIndex(i)
+        TC%Sensor_ID(j)        = TC%ODPS(i)%Sensor_ID
         TC%WMO_Satellite_ID(j) = TC%ODPS(i)%WMO_Satellite_ID
         TC%WMO_Sensor_ID(j)    = TC%ODPS(i)%WMO_Sensor_ID
         TC%Sensor_Type(j)      = TC%ODPS(i)%Sensor_Type
-      END DO     
-        
+      END DO
+
+      ! Validate each loaded structure against the supported ODPS group
+      ! definitions (Group_Index plus the Component_ID/Absorber_ID rosters).
+      ! Zeeman companion files (z*.TauCoeff) are loaded separately via the
+      ! ODZeeman path below and are not subject to this check.
+      DO i = 1, n
+        IF ( .NOT. ODPS_Validate_Group( TC%ODPS(i)%Group_Index , &
+                                        TC%ODPS(i)%Component_ID, &
+                                        TC%ODPS(i)%Absorber_ID , &
+                                        GroupMessage ) ) THEN
+          Error_Status = FAILURE
+          CALL Display_Message( ROUTINE_NAME, &
+                                'Invalid ODPS TauCoeff for sensor '// &
+                                TRIM(TC%ODPS(i)%Sensor_ID)//': '// &
+                                TRIM(GroupMessage), &
+                                Error_Status, &
+                                Message_Log=Message_Log )
+          RETURN
+        END IF
+      END DO
+
     END IF
 
     ! *** ODSSU algorithm  ***
@@ -597,15 +621,36 @@ CONTAINS
       ! set the pointer pointing to the local (algorithm specific) TC array
       TC%ODSSU => ODSSU_TC
         
-      ! Copy over sensor types and IDs 
-      DO i = 1, n  
-        j = SensorIndex(i) 
-        TC%Sensor_ID(j)        = TC%ODSSU(i)%Sensor_ID  
+      ! Copy over sensor types and IDs
+      DO i = 1, n
+        j = SensorIndex(i)
+        TC%Sensor_ID(j)        = TC%ODSSU(i)%Sensor_ID
         TC%WMO_Satellite_ID(j) = TC%ODSSU(i)%WMO_Satellite_ID
         TC%WMO_Sensor_ID(j)    = TC%ODSSU(i)%WMO_Sensor_ID
         TC%Sensor_Type(j)      = TC%ODSSU(i)%Sensor_Type
-      END DO   
-        
+      END DO
+
+      ! Validate every nested ODPS sub-structure of each ODSSU sensor
+      ! (ODSSU may instead carry ODAS sub-structures, hence the guard)
+      DO i = 1, n
+        IF ( .NOT. ASSOCIATED(TC%ODSSU(i)%ODPS) ) CYCLE
+        DO k = 1, SIZE(TC%ODSSU(i)%ODPS)
+          IF ( .NOT. ODPS_Validate_Group( TC%ODSSU(i)%ODPS(k)%Group_Index , &
+                                          TC%ODSSU(i)%ODPS(k)%Component_ID, &
+                                          TC%ODSSU(i)%ODPS(k)%Absorber_ID , &
+                                          GroupMessage ) ) THEN
+            Error_Status = FAILURE
+            CALL Display_Message( ROUTINE_NAME, &
+                                  'Invalid ODPS sub-structure in ODSSU TauCoeff for sensor '// &
+                                  TRIM(TC%ODSSU(i)%Sensor_ID)//': '// &
+                                  TRIM(GroupMessage), &
+                                  Error_Status, &
+                                  Message_Log=Message_Log )
+            RETURN
+          END IF
+        END DO
+      END DO
+
     END IF
 
     !----------------------------------------------------------------------------------
@@ -628,9 +673,24 @@ CONTAINS
     ! and no .bin) silently lose its Zeeman correction, because the per-file
     ! existence guard below would then find no zssmis*.TauCoeff.bin. Sensors
     ! with no Zeeman file in either format are simply skipped by that guard.
+    ! A sensor is a Zeeman candidate through the heritage WMO gate (SSMIS,
+    ! AMSU-A) OR, dual-acceptance, when a netCDF companion z-file exists and
+    ! opts in via the global attribute Zeeman_Algorithm = 1. Existing
+    ! coefficient sets carry no such attribute and behave exactly as before;
+    ! future Zeeman-corrected sensors can opt in via metadata instead of
+    ! having their WMO IDs hardwired here.
+    DO n = 1, n_Sensors
+      zeeman_candidate(n) = ( TC%WMO_Sensor_ID(n) == WMO_SSMIS .OR. &
+                              TC%WMO_Sensor_ID(n) == WMO_AMSUA )
+      IF ( .NOT. zeeman_candidate(n) ) THEN
+        zeeman_candidate(n) = Zeeman_Metadata_OptIn( &
+          TRIM(local_path)//'z'//TRIM(TC%Sensor_ID(n))//'.TauCoeff.nc' )
+      END IF
+    END DO
+
     zeeman_use_netCDF = .TRUE.
     DO n = 1, n_Sensors
-      IF ( TC%WMO_Sensor_ID(n) == WMO_SSMIS .OR. TC%WMO_Sensor_ID(n) == WMO_AMSUA ) THEN
+      IF ( zeeman_candidate(n) ) THEN
         zeeman_nc_exists  = File_Exists( TRIM(local_path) // 'z' // TRIM(TC%Sensor_ID(n)) // '.TauCoeff.nc'  )
         zeeman_bin_exists = File_Exists( TRIM(local_path) // 'z' // TRIM(TC%Sensor_ID(n)) // '.TauCoeff.bin' )
         IF ( ( .NOT. zeeman_nc_exists ) .AND. zeeman_bin_exists ) THEN
@@ -652,7 +712,7 @@ CONTAINS
     END IF
 
     DO n = 1, n_Sensors
-      IF(TC%WMO_Sensor_ID(n) == WMO_SSMIS .OR. TC%WMO_Sensor_ID(n) == WMO_AMSUA )THEN
+      IF( zeeman_candidate(n) )THEN
 
           ! file name: e.g. zssmis_f16.TauCoeff.nc (or .bin if NetCDF set incomplete)
         zfnames(i) = 'z'//TRIM(TC%Sensor_ID(n))//TRIM(zeeman_ext)
@@ -699,6 +759,7 @@ CONTAINS
 
     DEALLOCATE(SensorIDs,   &                 
                zfnames,     &
+               zeeman_candidate, &
                SensorIndex, &                                                                
                 STAT  = Deallocate_Status)
     IF ( Deallocate_Status /= 0 ) THEN                                   
@@ -881,6 +942,25 @@ CONTAINS
     END IF                                                    
 
   END FUNCTION CRTM_Destroy_TauCoeff
+
+  ! Dual-acceptance Zeeman opt-in probe: .TRUE. only when the named netCDF
+  ! companion file exists and carries global attribute Zeeman_Algorithm = 1.
+  ! Any missing file, unreadable file, or absent attribute means .FALSE.
+  ! (the heritage WMO gate then decides alone).
+  FUNCTION Zeeman_Metadata_OptIn( zFilename ) RESULT( OptIn )
+    CHARACTER(*), INTENT(IN) :: zFilename
+    LOGICAL :: OptIn
+    INTEGER :: status, FileID
+    INTEGER(Long) :: zeeman_flag
+    OptIn = .FALSE.
+    IF ( .NOT. File_Exists( zFilename ) ) RETURN
+    status = NF90_OPEN( zFilename, NF90_NOWRITE, FileID )
+    IF ( status /= NF90_NOERR ) RETURN
+    status = NF90_GET_ATT( FileID, NF90_GLOBAL, 'Zeeman_Algorithm', zeeman_flag )
+    IF ( status == NF90_NOERR ) OptIn = ( zeeman_flag == 1 )
+    status = NF90_CLOSE( FileID )
+  END FUNCTION Zeeman_Metadata_OptIn
+
 
   FUNCTION Inquire_AlgorithmID(  Filename        , &  ! Input
                                  Algorithm_ID    , &  ! Output

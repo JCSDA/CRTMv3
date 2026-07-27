@@ -42,6 +42,9 @@ PROGRAM test_ODPS_NO2_Predictor_TLAD
   INTEGER,  PARAMETER :: N_COMPONENTS = 6    ! group-8 [Dry,WLO,WCO,OZO,CO2,NO2]
   INTEGER,  PARAMETER :: N_ABSORBERS  = 4    ! group-8 [H2O,O3,CO2,NO2]
   INTEGER,  PARAMETER :: MAX_N_PRED   = 15
+  ! Canonical group-8 rosters [Dry,WLO,WCO,OZO,CO2,NO2] over [H2O,O3,CO2,NO2]
+  INTEGER,  PARAMETER :: COMPONT_IDS(N_COMPONENTS) = (/ 20, 101, 15, 114, 121, 122 /)
+  INTEGER,  PARAMETER :: ABSORBR_IDS(N_ABSORBERS)  = (/ 1, 3, 2, 10 /)
   REAL(fp), PARAMETER :: ZERO = 0.0_fp, ONE = 1.0_fp
   REAL(fp), PARAMETER :: TOL  = 1.0e-13_fp   ! ~1e3 * eps: pure-arithmetic bound
 
@@ -93,7 +96,8 @@ PROGRAM test_ODPS_NO2_Predictor_TLAD
   END IF
 
   ! Forward (fills prd%n_CP and the predictor values the AD recomputation uses)
-  CALL ODPS_Compute_Predictor( GROUP_UV_NO2, t, abs_prof, ref_level_p, &
+  CALL ODPS_Compute_Predictor( GROUP_UV_NO2, COMPONT_IDS, ABSORBR_IDS, &
+                               t, abs_prof, ref_level_p, &
                                ref_t, ref_abs, secang, prd )
 
   ! TL input: relative structure on every absorber, additive on T
@@ -103,7 +107,8 @@ PROGRAM test_ODPS_NO2_Predictor_TLAD
       abs_tl(k,j) = 0.1_fp * abs_prof(k,j) * COS( 0.23_fp*REAL(k,fp) + 1.1_fp*REAL(j,fp) )
     END DO
   END DO
-  CALL ODPS_Compute_Predictor_TL( GROUP_UV_NO2, t, abs_prof, ref_t, ref_abs, &
+  CALL ODPS_Compute_Predictor_TL( GROUP_UV_NO2, COMPONT_IDS, ABSORBR_IDS, &
+                                  t, abs_prof, ref_t, ref_abs, &
                                   secang, prd, t_tl, abs_tl, prd_TL )
 
   ! AD dual: deterministic pseudo-random weights on every active predictor slot
@@ -120,7 +125,8 @@ PROGRAM test_ODPS_NO2_Predictor_TLAD
 
   t_ad   = ZERO
   abs_ad = ZERO
-  CALL ODPS_Compute_Predictor_AD( GROUP_UV_NO2, t, abs_prof, ref_t, ref_abs, &
+  CALL ODPS_Compute_Predictor_AD( GROUP_UV_NO2, COMPONT_IDS, ABSORBR_IDS, &
+                                  t, abs_prof, ref_t, ref_abs, &
                                   secang, prd, prd_AD, t_ad, abs_ad )
 
   ! <X_TL, X_AD>  vs  <(dT,dAbs), (T_AD, Abs_AD)>

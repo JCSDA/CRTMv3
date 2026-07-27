@@ -210,7 +210,6 @@ list( APPEND AOD_Sensor_Ids
 
 # Create list of sensor ids for testing
 list( APPEND Zeeman_Sensor_Ids
-      ssmis_f20
       ssmis_f19
       ssmis_f18
       ssmis_f17
@@ -371,6 +370,14 @@ add_executable(Unit_Fastem1_SST_Jacobian mains/unit/Unit_Test/test_Fastem1_SST_J
 target_link_libraries(Unit_Fastem1_SST_Jacobian PRIVATE crtm)
 add_test(NAME test_Unit_Fastem1_SST_Jacobian
          COMMAND $<TARGET_FILE:Unit_Fastem1_SST_Jacobian>)
+
+# ODPS group modernization (Tier 0): load-time validation of Group_Index and
+# the Component_ID/Absorber_ID rosters, including rejection of the
+# Zeeman-reserved indexes (the OMPS Group-4 failure mode).
+add_executable(Unit_ODPS_Group_Validation mains/unit/Unit_Test/test_ODPS_Group_Validation.f90)
+target_link_libraries(Unit_ODPS_Group_Validation PRIVATE crtm)
+add_test(NAME test_Unit_ODPS_Group_Validation
+         COMMAND $<TARGET_FILE:Unit_ODPS_Group_Validation>)
 
 # Pins the v3.2.0 DDA-ARTS ICE_CLOUD scattering change (ICE_CLOUD now scatters via
 # the full branch / IconCloudIce habit). Registered only when a DDA-ARTS CloudCoeff
@@ -1069,17 +1076,14 @@ SpcCoeff/netCDF/v.viirs-m_npp.SpcCoeff.nc
 TauCoeff/ODAS/netCDF/v.viirs-m_npp.TauCoeff.nc
 SpcCoeff/netCDF/v.abi_gr.SpcCoeff.nc
 TauCoeff/ODAS/netCDF/v.abi_gr.TauCoeff.nc
-TauCoeff/ODPS/netCDF/zssmis_f20.TauCoeff.nc
 TauCoeff/ODPS/netCDF/zssmis_f19.TauCoeff.nc
 TauCoeff/ODPS/netCDF/zssmis_f18.TauCoeff.nc
 TauCoeff/ODPS/netCDF/zssmis_f17.TauCoeff.nc
 TauCoeff/ODPS/netCDF/zssmis_f16.TauCoeff.nc
-TauCoeff/ODPS/netCDF/ssmis_f20.TauCoeff.nc
 TauCoeff/ODPS/netCDF/ssmis_f19.TauCoeff.nc
 TauCoeff/ODPS/netCDF/ssmis_f18.TauCoeff.nc
 TauCoeff/ODPS/netCDF/ssmis_f17.TauCoeff.nc
 TauCoeff/ODPS/netCDF/ssmis_f16.TauCoeff.nc
-SpcCoeff/netCDF/ssmis_f20.SpcCoeff.nc
 SpcCoeff/netCDF/ssmis_f18.SpcCoeff.nc
 SpcCoeff/netCDF/ssmis_f19.SpcCoeff.nc
 SpcCoeff/netCDF/ssmis_f16.SpcCoeff.nc
