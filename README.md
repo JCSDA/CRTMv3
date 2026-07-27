@@ -18,8 +18,11 @@ v3.0.0 Released March, 2023
 v2.4.1 Released on June 9, 2025 (NB 2.4.x development/releases persisted well into the era where v3.x was being developed) 
 v2.4.0 Released on October 23, 2020
 
-This is a v3.x release of CRTM, some features may not be fully functional. Contact crtm-support@googlegroups.com.
-v3.x features will be rolled out in incremental updates. 
+This is a v3.x release of CRTM, some features may not be fully functional.
+v3.x features will be rolled out in incremental updates.
+
+Support: for general questions, post at https://forums.jcsda.org/ or email Benjamin.T.Johnson@noaa.gov.
+For complex problems (build failures, incorrect results, crashes), please open an issue in the CRTMv3 repository: https://github.com/JCSDA/CRTMv3/issues 
 
 Basic requirements:  
 (1) A Fortran 2008 compatible compiler
