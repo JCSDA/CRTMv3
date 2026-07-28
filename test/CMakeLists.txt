@@ -1060,8 +1060,8 @@ NLTECoeff/netCDF/airs_aqua.NLTECoeff.nc
 # lookup the test drivers rely on (File_Path=./testinput/).
 NLTECoeff/netCDF/cris-fsr_n21.NLTECoeff.nc
 ACCoeff/netCDF/amsua_n19.ACCoeff.nc
-SpcCoeff/netCDF/v.viirs-m_j2.SpcCoeff.nc
-TauCoeff/ODPS/netCDF/v.viirs-m_j2.TauCoeff.nc
+SpcCoeff/netCDF/v.viirs-m_n21.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/v.viirs-m_n21.TauCoeff.nc
 SpcCoeff/netCDF/v.abi_g18.SpcCoeff.nc
 TauCoeff/ODAS/netCDF/v.abi_g18.TauCoeff.nc
 SpcCoeff/netCDF/abi_g18.SpcCoeff.nc
