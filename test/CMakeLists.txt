@@ -841,6 +841,41 @@ endif()
 unset(_TEMPO_UVVIS_PRESENT)
 unset(_tempo_file)
 
+# test_MW_Sounder_Physics: microwave sounder physics, anchored to shipped
+# AMSU-A heritage inside the same run: the amsua_n19 57.29 GHz
+# line-splitting ladder (33.9/17.5/7.6/3.7/1.9 hPa) is asserted first, then
+# mwts3_fy3e (same instrument design, generated coefficients) must
+# reproduce it. This is the check that exposed both the flt double-offset
+# conversion defect and the multi-band convolution defect
+# (crtm-coeffgen#71): either failure mode collapses the ladder toward a
+# 41-49 hPa plateau. Also covers the MWHS-2 118/166 GHz structure, the
+# GEMS2 line climb, MWRI-RM BT sanity, adjoint closure, and K == AD.
+# The non-heritage pairs are pre-release: registered only when all four are
+# present (symlinked) in the source testinput directory.
+add_executable(test_MW_Sounder_Physics mains/unit/Unit_Test/test_MW_Sounder_Physics.f90)
+target_link_libraries(test_MW_Sounder_Physics PRIVATE crtm)
+set(_MW_PHYS_PRESENT TRUE)
+foreach(_mw_sensor mwts3_fy3e mwhs2_fy3e mwrirm_fy3g gems2_amethyst)
+  foreach(_mw_kind SpcCoeff TauCoeff)
+    set(_mw_file "${CMAKE_CURRENT_SOURCE_DIR}/testinput/${_mw_sensor}.${_mw_kind}.nc")
+    if(EXISTS "${_mw_file}")
+      execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                       "${_mw_file}"
+                       "${CMAKE_CURRENT_BINARY_DIR}/testinput/${_mw_sensor}.${_mw_kind}.nc" )
+    else()
+      set(_MW_PHYS_PRESENT FALSE)
+    endif()
+  endforeach()
+endforeach()
+if(_MW_PHYS_PRESENT)
+  add_test(NAME test_MW_Sounder_Physics
+           COMMAND $<TARGET_FILE:test_MW_Sounder_Physics>)
+else()
+  message(STATUS "test_MW_Sounder_Physics not registered (needs the four MW coefficient pairs in testinput).")
+endif()
+unset(_MW_PHYS_PRESENT)
+unset(_mw_file)
+
 # test_Grazing_SfcOptics: regression test for the catastrophic-reflectivity
 # guard in the MW-water surface optics (CRTM_FastemX and CRTM_PARMIO). Drives
 # both backends directly at grazing zenith angles + 325 GHz (where the reflection
