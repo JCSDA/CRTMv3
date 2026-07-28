@@ -14,8 +14,9 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 
 ## Summary
 
-- **515 sensors** with a SpcCoeff file: 107 microwave, 265 infrared, 135 visible, 6 ultraviolet, 2 invalid (see flags).
-- **TauCoeff coverage:** 267 sensors have both ODPS and ODAS, 115 ODPS only, 118 ODAS only, 8 ODSSU (SSU family), 7 none (cannot run; see flags).
+- **528 sensors** with a SpcCoeff file: 120 microwave, 265 infrared, 135 visible, 6 ultraviolet, 2 invalid (see flags).
+- **Post-audit additions:** the 2026-07-27 FY-3 microwave sweep (mwhs2_fy3c/d, mwts2_fy3c/d, mwts3_fy3e, mwri_fy3c/d, from NWP-SAF passbands; installed after the audit census and added to the table 2026-07-28), `gems2_amethyst` (Weather Stream GEMS2 MW sounder, ECMWF84+MonoRTM), and the completed INSAT-3DS visible pair (`v.imgr_insat-3ds`, `v.sndr_insat-3ds` gained TauCoeffs and regenerated SpcCoeffs). The headline counts above include all of these; the TauCoeff-coverage, provenance, and validation mixes below predate them (crtm-coeffgen count is now 33). FY-3 sweep 2 (mwhs2_fy3e/f, mwts3_fy3f, mwri2_fy3f, mwrirm_fy3g) completed 2026-07-28; the four quad-carrying sounders were regenerated with the MonoRTM backend after the double-offset and LBLRTM narrow-band findings (crtm-coeffgen#71) and are physics-validated.
+- **TauCoeff coverage:** 267 sensors have both ODPS and ODAS, 117 ODPS only, 118 ODAS only, 8 ODSSU (SSU family), 5 none (cannot run; see flags).
 - **ACCoeff (antenna correction):** 17 sensors (AMSU-A, AMSU-B, MHS families). **NLTECoeff (non-LTE correction):** 39 sensors (hyperspectral IR: AIRS, CrIS, IASI families).
 - **Zeeman TauCoeff siblings (z*.TauCoeff.nc):** SSMIS F-16 to F-19.
 - **Provenance mix:** 247 legacy JCSDA, 212 old / unknown (heritage), 23 crtm-coeffgen, 14 STAR, 11 JCSDA (2025), 2 JCSDA (2024), 2 JCSDA (2023), 2 JCSDA (2022), 1 JCSDA emulator (B.T. Johnson), 1 JCSDA (2026).
@@ -61,17 +62,22 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 
 ## Flags and anomalies
 
-- `cpr_cloudsat` and `dpr_gpm` have **invalid Sensor_Type = 101** (radar
-  placeholders). CRTM has no active-sensor path; these files are inert and
-  should probably be dropped from the tarball or fixed.
+- `cpr_cloudsat` and `dpr_gpm` carry **Sensor_Type = 101**, which is NOT
+  invalid (corrected 2026-07-28): SensorInfo_Parameters defines
+  ACTIVE_SENSOR = 100, and the SpcCoeff readers treat any Sensor_Type above
+  100 as active (Is_Active_Sensor = TRUE, effective type = value - 100, here
+  microwave), routing these radars into the v3 reflectivity path
+  (CRTM_Active_Sensor, gated on Is_Active_Sensor plus scattering). The
+  earlier "invalid, inert, drop from tarball" assessment was wrong about the
+  mechanism. What remains true: both files are untested end to end.
 - **7 sensors have no TauCoeff in either algorithm directory** and
-  cannot run: `imgrD1S2_g13`, `v.avhrr2_n14`, `v.imgr_insat-3ds`, `v.ivissr_fy2d`, `v.ivissr_fy2e`, `v.ivissr_fy2f`, `v.sndr_insat-3ds`.
+  cannot run: `imgrD1S2_g13`, `v.avhrr2_n14`, `v.ivissr_fy2d`, `v.ivissr_fy2e`, `v.ivissr_fy2f` (was 7; the two INSAT-3DS visible sensors were completed 2026-07-28).
 - `amsua_metop-a_v2` has an ACCoeff sibling and SpcCoeff, giving MetOp-A AMSU-A
   two variants (`amsua_metop-a`, `amsua_metop-a_v2`); only the former is I/O-tested.
 - `ssmis_f20` is **not** in the tarball (no SpcCoeff); it was removed from the
   Zeeman test roster during release prep.
 
-## Microwave sensors (107)
+## Microwave sensors (120)
 
 | Sensor_Id | Instrument / Platform | Ch | TauCoeff | AC | NLTE | Generated | Provenance | Validation |
 |---|---|---|---|---|---|---|---|---|
@@ -100,6 +106,7 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | atms_npp | ATMS / Suomi NPP | 22 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | regression suite (FWD/TL/AD/K baselines) |
 | cowvr_ors6 | COWVR / ORS-6 | 12 | ODPS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | eon_mw.v1 | EON-MW / MW design (v1) | 22 | ODPS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| gems2_amethyst | GEMS2 (Weather Stream MW sounder) / GEMS2-Amethyst | 24 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | validated (BT vs MonoRTM 0.04 K; FWD/TL/AD/K driver) |
 | gmi_gpm | GMI / GPM | 13 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | hamsr_grip | HAMSR / GRIP campaign (aircraft) | 25 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | hsb_aqua | HSB / Aqua | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
@@ -127,6 +134,10 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | msu_n12 | MSU / NOAA-12 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | msu_n14 | MSU / NOAA-14 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | msu_tirosn | MSU / TIROS-N | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| mwhs2_fy3c | MWHS-2 / FY-3C | 15 | ODPS |  |  | 2026-07-27 | crtm-coeffgen (NWP-SAF passbands) | validated (physics driver: BT/WF/adjoint/K==AD) |
+| mwhs2_fy3d | MWHS-2 / FY-3D | 15 | ODPS |  |  | 2026-07-27 | crtm-coeffgen (NWP-SAF passbands) | validated (physics driver: BT/WF/adjoint/K==AD) |
+| mwhs2_fy3e | MWHS-2 (E-variant) / FY-3E | 15 | ODPS |  |  | 2026-07-28 | crtm-coeffgen (NWP-SAF passbands) | validated (physics driver: BT/WF/adjoint/K==AD) |
+| mwhs2_fy3f | MWHS-2 (E-variant) / FY-3F | 15 | ODPS |  |  | 2026-07-28 | crtm-coeffgen (NWP-SAF passbands) | validated (physics driver: BT/WF/adjoint/K==AD) |
 | mwhs_fy3a | MWHS / FY-3A | 5 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | mwhs_fy3b | MWHS / FY-3B | 5 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | mwi_metop-sg-a1 | MWI / MetOp-SG A1 | 18 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
@@ -134,7 +145,15 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | mwr_aws | MWR / Arctic Weather Satellite (AWS) | 19 | ODPS |  |  | 2026-04-26 | JCSDA emulator (B.T. Johnson) | gated regression (PARMIO, FWD/TL/AD/K) |
 | mwri_fy3a | MWRI / FY-3A | 10 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | mwri_fy3b | MWRI / FY-3B | 10 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| mwri_fy3c | MWRI / FY-3C | 10 | ODPS |  |  | 2026-07-27 | crtm-coeffgen (NWP-SAF passbands) | validated (physics driver: BT/WF/adjoint/K==AD) |
+| mwri_fy3d | MWRI / FY-3D | 10 | ODPS |  |  | 2026-07-27 | crtm-coeffgen (NWP-SAF passbands) | validated (physics driver: BT/WF/adjoint/K==AD) |
+| mwri2_fy3f | MWRI-2 / FY-3F (instrument failed 2025; historical) | 22 | ODPS |  |  | 2026-07-28 | crtm-coeffgen (NWP-SAF passbands) | validated (physics driver: BT/WF/adjoint/K==AD) |
+| mwrirm_fy3g | MWRI-RM / FY-3G | 26 | ODPS |  |  | 2026-07-28 | crtm-coeffgen (NWP-SAF passbands) | validated (physics driver: BT/WF/adjoint/K==AD) |
 | mws_metop-sg-a1 | MWS / MetOp-SG A1 | 24 | ODPS |  |  | 2026-07-16 | crtm-coeffgen | untested (load-only) |
+| mwts2_fy3c | MWTS-2 / FY-3C | 13 | ODPS |  |  | 2026-07-28 | crtm-coeffgen (NWP-SAF passbands, fixed LBLRTM per #75; final 2026-07-28) | validated (physics driver; WF peaks match AMSU-A heritage exactly) |
+| mwts2_fy3d | MWTS-2 / FY-3D | 13 | ODPS |  |  | 2026-07-28 | crtm-coeffgen (NWP-SAF passbands, fixed LBLRTM per #75; final 2026-07-28) | validated (physics driver; WF peaks match AMSU-A heritage exactly) |
+| mwts3_fy3e | MWTS-3 / FY-3E | 17 | ODPS |  |  | 2026-07-28 | crtm-coeffgen (NWP-SAF passbands, fixed LBLRTM per #75; final 2026-07-28) | validated (physics driver; WF peaks match AMSU-A heritage exactly) |
+| mwts3_fy3f | MWTS-3 / FY-3F | 17 | ODPS |  |  | 2026-07-28 | crtm-coeffgen (NWP-SAF passbands, fixed LBLRTM per #75; final 2026-07-28) | validated (physics driver; WF peaks match AMSU-A heritage exactly) |
 | mwts_fy3a | MWTS / FY-3A | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | mwts_fy3b | MWTS / FY-3B | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | radiometer_smap | SMAP radiometer / SMAP | 4 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
@@ -521,7 +540,7 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | v.imgr_g13 | VIS-band GOES Imager / GOES-13 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | v.imgr_g14 | VIS-band GOES Imager / GOES-14 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | v.imgr_g15 | VIS-band GOES Imager / GOES-15 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| v.imgr_insat-3ds | VIS-band GOES Imager / INSAT-3DS | 2 | NONE |  |  | 2025-03-27 | JCSDA (2025) | untested (load-only) |
+| v.imgr_insat-3ds | VIS-band Imager / INSAT-3DS | 2 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | validated (BT vs LBL truth 0.006 K; FWD/TL/AD/K driver) |
 | v.imgr_mt2 | VIS-band GOES Imager / MTSAT-2 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | v.iras_fy3a | VIS-band IRAS / FY-3A | 6 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | v.iras_fy3b | VIS-band IRAS / FY-3B | 6 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
@@ -581,7 +600,7 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | v.sndr_g13 | VIS-band GOES Sounder / GOES-13 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | v.sndr_g14 | VIS-band GOES Sounder / GOES-14 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | v.sndr_g15 | VIS-band GOES Sounder / GOES-15 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| v.sndr_insat-3ds | VIS-band GOES Sounder / INSAT-3DS | 1 | NONE |  |  | 2025-03-27 | JCSDA (2025) | untested (load-only) |
+| v.sndr_insat-3ds | VIS-band Sounder / INSAT-3DS | 1 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | validated (BT vs LBL truth 0.002 K; FWD/TL/AD/K driver) |
 | v.tempo_is40e | VIS-band TEMPO / Intelsat 40e (TEMPO host) | 1028 | ODPS |  |  | 2026-07-25 | crtm-coeffgen | untested (load-only) |
 | v.viirs-dnb_j1 | VIS-band VIIRS DNB / NOAA-20 (JPSS-1) | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | v.viirs-i_j1 | VIS-band VIIRS I-bands / NOAA-20 (JPSS-1) | 3 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
@@ -610,4 +629,3 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 |---|---|---|---|---|---|---|---|---|
 | cpr_cloudsat | CPR (94 GHz radar) / CloudSat | 1 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | dpr_gpm | DPR (Ku/Ka radar) / GPM | 2 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-

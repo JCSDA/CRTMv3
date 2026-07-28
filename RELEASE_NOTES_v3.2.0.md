@@ -63,6 +63,28 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
   with "Unrecognised sensor type". UV channels now share the VIS Lambertian
   surface-optics path, and a UV-only sensor list loads the VIS surface
   emissivity LUTs at CRTM_Init. MW/IR/VIS behavior is unchanged.
+- **New sensor: `gems2_amethyst`** (Weather Stream GEMS2 24-channel
+  microwave sounder, 118.75 GHz oxygen bank plus 160-183.31 GHz humidity
+  bank, on the GEMS2-Amethyst smallsat). Generated with crtm-coeffgen
+  (MonoRTM, ECMWF84); brightness-temperature validation against
+  line-by-line truth averages 0.04 K. WMO ids are invalid-value sentinels
+  until C-5/C-8 assign codes; the 118.75 GHz line-center channels carry no
+  Zeeman treatment. Unrelated to the Korean GEMS UV spectrometer
+  (`gems_gk2b`) despite the acronym.
+- **FY-3 microwave family completed (12 sensors, FY-3C through FY-3G).**
+  New coefficient pairs for MWHS-2 (FY-3C/D and the E-variant on FY-3E/F),
+  MWTS-2 (FY-3C/D), MWTS-3 (FY-3E/F), MWRI (FY-3C/D), MWRI-2 (FY-3F;
+  instrument failed in 2025, coefficient serves historical reprocessing),
+  and MWRI-RM (FY-3G). Generated with crtm-coeffgen from the NWP-SAF
+  passband definitions and validated with forward, weighting-function, and
+  adjoint physics checks; the 57 GHz line-splitting channels reproduce the
+  AMSU-A weighting-function progression.
+- **INSAT-3DS visible sensors completed.** `v.imgr_insat-3ds` and
+  `v.sndr_insat-3ds` previously shipped a SpcCoeff with no TauCoeff and
+  could not pass `CRTM_Init`; both now carry TauCoeffs generated from the
+  measured ISRO SRFs (crtm-coeffgen, ECMWF84) and regenerated SpcCoeffs
+  whose centroids match the previously shipped files to better than
+  0.03 nm.
 - **CRTM-Exp cloud-optics schema (experimental, opt-in).** A new
   habit-resolved cloud LUT format selected explicitly with
   `Cloud_Model='CRTM-Exp'`; the default cloud path is unchanged.
@@ -95,7 +117,9 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
   include general TL-vs-FD and adjoint-consistency tests across the three
   main sensor types (#280), multi-sensor single-call bit-consistency, ODPS
   group-validation and long-path initialization tests, a DDA-ARTS ICE_CLOUD
-  behavior pin, and OpenMP thread-count consistency tests (#111).
+  behavior pin, multi-sensor OMPS UV and TEMPO UV+VIS physics verifications
+  (each registered when its pre-release coefficient pairs are present), and
+  OpenMP thread-count consistency tests (#111).
 
 ## Breaking and behavior changes
 
@@ -145,6 +169,75 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
    the binary coefficient read path. The binary readers remain in the library
    for users with existing binary trees, but they should be considered
    deprecated (removal expected in a later v3.2.x, per the README).
+
+9. **Duplicate `_j2` sensor aliases removed from the fix tree.** Seven
+   sensors shipped twice under both a `_j2` and an `_n21` name for the same
+   satellite (JPSS-2 = NOAA-21), with bit-identical coefficients differing
+   only in the internal `Sensor_Id` string and the creation timestamp. The
+   `_j2` copies are gone; use the `_n21` name:
+
+   | removed | use instead |
+   |---|---|
+   | `atms_j2` | `atms_n21` |
+   | `atms_j2-srf` | `atms_n21-srf` |
+   | `cris-fsr_j2` | `cris-fsr_n21` |
+   | `viirs-i_j2` | `viirs-i_n21` |
+   | `viirs-m_j2` | `viirs-m_n21` |
+   | `v.viirs-i_j2` | `v.viirs-i_n21` |
+   | `v.viirs-m_j2` | `v.viirs-m_n21` |
+
+   `cris-fsr_j2.NLTECoeff.nc` went with them (identical to
+   `cris-fsr_n21.NLTECoeff.nc`, and orphaned once its SpcCoeff was removed).
+
+   `CRTM_Init` resolves coefficients by filename, so any caller configured
+   with a `_j2` sensor id must be updated or initialization will fail. The
+   duplication was a maintenance hazard as much as dead weight: nothing in the
+   tree recorded that the two names were meant to be twins, so regenerating
+   one would have silently left the other stale.
+
+   Note this does **not** apply to the visible-channel files that share
+   content across detector variants (`v.imgrD1..D8_gNN`, `v.sndrD1..D4_gNN`,
+   `v.mi-l/m_coms`). Those are genuinely distinct sensors whose parent IR
+   channels differ; they share a common visible channel by instrument design
+   and are all retained.
+
+10. **OMPS replaced by per-platform NOAA-20 and NOAA-21 products.** The two
+    shipped OMPS files were unusable and mislabelled, and have been retired in
+    favor of four regenerated products:
+
+    | removed | replaced by |
+    |---|---|
+    | `u.omps-npAllFOV_j2` | `u.omps-np_n20` (151 ch), `u.omps-np_n21` (158 ch) |
+    | `u.omps-tcAllFOV_j2` | `u.omps-tc_n20` (196 ch), `u.omps-tc_n21` (198 ch) |
+
+    Three separate defects motivated this:
+
+    - **The files could not be loaded at all.** Both carried
+      `Group_Index=4`, which has been Zeeman-reserved with zero components
+      since 2008, so `CRTM_Predictor_Create` failed outright. The replacements
+      are `Group_Index=8` (`GROUP_UV_NO2`), the UV variant carrying a scene-NO2
+      component, and all four now pass `CRTM_Init`.
+    - **The platform labels were wrong, in opposite directions.**
+      `u.omps-npAllFOV_j2` was labelled NOAA-21 (WMO 226) but its channel set
+      matches the NOAA-20 grid (rms 0.04 nm, max 0.07 nm; every other
+      platform's grid is at least 7 times farther); NOAA-21's nadir profiler
+      natively has 158 channels reaching 245 nm, not 151. `u.omps-tcAllFOV_j2`
+      really was NOAA-21 content, but indexed with a three-channel offset.
+    - **Only one platform was represented** where two instruments exist.
+
+    Channel numbering now follows each platform's own SRF. For total column,
+    old channel *N* corresponds to `u.omps-tc_n21` channel *N+3*; the old file
+    omitted n21 channels 1 to 3 (298.1 to 298.9 nm) and extended three channels
+    past its red end. Channel selections carried over from the old files must
+    be re-mapped, not reused.
+
+    The per-platform channel sets are verified against primary sources: the
+    JPSS NOAA-21 OMPS SDR validated-maturity record (nadir profiler 158
+    channels, nadir mapper 198) and the published instrument table in Yan et
+    al. 2024, doi:10.3390/rs16234488 (nadir profiler SNPP 147 / NOAA-20 151 /
+    NOAA-21 158; nadir mapper 196 / 196 / 198). Note the same record flags
+    NOAA-21 nadir mapper radiances below 302 nm (roughly `u.omps-tc_n21`
+    channels 1 to 10) as not validated for operational use.
 
 ## Known issues and limitations
 
