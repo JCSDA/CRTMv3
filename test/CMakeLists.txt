@@ -769,6 +769,78 @@ endif()
 unset(_TEMPO_SPC)
 unset(_TEMPO_TAU)
 
+# test_OMPS_UV_Physics: baseline-independent physics verification of the four
+# per-platform OMPS UV products (u.omps-np/tc_n20/n21), all initialized in one
+# call and run as one multi-sensor forward. Asserts the BUV spectral shape
+# (Hartley cutoff for the profilers, 340 nm maximum for the mappers),
+# NOAA-20 vs NOAA-21 normalized-radiance consistency at matched wavelengths
+# (breaks on any wavelength-registration or channel-numbering error through
+# the Fraunhofer structure), NP-vs-TC dichroic-range consistency, monotone
+# descent of the profiler ozone weighting functions, scene-NO2 and ozone
+# response signs and windows, adjoint dot-product closure, and K == AD.
+# Promoted from the OMPS product-acceptance driver (audit record
+# coeff_consistency_2026-07-26/OMPS_PRODUCT_VERIFICATION.md). The coefficient
+# pairs are pre-release: registered only when all eight files are present
+# (symlinked) in the source testinput directory; nothing outside the repo is
+# referenced.
+add_executable(test_OMPS_UV_Physics mains/unit/Unit_Test/test_OMPS_UV_Physics.f90)
+target_link_libraries(test_OMPS_UV_Physics PRIVATE crtm)
+set(_OMPS_COEFFS_PRESENT TRUE)
+foreach(_omps_sensor u.omps-np_n20 u.omps-np_n21 u.omps-tc_n20 u.omps-tc_n21)
+  foreach(_omps_kind SpcCoeff TauCoeff)
+    set(_omps_file "${CMAKE_CURRENT_SOURCE_DIR}/testinput/${_omps_sensor}.${_omps_kind}.nc")
+    if(EXISTS "${_omps_file}")
+      execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                       "${_omps_file}"
+                       "${CMAKE_CURRENT_BINARY_DIR}/testinput/${_omps_sensor}.${_omps_kind}.nc" )
+    else()
+      set(_OMPS_COEFFS_PRESENT FALSE)
+    endif()
+  endforeach()
+endforeach()
+if(_OMPS_COEFFS_PRESENT)
+  add_test(NAME test_OMPS_UV_Physics
+           COMMAND $<TARGET_FILE:test_OMPS_UV_Physics>)
+else()
+  message(STATUS "test_OMPS_UV_Physics not registered (needs the four u.omps-* coefficient pairs in testinput).")
+endif()
+unset(_OMPS_COEFFS_PRESENT)
+unset(_omps_file)
+
+# test_TEMPO_UVVIS_Physics: baseline-independent physics verification of the
+# two TEMPO products (UV 292-495 nm, VIS 538-741 nm) in one multi-sensor run,
+# companion to test_OMPS_UV_Physics. Asserts the Huggins ozone cutoff (UV),
+# the O2 B-band and 720 nm water-band dips (VIS), scene-NO2 response windows
+# including structural NO2 blindness beyond 710 nm where the cross section is
+# zero, ozone response in the Huggins (UV) and Chappuis (VIS) bands, monotone
+# descent of the UV ozone weighting functions, adjoint closure, and K == AD.
+# The VIS product's TL/AD/K has no other coverage (test_UV_NO2_TLAD exercises
+# the UV product only). Registered only when both TEMPO pairs are present
+# (symlinked) in the source testinput directory.
+add_executable(test_TEMPO_UVVIS_Physics mains/unit/Unit_Test/test_TEMPO_UVVIS_Physics.f90)
+target_link_libraries(test_TEMPO_UVVIS_Physics PRIVATE crtm)
+set(_TEMPO_UVVIS_PRESENT TRUE)
+foreach(_tempo_sensor u.tempo_is40e v.tempo_is40e)
+  foreach(_tempo_kind SpcCoeff TauCoeff)
+    set(_tempo_file "${CMAKE_CURRENT_SOURCE_DIR}/testinput/${_tempo_sensor}.${_tempo_kind}.nc")
+    if(EXISTS "${_tempo_file}")
+      execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                       "${_tempo_file}"
+                       "${CMAKE_CURRENT_BINARY_DIR}/testinput/${_tempo_sensor}.${_tempo_kind}.nc" )
+    else()
+      set(_TEMPO_UVVIS_PRESENT FALSE)
+    endif()
+  endforeach()
+endforeach()
+if(_TEMPO_UVVIS_PRESENT)
+  add_test(NAME test_TEMPO_UVVIS_Physics
+           COMMAND $<TARGET_FILE:test_TEMPO_UVVIS_Physics>)
+else()
+  message(STATUS "test_TEMPO_UVVIS_Physics not registered (needs both tempo_is40e coefficient pairs in testinput).")
+endif()
+unset(_TEMPO_UVVIS_PRESENT)
+unset(_tempo_file)
+
 # test_Grazing_SfcOptics: regression test for the catastrophic-reflectivity
 # guard in the MW-water surface optics (CRTM_FastemX and CRTM_PARMIO). Drives
 # both backends directly at grazing zenith angles + 325 GHz (where the reflection
