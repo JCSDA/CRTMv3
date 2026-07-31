@@ -770,6 +770,15 @@ target_link_libraries(test_VectorRT_StokesOutput PRIVATE crtm)
 add_test(NAME test_VectorRT_StokesOutput
          COMMAND $<TARGET_FILE:test_VectorRT_StokesOutput>)
 
+# test_VectorRT_Unsupported: asserts that vector-path combinations CRTM cannot
+# honour are refused rather than silently substituted. Covers RT_SOI with
+# n_Stokes>1, which used to be handed ADA without telling the caller, with an
+# RT_ADA vector run as the control. Needs no cloud LUT.
+add_executable(test_VectorRT_Unsupported mains/unit/Unit_Test/test_VectorRT_Unsupported.f90)
+target_link_libraries(test_VectorRT_Unsupported PRIVATE crtm)
+add_test(NAME test_VectorRT_Unsupported
+         COMMAND $<TARGET_FILE:test_VectorRT_Unsupported>)
+
 # test_VectorRT_TLADK: TL/AD/K correctness for the vector-RT (n_Stokes>1)
 # cloud-scattering path. The n_Stokes>1 ADA branch needs a >=6-phase-element
 # LUT (the CRTM-Exp scheme), so it is unreachable by every other test; this is

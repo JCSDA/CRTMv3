@@ -246,6 +246,18 @@ CONTAINS
     END IF
 
     IF( RTV%n_Stokes > 1 ) THEN
+      ! The vector branch below precedes the RT_Algorithm_Id dispatch entirely,
+      ! so a caller asking for SOI with n_Stokes > 1 would be handed ADA and
+      ! never told. SOI has no vector solver. Refuse rather than substitute:
+      ! silently returning a different algorithm's answer is the failure mode
+      ! this whole path has been most damaged by.
+      IF( RTV%RT_Algorithm_Id == RT_SOI ) THEN
+        Error_Status = FAILURE
+        WRITE( Message,'("SOI has no vector solver; RT_Algorithm_Id=RT_SOI is not ",&
+                        &"supported with Options%n_Stokes = ",i0,". Use RT_ADA.")' ) RTV%n_Stokes
+        CALL Display_Message( ROUTINE_NAME, TRIM(Message), Error_Status )
+        RETURN
+      END IF
       CALL Reshape_Surf_Opt(RTV%n_Angles, RTV%n_Stokes, SfcOptics%Emissivity, SfcOptics%Direct_Reflectivity, &
         SfcOptics%Reflectivity, SfcOptics%S_Emissivity, SfcOptics%S_Direct_Ref, SfcOptics%S_Reflectivity)
     ! ------------------------------
