@@ -1186,7 +1186,14 @@ CONTAINS
                      ! ...Save the cloud cover in the output structure
                      RTSolution(ln,m)%Total_Cloud_Cover = CloudCover%Total_Cloud_Cover
                   END DO
-                  RTSolution(ln,m)%Radiance = RTSolution(ln,m)%Stokes(1)
+                  ! The projection onto the channel polarization is linear, and so
+                  ! is this combine, so the combined reported radiance is the same
+                  ! combine applied to the already-projected clear and cloudy
+                  ! radiances. Re-deriving it from Stokes(1) here would silently
+                  ! undo the projection for every fractional-cloud vector scene.
+                  RTSolution(ln,m)%Radiance = &
+                       ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Radiance) + &
+                       (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Radiance)
                   !...Reflectance
                   RTSolution(ln,m)%Reflectance = &
                         ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Reflectance) + &

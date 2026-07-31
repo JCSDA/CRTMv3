@@ -473,6 +473,7 @@ CONTAINS
       REAL(fp) :: transmittance, transmittance_AD
       REAL(fp) :: transmittance_clear, transmittance_clear_AD
       REAL(fp) :: r_cloudy(4)
+      REAL(fp) :: r_cloudy_rad
       REAL(fp) :: r_cloudy_dn
       REAL(fp), ALLOCATABLE :: r_cloudy_dn_prof(:)  ! pre-combine cloudy downwelling profile
       REAL(fp), ALLOCATABLE :: r_cloudy_up_prof(:)  ! pre-combine cloudy upwelling profile
@@ -1190,7 +1191,15 @@ CONTAINS
                   ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear%Stokes(ks)) + &
                   (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Stokes(ks))
               END DO
-              RTSolution(ln,m)%Radiance = RTSolution(ln,m)%Stokes(1)
+              ! The projection onto the channel polarization is linear, and so
+              ! is this combine, so the combined reported radiance is the same
+              ! combine applied to the already-projected clear and cloudy
+              ! radiances. Re-deriving it from Stokes(1) here would silently
+              ! undo the projection for every fractional-cloud vector scene.
+              r_cloudy_rad = RTSolution(ln,m)%Radiance
+              RTSolution(ln,m)%Radiance = &
+                  ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear%Radiance) + &
+                  (CloudCover%Total_Cloud_Cover * r_cloudy_rad)
               END IF
               ! ...Save the cloud cover in the output structure
               RTSolution(ln,m)%Total_Cloud_Cover = CloudCover%Total_Cloud_Cover
@@ -1292,6 +1301,17 @@ CONTAINS
                 RTSolution_AD(ln,m)%Stokes(ks) = &
                     CloudCover%Total_Cloud_Cover * RTSolution_AD(ln,m)%Stokes(ks)
               END DO
+              ! The reported radiance is combined linearly too, so its seed has
+              ! to be split between the columns exactly as the Stokes components
+              ! are. Leaving it unsplit gives the cloudy column the whole seed
+              ! and the clear column none, which is invisible when the total
+              ! cloud cover is one and wrong everywhere else.
+              RTSolution_Clear_AD%Radiance = &
+                  (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_AD(ln,m)%Radiance
+              CloudCover_AD%Total_Cloud_Cover = CloudCover_AD%Total_Cloud_Cover + &
+                  ((r_cloudy_rad - RTSolution_Clear%Radiance) * RTSolution_AD(ln,m)%Radiance)
+              RTSolution_AD(ln,m)%Radiance = &
+                  CloudCover%Total_Cloud_Cover * RTSolution_AD(ln,m)%Radiance
               END IF
               ! Adjoint of the surface downwelling radiance (scalar) combine (opt-in),
               ! mirroring the Radiance combine adjoint above (including the TCC term).
@@ -1708,7 +1728,14 @@ CONTAINS
       ! without this the n_Stokes>1 Jacobians come out identically zero.  %Radiance
       ! is left intact for the scalar-style fractional-cloud clear/cloudy combine
       ! (a full Stokes-space fractional combine for n_Stokes>1 remains separate).
-      IF ( Opt%n_Stokes > 1 ) rts_AD%Stokes(1) = rts_AD%Stokes(1) + rts_AD%Radiance
+      ! Historically this mirrored %Radiance into %Stokes(1) for vector runs,
+      ! because Assign_Common_Input_AD read the seed from %Stokes and ignored
+      ! %Radiance entirely, so without it the n_Stokes>1 Jacobians came out
+      ! identically zero. That is no longer true: %Radiance is now the Stokes
+      ! vector projected onto the channel polarization, and its adjoint is
+      ! distributed over every Stokes component by the transpose of that
+      ! projection. Mirroring here as well would double count the seed, which
+      ! the adjoint dot-product identity detects.
 
     END SUBROUTINE Pre_Process_RTSolution_AD
 

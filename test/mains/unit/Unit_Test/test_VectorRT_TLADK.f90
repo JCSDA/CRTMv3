@@ -79,6 +79,8 @@ PROGRAM test_VectorRT_TLADK
   LOGICAL :: ok_c_fd_t1, ok_c_fd_t2, ok_c_adj, ok_c_k
   LOGICAL :: ok_f_fd, ok_f_adj, ok_f_k
   LOGICAL :: ok_4_fd1, ok_4_fd2, ok_4_fd3, ok_4_fd4, ok_4_adj, ok_4_k
+  LOGICAL :: ok_4_fdR, ok_4_adjR
+  LOGICAL :: ok_4f_fdR, ok_4f_adjR
 
   TYPE(CRTM_ChannelInfo_type) :: ChannelInfo(1)
   TYPE(CRTM_Geometry_type)    :: Geometry(N_PROFILES)
@@ -264,6 +266,25 @@ PROGRAM test_VectorRT_TLADK
   CALL check_fd ( 4, VAR_WC, ok_4_fd4 )      ! dV/dWC
   CALL check_adj( 4, ok_4_adj )              ! four-component dot product
   CALL check_k  ( 4, ok_4_k )
+  ! The reported Radiance is now the Stokes vector projected onto the channel
+  ! polarization, so it has its own tangent linear and adjoint. Passing ks_out=0
+  ! selects %Radiance rather than a Stokes component, and check_adj_radiance
+  ! seeds %Radiance rather than %Stokes, which is the only way to exercise the
+  ! transpose of the projection.
+  CALL check_fd ( 0, VAR_WC, ok_4_fdR )      ! d(projected Radiance)/dWC
+  CALL check_adj_radiance( ok_4_adjR )
+
+  ! Same two checks with FRACTIONAL cloud. The overcast block above has a total
+  ! cloud cover of one, which makes the clear/cloudy split of the reported
+  ! radiance degenerate: the cloudy column gets everything either way. Only a
+  ! cover strictly between zero and one distinguishes a correct split from an
+  ! absent one, and only the reported radiance exercises it, since the Stokes
+  ! seeds are split separately.
+  CALL set_cfrac( 0.5_fp )
+  WRITE(*,'(/5x,"=========== n_Stokes = 4, fractional, reported radiance ===========")')
+  CALL check_fd ( 0, VAR_WC, ok_4f_fdR )
+  CALL check_adj_radiance( ok_4f_adjR )
+  CALL set_cfrac( ONE )
 
   Error_Status = CRTM_Destroy( ChannelInfo )
 
@@ -290,13 +311,18 @@ PROGRAM test_VectorRT_TLADK
   WRITE(*,'(5x,"n_Stokes=4      TL vs FD (dV/dWC)     : ",a)') MERGE('PASS','FAIL',ok_4_fd4)
   WRITE(*,'(5x,"n_Stokes=4      adjoint dot-product   : ",a)') MERGE('PASS','FAIL',ok_4_adj)
   WRITE(*,'(5x,"n_Stokes=4      K vs AD               : ",a)') MERGE('PASS','FAIL',ok_4_k)
+  WRITE(*,'(5x,"n_Stokes=4      TL vs FD (dRadiance)   : ",a)') MERGE('PASS','FAIL',ok_4_fdR)
+  WRITE(*,'(5x,"n_Stokes=4      adjoint via %Radiance  : ",a)') MERGE('PASS','FAIL',ok_4_adjR)
+  WRITE(*,'(5x,"n_Stokes=4 frac TL vs FD (dRadiance)   : ",a)') MERGE('PASS','FAIL',ok_4f_fdR)
+  WRITE(*,'(5x,"n_Stokes=4 frac adjoint via %Radiance  : ",a)') MERGE('PASS','FAIL',ok_4f_adjR)
   IF ( ok_s1_fd .AND. ok_s1_adj .AND. ok_s1_k .AND. &
        ok_v_fd_wc1 .AND. ok_v_fd_wc2 .AND. ok_v_fd_t1 .AND. ok_v_fd_t2 .AND. &
        ok_v_adj .AND. ok_v_k .AND. &
        ok_c_fd_t1 .AND. ok_c_fd_t2 .AND. ok_c_adj .AND. ok_c_k .AND. &
        ok_f_fd .AND. ok_f_adj .AND. ok_f_k .AND. &
        ok_4_fd1 .AND. ok_4_fd2 .AND. ok_4_fd3 .AND. ok_4_fd4 .AND. &
-       ok_4_adj .AND. ok_4_k ) THEN
+       ok_4_adj .AND. ok_4_k .AND. ok_4_fdR .AND. ok_4_adjR .AND. &
+       ok_4f_fdR .AND. ok_4f_adjR ) THEN
     WRITE(*,'(5x,a)') 'ALL CHECKS PASSED'
     STOP 0
   ELSE
@@ -509,6 +535,54 @@ CONTAINS
     WRITE(*,'(/7x,"[ADJ] <dy,dy>=",es16.9,"   <x,gx>=",es16.9)') LHS, RHS
     WRITE(*,'(7x,"-> relative difference = ",es11.4,"   ",a)') rel_adj, MERGE('PASS','FAIL',ok)
   END SUBROUTINE check_adj
+
+  ! Adjoint dot product seeded through %Radiance instead of %Stokes. This is
+  ! the transpose of the channel-polarization projection, and nothing else
+  ! exercises it: every other check seeds Stokes components directly, which
+  ! bypasses the projection entirely.
+  SUBROUTINE check_adj_radiance( ok )
+    LOGICAL, INTENT(OUT) :: ok
+    REAL(fp) :: LHS, RHS, dy, rel_adj
+    INTEGER  :: ii, mm
+
+    CALL CRTM_Atmosphere_Zero( Atm_TL ) ; CALL CRTM_Surface_Zero( Sfc_TL )
+    DO mm = 1, N_PROFILES
+      DO ii = 1, N_LAYERS
+        Atm_TL(mm)%Temperature(ii)            = 0.5_fp * SIN( 0.7_fp*REAL(ii,fp) + 1.3_fp*REAL(mm,fp) )
+        Atm_TL(mm)%Cloud(1)%Water_Content(ii) = 0.1_fp * COS( 0.9_fp*REAL(ii,fp) + 0.4_fp*REAL(mm,fp) )
+      END DO
+    END DO
+    Error_Status = CRTM_Tangent_Linear( Atm, Sfc, Atm_TL, Sfc_TL, Geometry, ChannelInfo, &
+                                        RTSolution, RTSolution_TL, Options=Options )
+    IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'TL fail' ; ok=.FALSE. ; RETURN ; END IF
+
+    LHS = ZERO
+    CALL CRTM_RTSolution_Zero( RTSolution_AD )
+    DO mm = 1, N_PROFILES
+      DO l = 1, n_Channels
+        dy = RTSolution_TL(l,mm)%Radiance
+        LHS = LHS + dy*dy
+        RTSolution_AD(l,mm)%Radiance = dy
+      END DO
+    END DO
+
+    CALL CRTM_Atmosphere_Zero( Atm_AD ) ; CALL CRTM_Surface_Zero( Sfc_AD )
+    Error_Status = CRTM_Adjoint( Atm, Sfc, RTSolution_AD, Geometry, ChannelInfo, &
+                                 Atm_AD, Sfc_AD, RTSolution, Options=Options )
+    IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'AD fail' ; ok=.FALSE. ; RETURN ; END IF
+
+    RHS = ZERO
+    DO mm = 1, N_PROFILES
+      DO ii = 1, N_LAYERS
+        RHS = RHS + Atm_TL(mm)%Temperature(ii)            * Atm_AD(mm)%Temperature(ii)
+        RHS = RHS + Atm_TL(mm)%Cloud(1)%Water_Content(ii) * Atm_AD(mm)%Cloud(1)%Water_Content(ii)
+      END DO
+    END DO
+    rel_adj = ABS(LHS-RHS) / MAX(ABS(LHS), TINY(ONE))
+    ok = ( rel_adj < TOL_ADJ )
+    WRITE(*,'(/7x,"[ADJ-R] <dy,dy>=",es16.9,"   <x,gx>=",es16.9)') LHS, RHS
+    WRITE(*,'(7x,"-> relative difference = ",es11.4,"   ",a)') rel_adj, MERGE('PASS','FAIL',ok)
+  END SUBROUTINE check_adj_radiance
 
   ! ----------------------------------------------------------------
   ! Check 3 : K-Matrix vs Adjoint Jacobian (Stokes(1) seed; Temperature

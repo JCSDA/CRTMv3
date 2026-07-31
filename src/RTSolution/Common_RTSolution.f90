@@ -20,7 +20,15 @@ MODULE Common_RTSolution
                                        DEGREES_TO_RADIANS, &
                                        SECANT_DIFFUSIVITY, &
                                        SCATTERING_ALBEDO_THRESHOLD, &
+                                       MAX_N_STOKES, &
                                        RT_SOI
+  USE SensorInfo_Parameters,     ONLY: INTENSITY, SECOND_STOKES_COMPONENT, &
+                                       THIRD_STOKES_COMPONENT, FOURTH_STOKES_COMPONENT, &
+                                       VL_POLARIZATION, HL_POLARIZATION, &
+                                       plus45L_POLARIZATION, minus45L_POLARIZATION, &
+                                       VL_MIXED_POLARIZATION, HL_MIXED_POLARIZATION, &
+                                       RC_POLARIZATION, LC_POLARIZATION, &
+                                       CONST_MIXED_POLARIZATION, PRA_POLARIZATION
   USE Message_Handler,           ONLY: SUCCESS, Display_Message
   USE CRTM_Atmosphere_Define,    ONLY: CRTM_Atmosphere_type
   USE CRTM_Surface_Define,       ONLY: CRTM_Surface_type
@@ -1008,6 +1016,7 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Assign_Common_Input_AD'
     ! Local variables
     REAL(fp) :: w_cos, w_sin
+    REAL(fp) :: w_pol(MAX_N_STOKES), Stokes_AD(MAX_N_STOKES), rad_AD
 
     ! -----
     ! Setup
@@ -1026,6 +1035,7 @@ CONTAINS
     ! ------------------------------------------
     ! Compute the brightness temperature adjoint
     ! ------------------------------------------
+    rad_AD = ZERO
     IF ( SpcCoeff_IsInfraredSensor( SC(SensorIndex) ) .OR. &
          SpcCoeff_IsMicrowaveSensor( SC(SensorIndex) ) ) THEN
       IF( RTV%mth_Azi == 0 ) THEN
@@ -1034,7 +1044,7 @@ CONTAINS
                ChannelIndex                        , & ! Input
                RTSolution%Radiance                 , & ! Input
                RTSolution_AD%Brightness_Temperature, & ! Input
-               Radiance_AD(1)                        ) ! Output
+               rad_AD                                ) ! Output
         RTSolution_AD%Brightness_Temperature = ZERO
       END IF
     END IF
@@ -1042,12 +1052,23 @@ CONTAINS
     ! accumulate Fourier component
     CALL Azimuth_Fourier_Weights( RTV, GeometryInfo, w_cos, w_sin )
     IF( RTV%n_Stokes == 1 ) THEN
-      Radiance_AD(1) = Radiance_AD(1) + RTSolution_AD%Radiance * w_cos
+      Radiance_AD(1) = Radiance_AD(1) + rad_AD + RTSolution_AD%Radiance * w_cos
     ELSE
-      Radiance_AD(1:2) = Radiance_AD(1:2) + RTSolution_AD%Stokes(1:2) * w_cos
+      ! Adjoint of the channel-polarization projection. The forward model builds
+      ! the reported Radiance as a weighted sum over the Stokes vector, so its
+      ! adjoint distributes back onto every component. This is also what makes
+      ! seeding %Radiance, or %Brightness_Temperature, meaningful on the vector
+      ! path: before the projection existed, %Radiance was an output alias for
+      ! Stokes(1) but not an input one, and seeding it did nothing at all.
+      w_pol = Channel_Polarization_Weights( SfcOptics, GeometryInfo, SensorIndex, ChannelIndex )
+      rad_AD = rad_AD + RTSolution_AD%Radiance
+      Stokes_AD(1:RTV%n_Stokes) = RTSolution_AD%Stokes(1:RTV%n_Stokes) + &
+                                  w_pol(1:RTV%n_Stokes) * rad_AD
+
+      Radiance_AD(1:2) = Radiance_AD(1:2) + Stokes_AD(1:2) * w_cos
 
       IF(  RTV%n_Stokes > 2 ) THEN
-       Radiance_AD(3:RTV%n_Stokes) = Radiance_AD(3:RTV%n_Stokes) + RTSolution_AD%Stokes(3:RTV%n_Stokes)*w_sin
+       Radiance_AD(3:RTV%n_Stokes) = Radiance_AD(3:RTV%n_Stokes) + Stokes_AD(3:RTV%n_Stokes)*w_sin
       END IF
     END IF
 
@@ -1176,6 +1197,7 @@ CONTAINS
     INTEGER :: no, na, nt, n1
     REAL(fp) :: Radiance(RTV%n_Stokes)
     REAL(fp) :: w_cos, w_sin
+    REAL(fp) :: w_pol(MAX_N_STOKES)
 
     Error_Status = SUCCESS
     n1 = (SfcOptics%Index_Sat_Ang-1)*RTV%n_Stokes + 1
@@ -1287,7 +1309,13 @@ CONTAINS
        IF(  RTV%n_Stokes > 2 ) THEN
      RTSolution%Stokes(3:RTV%n_Stokes) = RTSolution%Stokes(3:RTV%n_Stokes) + Radiance(3:RTV%n_Stokes)*w_sin
        END IF
-       RTSolution%Radiance = RTSolution%Stokes(1)
+       ! Project the emergent Stokes vector onto what this channel measures.
+       ! Reporting Stokes(1) here handed a vertically polarized channel the
+       ! total intensity I instead of I+Q. Stokes itself is untouched and stays
+       ! the physical (I,Q,U,V); only the scalar Radiance, and the brightness
+       ! temperature computed from it below, are projected.
+       w_pol = Channel_Polarization_Weights( SfcOptics, GeometryInfo, SensorIndex, ChannelIndex )
+       RTSolution%Radiance = DOT_PRODUCT( w_pol(1:RTV%n_Stokes), RTSolution%Stokes(1:RTV%n_Stokes) )
     END IF
 
     ! ------------------------------------------------
@@ -1450,6 +1478,7 @@ CONTAINS
     INTEGER :: Error_Status,n1
     REAL(fp) :: SRadiance_TL(RTV%n_Stokes)
     REAL(fp) :: w_cos, w_sin
+    REAL(fp) :: w_pol(MAX_N_STOKES)
     ! Local Parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Assign_Common_Output_TL'
 
@@ -1480,10 +1509,14 @@ CONTAINS
       RTSolution_TL%Stokes(1) = RTSolution_TL%Radiance
     ELSE
       RTSolution_TL%Stokes(1:2) = RTSolution_TL%Stokes(1:2) + SRadiance_TL(1:2)*w_cos
-      RTSolution_TL%Radiance = RTSolution_TL%Stokes(1)
       IF(  RTV%n_Stokes > 2 ) THEN
       RTSolution_TL%Stokes(3:RTV%n_Stokes) = RTSolution_TL%Stokes(3:RTV%n_Stokes) + SRadiance_TL(3:RTV%n_Stokes)*w_sin
      END IF
+      ! Tangent linear of the channel-polarization projection. The weights are
+      ! geometry and coefficient constants, not functions of the state, so the
+      ! TL carries the same linear form.
+      w_pol = Channel_Polarization_Weights( SfcOptics, GeometryInfo, SensorIndex, ChannelIndex )
+      RTSolution_TL%Radiance = DOT_PRODUCT( w_pol(1:RTV%n_Stokes), RTSolution_TL%Stokes(1:RTV%n_Stokes) )
     END IF
 
 
@@ -1931,6 +1964,133 @@ CONTAINS
 !          the m = 0 U and V sources are zero and so is their solution.
 !
 !--------------------------------------------------------------------------------
+
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       Channel_Polarization_Weights
+!
+! PURPOSE:
+!       Returns the weights w such that the radiance a channel actually
+!       measures is DOT_PRODUCT( w(1:n_Stokes), Stokes(1:n_Stokes) ).
+!
+!       On the scalar path the channel polarization is applied to the surface
+!       emissivity, in the (V,H) basis, and the solver then carries a single
+!       already-projected radiance. On the vector path the solver carries the
+!       whole Stokes vector, so the projection has to be applied to the
+!       emergent radiance instead. Without it a vertically polarized channel
+!       reports I where the instrument measures I+Q.
+!
+!       The weights are derived from the scalar branch of CRTM_SfcOptics rather
+!       than from first principles, so that the two paths agree by construction.
+!       Every case there is a combination a*eV + b*eH (+ c*e3 + d*e4), and with
+!       eV = I+Q and eH = I-Q that is
+!
+!           w = (/ a+b, a-b, c, d /) .
+!
+!       Two caveats inherited deliberately from the scalar branch. It treats
+!       plus45L, minus45L, RC and LC as vertical, which is a placeholder rather
+!       than the true projection; mirroring it keeps the paths consistent, and
+!       fixing it belongs with those polarizations, not here. And for the mixed
+!       cases the scalar path applies the mixing at every quadrature angle
+!       inside the radiative transfer, whereas this applies it once to the
+!       emergent radiance at the sensor angle, which is where a receiver
+!       actually projects. The two coincide when there is one angle, and differ
+!       slightly for a scattering mixed-polarization channel.
+!
+!--------------------------------------------------------------------------------
+
+  FUNCTION Channel_Polarization_Weights( &
+    SfcOptics    , &  ! Input
+    GeometryInfo , &  ! Input
+    SensorIndex  , &  ! Input
+    ChannelIndex ) &  ! Input
+  RESULT( w )
+    ! Arguments
+    TYPE(CRTM_SfcOptics_type)   , INTENT(IN) :: SfcOptics
+    TYPE(CRTM_GeometryInfo_type), INTENT(IN) :: GeometryInfo
+    INTEGER                     , INTENT(IN) :: SensorIndex
+    INTEGER                     , INTENT(IN) :: ChannelIndex
+    ! Function result
+    REAL(fp) :: w(MAX_N_STOKES)
+    ! Local variables
+    INTEGER  :: isat
+    REAL(fp) :: SIN2_Angle, phi, theta_f, ph, pv
+
+    ! Default to reporting the total intensity, which is what the vector path
+    ! did before any projection existed.
+    w    = ZERO
+    w(1) = ONE
+
+    isat = SfcOptics%Index_Sat_Ang
+    IF ( isat < 1 ) RETURN
+
+    SELECT CASE( SC(SensorIndex)%Polarization(ChannelIndex) )
+
+      ! I. Note INTENSITY == UNPOLARIZED == FIRST_STOKES_COMPONENT
+      CASE( INTENSITY )
+        w(1) = ONE
+
+      ! Q
+      CASE( SECOND_STOKES_COMPONENT )
+        w(1) = ZERO ; w(2) = ONE
+
+      ! U
+      CASE( THIRD_STOKES_COMPONENT )
+        w(1) = ZERO ; w(3) = ONE
+
+      ! V
+      CASE( FOURTH_STOKES_COMPONENT )
+        w(1) = ZERO ; w(4) = ONE
+
+      ! eV = I + Q. plus45L, minus45L, RC and LC are treated as vertical by the
+      ! scalar branch; see the caveat above.
+      CASE( VL_POLARIZATION, plus45L_POLARIZATION, minus45L_POLARIZATION, &
+            RC_POLARIZATION, LC_POLARIZATION )
+        w(1) = ONE ; w(2) = ONE
+
+      ! eH = I - Q
+      CASE( HL_POLARIZATION )
+        w(1) = ONE ; w(2) = -ONE
+
+      ! eV*(1-s2) + eH*s2
+      CASE( VL_MIXED_POLARIZATION )
+        SIN2_Angle = (GeometryInfo%Distance_Ratio * &
+                      SIN(DEGREES_TO_RADIANS*SfcOptics%Angle(isat)))**2
+        w(1) = ONE ; w(2) = ONE - TWO*SIN2_Angle
+
+      ! eV*s2 + eH*(1-s2)
+      CASE( HL_MIXED_POLARIZATION )
+        SIN2_Angle = (GeometryInfo%Distance_Ratio * &
+                      SIN(DEGREES_TO_RADIANS*SfcOptics%Angle(isat)))**2
+        w(1) = ONE ; w(2) = TWO*SIN2_Angle - ONE
+
+      ! Constant, scan-independent mixing. PolAngle is a fixed channel angle and
+      ! is deliberately NOT scaled by Distance_Ratio; see the scalar branch.
+      CASE( CONST_MIXED_POLARIZATION )
+        SIN2_Angle = SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex))**2
+        w(1) = ONE ; w(2) = TWO*SIN2_Angle - ONE
+
+      ! Polarization rotation angle varying with scan angle
+      CASE( PRA_POLARIZATION )
+        phi     = GeometryInfo%Sensor_Scan_Radian
+        theta_f = DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)
+        ph = SIN(phi) * ( COS(phi) + SIN(theta_f)*(ONE - COS(phi))  ) &
+             / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(ONE - COS(phi)**2) )
+        pv = - ( SIN(phi)**2 - SIN(theta_f)*(ONE - COS(phi))*COS(phi) ) &
+             / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(ONE - COS(phi)**2) )
+        SIN2_Angle = SIN(ATAN( -pv/ph ))**2
+        w(1) = ONE ; w(2) = TWO*SIN2_Angle - ONE
+
+      ! Anything else keeps the total-intensity default set above.
+      CASE DEFAULT
+        w    = ZERO
+        w(1) = ONE
+
+    END SELECT
+
+  END FUNCTION Channel_Polarization_Weights
+
 
 !--------------------------------------------------------------------------------
 !

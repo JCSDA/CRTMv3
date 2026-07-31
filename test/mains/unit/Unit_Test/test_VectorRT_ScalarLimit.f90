@@ -116,8 +116,9 @@ PROGRAM test_VectorRT_ScalarLimit
 
   CHARACTER(256) :: Version
   INTEGER  :: Error_Status, Allocate_Status, n_Channels, l, m, saved_pol
-  LOGICAL  :: all_ok
+  LOGICAL  :: all_ok, ok_projV, ok_projH
   REAL(fp) :: Iv, Ih, Iexp, Qexp, Igot, Qgot, dI, dQ, worst_I, worst_Q
+  REAL(fp) :: d_projV, d_projH
 
   TYPE(CRTM_ChannelInfo_type) :: ChannelInfo(1)
   TYPE(CRTM_Geometry_type)    :: Geometry(N_PROFILES)
@@ -125,7 +126,7 @@ PROGRAM test_VectorRT_ScalarLimit
   TYPE(CRTM_Surface_type)     :: Sfc(N_PROFILES)
   TYPE(CRTM_Options_type)     :: Options(N_PROFILES)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: RTS(:,:)
-  REAL(fp), ALLOCATABLE :: Iv_ch(:), Ih_ch(:)
+  REAL(fp), ALLOCATABLE :: Iv_ch(:), Ih_ch(:), Rv_ch(:), Rh_ch(:)
 
   CALL CRTM_Version(Version)
   WRITE(*,'(/5x,a)') 'Vector-RT scalar-limit ground truth (ADA, negligible scattering)'
@@ -143,7 +144,7 @@ PROGRAM test_VectorRT_ScalarLimit
   n_Channels = SUM(CRTM_ChannelInfo_n_Channels(ChannelInfo))
 
   ALLOCATE( RTS(n_Channels,N_PROFILES), Iv_ch(n_Channels), Ih_ch(n_Channels), &
-            STAT=Allocate_Status )
+            Rv_ch(n_Channels), Rh_ch(n_Channels), STAT=Allocate_Status )
   IF ( Allocate_Status /= 0 ) THEN; WRITE(*,*) 'Alloc error'; STOP 1; END IF
   CALL CRTM_RTSolution_Create( RTS, N_LAYERS )
   CALL CRTM_Atmosphere_Create( Atm, N_LAYERS, N_ABSORBERS, N_CLOUDS, N_AEROSOLS )
@@ -216,11 +217,32 @@ PROGRAM test_VectorRT_ScalarLimit
     END DO
   END DO
 
+  ! ------------------------------------------------------------------
+  ! Channel-polarization projection: what the instrument actually measures
+  ! ------------------------------------------------------------------
+  ! RTSolution%Radiance on the vector path must be the emergent Stokes vector
+  ! projected onto the channel polarization, not Stokes(1). For a pure V
+  ! channel that is I+Q, which must equal the ordinary scalar run with the same
+  ! polarization; likewise I-Q for pure H. Reporting Stokes(1) instead fails by
+  ! the whole polarization difference, which over ocean is order 20 percent of
+  ! the signal, not a tolerance margin.
+  CALL run_vector_radiance( VL_POLARIZATION, Rv_ch )
+  CALL run_vector_radiance( HL_POLARIZATION, Rh_ch )
+  d_projV = ZERO ; d_projH = ZERO
+  DO l = 1, n_Channels
+    d_projV = MAX( d_projV, ABS(Rv_ch(l) - Iv_ch(l)) )
+    d_projH = MAX( d_projH, ABS(Rh_ch(l) - Ih_ch(l)) )
+  END DO
+  ok_projV = ( d_projV < TOL )
+  ok_projH = ( d_projH < TOL )
+  WRITE(*,'(/5x,a,es12.4,a,l1)') 'vector Radiance vs scalar, V-pol = ', d_projV, '   pass = ', ok_projV
+  WRITE(*,'(5x,a,es12.4,a,l1)')  'vector Radiance vs scalar, H-pol = ', d_projH, '   pass = ', ok_projH
+
   WRITE(*,'(/5x,a,es12.4)') 'worst |I - (Iv+Ih)/2| = ', worst_I
   WRITE(*,'(5x,a,es12.4)')  'worst |Q - (Iv-Ih)/2| = ', worst_Q
   WRITE(*,'(5x,a,es12.4)')  'tolerance             = ', TOL
 
-  all_ok = ( worst_I < TOL ) .AND. ( worst_Q < TOL )
+  all_ok = ( worst_I < TOL ) .AND. ( worst_Q < TOL ) .AND. ok_projV .AND. ok_projH
 
   Error_Status = CRTM_Destroy( ChannelInfo )
 
@@ -259,6 +281,31 @@ CONTAINS
       SC(1)%Polarization(ll) = saved(ll)
     END DO
   END SUBROUTINE run_scalar
+
+  ! Vector run with the channel polarization forced, returning the REPORTED
+  ! scalar Radiance rather than a Stokes component. That is the quantity the
+  ! channel-polarization projection is responsible for.
+  SUBROUTINE run_vector_radiance( pol, out )
+    INTEGER,  INTENT(IN)  :: pol
+    REAL(fp), INTENT(OUT) :: out(:)
+    INTEGER :: ll, mm, saved(n_Channels)
+    DO ll = 1, n_Channels
+      saved(ll) = SC(1)%Polarization(ll)
+      SC(1)%Polarization(ll) = pol
+    END DO
+    DO mm = 1, N_PROFILES
+      Options(mm)%n_Stokes        = 2
+      Options(mm)%RT_Algorithm_Id = RT_ADA
+    END DO
+    Error_Status = CRTM_Forward( Atm, Sfc, Geometry, ChannelInfo, RTS, Options=Options )
+    IF ( Error_Status /= SUCCESS ) THEN
+      CALL Display_Message( PROGRAM_NAME, 'CRTM_Forward (vector) failed', FAILURE ); STOP 1
+    END IF
+    DO ll = 1, n_Channels
+      out(ll) = RTS(ll,1)%Radiance
+      SC(1)%Polarization(ll) = saved(ll)
+    END DO
+  END SUBROUTINE run_vector_radiance
 
   INCLUDE 'Load_ECMWF84_Atm_Data.inc'
 
