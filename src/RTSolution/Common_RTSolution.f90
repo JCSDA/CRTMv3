@@ -1006,6 +1006,8 @@ CONTAINS
     INTEGER :: Error_Status
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Assign_Common_Input_AD'
+    ! Local variables
+    REAL(fp) :: w_cos, w_sin
 
     ! -----
     ! Setup
@@ -1038,16 +1040,14 @@ CONTAINS
     END IF
 
     ! accumulate Fourier component
+    CALL Azimuth_Fourier_Weights( RTV, GeometryInfo, w_cos, w_sin )
     IF( RTV%n_Stokes == 1 ) THEN
-      Radiance_AD(1) = Radiance_AD(1) + RTSolution_AD%Radiance * &
-         COS( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+      Radiance_AD(1) = Radiance_AD(1) + RTSolution_AD%Radiance * w_cos
     ELSE
-      Radiance_AD(1:2) = Radiance_AD(1:2) + RTSolution_AD%Stokes(1:2) * &
-         COS( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+      Radiance_AD(1:2) = Radiance_AD(1:2) + RTSolution_AD%Stokes(1:2) * w_cos
 
       IF(  RTV%n_Stokes > 2 ) THEN
-       Radiance_AD(3:RTV%n_Stokes) = Radiance_AD(3:RTV%n_Stokes) + RTSolution_AD%Stokes(3:RTV%n_Stokes)* &
-       SIN( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+       Radiance_AD(3:RTV%n_Stokes) = Radiance_AD(3:RTV%n_Stokes) + RTSolution_AD%Stokes(3:RTV%n_Stokes)*w_sin
       END IF
     END IF
 
@@ -1175,6 +1175,7 @@ CONTAINS
     ! Local variables
     INTEGER :: no, na, nt, n1
     REAL(fp) :: Radiance(RTV%n_Stokes)
+    REAL(fp) :: w_cos, w_sin
 
     Error_Status = SUCCESS
     n1 = (SfcOptics%Index_Sat_Ang-1)*RTV%n_Stokes + 1
@@ -1271,16 +1272,14 @@ CONTAINS
     END IF
 
     ! accumulate Fourier component
+    CALL Azimuth_Fourier_Weights( RTV, GeometryInfo, w_cos, w_sin )
     IF( RTV%n_Stokes == 1 ) THEN
-     RTSolution%Radiance = RTSolution%Radiance + Radiance(1)*  &
-       COS( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+     RTSolution%Radiance = RTSolution%Radiance + Radiance(1)*w_cos
       RTSolution%Stokes(1) = RTSolution%Radiance
     ELSE
-     RTSolution%Stokes(1:2) = RTSolution%Stokes(1:2) + Radiance(1:2)*  &
-       COS( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+     RTSolution%Stokes(1:2) = RTSolution%Stokes(1:2) + Radiance(1:2)*w_cos
        IF(  RTV%n_Stokes > 2 ) THEN
-     RTSolution%Stokes(3:RTV%n_Stokes) = RTSolution%Stokes(3:RTV%n_Stokes) + Radiance(3:RTV%n_Stokes)*  &
-       SIN( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+     RTSolution%Stokes(3:RTV%n_Stokes) = RTSolution%Stokes(3:RTV%n_Stokes) + Radiance(3:RTV%n_Stokes)*w_sin
        END IF
        RTSolution%Radiance = RTSolution%Stokes(1)
     END IF
@@ -1440,6 +1439,7 @@ CONTAINS
     ! Function Result
     INTEGER :: Error_Status,n1
     REAL(fp) :: SRadiance_TL(RTV%n_Stokes)
+    REAL(fp) :: w_cos, w_sin
     ! Local Parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Assign_Common_Output_TL'
 
@@ -1455,17 +1455,15 @@ CONTAINS
     END IF
 
     ! accumulate Fourier component
+    CALL Azimuth_Fourier_Weights( RTV, GeometryInfo, w_cos, w_sin )
     IF( RTV%n_Stokes == 1 ) THEN
-      RTSolution_TL%Radiance = RTSolution_TL%Radiance + SRadiance_TL(1)*  &
-         COS( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+      RTSolution_TL%Radiance = RTSolution_TL%Radiance + SRadiance_TL(1)*w_cos
       RTSolution_TL%Stokes(1) = RTSolution_TL%Radiance
     ELSE
-      RTSolution_TL%Stokes(1:2) = RTSolution_TL%Stokes(1:2) + SRadiance_TL(1:2)*  &
-         COS( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+      RTSolution_TL%Stokes(1:2) = RTSolution_TL%Stokes(1:2) + SRadiance_TL(1:2)*w_cos
       RTSolution_TL%Radiance = RTSolution_TL%Stokes(1)
       IF(  RTV%n_Stokes > 2 ) THEN
-      RTSolution_TL%Stokes(3:RTV%n_Stokes) = RTSolution_TL%Stokes(3:RTV%n_Stokes) + SRadiance_TL(3:RTV%n_Stokes)* &
-       SIN( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+      RTSolution_TL%Stokes(3:RTV%n_Stokes) = RTSolution_TL%Stokes(3:RTV%n_Stokes) + SRadiance_TL(3:RTV%n_Stokes)*w_sin
      END IF
     END IF
 
@@ -1872,6 +1870,69 @@ CONTAINS
 !##                                                                            ##
 !################################################################################
 !################################################################################
+
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       Azimuth_Fourier_Weights
+!
+! PURPOSE:
+!       Returns the weights with which the mth azimuthal Fourier component of
+!       the emergent radiance is accumulated into RTSolution%Stokes. Shared by
+!       the forward, tangent-linear and adjoint accumulations so the three can
+!       never drift apart.
+!
+!       Stokes components 1 and 2 (I,Q) accumulate with the cosine series and
+!       components 3 and 4 (U,V) with the sine series, which is the standard
+!       convention for a solar problem decomposed about the principal plane.
+!
+!       The m = 0 sine weight is unity, not SIN(0). Two facts make that the
+!       correct choice rather than a special case:
+!
+!       1. CRTM sets n_Azi > 0 only for visible channels
+!          (CRTM_Forward_Module.f90:993 versus :1011), while the coupled
+!          polarimetric surface branch exists only for microwave. Every run in
+!          which n_Stokes > 1 is meaningful therefore performs a single m = 0
+!          solve, whose azimuth dependence is carried by the surface (evaluated
+!          at the actual relative wind azimuth) rather than by a Fourier
+!          series. There is nothing to synthesize, so the weight is unity, as
+!          it already is for components 1 and 2. Taking SIN(0) instead
+!          annihilated U and V on their way out, whatever the solver computed.
+!
+!       2. On the solar and visible path, where the sine series is genuine, the
+!          m = 0 U and V are identically zero, so the weight applied to them is
+!          immaterial. At m = 0 the generalized spherical function T_l^m
+!          (RTV%Pminus) vanishes exactly: Gl2n (CRTM_Utility.f90:1295) drops its
+!          n argument when MF = 0, in both the seed and the recursion, so
+!          Pminus = (Gl2n(-2) - Gl2n(2))/2 is zero. Every phase-matrix block
+!          carrying a Pminus factor vanishes with it, which is all of (1,3),
+!          (3,1), (2,3), (3,2), (2,4) and (4,2), leaving the m = 0 phase matrix
+!          block diagonal in {I,Q} and {U,V}. The infrared and visible surface
+!          fills component 1 only and the thermal source is intensity only, so
+!          the m = 0 U and V sources are zero and so is their solution.
+!
+!--------------------------------------------------------------------------------
+
+  SUBROUTINE Azimuth_Fourier_Weights( RTV, GeometryInfo, w_cos, w_sin )
+    ! Arguments
+    TYPE(RTV_type)              , INTENT(IN)  :: RTV
+    TYPE(CRTM_GeometryInfo_type), INTENT(IN)  :: GeometryInfo
+    REAL(fp)                    , INTENT(OUT) :: w_cos
+    REAL(fp)                    , INTENT(OUT) :: w_sin
+    ! Local variables
+    REAL(fp) :: dphi
+
+    dphi  = RTV%mth_Azi * ( GeometryInfo%Sensor_Azimuth_Radian - &
+                            GeometryInfo%Source_Azimuth_Radian )
+    w_cos = COS( dphi )
+    IF ( RTV%mth_Azi == 0 ) THEN
+      w_sin = ONE
+    ELSE
+      w_sin = SIN( dphi )
+    END IF
+
+  END SUBROUTINE Azimuth_Fourier_Weights
+
 
 ! -------------------------------------------------------------------------------
 !

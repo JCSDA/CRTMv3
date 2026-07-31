@@ -763,6 +763,17 @@ target_link_libraries(test_VectorRT_SurfaceFrame PRIVATE crtm)
 add_test(NAME test_VectorRT_SurfaceFrame
          COMMAND $<TARGET_FILE:test_VectorRT_SurfaceFrame>)
 
+# test_VectorRT_StokesOutput: proves the third/fourth Stokes components survive
+# the azimuthal Fourier accumulation into RTSolution%Stokes, and that the vector
+# solver preserves the meridional Stokes frame end to end. Runs the mirrored
+# scene pair at n_Stokes=4 and asserts Stokes 1,2 even and 3,4 odd in relative
+# azimuth, plus non-degeneracy. Needs the >=6-phase-element CRTM-Exp LUT (same
+# gating as test_VectorRT_TLADK) and FASTEM4 for a polarimetric surface.
+add_executable(test_VectorRT_StokesOutput mains/unit/Unit_Test/test_VectorRT_StokesOutput.f90)
+target_link_libraries(test_VectorRT_StokesOutput PRIVATE crtm)
+add_test(NAME test_VectorRT_StokesOutput
+         COMMAND $<TARGET_FILE:test_VectorRT_StokesOutput>)
+
 # test_VectorRT_TLADK: TL/AD/K correctness for the vector-RT (n_Stokes>1)
 # cloud-scattering path. The n_Stokes>1 ADA branch needs a >=6-phase-element
 # LUT (the CRTM-Exp scheme), so it is unreachable by every other test; this is
