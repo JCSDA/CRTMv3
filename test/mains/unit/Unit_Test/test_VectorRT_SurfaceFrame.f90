@@ -98,7 +98,15 @@ PROGRAM test_VectorRT_SurfaceFrame
   IMPLICIT NONE
 
   CHARACTER(*), PARAMETER :: PROGRAM_NAME = 'test_VectorRT_SurfaceFrame'
-  CHARACTER(*), PARAMETER :: SENSOR       = 'amsua_n19'
+  ! Two sensors: amsua_n19 channel 1 (23.8 GHz) exercises the FASTEM backend,
+  ! mwr_aws channel 16 (325 GHz) is above PARMIO_FREQ_THRESHOLD so the MW-water
+  ! dispatcher routes it to PARMIO instead. PARMIO carries its own independent
+  ! four-Stokes azimuth model, and nothing exercised it: it is the default
+  ! backend at and above 200 GHz, but every sensor that reaches that far sits
+  ! on a water-vapour line, so its polarimetric surface never survives to the
+  ! top of the atmosphere and a full radiative-transfer test cannot see it.
+  ! Checking it here, at the surface interface, is the only way to reach it.
+  CHARACTER(*), PARAMETER :: SENSORS(2)   = (/ 'amsua_n19', 'mwr_aws  ' /)
   CHARACTER(*), PARAMETER :: PATH         = 'testinput/'
   ! FASTEM4 carries the third and fourth Stokes azimuth harmonics; the FASTEM6
   ! default does not (see header). Selection is by scheme name, not filename:
@@ -131,12 +139,13 @@ PROGRAM test_VectorRT_SurfaceFrame
   CHARACTER(256) :: Version
   INTEGER :: Error_Status, n_Channels
   LOGICAL :: ok_pass_U, ok_pass_V, ok_even, ok_odd, ok_signal, all_ok
+  LOGICAL :: ok_fastem, ok_parmio
   REAL(fp) :: eU_raw, eV_raw
   REAL(fp) :: eI_p, eQ_p, eU_p, eV_p
   REAL(fp) :: eI_m, eQ_m, eU_m, eV_m
   REAL(fp) :: d_passU, d_passV, d_even, d_odd
 
-  TYPE(CRTM_ChannelInfo_type)  :: ChannelInfo(1)
+  TYPE(CRTM_ChannelInfo_type)  :: ChannelInfo(2)
   TYPE(CRTM_Surface_type)      :: Sfc
   TYPE(CRTM_GeometryInfo_type) :: gInfo_p, gInfo_m
   TYPE(CRTM_SfcOptics_type)    :: SfcOptics_s, SfcOptics_p, SfcOptics_m
@@ -149,7 +158,7 @@ PROGRAM test_VectorRT_SurfaceFrame
   ! --------------
   ! Initialize
   ! --------------
-  Error_Status = CRTM_Init( (/ SENSOR /), ChannelInfo,             &
+  Error_Status = CRTM_Init( SENSORS, ChannelInfo,                  &
                             File_Path           = PATH,            &
                             MWwaterCoeff_Scheme = MWWATER_SCHEME,  &
                             Quiet               = .TRUE.           )
@@ -157,9 +166,6 @@ PROGRAM test_VectorRT_SurfaceFrame
     CALL Display_Message( PROGRAM_NAME, 'CRTM_Init failed', FAILURE ); STOP 1
   END IF
   n_Channels = SUM(CRTM_ChannelInfo_n_Channels(ChannelInfo))
-  IF ( n_Channels < CHANNEL ) THEN
-    CALL Display_Message( PROGRAM_NAME, 'sensor has too few channels', FAILURE ); STOP 1
-  END IF
 
   ! ------------------------
   ! Ocean surface + geometry
@@ -197,13 +203,48 @@ PROGRAM test_VectorRT_SurfaceFrame
   SfcOptics_p = SfcOptics_s
   SfcOptics_m = SfcOptics_s
 
+  ! Both microwave-water backends. amsua_n19 channel 1 is 23.8 GHz, below the
+  ! PARMIO frequency threshold, so it uses FASTEM. mwr_aws channel 16 is
+  ! 325 GHz, above it, so the dispatcher routes it to PARMIO, which has its own
+  ! independent four-Stokes azimuth model.
+  CALL check_backend( 1,  1, 'FASTEM (amsua_n19 ch1, 23.8 GHz)', ok_fastem )
+  CALL check_backend( 2, 16, 'PARMIO (mwr_aws ch16, 325 GHz)  ', ok_parmio )
+  all_ok = ok_fastem .AND. ok_parmio
+
+  CALL CRTM_SfcOptics_Destroy( SfcOptics_s )
+  CALL CRTM_SfcOptics_Destroy( SfcOptics_p )
+  CALL CRTM_SfcOptics_Destroy( SfcOptics_m )
+  Error_Status = CRTM_Destroy( ChannelInfo )
+
+  IF ( all_ok ) THEN
+    WRITE(*,'(/5x,a)') 'PASS: surface Stokes frame is the view (meridional) plane,'
+    WRITE(*,'(5x,a/)') '      and U, V reach the vector solver input.'
+    STOP 0
+  ELSE
+    IF ( .NOT. ok_signal ) THEN
+      WRITE(*,'(/5x,a)') 'FAIL: the surface third/fourth Stokes components are zero at the'
+      WRITE(*,'(5x,a)')  '      solver input, so no polarimetric surface signal exists.'
+    ELSE
+      WRITE(*,'(/5x,a)') 'FAIL: surface polarimetric frame or handoff is not as asserted.'
+    END IF
+    WRITE(*,'(a)') ''
+    STOP 1
+  END IF
+
+CONTAINS
+
+  SUBROUTINE check_backend( sidx, chan, label, ok )
+    INTEGER,      INTENT(IN)  :: sidx, chan
+    CHARACTER(*), INTENT(IN)  :: label
+    LOGICAL,      INTENT(OUT) :: ok
+
   ! ------------------------------------------------------------------
   ! 1. Raw surface-model U and V, read through the scalar path.
   !    The n_Stokes==1 branch writes component 1 only, so components 3
   !    and 4 still hold exactly what Compute_MW_Water_SfcOptics wrote.
   ! ------------------------------------------------------------------
   SfcOptics_s%n_Stokes = 1
-  Error_Status = CRTM_Compute_SfcOptics( Sfc, gInfo_p, 1, CHANNEL, SfcOptics_s, iVar )
+  Error_Status = CRTM_Compute_SfcOptics( Sfc, gInfo_p, sidx, chan, SfcOptics_s, iVar )
   IF ( Error_Status /= SUCCESS ) THEN
     CALL Display_Message( PROGRAM_NAME, 'Compute_SfcOptics (scalar) failed', FAILURE ); STOP 1
   END IF
@@ -214,7 +255,7 @@ PROGRAM test_VectorRT_SurfaceFrame
   ! 2. Vector path at relative azimuth +phi
   ! ------------------------------------------------
   SfcOptics_p%n_Stokes = 4
-  Error_Status = CRTM_Compute_SfcOptics( Sfc, gInfo_p, 1, CHANNEL, SfcOptics_p, iVar )
+  Error_Status = CRTM_Compute_SfcOptics( Sfc, gInfo_p, sidx, chan, SfcOptics_p, iVar )
   IF ( Error_Status /= SUCCESS ) THEN
     CALL Display_Message( PROGRAM_NAME, 'Compute_SfcOptics (vector +phi) failed', FAILURE ); STOP 1
   END IF
@@ -227,7 +268,7 @@ PROGRAM test_VectorRT_SurfaceFrame
   ! 3. Vector path at relative azimuth -phi
   ! ------------------------------------------------
   SfcOptics_m%n_Stokes = 4
-  Error_Status = CRTM_Compute_SfcOptics( Sfc, gInfo_m, 1, CHANNEL, SfcOptics_m, iVar )
+  Error_Status = CRTM_Compute_SfcOptics( Sfc, gInfo_m, sidx, chan, SfcOptics_m, iVar )
   IF ( Error_Status /= SUCCESS ) THEN
     CALL Display_Message( PROGRAM_NAME, 'Compute_SfcOptics (vector -phi) failed', FAILURE ); STOP 1
   END IF
@@ -254,7 +295,8 @@ PROGRAM test_VectorRT_SurfaceFrame
   ! (d) non-degeneracy
   ok_signal = ( ABS(eU_p) > SIGNAL_FLOOR .AND. ABS(eV_p) > SIGNAL_FLOOR )
 
-  WRITE(*,'(5x,a,i0,a,f6.2,a,f6.2,a)') 'Channel ', CHANNEL, ' at ', ZENITH, &
+  WRITE(*,'(/5x,a)') '--- backend: '//label//' ---'
+    WRITE(*,'(5x,a,i0,a,f6.2,a,f6.2,a)') 'Channel ', chan, ' at ', ZENITH, &
         ' deg, relative azimuth +/-', WIND_DIR-SENSOR_AZI_P, ' deg over ocean'
   WRITE(*,'(5x,a,es14.6,a,es14.6)') 'surface model  U = ', eU_raw, '   V = ', eV_raw
   WRITE(*,'(5x,a,es14.6,a,es14.6)') 'solver input   U = ', eU_p,   '   V = ', eV_p
@@ -268,26 +310,9 @@ PROGRAM test_VectorRT_SurfaceFrame
   WRITE(*,'(5x,a,es12.4,a,l1)')  'U,V odd  in azimuth       = ', d_odd,   '   pass = ', ok_odd
   WRITE(*,'(5x,a,l1)')           'U,V above signal floor      ................  pass = ', ok_signal
 
-  all_ok = ok_pass_U .AND. ok_pass_V .AND. ok_even .AND. ok_odd .AND. ok_signal
+  ok = ok_pass_U .AND. ok_pass_V .AND. ok_even .AND. ok_odd .AND. ok_signal
 
-  CALL CRTM_SfcOptics_Destroy( SfcOptics_s )
-  CALL CRTM_SfcOptics_Destroy( SfcOptics_p )
-  CALL CRTM_SfcOptics_Destroy( SfcOptics_m )
-  Error_Status = CRTM_Destroy( ChannelInfo )
 
-  IF ( all_ok ) THEN
-    WRITE(*,'(/5x,a)') 'PASS: surface Stokes frame is the view (meridional) plane,'
-    WRITE(*,'(5x,a/)') '      and U, V reach the vector solver input.'
-    STOP 0
-  ELSE
-    IF ( .NOT. ok_signal ) THEN
-      WRITE(*,'(/5x,a)') 'FAIL: the surface third/fourth Stokes components are zero at the'
-      WRITE(*,'(5x,a)')  '      solver input, so no polarimetric surface signal exists.'
-    ELSE
-      WRITE(*,'(/5x,a)') 'FAIL: surface polarimetric frame or handoff is not as asserted.'
-    END IF
-    WRITE(*,'(a)') ''
-    STOP 1
-  END IF
+  END SUBROUTINE check_backend
 
 END PROGRAM test_VectorRT_SurfaceFrame

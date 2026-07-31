@@ -220,7 +220,7 @@ PROGRAM test_VectorRT_StokesOutput
         ' channels, n_Stokes = 4, overcast snow over ocean'
   WRITE(*,'(5x,a,f6.2,a)') 'relative wind azimuth +/-', WIND_DIR-SENSOR_AZI_P, ' deg'
   WRITE(*,'(/5x,a)') 'ch      Stokes I        Stokes Q        Stokes U        Stokes V'
-  DO l = 1, MIN(n_Channels,8)
+  DO l = 1, n_Channels
     WRITE(*,'(5x,i2,4(2x,es14.6))') l, RTSolution(l,1)%Stokes(1), RTSolution(l,1)%Stokes(2), &
                                        RTSolution(l,1)%Stokes(3), RTSolution(l,1)%Stokes(4)
   END DO
