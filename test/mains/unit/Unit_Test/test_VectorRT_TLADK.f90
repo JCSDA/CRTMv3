@@ -69,7 +69,7 @@ PROGRAM test_VectorRT_TLADK
   REAL(fp), PARAMETER :: TOL_K   = 1.0e-9_fp      ! K vs AD
 
   ! Perturbation-variable selectors for the FD check
-  INTEGER, PARAMETER :: VAR_WC = 1, VAR_T = 2
+  INTEGER, PARAMETER :: VAR_WC = 1, VAR_T = 2, VAR_WSP = 3, VAR_WDIR = 4
 
   CHARACTER(256) :: Version
   INTEGER :: Error_Status, Allocate_Status, n_Channels
@@ -81,6 +81,7 @@ PROGRAM test_VectorRT_TLADK
   LOGICAL :: ok_4_fd1, ok_4_fd2, ok_4_fd3, ok_4_fd4, ok_4_adj, ok_4_k
   LOGICAL :: ok_4_fdR, ok_4_adjR
   LOGICAL :: ok_4f_fdR, ok_4f_adjR
+  LOGICAL :: ok_4_wdirU, ok_4_wdirV, ok_4_wspQ
 
   TYPE(CRTM_ChannelInfo_type) :: ChannelInfo(1)
   TYPE(CRTM_Geometry_type)    :: Geometry(N_PROFILES)
@@ -264,6 +265,13 @@ PROGRAM test_VectorRT_TLADK
   CALL check_fd ( 2, VAR_WC, ok_4_fd2 )      ! dQ/dWC
   CALL check_fd ( 3, VAR_WC, ok_4_fd3 )      ! dU/dWC
   CALL check_fd ( 4, VAR_WC, ok_4_fd4 )      ! dV/dWC
+  ! The observable polarimetric microwave exists for: the third and fourth
+  ! Stokes components respond to WIND DIRECTION, through the odd harmonics of
+  ! the surface azimuth model. Nothing had ever differentiated the surface on
+  ! the vector path, so this is the Jacobian the whole capability rests on.
+  CALL check_fd ( 3, VAR_WDIR, ok_4_wdirU )  ! dU/d(wind direction)
+  CALL check_fd ( 4, VAR_WDIR, ok_4_wdirV )  ! dV/d(wind direction)
+  CALL check_fd ( 2, VAR_WSP , ok_4_wspQ  )  ! dQ/d(wind speed)
   CALL check_adj( 4, ok_4_adj )              ! four-component dot product
   CALL check_k  ( 4, ok_4_k )
   ! The reported Radiance is now the Stokes vector projected onto the channel
@@ -309,6 +317,9 @@ PROGRAM test_VectorRT_TLADK
   WRITE(*,'(5x,"n_Stokes=4      TL vs FD (dQ/dWC)     : ",a)') MERGE('PASS','FAIL',ok_4_fd2)
   WRITE(*,'(5x,"n_Stokes=4      TL vs FD (dU/dWC)     : ",a)') MERGE('PASS','FAIL',ok_4_fd3)
   WRITE(*,'(5x,"n_Stokes=4      TL vs FD (dV/dWC)     : ",a)') MERGE('PASS','FAIL',ok_4_fd4)
+  WRITE(*,'(5x,"n_Stokes=4      TL vs FD (dU/dWindDir)  : ",a)') MERGE('PASS','FAIL',ok_4_wdirU)
+  WRITE(*,'(5x,"n_Stokes=4      TL vs FD (dV/dWindDir)  : ",a)') MERGE('PASS','FAIL',ok_4_wdirV)
+  WRITE(*,'(5x,"n_Stokes=4      TL vs FD (dQ/dWindSpd)  : ",a)') MERGE('PASS','FAIL',ok_4_wspQ)
   WRITE(*,'(5x,"n_Stokes=4      adjoint dot-product   : ",a)') MERGE('PASS','FAIL',ok_4_adj)
   WRITE(*,'(5x,"n_Stokes=4      K vs AD               : ",a)') MERGE('PASS','FAIL',ok_4_k)
   WRITE(*,'(5x,"n_Stokes=4      TL vs FD (dRadiance)   : ",a)') MERGE('PASS','FAIL',ok_4_fdR)
@@ -322,7 +333,8 @@ PROGRAM test_VectorRT_TLADK
        ok_f_fd .AND. ok_f_adj .AND. ok_f_k .AND. &
        ok_4_fd1 .AND. ok_4_fd2 .AND. ok_4_fd3 .AND. ok_4_fd4 .AND. &
        ok_4_adj .AND. ok_4_k .AND. ok_4_fdR .AND. ok_4_adjR .AND. &
-       ok_4f_fdR .AND. ok_4f_adjR ) THEN
+       ok_4f_fdR .AND. ok_4f_adjR .AND. &
+       ok_4_wdirU .AND. ok_4_wdirV .AND. ok_4_wspQ ) THEN
     WRITE(*,'(5x,a)') 'ALL CHECKS PASSED'
     STOP 0
   ELSE
@@ -386,21 +398,23 @@ CONTAINS
   ! Access the perturbed forward variable (profile 1, layer KP)
   REAL(fp) FUNCTION get_var( var )
     INTEGER, INTENT(IN) :: var
-    IF ( var == VAR_WC ) THEN
-      get_var = Atm(1)%Cloud(1)%Water_Content(KP)
-    ELSE
-      get_var = Atm(1)%Temperature(KP)
-    END IF
+    SELECT CASE ( var )
+      CASE ( VAR_WC )   ; get_var = Atm(1)%Cloud(1)%Water_Content(KP)
+      CASE ( VAR_WSP )  ; get_var = Sfc(1)%Wind_Speed
+      CASE ( VAR_WDIR ) ; get_var = Sfc(1)%Wind_Direction
+      CASE DEFAULT      ; get_var = Atm(1)%Temperature(KP)
+    END SELECT
   END FUNCTION get_var
 
   SUBROUTINE set_var( var, val )
     INTEGER,  INTENT(IN) :: var
     REAL(fp), INTENT(IN) :: val
-    IF ( var == VAR_WC ) THEN
-      Atm(1)%Cloud(1)%Water_Content(KP) = val
-    ELSE
-      Atm(1)%Temperature(KP) = val
-    END IF
+    SELECT CASE ( var )
+      CASE ( VAR_WC )   ; Atm(1)%Cloud(1)%Water_Content(KP) = val
+      CASE ( VAR_WSP )  ; Sfc(1)%Wind_Speed     = val
+      CASE ( VAR_WDIR ) ; Sfc(1)%Wind_Direction = val
+      CASE DEFAULT      ; Atm(1)%Temperature(KP) = val
+    END SELECT
   END SUBROUTINE set_var
 
   ! ----------------------------------------------------------------
@@ -415,7 +429,12 @@ CONTAINS
     REAL(fp) :: fd_all(n_Channels)
     INTEGER  :: ii, kk, ch
 
-    IF ( var == VAR_WC ) THEN ; vname = 'Water_Content' ; ELSE ; vname = 'Temperature' ; END IF
+    SELECT CASE ( var )
+      CASE ( VAR_WC )   ; vname = 'Water_Content'
+      CASE ( VAR_WSP )  ; vname = 'Wind_Speed'
+      CASE ( VAR_WDIR ) ; vname = 'Wind_Direction'
+      CASE DEFAULT      ; vname = 'Temperature'
+    END SELECT
     IF ( ks_out > 0 ) THEN
       WRITE(oname,'("Stokes(",i0,")")') ks_out
     ELSE
@@ -424,11 +443,12 @@ CONTAINS
 
     ! TL with a unit perturbation of the variable
     CALL CRTM_Atmosphere_Zero( Atm_TL ) ; CALL CRTM_Surface_Zero( Sfc_TL )
-    IF ( var == VAR_WC ) THEN
-      Atm_TL(1)%Cloud(1)%Water_Content(KP) = ONE
-    ELSE
-      Atm_TL(1)%Temperature(KP) = ONE
-    END IF
+    SELECT CASE ( var )
+      CASE ( VAR_WC )   ; Atm_TL(1)%Cloud(1)%Water_Content(KP) = ONE
+      CASE ( VAR_WSP )  ; Sfc_TL(1)%Wind_Speed     = ONE
+      CASE ( VAR_WDIR ) ; Sfc_TL(1)%Wind_Direction = ONE
+      CASE DEFAULT      ; Atm_TL(1)%Temperature(KP) = ONE
+    END SELECT
     Error_Status = CRTM_Tangent_Linear( Atm, Sfc, Atm_TL, Sfc_TL, Geometry, ChannelInfo, &
                                         RTSolution, RTSolution_TL, Options=Options )
     IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'TL fail' ; ok=.FALSE. ; RETURN ; END IF
@@ -450,7 +470,11 @@ CONTAINS
     CALL set_var( var, X0 )
     ch = 0 ; best = ZERO
     DO ii = 1, n_Channels
-      IF ( .NOT. RTSolution(ii,1)%Scattering_Flag ) CYCLE
+      ! Surface variables reach every channel; the scattering restriction only
+      ! makes sense for the cloud/temperature probes.
+      IF ( var /= VAR_WSP .AND. var /= VAR_WDIR ) THEN
+        IF ( .NOT. RTSolution(ii,1)%Scattering_Flag ) CYCLE
+      END IF
       IF ( ABS(fd_all(ii)) >= best ) THEN ; best = ABS(fd_all(ii)) ; ch = ii ; END IF
     END DO
     IF ( ch == 0 ) ch = 1
@@ -486,15 +510,25 @@ CONTAINS
   SUBROUTINE check_adj( ns, ok )
     INTEGER, INTENT(IN)  :: ns
     LOGICAL, INTENT(OUT) :: ok
-    REAL(fp) :: LHS, RHS, dy, rel_adj
+    REAL(fp) :: LHS, RHS, dy, rel_adj, RHS_sfc
     INTEGER  :: ii, ks, mm
 
+    ! The surface is perturbed alongside the atmosphere. Without it the identity
+    ! never touches the surface adjoint at all, and a completely broken
+    ! SfcOptics_AD would satisfy it: Sfc_TL was zeroed and Sfc_AD never read.
+    ! Wind direction is the one that matters, because it is the only route to
+    ! the third and fourth Stokes components and so the observable that
+    ! polarimetric microwave exists for.
     CALL CRTM_Atmosphere_Zero( Atm_TL ) ; CALL CRTM_Surface_Zero( Sfc_TL )
     DO mm = 1, N_PROFILES
       DO ii = 1, N_LAYERS
         Atm_TL(mm)%Temperature(ii)            = 0.5_fp * SIN( 0.7_fp*REAL(ii,fp) + 1.3_fp*REAL(mm,fp) )
         Atm_TL(mm)%Cloud(1)%Water_Content(ii) = 0.1_fp * COS( 0.9_fp*REAL(ii,fp) + 0.4_fp*REAL(mm,fp) )
       END DO
+      Sfc_TL(mm)%Wind_Speed        = 0.30_fp + 0.10_fp*REAL(mm,fp)
+      Sfc_TL(mm)%Wind_Direction    = 2.00_fp - 0.50_fp*REAL(mm,fp)
+      Sfc_TL(mm)%Water_Temperature = 0.20_fp + 0.05_fp*REAL(mm,fp)
+      Sfc_TL(mm)%Salinity          = 0.10_fp
     END DO
     Error_Status = CRTM_Tangent_Linear( Atm, Sfc, Atm_TL, Sfc_TL, Geometry, ChannelInfo, &
                                         RTSolution, RTSolution_TL, Options=Options )
@@ -523,16 +557,25 @@ CONTAINS
                                  Atm_AD, Sfc_AD, RTSolution, Options=Options )
     IF ( Error_Status /= SUCCESS ) THEN ; WRITE(*,*) 'AD fail' ; ok=.FALSE. ; RETURN ; END IF
 
-    RHS = ZERO
+    RHS = ZERO ; RHS_sfc = ZERO
     DO mm = 1, N_PROFILES
       DO ii = 1, N_LAYERS
         RHS = RHS + Atm_TL(mm)%Temperature(ii)            * Atm_AD(mm)%Temperature(ii)
         RHS = RHS + Atm_TL(mm)%Cloud(1)%Water_Content(ii) * Atm_AD(mm)%Cloud(1)%Water_Content(ii)
       END DO
+      RHS_sfc = RHS_sfc &
+              + Sfc_TL(mm)%Wind_Speed        * Sfc_AD(mm)%Wind_Speed        &
+              + Sfc_TL(mm)%Wind_Direction    * Sfc_AD(mm)%Wind_Direction    &
+              + Sfc_TL(mm)%Water_Temperature * Sfc_AD(mm)%Water_Temperature &
+              + Sfc_TL(mm)%Salinity          * Sfc_AD(mm)%Salinity
     END DO
+    RHS = RHS + RHS_sfc
     rel_adj = ABS(LHS-RHS) / MAX(ABS(LHS), TINY(ONE))
     ok = ( rel_adj < TOL_ADJ )
     WRITE(*,'(/7x,"[ADJ] <dy,dy>=",es16.9,"   <x,gx>=",es16.9)') LHS, RHS
+    ! Surface share, so it is visible whether the surface adjoint is actually
+    ! being tested or merely swamped by the atmospheric terms.
+    WRITE(*,'(7x,"surface share of <x,gx> = ",f8.4," %")') 100.0_fp*RHS_sfc/MAX(ABS(RHS),TINY(ONE))
     WRITE(*,'(7x,"-> relative difference = ",es11.4,"   ",a)') rel_adj, MERGE('PASS','FAIL',ok)
   END SUBROUTINE check_adj
 
@@ -617,9 +660,15 @@ CONTAINS
 
     maxdiff = MAX( MAXVAL( ABS( Atm_K(l0,m0)%Temperature - Atm_AD(m0)%Temperature ) ),  &
                    MAXVAL( ABS( Atm_K(l0,m0)%Cloud(1)%Water_Content                     &
-                                - Atm_AD(m0)%Cloud(1)%Water_Content ) ) )
+                                - Atm_AD(m0)%Cloud(1)%Water_Content ) ),                &
+                   ABS( Sfc_K(l0,m0)%Wind_Speed        - Sfc_AD(m0)%Wind_Speed ),       &
+                   ABS( Sfc_K(l0,m0)%Wind_Direction    - Sfc_AD(m0)%Wind_Direction ),   &
+                   ABS( Sfc_K(l0,m0)%Water_Temperature - Sfc_AD(m0)%Water_Temperature ),&
+                   ABS( Sfc_K(l0,m0)%Salinity          - Sfc_AD(m0)%Salinity ) )
     scal    = MAX( MAXVAL(ABS(Atm_K(l0,m0)%Temperature)), &
-                   MAXVAL(ABS(Atm_K(l0,m0)%Cloud(1)%Water_Content)), TINY(ONE) )
+                   MAXVAL(ABS(Atm_K(l0,m0)%Cloud(1)%Water_Content)), &
+                   ABS(Sfc_K(l0,m0)%Wind_Speed), ABS(Sfc_K(l0,m0)%Wind_Direction), &
+                   ABS(Sfc_K(l0,m0)%Water_Temperature), TINY(ONE) )
     rel_k   = maxdiff / scal
     ok = ( rel_k < TOL_K )
     WRITE(*,'(/7x,"[K] K vs AD (channel ",i0,"):  max|K-AD|/max|K| = ",es11.4,"   ",a)') &
