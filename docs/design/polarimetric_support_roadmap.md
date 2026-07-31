@@ -69,6 +69,40 @@ on the scalar path and asserts the vector path returns their half-sum and
 half-difference, together with the reflectivity identities. It requires no cloud
 lookup table and no reference radiances.
 
+**The surface Stokes frame is the meridional frame, and no rotation is
+required.** Resolved 2026-07-31; this was the largest open question and the
+answer is negative, so no code change follows from it. Three independent lines
+of evidence agree.
+
+1. The solver's Stokes basis is the per-direction meridional frame. The
+   polarized phase matrix is assembled from the generalized spherical functions
+   `Pplus` (R_l^m) and `Pminus` (T_l^m) at `Common_RTSolution.f90:2017` and
+   `:2019`, which is the standard meridional-frame azimuthal Fourier expansion
+   with the scattering-plane rotations folded in analytically. Consistent with
+   that, a whole-tree search of `src/RTSolution` and `src/SfcOptics` finds no
+   rotation matrix of any kind.
+2. The surface models refer their vector to the plane of incidence, which for a
+   plane-parallel atmosphere is the same plane: both are spanned by the local
+   zenith and the propagation direction, so the angle between them is zero by
+   construction at every azimuth. The code shows this directly in the parity of
+   the azimuthal model. `Azimuth_Emissivity_Module.f90:139-142` builds the
+   vertical and horizontal components from `cos(m*phi)` and the third and
+   fourth from `sin(m*phi)`, where `phi` is the relative azimuth; PARMIO does
+   the same at `PARMIO_Azimuth_Module.f90:79-91`. Even V and H with odd U and V
+   is exactly the signature of a reference frame lying in the view plane, since
+   reflecting the scene through that plane maps `phi` to `-phi` and must leave
+   I and Q alone while flipping the handedness of U and V.
+3. Measured, not argued. `test_VectorRT_SurfaceFrame` mirrors an ocean scene
+   through the view plane at 45 degrees and recovers I and Q bit-identical and
+   U and V exactly negated. `test_VectorRT_StokesOutput` repeats the
+   measurement through the full scattering solver at `n_Stokes = 4` and gets I
+   and Q bit-identical with U and V odd to 3.4e-13 against an intensity scale
+   of 2.2e-1.
+
+The residual risk in this area is not the frame but the *sign* convention of
+the third Stokes component between FASTEM and the solver. That is untestable
+against CRTM alone and belongs to Phase 0 external ground truth.
+
 **Nothing at `n_Stokes = 1` is affected.** All executable lines of the fix are
 inside the `ELSE` of `IF (SfcOptics%n_Stokes == 1)`. `CRTM_Options_type%n_Stokes`
 and `RTV_type%n_Stokes` both default to 1, the propagation is guarded by
@@ -83,12 +117,17 @@ through those entry modules. The second caller,
 
 ## Known defects and gaps
 
-Each of these was verified on 2026-07-30. None is speculative.
+Each of these was verified on 2026-07-30, and the 2a to 2d entries on
+2026-07-31. None is speculative.
 
 | # | Gap | Evidence |
 |---|-----|----------|
 | 1 | Reported radiance is total intensity, not the channel's polarized measurement. There is no projection of the Stokes vector onto the channel polarization. | `src/RTSolution/Common_RTSolution.f90:1279`, `RTSolution%Radiance = RTSolution%Stokes(1)` inside the `n_Stokes > 1` block |
-| 2 | U and V are computed by the surface model and then discarded. FastemX receives the full four-component slice, but the coverage aggregation copies only components 1 and 2 into the local array, which is zero-initialised. The solver always sees U = V = 0 at the surface. | Full slice passed at `CRTM_MW_Water_SfcOptics.f90:276`; aggregation at `CRTM_SfcOptics.f90:546, 575, 604, 633`; zero-init at `:509` |
+| 2 | ~~U and V are computed by the surface model and then discarded by the coverage aggregation.~~ **FIXED 2026-07-31.** Corrected only at the microwave *water* sites in the forward, tangent-linear and adjoint routines, not at twelve sites as originally prescribed. The land, snow and ice models write components 1 and 2 and never define 3 and 4, and nothing zeroes `SfcOptics%Emissivity` between calls, so extending their aggregation would have read stale values from a previous water channel. Water is the only microwave surface with a polarimetric model, and the accumulator is already zeroed, so leaving the other three at `1:2` is also the physically correct contribution. | Aggregation now `1:nS` with `nS = MAX(2,nL)` at `CRTM_SfcOptics.f90` water blocks; land/snow/ice fill only 1:2, e.g. `CRTM_MW_Land_SfcOptics.f90:257`; no entry zeroing in any of the four models. Pinned by `test_VectorRT_SurfaceFrame` |
+| 2a | U and V were then annihilated a second time, on output. `RTSolution%Stokes(3:4)` accumulated with a weight of `SIN(mth_Azi*dphi)`, and `n_Azi` is set above zero only for visible channels while the polarimetric surface branch exists only for microwave, so `mth_Azi` is always 0 on every path where `n_Stokes > 1` is meaningful and the weight was always `SIN(0)`. **FIXED 2026-07-31** in the forward, tangent-linear and adjoint accumulations. | `Common_RTSolution.f90` accumulation blocks; `n_Azi` at `CRTM_Forward_Module.f90:993` versus `:1011`. Pinned by `test_VectorRT_StokesOutput` |
+| 2b | The shipped default microwave water model has no third or fourth Stokes azimuth model at all. `CRTM_Init` defaults to FASTEM6, whose azimuth routine parameterises the vertical and horizontal components only and returns components 3 and 4 as identically zero. A polarimetric run has a real surface U and V only on FASTEM4/5 or PARMIO. Not a defect in itself, but it means gap 2 was invisible in the default configuration, and it constrains what a polarimetric user can actually run. | `CRTM_LifeCycle.f90:802`; `Azimuth_Emissivity_F6_Module.f90:187-188` versus `Azimuth_Emissivity_Module.f90:139-142` and `PARMIO_Azimuth_Module.f90:79-91` |
+| 2c | `MWwaterCoeff_File` does not select the microwave water model. The file-based load is commented out and selection is by the `MWwaterCoeff_Scheme` string; the filename argument survives only in a diagnostic message. Passing `MWwaterCoeff_File='FASTEM4...'` silently leaves FASTEM6 loaded. | `CRTM_LifeCycle.f90:1168-1179` commented, `:1182-1188` live, `:848` |
+| 2d | On the **scalar** path, a channel declared `THIRD_STOKES_COMPONENT` or `FOURTH_STOKES_COMPONENT` receives an identically zero surface emissivity. Those cases read `Emissivity(:,3)` and `(:,4)` from the same accumulator, which at `nL = 1` still stops at component 2. Latent only: no sensor in the shipped test suite uses polarization 3 or 4 (a scan of all `testinput/*.SpcCoeff.nc` finds only 1, 5, 6, 9, 10, 11, 13, 14). Left unfixed deliberately, being a scalar-path behaviour change outside this work's scope; the one-line fix is to raise the water aggregation floor from `MAX(2,nL)` to 4. | `CRTM_SfcOptics.f90:683-691` |
 | 3 | The fractional-cloud K seed is defective for vector runs. Inside a `DO ks = 1, n_Stokes` loop it assigns to a scalar with no `ks` index, so each iteration overwrites the last and only the final Stokes component survives. The correct line is present, commented out, directly above. | `src/CRTM_K_Matrix_Module.f90:1335` (loop), `:1339` (defect), `:1336` (commented correct form) |
 | 4 | Selecting SOI with `n_Stokes > 1` silently yields ADA. The vector branch precedes the algorithm dispatch entirely, so `RT_Algorithm_Id` is never consulted. | `src/RTSolution/CRTM_RTSolution.f90:248` versus the `ELSE IF (RTV%Scattering_RT)` dispatch that follows |
 | 5 | Aerosols contribute no polarization. The shipped `AerosolCoeff.nc` carries `n_Phase_Elements = 1`, and the scatter routine fills `MIN(n_Phase_Elements, AeroC%N_PHASE_ELEMENTS)`. A vector run therefore mixes polarized cloud scattering with unpolarized aerosol scattering. | Coefficient file dimension; `src/AtmScatter/CRTM_AerosolScatter.f90:316` |
@@ -100,10 +139,12 @@ Each of these was verified on 2026-07-30. None is speculative.
 
 Unknown, and to be resolved in Phase 1 rather than assumed.
 
-- **Frame convention at the surface.** Whether the surface V/H frame coincides
-  with the radiative transfer meridional plane at non-zero azimuth. If it does
-  not, a rotation is required, and its absence is invisible at nadir, which is
-  where most casual testing happens.
+- ~~**Frame convention at the surface.**~~ **RESOLVED 2026-07-31**, negatively:
+  the two frames coincide identically at every azimuth and no rotation is
+  required. Promoted to "Established facts" above, with the evidence and the
+  two tests that measure it. The one thing this does *not* settle is the sign
+  convention of the third Stokes component between FASTEM and the solver, which
+  cannot be decided against CRTM alone and moves to Phase 0.
 - **Phase matrix ordering.** `CloudCoeff_Exp_Define.f90:12` documents six phase
   elements as "alpha1..alpha4, beta1, beta2", the Hovenier and Mishchenko
   expansion convention for randomly oriented particles with a plane of symmetry.
@@ -137,22 +178,38 @@ solution for at least one clear-sky and one single-scatter configuration.
 Document, then verify against code, the convention at every interface: surface
 model output, solver state vector, phase matrix expansion ordering and reference
 frame, azimuthal Fourier assignment, and the surface-to-meridional frame
-relationship. Resolve all four open questions above.
+relationship.
+
+**Partly done, 2026-07-31.** The surface-to-meridional frame relationship is
+resolved and pinned by two tests, and the azimuthal Fourier assignment is
+resolved as far as the accumulation weights go (gap 2a, including the proof
+that the m = 0 phase matrix is block diagonal in {I,Q} and {U,V} because
+`Pminus` vanishes there). Phase matrix expansion ordering and the reflectivity
+structure remain open.
 
 *Exit:* a design note plus assertion tests pinning each interface independently,
 so that a later change violating one fails immediately rather than silently.
 
 ### Phase 2. Complete the surface
 
-Carry U and V through the coverage aggregation. Note that the naive change from
-`1:2` to `1:nL` breaks the scalar path, which requires both V and H even at
-`nL = 1` for its polarization mixing; the correct form is `1:MAX(2,nL)`, applied
-at twelve sites across the forward, tangent-linear and adjoint routines. Add the
-frame rotation if Phase 1 shows one is needed, and resolve the reflectivity
-structure question.
+**Largely done, 2026-07-31.** U and V now travel from the surface model to the
+solver and out to `RTSolution%Stokes` (gaps 2 and 2a). No frame rotation is
+needed, per the Phase 1 resolution. The correction is `1:MAX(2,nL)` at the
+microwave *water* aggregation sites only, in the forward, tangent-linear and
+adjoint routines; see gap 2 for why the other three surface types must stay at
+`1:2` rather than the twelve sites originally prescribed.
 
-*Exit:* `test_VectorRT_SurfaceBasis` extended to four Stokes components, plus a
-test proving FastemX's U and V survive to the solver input.
+Still open in this phase: the reflectivity structure question (whether a
+polarimetric surface needs off-diagonal angle coupling), and the fact that the
+water reflectivity's third and fourth components are hard-zeroed by FASTEM
+itself (`CRTM_FastemX.f90:469`), so U and V are emitted but never reflected.
+
+*Exit:* met for the pass-through. `test_VectorRT_SurfaceFrame` proves the
+surface model's U and V reach the solver input; `test_VectorRT_StokesOutput`
+proves they reach the reported Stokes vector and that the solver preserves the
+frame. Both fail against the unfixed code, the first at exactly zero against a
+surface U of 1.2e-2 in emissivity units, the second at exactly zero on all 19
+channels.
 
 ### Phase 3. Fix the output side
 
