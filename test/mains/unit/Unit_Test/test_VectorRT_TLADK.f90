@@ -54,6 +54,9 @@ PROGRAM test_VectorRT_TLADK
   INTEGER,  PARAMETER :: KP  = 82                 ! perturbed layer (mid-band)
   REAL(fp), PARAMETER :: REFF_S = 500.0_fp        ! snow effective radius (microns)
   REAL(fp), PARAMETER :: WC_S   = 1.0_fp          ! kg/m^2 per layer
+  ! Small enough that every layer's single-scatter albedo falls below CRTM's
+  ! scattering threshold, so the solve leaves ADA for the emission path.
+  REAL(fp), PARAMETER :: WC_CLEAR = 1.0e-8_fp
 
   ! The adjoint dot-product tolerance is deliberately tight (the correct code
   ! achieves ~1e-15): a one-sided TL/AD inconsistency in the phase-normalization
@@ -70,6 +73,7 @@ PROGRAM test_VectorRT_TLADK
   INTEGER :: l, m
   LOGICAL :: ok_s1_fd, ok_s1_adj, ok_s1_k
   LOGICAL :: ok_v_fd_wc1, ok_v_fd_wc2, ok_v_fd_t1, ok_v_fd_t2, ok_v_adj, ok_v_k
+  LOGICAL :: ok_c_fd_t1, ok_c_fd_t2, ok_c_adj, ok_c_k
 
   TYPE(CRTM_ChannelInfo_type) :: ChannelInfo(1)
   TYPE(CRTM_Geometry_type)    :: Geometry(N_PROFILES)
@@ -192,6 +196,25 @@ PROGRAM test_VectorRT_TLADK
   CALL check_adj( 2, ok_v_adj )              ! full-Stokes dot product
   CALL check_k  ( 2, ok_v_k )
 
+  ! --------------------------------------------------------------------------
+  ! Vector RT with scattering switched OFF (n_Stokes = 2). Dropping the water
+  ! content below CRTM's scattering trigger routes the solve to CRTM_Emission
+  ! plus CRTM_Emission_Stokes instead of ADA, which is a different code path
+  ! with its own tangent-linear and adjoint. Without this block that path has
+  ! no Jacobian coverage at all, and it is the path a clear-sky polarimetric
+  ! run takes, which is the main use for ocean wind-vector work.
+  ! Water content is the wrong control variable here (there is no cloud left to
+  ! perturb), so the checks drive temperature, which reaches Stokes Q through
+  ! both the surface Planck term and the reflected downwelling.
+  ! --------------------------------------------------------------------------
+  CALL set_wc( WC_CLEAR )
+  WRITE(*,'(/5x,"=========== n_Stokes = 2 vector RT (no scattering, Emission) ===========")')
+  CALL check_fd ( 1, VAR_T, ok_c_fd_t1 )     ! dI/dT
+  CALL check_fd ( 2, VAR_T, ok_c_fd_t2 )     ! dQ/dT (polarized surface chain)
+  CALL check_adj( 2, ok_c_adj )              ! full-Stokes dot product
+  CALL check_k  ( 2, ok_c_k )
+  CALL set_wc( WC_S )                        ! restore, in case more is added below
+
   Error_Status = CRTM_Destroy( ChannelInfo )
 
   WRITE(*,'(/5x,a)') '====================================================='
@@ -204,9 +227,14 @@ PROGRAM test_VectorRT_TLADK
   WRITE(*,'(5x,"n_Stokes=2      TL vs FD (dQ/dT)      : ",a)') MERGE('PASS','FAIL',ok_v_fd_t2)
   WRITE(*,'(5x,"n_Stokes=2      adjoint dot-product   : ",a)') MERGE('PASS','FAIL',ok_v_adj)
   WRITE(*,'(5x,"n_Stokes=2      K vs AD               : ",a)') MERGE('PASS','FAIL',ok_v_k)
+  WRITE(*,'(5x,"n_Stokes=2 clear TL vs FD (dI/dT)     : ",a)') MERGE('PASS','FAIL',ok_c_fd_t1)
+  WRITE(*,'(5x,"n_Stokes=2 clear TL vs FD (dQ/dT)     : ",a)') MERGE('PASS','FAIL',ok_c_fd_t2)
+  WRITE(*,'(5x,"n_Stokes=2 clear adjoint dot-product  : ",a)') MERGE('PASS','FAIL',ok_c_adj)
+  WRITE(*,'(5x,"n_Stokes=2 clear K vs AD              : ",a)') MERGE('PASS','FAIL',ok_c_k)
   IF ( ok_s1_fd .AND. ok_s1_adj .AND. ok_s1_k .AND. &
        ok_v_fd_wc1 .AND. ok_v_fd_wc2 .AND. ok_v_fd_t1 .AND. ok_v_fd_t2 .AND. &
-       ok_v_adj .AND. ok_v_k ) THEN
+       ok_v_adj .AND. ok_v_k .AND. &
+       ok_c_fd_t1 .AND. ok_c_fd_t2 .AND. ok_c_adj .AND. ok_c_k ) THEN
     WRITE(*,'(5x,a)') 'ALL CHECKS PASSED'
     STOP 0
   ELSE
@@ -224,6 +252,16 @@ CONTAINS
       Options(mm)%RT_Algorithm_Id = RT_ADA
     END DO
   END SUBROUTINE set_options
+
+  ! Reset the cloud water content on every profile, preserving the per-profile
+  ! spread the scattering blocks rely on.
+  SUBROUTINE set_wc( wc )
+    REAL(fp), INTENT(IN) :: wc
+    INTEGER :: mm
+    DO mm = 1, N_PROFILES
+      Atm(mm)%Cloud(1)%Water_Content(KC1:KC2) = wc * (ONE + 0.2_fp*REAL(mm-1,fp))
+    END DO
+  END SUBROUTINE set_wc
 
   ! Selected output: Stokes component ks (n_Stokes>1) or the scalar Radiance (ks=0)
   REAL(fp) FUNCTION get_out( rts, ks )

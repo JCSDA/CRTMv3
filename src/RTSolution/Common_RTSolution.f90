@@ -1246,6 +1246,12 @@ CONTAINS
       ELSE
         Radiance(1) = RTV%e_Level_Rad_UP(0)
       END IF
+      ! Polarized components from the non-scattering vector completion
+      ! (CRTM_Emission_Stokes). This also guarantees Radiance(2:n_Stokes) is
+      ! defined: the scalar solver fills slot 1 only, so the accumulation below
+      ! was previously reading an automatic array before it was ever assigned.
+      IF ( RTV%n_Stokes > 1 ) &
+        Radiance(2:RTV%n_Stokes) = RTV%e_Rad_UP_Stokes(2:RTV%n_Stokes)
 
       ! Other emission-only output
       RTSolution%Up_Radiance             = RTV%Up_Radiance
@@ -1423,7 +1429,8 @@ CONTAINS
     SensorIndex            , & ! Input
     ChannelIndex           , & ! Input
     RTV                    , & ! Input
-    RTSolution_TL          ) & ! Output
+    RTSolution_TL          , & ! Output
+    Stokes_TL              ) & ! Optional input
   RESULT( Error_Status )
     ! Arguments
     TYPE(CRTM_SfcOptics_type)   , INTENT(IN)     :: SfcOptics
@@ -1435,6 +1442,9 @@ CONTAINS
     INTEGER                     , INTENT(IN)     :: ChannelIndex
     TYPE(RTV_type)              , INTENT(IN)     :: RTV
     TYPE(CRTM_RTSolution_type)  , INTENT(IN OUT) :: RTSolution_TL
+    ! Tangent linear of the polarized components on the non-scattering path.
+    ! Optional so callers that never take that path are unaffected.
+    REAL(fp)          , OPTIONAL, INTENT(IN)     :: Stokes_TL(:)
 
     ! Function Result
     INTEGER :: Error_Status,n1
@@ -1452,6 +1462,15 @@ CONTAINS
     ! Emission specific assignments
     ELSE
         SRadiance_TL(1) = Radiance_TL
+        ! Polarized components from the non-scattering vector completion. Also
+        ! guarantees SRadiance_TL(2:) is defined rather than read unassigned.
+        IF ( RTV%n_Stokes > 1 ) THEN
+          IF ( PRESENT(Stokes_TL) ) THEN
+            SRadiance_TL(2:RTV%n_Stokes) = Stokes_TL(2:RTV%n_Stokes)
+          ELSE
+            SRadiance_TL(2:RTV%n_Stokes) = ZERO
+          END IF
+        END IF
     END IF
 
     ! accumulate Fourier component

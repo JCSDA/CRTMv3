@@ -32,6 +32,10 @@ MODULE Emission_Module
   PUBLIC CRTM_Emission
   PUBLIC CRTM_Emission_TL
   PUBLIC CRTM_Emission_AD
+  ! Polarized (Stokes 2..n) completion of the non-scattering solution
+  PUBLIC CRTM_Emission_Stokes
+  PUBLIC CRTM_Emission_Stokes_TL
+  PUBLIC CRTM_Emission_Stokes_AD
   
   ! -----------------
   ! Module parameters
@@ -436,6 +440,243 @@ CONTAINS
       down_rad_AD = ZERO 
 
       RETURN
-      END SUBROUTINE CRTM_Emission_AD 
-  
-END MODULE Emission_Module  
+      END SUBROUTINE CRTM_Emission_AD
+
+
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       CRTM_Emission_Stokes
+!
+! PURPOSE:
+!       Completes the non-scattering solution for the polarized Stokes
+!       components 2..n_Stokes. CRTM_Emission itself is a scalar solver: it
+!       returns the total intensity and nothing else, so on the n_Stokes > 1
+!       path a clear-sky run came back with Q = U = V = 0 however polarized the
+!       surface was.
+!
+!       In the absence of scattering the atmosphere is polarization neutral. It
+!       emits unpolarized radiation, so the thermal source enters Stokes I
+!       alone, and it transmits every Stokes component with the same layer
+!       transmittance (CRTM replicates the per-angle cosine across the Stokes
+!       slots of that angle). The only polarized object in the problem is the
+!       surface, and the downwelling it reflects is unpolarized. So for k >= 2
+!       the whole solution is a boundary value transported upward with no
+!       source of its own,
+!
+!           S_k(surface) = e_k * B_surface  +  R_k1 * D_surface
+!           S_k(level-1) = S_k(level) * layer_transmittance
+!
+!       where D_surface is the (unpolarized) downwelling already computed by
+!       CRTM_Emission and R_k1 is the first column of the surface reflection
+!       matrix, which is what an unpolarized incident vector selects.
+!
+!       This is exactly the statement test_VectorRT_ScalarLimit checks against
+!       two scalar runs: I = (Iv+Ih)/2 and Q = (Iv-Ih)/2.
+!
+! CALLING SEQUENCE:
+!       CALL CRTM_Emission_Stokes( n_Layers, n_Angles, n_Stokes, &
+!                                  Planck_Surface, emissivity, reflectivity, RTV )
+!
+! COMMENTS:
+!       Must be called after CRTM_Emission, which populates the RTV downwelling
+!       and layer transmittances this reads.
+!
+!       emissivity and reflectivity are the FLATTENED (angle,Stokes) arrays
+!       built by Reshape_Surf_Opt, so element (i-1)*n_Stokes+m is angle i,
+!       Stokes m. The microwave non-scattering path is always specular, which
+!       fixes n_Angles at 1 (Common_RTSolution.f90:334); the routine asserts
+!       that rather than assuming it silently, because with more than one angle
+!       the sensor angle is no longer the first block.
+!
+!--------------------------------------------------------------------------------
+
+  SUBROUTINE CRTM_Emission_Stokes( &
+    n_Layers,        &  ! Input, number of atmospheric layers
+    n_Angles,        &  ! Input, number of discrete zenith angles
+    n_Stokes,        &  ! Input, number of Stokes components
+    Planck_Surface,  &  ! Input, surface radiance
+    emissivity,      &  ! Input, flattened surface emissivity
+    reflectivity,    &  ! Input, flattened surface reflectivity
+    RTV              )  ! In/Output, internal variables
+    ! Arguments
+    INTEGER,                  INTENT(IN)     :: n_Layers, n_Angles, n_Stokes
+    REAL(fp),                 INTENT(IN)     :: Planck_Surface
+    REAL(fp), DIMENSION(:),   INTENT(IN)     :: emissivity
+    REAL(fp), DIMENSION(:,:), INTENT(IN)     :: reflectivity
+    TYPE(RTV_type),           INTENT(IN OUT) :: RTV
+    ! Local variables
+    INTEGER  :: k, ks, out_lev
+    REAL(fp) :: rad, down_sfc
+
+    RTV%e_Rad_UP_Stokes = ZERO
+    IF ( n_Stokes < 2 .OR. n_Angles /= 1 ) RETURN
+
+    down_sfc = RTV%e_Level_Rad_DOWN(n_Layers)
+    out_lev  = 0
+    IF ( RTV%aircraft%rt ) out_lev = RTV%aircraft%idx
+
+    DO ks = 2, n_Stokes
+      ! Surface boundary: polarized emission plus the polarized part of the
+      ! reflected, unpolarized, downwelling.
+      rad = ( emissivity(ks) * Planck_Surface ) + ( reflectivity(ks,1) * down_sfc )
+      ! Source-free, polarization-neutral transport to the observer level.
+      DO k = n_Layers, out_lev+1, -1
+        rad = rad * RTV%e_Layer_Trans_UP(k)
+      END DO
+      RTV%e_Rad_UP_Stokes(ks) = rad
+    END DO
+
+  END SUBROUTINE CRTM_Emission_Stokes
+
+
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       CRTM_Emission_Stokes_TL
+!
+! PURPOSE:
+!       Tangent-linear of CRTM_Emission_Stokes. down_rad_TL is the tangent
+!       linear of the surface downwelling radiance, which CRTM_Emission_TL
+!       already returns through its down_rad_TL_out argument.
+!
+!--------------------------------------------------------------------------------
+
+  SUBROUTINE CRTM_Emission_Stokes_TL( &
+    n_Layers,           &  ! Input, number of atmospheric layers
+    n_Angles,           &  ! Input, number of discrete zenith angles
+    n_Stokes,           &  ! Input, number of Stokes components
+    u,                  &  ! Input, cosine of the sensor zenith angle
+    Planck_Surface,     &  ! Input, FWD surface radiance
+    emissivity,         &  ! Input, FWD flattened surface emissivity
+    reflectivity,       &  ! Input, FWD flattened surface reflectivity
+    RTV,                &  ! Input, internal variables
+    T_OD_TL,            &  ! Input, TL layer optical depth
+    Planck_Surface_TL,  &  ! Input, TL surface radiance
+    emissivity_TL,      &  ! Input, TL flattened surface emissivity
+    reflectivity_TL,    &  ! Input, TL flattened surface reflectivity
+    down_rad_TL,        &  ! Input, TL surface downwelling radiance
+    Stokes_TL           )  ! Output, TL polarized components
+    ! Arguments
+    INTEGER,                  INTENT(IN)  :: n_Layers, n_Angles, n_Stokes
+    REAL(fp),                 INTENT(IN)  :: u
+    REAL(fp),                 INTENT(IN)  :: Planck_Surface
+    REAL(fp), DIMENSION(:),   INTENT(IN)  :: emissivity
+    REAL(fp), DIMENSION(:,:), INTENT(IN)  :: reflectivity
+    TYPE(RTV_type),           INTENT(IN)  :: RTV
+    REAL(fp), DIMENSION(:),   INTENT(IN)  :: T_OD_TL
+    REAL(fp),                 INTENT(IN)  :: Planck_Surface_TL
+    REAL(fp), DIMENSION(:),   INTENT(IN)  :: emissivity_TL
+    REAL(fp), DIMENSION(:,:), INTENT(IN)  :: reflectivity_TL
+    REAL(fp),                 INTENT(IN)  :: down_rad_TL
+    REAL(fp), DIMENSION(:),   INTENT(OUT) :: Stokes_TL
+    ! Local variables
+    INTEGER  :: k, ks, out_lev
+    REAL(fp) :: rad, rad_TL, down_sfc, trans_TL
+
+    Stokes_TL = ZERO
+    IF ( n_Stokes < 2 .OR. n_Angles /= 1 ) RETURN
+
+    down_sfc = RTV%e_Level_Rad_DOWN(n_Layers)
+    out_lev  = 0
+    IF ( RTV%aircraft%rt ) out_lev = RTV%aircraft%idx
+
+    DO ks = 2, n_Stokes
+      rad    = ( emissivity(ks) * Planck_Surface ) + ( reflectivity(ks,1) * down_sfc )
+      rad_TL = ( emissivity_TL(ks)   * Planck_Surface ) + &
+               ( emissivity(ks)      * Planck_Surface_TL ) + &
+               ( reflectivity_TL(ks,1) * down_sfc ) + &
+               ( reflectivity(ks,1)    * down_rad_TL )
+      DO k = n_Layers, out_lev+1, -1
+        ! layer_trans = EXP(-T_OD/u)  =>  layer_trans_TL = -T_OD_TL/u * layer_trans
+        trans_TL = -T_OD_TL(k) / u * RTV%e_Layer_Trans_UP(k)
+        rad_TL   = ( rad_TL * RTV%e_Layer_Trans_UP(k) ) + ( rad * trans_TL )
+        rad      = rad * RTV%e_Layer_Trans_UP(k)
+      END DO
+      Stokes_TL(ks) = rad_TL
+    END DO
+
+  END SUBROUTINE CRTM_Emission_Stokes_TL
+
+
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       CRTM_Emission_Stokes_AD
+!
+! PURPOSE:
+!       Adjoint of CRTM_Emission_Stokes. down_rad_AD is accumulated, not
+!       assigned, so the caller can hand the running total to CRTM_Emission_AD
+!       through its down_rad_AD_in argument and keep the two contributions to
+!       the surface downwelling adjoint together.
+!
+!--------------------------------------------------------------------------------
+
+  SUBROUTINE CRTM_Emission_Stokes_AD( &
+    n_Layers,           &  ! Input, number of atmospheric layers
+    n_Angles,           &  ! Input, number of discrete zenith angles
+    n_Stokes,           &  ! Input, number of Stokes components
+    u,                  &  ! Input, cosine of the sensor zenith angle
+    Planck_Surface,     &  ! Input, FWD surface radiance
+    emissivity,         &  ! Input, FWD flattened surface emissivity
+    reflectivity,       &  ! Input, FWD flattened surface reflectivity
+    RTV,                &  ! Input, internal variables
+    Stokes_AD,          &  ! Input, AD polarized components
+    T_OD_AD,            &  ! In/Output, AD layer optical depth
+    Planck_Surface_AD,  &  ! In/Output, AD surface radiance
+    emissivity_AD,      &  ! In/Output, AD flattened surface emissivity
+    reflectivity_AD,    &  ! In/Output, AD flattened surface reflectivity
+    down_rad_AD         )  ! In/Output, AD surface downwelling radiance
+    ! Arguments
+    INTEGER,                  INTENT(IN)     :: n_Layers, n_Angles, n_Stokes
+    REAL(fp),                 INTENT(IN)     :: u
+    REAL(fp),                 INTENT(IN)     :: Planck_Surface
+    REAL(fp), DIMENSION(:),   INTENT(IN)     :: emissivity
+    REAL(fp), DIMENSION(:,:), INTENT(IN)     :: reflectivity
+    TYPE(RTV_type),           INTENT(IN)     :: RTV
+    REAL(fp), DIMENSION(:),   INTENT(IN)     :: Stokes_AD
+    REAL(fp), DIMENSION(:),   INTENT(IN OUT) :: T_OD_AD
+    REAL(fp),                 INTENT(IN OUT) :: Planck_Surface_AD
+    REAL(fp), DIMENSION(:),   INTENT(IN OUT) :: emissivity_AD
+    REAL(fp), DIMENSION(:,:), INTENT(IN OUT) :: reflectivity_AD
+    REAL(fp),                 INTENT(IN OUT) :: down_rad_AD
+    ! Local variables
+    INTEGER  :: k, ks, out_lev
+    REAL(fp) :: rad_AD, down_sfc
+    REAL(fp) :: rad_fwd(0:n_Layers)
+
+    IF ( n_Stokes < 2 .OR. n_Angles /= 1 ) RETURN
+
+    down_sfc = RTV%e_Level_Rad_DOWN(n_Layers)
+    out_lev  = 0
+    IF ( RTV%aircraft%rt ) out_lev = RTV%aircraft%idx
+
+    DO ks = 2, n_Stokes
+      ! Forward sweep, retaining the running radiance the adjoint needs. Index k
+      ! holds the value at the BOTTOM of layer k, so rad_fwd(n_Layers) is the
+      ! surface boundary value.
+      rad_fwd = ZERO
+      rad_fwd(n_Layers) = ( emissivity(ks) * Planck_Surface ) + &
+                          ( reflectivity(ks,1) * down_sfc )
+      DO k = n_Layers, out_lev+1, -1
+        rad_fwd(k-1) = rad_fwd(k) * RTV%e_Layer_Trans_UP(k)
+      END DO
+
+      ! Adjoint sweep, exact transpose of the loop above.
+      rad_AD = Stokes_AD(ks)
+      DO k = out_lev+1, n_Layers
+        ! rad_fwd(k-1) = rad_fwd(k)*trans(k)
+        T_OD_AD(k) = T_OD_AD(k) - ( rad_fwd(k) * RTV%e_Layer_Trans_UP(k) / u ) * rad_AD
+        rad_AD     = rad_AD * RTV%e_Layer_Trans_UP(k)
+      END DO
+
+      ! Adjoint of the surface boundary.
+      emissivity_AD(ks)      = emissivity_AD(ks)      + ( Planck_Surface * rad_AD )
+      Planck_Surface_AD      = Planck_Surface_AD      + ( emissivity(ks) * rad_AD )
+      reflectivity_AD(ks,1)  = reflectivity_AD(ks,1)  + ( down_sfc * rad_AD )
+      down_rad_AD            = down_rad_AD            + ( reflectivity(ks,1) * rad_AD )
+    END DO
+
+  END SUBROUTINE CRTM_Emission_Stokes_AD
+
+END MODULE Emission_Module

@@ -708,14 +708,10 @@ endif()
 # as the other Exp-scheme tests.
 add_executable(test_VectorRT_ScalarLimit mains/unit/Unit_Test/test_VectorRT_ScalarLimit.f90)
 target_link_libraries(test_VectorRT_ScalarLimit PRIVATE crtm)
-# NOT registered yet: this test currently FAILS, and correctly so. It documents
-# a real defect rather than a regression, so registering it would leave the
-# suite red. See the file header. Register it once the non-scattering vector
-# dispatch is fixed or guarded.
-# if(AWS_COEFFS_PRESENT AND CLOUDCOEFF_EXP_PRESENT)
-#   add_test(NAME test_VectorRT_ScalarLimit
-#            COMMAND $<TARGET_FILE:test_VectorRT_ScalarLimit>)
-# endif()
+# Registered 2026-07-31, once the non-scattering path gained a vector solver
+# (CRTM_Emission_Stokes). It now passes at 1.1e-16 in I and 8.2e-17 in Q.
+add_test(NAME test_VectorRT_ScalarLimit
+         COMMAND $<TARGET_FILE:test_VectorRT_ScalarLimit>)
 
 # test_PhaseMatrix_Invariants: asserts physical invariants of the assembled
 # polarized phase matrix (intensity block independent of n_Stokes, degree of
