@@ -131,6 +131,7 @@ CONTAINS
     REAL (fp), DIMENSION(RTV%n_Angles*RTV%n_Stokes) :: temporal_vector
     REAL (fp), DIMENSION(0:n_Layers) :: total_opt
     INTEGER :: i, j, k, Error_Status
+    REAL (fp) :: cbr_sum
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_ADA'
     CHARACTER(256) :: Message
 
@@ -248,9 +249,22 @@ CONTAINS
 
     10     CONTINUE
     !  Adding reflected cosmic background radiation
+    ! The incident cosmic background is UNPOLARIZED: its Stokes vector is
+    ! (CBR,0,0,0) at every angle, so only the intensity COLUMNS of the
+    ! reflection matrix act on it.  Reflecting unpolarized radiation off a
+    ! polarizing surface produces polarization, so every Stokes ROW receives a
+    ! contribution, not just the intensity rows.  The previous form had both
+    ! index sets wrong for n_Stokes>1: it summed all columns (letting the Q
+    ! reflection columns act on radiation that has no Q) and wrote only the
+    ! intensity rows (discarding the polarization the surface imparts).  Both
+    ! reduce to the original scalar expression when n_Stokes==1.
     IF( RTV%mth_Azi == 0 ) THEN
-       DO i = 1, nZ, RTV%n_Stokes
-         RTV%s_Level_Rad_UP(i,0)=RTV%s_Level_Rad_UP(i,0)+sum(RTV%s_Level_Refl_UP(i,1:nZ,0))*cosmic_background
+       DO i = 1, nZ
+         cbr_sum = ZERO
+         DO j = 1, nZ, RTV%n_Stokes
+           cbr_sum = cbr_sum + RTV%s_Level_Refl_UP(i,j,0)
+         END DO
+         RTV%s_Level_Rad_UP(i,0)=RTV%s_Level_Rad_UP(i,0)+cbr_sum*cosmic_background
        ENDDO
     END IF
 
@@ -1332,6 +1346,7 @@ CONTAINS
       REAL (fp), DIMENSION( RTV%n_Angles*RTV%n_Stokes, RTV%n_Angles*RTV%n_Stokes ) :: s_refl_up_TL,Inv_Gamma_TL,Inv_GammaT_TL
       REAL (fp), DIMENSION(0:n_Layers) :: total_opt, total_opt_TL
       INTEGER :: i, j, k, nZ
+       REAL (fp) :: cbr_sum_TL
    ! ---- downward-sweep TL state (surface Down_Radiance output) -------- !
       REAL (fp), DIMENSION( RTV%n_Angles*RTV%n_Stokes ) :: rad_dn_TL, rad_dn_new_TL, refl_dn_src_TL, downt_TL, rad_up_surf_TL
       REAL (fp), DIMENSION( RTV%n_Angles*RTV%n_Stokes, RTV%n_Angles*RTV%n_Stokes ) :: refl_dn_TL, refl_dn_new_TL
@@ -1486,9 +1501,15 @@ CONTAINS
    10     CONTINUE
 !
 !  Adding reflected cosmic background radiation
+    ! Tangent-linear of the forward cosmic-background reflection: same index
+    ! sets (intensity columns act, every Stokes row receives).
     IF( RTV%mth_Azi == 0 ) THEN
-      DO i = 1, nZ, RTV%n_Stokes
-      s_rad_up_TL(i)=s_rad_up_TL(i)+sum(s_refl_up_TL(i,1:nZ))*cosmic_background
+      DO i = 1, nZ
+        cbr_sum_TL = ZERO
+        DO j = 1, nZ, RTV%n_Stokes
+          cbr_sum_TL = cbr_sum_TL + s_refl_up_TL(i,j)
+        END DO
+        s_rad_up_TL(i)=s_rad_up_TL(i)+cbr_sum_TL*cosmic_background
       ENDDO
     END IF
 
@@ -2193,9 +2214,12 @@ CONTAINS
 
 !  Adding reflected cosmic background radiation
 
-      DO i = 1, nZ, RTV%n_Stokes
+      ! Adjoint of the forward cosmic-background reflection.  The forward maps
+      ! the intensity columns of every row into that row's radiance, so the
+      ! transpose seeds only the intensity columns, for every Stokes row.
+      DO i = 1, nZ
       sum_s_AD = s_rad_up_AD(i)*cosmic_background
-      DO j = 1, nZ !RTV%n_Angles
+      DO j = 1, nZ, RTV%n_Stokes
       s_refl_up_AD(i,j) = sum_s_AD
       ENDDO
       ENDDO

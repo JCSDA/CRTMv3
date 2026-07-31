@@ -717,6 +717,18 @@ target_link_libraries(test_VectorRT_ScalarLimit PRIVATE crtm)
 #            COMMAND $<TARGET_FILE:test_VectorRT_ScalarLimit>)
 # endif()
 
+# test_ADA_VectorDecoupling: drives CRTM_ADA directly with a synthetic phase
+# matrix whose polarized blocks are zero and whose I and Q blocks are identical.
+# Such a matrix cannot couple Stokes components, so an n_Stokes=2 solve must
+# reproduce two scalar solves exactly, WITH scattering active. Needs no
+# coefficient files and no cloud LUT, which is what makes it usable while the
+# polarized LUTs are still unsuitable: it tests whether the code is correct
+# independently of whether the data is.
+add_executable(test_ADA_VectorDecoupling mains/unit/Unit_Test/test_ADA_VectorDecoupling.f90)
+target_link_libraries(test_ADA_VectorDecoupling PRIVATE crtm)
+add_test(NAME test_ADA_VectorDecoupling
+         COMMAND $<TARGET_FILE:test_ADA_VectorDecoupling>)
+
 # test_VectorRT_SurfaceBasis: pins the surface (V,H) -> Stokes (I,Q) conversion
 # on the n_Stokes>1 path. Calls CRTM_Compute_SfcOptics directly and checks the
 # vector-path emissivity/reflectivity against eV,eH obtained from the scalar
