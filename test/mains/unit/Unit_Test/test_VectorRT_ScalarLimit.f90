@@ -41,7 +41,7 @@
 ! surface handoff was wrong by a factor of 3.3 in Stokes Q. This test compares
 ! the forward model against an independent statement about the physics.
 !
-! CURRENT STATUS (2026-07-31): THIS TEST FAILS, AND THE FAILURE IS REAL.
+! CURRENT STATUS (2026-07-31, revised): THIS TEST FAILS, IN Q ONLY.
 ! -----------------------------------------------------------------------
 ! Driving the cloud water content low enough to suppress scattering also drops
 ! CRTM_Include_Scattering below its trigger, so RTV%Scattering_RT becomes false
@@ -49,13 +49,32 @@
 ! separate defect: CRTM_Emission is a scalar solver. It reads emissivity via
 ! emissivity(n_Angles), a single element, and returns one scalar radiance
 ! (Emission_Module.f90:141), but the n_Stokes>1 branch hands it the flattened
-! (angle,Stokes) arrays built by Reshape_Surf_Opt. The result is not merely
-! unpolarized, it is a wrong intensity: on the opaque 183 GHz channels, where
-! Iv and Ih are identical because the surface is invisible, the vector run comes
-! back about 9 percent high.
+! (angle,Stokes) arrays built by Reshape_Surf_Opt.
 !
-! So this file currently documents that defect rather than validating ADA. It is
-! deliberately not registered in CMakeLists.txt so the suite does not go red.
+! An earlier revision of this header claimed the intensity came back about 9
+! percent high on the opaque 183 GHz channels. That was wrong, and it was an
+! artefact of this test rather than of CRTM. Atm(2) was never copied from
+! Atm(1), so the second profile carried an empty atmosphere while the scalar
+! reference Iv_ch/Ih_ch was captured from the first, and the two tables were
+! being compared across different scenes. With the profiles equalized the
+! measured intensity error is 1.1e-16, which is machine precision.
+!
+! The real defect is narrower and is confined to the polarized components. With
+! n_Angles = 1 the flattened arrays happen to place Stokes I first, so
+! emissivity(n_Angles) is e_I and reflectivity(1,1) is R_II and the intensity is
+! right by construction. But the scalar solver produces no Q, U or V at all, and
+! Assign_Common_Output fills only Radiance(1), leaving Radiance(2:n_Stokes) read
+! before it is ever assigned. So a clear-sky polarimetric run, which is exactly
+! the configuration ocean wind-vector retrieval needs, returns Q = 0.
+!
+! Fixing it needs a vector emission path, not a dispatch tweak: forward,
+! tangent-linear and adjoint, since a forward-only change would recreate the
+! forward-versus-Jacobian inconsistency this whole effort exists to prevent.
+! The same missing piece blocks the fractional-cloud polarized K seed, whose
+! clear-sky half has nothing vector to seed from.
+!
+! Until then this file documents the defect rather than validating ADA, and it
+! is deliberately not registered in CMakeLists.txt so the suite does not go red.
 ! Tuning the water content cannot rescue it: SCATTERING_ALBEDO_THRESHOLD is
 ! 1.0e-10, so there is no window in which ADA runs with its scattering coupling
 ! inactive. Validating ADA's vector machinery requires driving CRTM_ADA directly
@@ -134,7 +153,10 @@ PROGRAM test_VectorRT_ScalarLimit
 
   ! Scene: a vanishingly thin frozen layer, present only so the calculation is
   ! routed through ADA instead of the scalar emission solver.
-  CALL Load_ECMWF84_Atm_Data()
+  CALL Load_ECMWF84_Atm_Data()          ! fills Atm(1) only
+  DO m = 2, N_PROFILES
+    Atm(m) = Atm(1)                     ! every profile must be the SAME scene
+  END DO
   DO m = 1, N_PROFILES
     Atm(m)%n_Clouds                           = 1
     Atm(m)%Cloud_Fraction                     = ZERO
