@@ -55,6 +55,12 @@ MODULE Common_RTSolution
   PUBLIC :: Assign_Common_Output_TL
   PUBLIC :: Assign_Common_Input_AD
   PUBLIC :: Assign_Common_Output_AD
+  ! Exposed for testing only. CRTM_Phase_Matrix assembles the polarized phase
+  ! matrix from the expansion coefficients; making it callable lets a unit test
+  ! assert physical invariants of the assembled matrix (degree of polarization
+  ! bounded by unity, intensity-block invariance under n_Stokes) directly,
+  ! rather than inferring them from end-to-end radiances. No behaviour change.
+  PUBLIC :: CRTM_Phase_Matrix
 
   ! -----------------
   ! Module parameters

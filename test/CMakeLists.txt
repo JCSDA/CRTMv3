@@ -717,6 +717,17 @@ target_link_libraries(test_VectorRT_ScalarLimit PRIVATE crtm)
 #            COMMAND $<TARGET_FILE:test_VectorRT_ScalarLimit>)
 # endif()
 
+# test_PhaseMatrix_Invariants: asserts physical invariants of the assembled
+# polarized phase matrix (intensity block independent of n_Stokes, degree of
+# polarization bounded by unity, intensity-block symmetry). Drives
+# CRTM_Phase_Matrix directly, so it needs no coefficient files. Deliberately
+# invariant-based rather than a Rayleigh reconstruction: Pff is a Fourier
+# component rather than F(Theta), and the sign of beta1 is convention-dependent.
+add_executable(test_PhaseMatrix_Invariants mains/unit/Unit_Test/test_PhaseMatrix_Invariants.f90)
+target_link_libraries(test_PhaseMatrix_Invariants PRIVATE crtm)
+add_test(NAME test_PhaseMatrix_Invariants
+         COMMAND $<TARGET_FILE:test_PhaseMatrix_Invariants>)
+
 # test_ADA_VectorDecoupling: drives CRTM_ADA directly with a synthetic phase
 # matrix whose polarized blocks are zero and whose I and Q blocks are identical.
 # Such a matrix cannot couple Stokes components, so an n_Stokes=2 solve must
