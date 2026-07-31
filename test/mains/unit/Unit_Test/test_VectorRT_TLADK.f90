@@ -74,6 +74,7 @@ PROGRAM test_VectorRT_TLADK
   LOGICAL :: ok_s1_fd, ok_s1_adj, ok_s1_k
   LOGICAL :: ok_v_fd_wc1, ok_v_fd_wc2, ok_v_fd_t1, ok_v_fd_t2, ok_v_adj, ok_v_k
   LOGICAL :: ok_c_fd_t1, ok_c_fd_t2, ok_c_adj, ok_c_k
+  LOGICAL :: ok_f_fd, ok_f_adj, ok_f_k
 
   TYPE(CRTM_ChannelInfo_type) :: ChannelInfo(1)
   TYPE(CRTM_Geometry_type)    :: Geometry(N_PROFILES)
@@ -213,7 +214,23 @@ PROGRAM test_VectorRT_TLADK
   CALL check_fd ( 2, VAR_T, ok_c_fd_t2 )     ! dQ/dT (polarized surface chain)
   CALL check_adj( 2, ok_c_adj )              ! full-Stokes dot product
   CALL check_k  ( 2, ok_c_k )
-  CALL set_wc( WC_S )                        ! restore, in case more is added below
+  CALL set_wc( WC_S )                        ! restore the scattering column
+
+  ! --------------------------------------------------------------------------
+  ! Vector RT with FRACTIONAL cloud cover (n_Stokes = 2). The blocks above are
+  ! deliberately overcast so the solver is isolated from the clear/cloudy
+  ! combine. This one exercises that combine: the forward model blends every
+  ! Stokes component of the clear and cloudy columns, so its adjoint has to
+  ! seed every Stokes component of both. Seeding %Radiance alone leaves the
+  ! clear-sky half of the vector Jacobian unseeded, which the dot-product
+  ! identity detects and a K-vs-AD check cannot.
+  ! --------------------------------------------------------------------------
+  CALL set_cfrac( 0.5_fp )
+  WRITE(*,'(/5x,"=========== n_Stokes = 2 vector RT (fractional cloud) ===========")')
+  CALL check_fd ( 2, VAR_WC, ok_f_fd )       ! dQ/dWC through the combine
+  CALL check_adj( 2, ok_f_adj )              ! full-Stokes dot product
+  CALL check_k  ( 2, ok_f_k )
+  CALL set_cfrac( ONE )                      ! restore
 
   Error_Status = CRTM_Destroy( ChannelInfo )
 
@@ -231,10 +248,14 @@ PROGRAM test_VectorRT_TLADK
   WRITE(*,'(5x,"n_Stokes=2 clear TL vs FD (dQ/dT)     : ",a)') MERGE('PASS','FAIL',ok_c_fd_t2)
   WRITE(*,'(5x,"n_Stokes=2 clear adjoint dot-product  : ",a)') MERGE('PASS','FAIL',ok_c_adj)
   WRITE(*,'(5x,"n_Stokes=2 clear K vs AD              : ",a)') MERGE('PASS','FAIL',ok_c_k)
+  WRITE(*,'(5x,"n_Stokes=2 frac  TL vs FD (dQ/dWC)    : ",a)') MERGE('PASS','FAIL',ok_f_fd)
+  WRITE(*,'(5x,"n_Stokes=2 frac  adjoint dot-product  : ",a)') MERGE('PASS','FAIL',ok_f_adj)
+  WRITE(*,'(5x,"n_Stokes=2 frac  K vs AD              : ",a)') MERGE('PASS','FAIL',ok_f_k)
   IF ( ok_s1_fd .AND. ok_s1_adj .AND. ok_s1_k .AND. &
        ok_v_fd_wc1 .AND. ok_v_fd_wc2 .AND. ok_v_fd_t1 .AND. ok_v_fd_t2 .AND. &
        ok_v_adj .AND. ok_v_k .AND. &
-       ok_c_fd_t1 .AND. ok_c_fd_t2 .AND. ok_c_adj .AND. ok_c_k ) THEN
+       ok_c_fd_t1 .AND. ok_c_fd_t2 .AND. ok_c_adj .AND. ok_c_k .AND. &
+       ok_f_fd .AND. ok_f_adj .AND. ok_f_k ) THEN
     WRITE(*,'(5x,a)') 'ALL CHECKS PASSED'
     STOP 0
   ELSE
@@ -262,6 +283,16 @@ CONTAINS
       Atm(mm)%Cloud(1)%Water_Content(KC1:KC2) = wc * (ONE + 0.2_fp*REAL(mm-1,fp))
     END DO
   END SUBROUTINE set_wc
+
+  ! Cloud fraction in the cloud band. ONE is overcast; anything strictly between
+  ! zero and one routes the run through the clear/cloudy combine.
+  SUBROUTINE set_cfrac( cf )
+    REAL(fp), INTENT(IN) :: cf
+    INTEGER :: mm
+    DO mm = 1, N_PROFILES
+      Atm(mm)%Cloud_Fraction(KC1:KC2) = cf
+    END DO
+  END SUBROUTINE set_cfrac
 
   ! Selected output: Stokes component ks (n_Stokes>1) or the scalar Radiance (ks=0)
   REAL(fp) FUNCTION get_out( rts, ks )

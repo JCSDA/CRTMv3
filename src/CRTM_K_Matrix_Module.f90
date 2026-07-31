@@ -772,6 +772,8 @@ CONTAINS
           RTV(nt)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
           RTV(nt)%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
           IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
+          ! Clear column must match the cloudy one; see CRTM_Adjoint_Module.
+          IF( Opt%n_Stokes > 0 ) RTV_Clear(nt)%n_Stokes = Opt%n_Stokes
           AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
           AtmOptics_K(nt)%n_Stokes = RTV(nt)%n_Stokes
           ! Re-sync SfcOptics%n_Stokes here: it was set from RTV(nt)%n_Stokes at
@@ -1493,10 +1495,24 @@ CONTAINS
                     ! The adjoint of the clear and cloudy radiance combination
                     CloudCover_K(nt)%Total_Cloud_Cover = RTSolution_K(ln,m)%Total_Cloud_Cover
                     RTSolution_K(ln,m)%Total_Cloud_Cover = ZERO
+                    IF( RTV(nt)%n_Stokes == 1 ) THEN
                     RTSolution_Clear_K(nt)%Radiance = (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_K(ln,m)%Radiance
                     CloudCover_K(nt)%Total_Cloud_Cover = CloudCover_K(nt)%Total_Cloud_Cover + &
                                ((r_cloudy(1) - RTSolution_Clear(nt)%Radiance) * RTSolution_K(ln,m)%Radiance)
                     RTSolution_K(ln,m)%Radiance    = CloudCover%Total_Cloud_Cover * RTSolution_K(ln,m)%Radiance
+                    ELSE
+                    ! Transpose of the Stokes-wise forward combine; see the
+                    ! matching block in CRTM_Adjoint_Module for why %Radiance
+                    ! alone was not enough on the vector path.
+                    DO ks = 1, RTV(nt)%n_Stokes
+                      RTSolution_Clear_K(nt)%Stokes(ks) = &
+                          (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_K(ln,m)%Stokes(ks)
+                      CloudCover_K(nt)%Total_Cloud_Cover = CloudCover_K(nt)%Total_Cloud_Cover + &
+                          ((r_cloudy(ks) - RTSolution_Clear(nt)%Stokes(ks)) * RTSolution_K(ln,m)%Stokes(ks))
+                      RTSolution_K(ln,m)%Stokes(ks) = &
+                          CloudCover%Total_Cloud_Cover * RTSolution_K(ln,m)%Stokes(ks)
+                    END DO
+                    END IF
                     ! Adjoint of the surface downwelling radiance (scalar) combine (opt-in),
                     ! mirroring the Radiance combine adjoint above (including the TCC term).
                     IF ( Opt%Compute_Down_Radiance ) THEN

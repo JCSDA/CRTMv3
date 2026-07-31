@@ -662,6 +662,13 @@ CONTAINS
         AtmOptics%depolarization = Opt%depolarization
         AtmOptics_AD%depolarization = Opt%depolarization
         IF( Opt%n_Stokes > 0 ) RTV%n_Stokes = Opt%n_Stokes
+        ! The clear-sky column of a fractional-cloud scene must carry the same
+        ! Stokes dimension as the cloudy one, because the forward model blends
+        ! them component by component. CRTM_Forward sets this; the tangent
+        ! linear, adjoint and K-matrix did not, so their clear column ran
+        ! scalar and their fractional-cloud vector result did not match
+        ! CRTM_Forward's.
+        IF( Opt%n_Stokes > 0 ) RTV_Clear%n_Stokes = Opt%n_Stokes
         AtmOptics%n_Stokes = RTV%n_Stokes
         AtmOptics_AD%n_Stokes = RTV%n_Stokes
       END IF
@@ -1262,10 +1269,30 @@ CONTAINS
           IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) ) THEN
               ! The adjoint of the clear and cloudy radiance combination
 !!              RTSolution_AD(ln,m)%Total_Cloud_Cover = ZERO
+              IF( RTV%n_Stokes == 1 ) THEN
               RTSolution_Clear_AD%Radiance = (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_AD(ln,m)%Radiance
               CloudCover_AD%Total_Cloud_Cover = CloudCover_AD%Total_Cloud_Cover + &
                               ((r_cloudy(1) - RTSolution_Clear%Radiance) * RTSolution_AD(ln,m)%Radiance)
               RTSolution_AD(ln,m)%Radiance    = CloudCover%Total_Cloud_Cover * RTSolution_AD(ln,m)%Radiance
+              ELSE
+              ! Transpose of the Stokes-wise forward combine above. Seeding
+              ! %Radiance alone left the clear column unseeded, because the
+              ! vector path reads %Stokes and never %Radiance, and left the
+              ! cloudy column unscaled by the cloud cover. The dot-product
+              ! identity showed both as a factor of two; TL-vs-FD and K-vs-AD
+              ! did not, since neither compares against the transpose.
+              ! (The forward also publishes Radiance = Stokes(1) after the
+              ! loop. That assignment is reporting rather than transport, and
+              ! its adjoint belongs with the Radiance/Stokes rework, gap 1.)
+              DO ks = 1, RTV%n_Stokes
+                RTSolution_Clear_AD%Stokes(ks) = &
+                    (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_AD(ln,m)%Stokes(ks)
+                CloudCover_AD%Total_Cloud_Cover = CloudCover_AD%Total_Cloud_Cover + &
+                    ((r_cloudy(ks) - RTSolution_Clear%Stokes(ks)) * RTSolution_AD(ln,m)%Stokes(ks))
+                RTSolution_AD(ln,m)%Stokes(ks) = &
+                    CloudCover%Total_Cloud_Cover * RTSolution_AD(ln,m)%Stokes(ks)
+              END DO
+              END IF
               ! Adjoint of the surface downwelling radiance (scalar) combine (opt-in),
               ! mirroring the Radiance combine adjoint above (including the TCC term).
               IF ( Opt%Compute_Down_Radiance ) THEN

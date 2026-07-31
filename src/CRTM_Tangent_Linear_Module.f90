@@ -717,6 +717,8 @@ CONTAINS
         AtmOptics(nt)%depolarization = Opt%depolarization
         AtmOptics_TL(nt)%depolarization = Opt%depolarization
         IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
+        ! Clear column must match the cloudy one; see CRTM_Adjoint_Module.
+        IF( Opt%n_Stokes > 0 ) RTV_Clear(nt)%n_Stokes = Opt%n_Stokes
         AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
         AtmOptics_TL(nt)%n_Stokes = RTV(nt)%n_Stokes
         AtmOptics(nt)%Include_Scattering = Opt%Include_Scattering
