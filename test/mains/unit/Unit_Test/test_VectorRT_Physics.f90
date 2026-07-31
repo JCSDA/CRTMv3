@@ -59,6 +59,7 @@ PROGRAM test_VectorRT_Physics
   INTEGER,  PARAMETER :: N_AEROSOLS  = 0
   REAL(fp), PARAMETER :: ZENITH      = 53.0_fp
   REAL(fp), PARAMETER :: WIND_DIR    = 100.0_fp
+  REAL(fp), PARAMETER :: AIRCRAFT_P  = 300.0_fp   ! hPa
 
   ! Machine-precision: the ladder and the degeneracy are exact statements.
   REAL(fp), PARAMETER :: TOL         = 1.0e-14_fp
@@ -67,7 +68,9 @@ PROGRAM test_VectorRT_Physics
   CHARACTER(256) :: Version
   INTEGER :: Error_Status, Allocate_Status, n_Channels, l, m
   LOGICAL :: ok_ladder, ok_deg, ok_bound, ok_pos, ok_signal, all_ok
+  LOGICAL :: ok_air_bound, ok_air_diff
   REAL(fp) :: d_ladder, d_deg, worst_bound, min_I, max_pol
+  REAL(fp) :: SA(4,64,2), air_bound, air_diff
   REAL(fp) :: S2(4,64,2), S3(4,64,2), S4(4,64,2)
   REAL(fp) :: pol2
 
@@ -172,6 +175,33 @@ PROGRAM test_VectorRT_Physics
   END DO
   ok_deg = ( d_deg < TOL )
 
+  ! ------------------------------------------------------------------
+  ! 5: aircraft observer. CRTM_Emission_Stokes transports the polarized
+  !    components to the observer level, not unconditionally to the top of
+  !    the atmosphere, and that branch is otherwise never executed.
+  ! ------------------------------------------------------------------
+  CALL set_azimuth( WIND_DIR - 60.0_fp )
+  CALL run( 4, S4 )                          ! reference: top of atmosphere
+  DO m = 1, N_PROFILES
+    Options(m)%Aircraft_Pressure = AIRCRAFT_P
+  END DO
+  CALL run( 4, SA )
+  DO m = 1, N_PROFILES
+    Options(m)%Aircraft_Pressure = ZERO      ! restore
+  END DO
+  air_bound = -HUGE(ONE)
+  air_diff  = ZERO
+  DO m = 1, N_PROFILES
+    DO l = 1, n_Channels
+      air_bound = MAX( air_bound, SA(2,l,m)**2 + SA(3,l,m)**2 + SA(4,l,m)**2 - SA(1,l,m)**2 )
+      ! The aircraft view must not simply reproduce the top-of-atmosphere one,
+      ! otherwise the observer level is being ignored and the check is vacuous.
+      air_diff = MAX( air_diff, ABS(SA(1,l,m) - S4(1,l,m)) )
+    END DO
+  END DO
+  ok_air_bound = ( air_bound <= ZERO )
+  ok_air_diff  = ( air_diff > SIGNAL_FLOOR )
+
   WRITE(*,'(5x,a,i0,a)') 'sensor '//SENSOR//', ', n_Channels, ' channels, clear sky over ocean'
   WRITE(*,'(/5x,a,es12.4,a,l1)') 'truncation ladder n_Stokes 2/3/4 = ', d_ladder, '   pass = ', ok_ladder
   WRITE(*,'(5x,a,es12.4,a,l1)')  'U,V zero at rel azimuth 0 and 180= ', d_deg,    '   pass = ', ok_deg
@@ -179,7 +209,11 @@ PROGRAM test_VectorRT_Physics
   WRITE(*,'(5x,a,es12.4,a,l1)')  'min Stokes I                     = ', min_I,    '   pass = ', ok_pos
   WRITE(*,'(5x,a,es12.4,a,l1)')  'max sqrt(Q2+U2+V2) (must be > 0) = ', max_pol,  '   pass = ', ok_signal
 
-  all_ok = ok_ladder .AND. ok_deg .AND. ok_bound .AND. ok_pos .AND. ok_signal
+  WRITE(*,'(5x,a,es12.4,a,l1)')  'aircraft obs: Q2+U2+V2 - I2      = ', air_bound, '   pass = ', ok_air_bound
+  WRITE(*,'(5x,a,es12.4,a,l1)')  'aircraft obs: differs from TOA   = ', air_diff,  '   pass = ', ok_air_diff
+
+  all_ok = ok_ladder .AND. ok_deg .AND. ok_bound .AND. ok_pos .AND. ok_signal &
+           .AND. ok_air_bound .AND. ok_air_diff
 
   Error_Status = CRTM_Destroy( ChannelInfo )
 
