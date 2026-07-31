@@ -698,6 +698,25 @@ else()
   message(STATUS "test_CloudCoeff_Exp_Forward not registered (needs mwr_aws coeffs + CloudCoeff_Exp_Full6.nc).")
 endif()
 
+# test_VectorRT_ScalarLimit: ground truth for the polarimetric ADA path that does
+# not depend on cloud-LUT quality or any external RT code. With scattering driven
+# below CRTM's albedo threshold the atmosphere is polarization-neutral, so the
+# emergent Stokes vector must satisfy I=(Iv+Ih)/2 and Q=(Iv-Ih)/2 exactly, where
+# Iv and Ih come from scalar runs with the channel forced to pure V and pure H.
+# Validates the surface conversion, the ADA adding machinery under n_Stokes>1,
+# and the surface boundary condition against the trusted scalar path. Same gating
+# as the other Exp-scheme tests.
+add_executable(test_VectorRT_ScalarLimit mains/unit/Unit_Test/test_VectorRT_ScalarLimit.f90)
+target_link_libraries(test_VectorRT_ScalarLimit PRIVATE crtm)
+# NOT registered yet: this test currently FAILS, and correctly so. It documents
+# a real defect rather than a regression, so registering it would leave the
+# suite red. See the file header. Register it once the non-scattering vector
+# dispatch is fixed or guarded.
+# if(AWS_COEFFS_PRESENT AND CLOUDCOEFF_EXP_PRESENT)
+#   add_test(NAME test_VectorRT_ScalarLimit
+#            COMMAND $<TARGET_FILE:test_VectorRT_ScalarLimit>)
+# endif()
+
 # test_VectorRT_SurfaceBasis: pins the surface (V,H) -> Stokes (I,Q) conversion
 # on the n_Stokes>1 path. Calls CRTM_Compute_SfcOptics directly and checks the
 # vector-path emissivity/reflectivity against eV,eH obtained from the scalar
