@@ -790,6 +790,19 @@ target_link_libraries(test_VectorRT_Physics PRIVATE crtm)
 add_test(NAME test_VectorRT_Physics
          COMMAND $<TARGET_FILE:test_VectorRT_Physics>)
 
+# test_VectorRT_PARMIO_TLAD: Jacobian coverage for the PARMIO polarimetric
+# surface through the full RT chain. PARMIO is the microwave-water backend at
+# and above 200 GHz and has a four-Stokes azimuth model independent of FASTEM's,
+# which every other polarimetric test bypasses by loading FASTEM4. Reachable
+# because TROPICS channel 12 sits at 204.78 GHz, between the 183 and 325 GHz
+# water-vapour lines, where the surface is still visible (U/I = 1.6e-3); the
+# mwr_aws channels above the gate are at 325.15 GHz and are opaque. Clear sky,
+# so no cloud LUT gating.
+add_executable(test_VectorRT_PARMIO_TLAD mains/unit/Unit_Test/test_VectorRT_PARMIO_TLAD.f90)
+target_link_libraries(test_VectorRT_PARMIO_TLAD PRIVATE crtm)
+add_test(NAME test_VectorRT_PARMIO_TLAD
+         COMMAND $<TARGET_FILE:test_VectorRT_PARMIO_TLAD>)
+
 # test_VectorRT_TLADK: TL/AD/K correctness for the vector-RT (n_Stokes>1)
 # cloud-scattering path. The n_Stokes>1 ADA branch needs a >=6-phase-element
 # LUT (the CRTM-Exp scheme), so it is unreachable by every other test; this is
