@@ -1932,6 +1932,39 @@ CONTAINS
 !
 !--------------------------------------------------------------------------------
 
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       Bound_Phase_Block
+!
+! PURPOSE:
+!       Bounds every element of one n_Stokes x n_Stokes phase-matrix block by
+!       the magnitude of its own (1,1) element, which is the necessary
+!       condition for the block to map physically realisable Stokes vectors to
+!       physically realisable ones. Used only where the (1,1) element has just
+!       been clamped away from a negative value, which makes the rest of that
+!       block numerically meaningless; see the call site.
+!
+!--------------------------------------------------------------------------------
+
+  SUBROUTINE Bound_Phase_Block( P, i1, j1, n_Stokes, bound )
+    ! Arguments
+    REAL(fp), INTENT(IN OUT) :: P(:,:)
+    INTEGER , INTENT(IN)     :: i1, j1, n_Stokes
+    REAL(fp), INTENT(IN)     :: bound
+    ! Local variables
+    INTEGER :: ii, jj
+
+    DO jj = 0, n_Stokes-1
+      DO ii = 0, n_Stokes-1
+        IF ( ii == 0 .AND. jj == 0 ) CYCLE          ! the (1,1) element itself
+        P(i1+ii,j1+jj) = SIGN( MIN(ABS(P(i1+ii,j1+jj)), bound), P(i1+ii,j1+jj) )
+      END DO
+    END DO
+
+  END SUBROUTINE Bound_Phase_Block
+
+
   SUBROUTINE Azimuth_Fourier_Weights( RTV, GeometryInfo, w_cos, w_sin )
     ! Arguments
     TYPE(RTV_type)              , INTENT(IN)  :: RTV
@@ -2212,10 +2245,29 @@ CONTAINS
             RTV%Pff(i1,j1,k) = RTV%Off(i,j,k)
             RTV%Pbb(i1,j1,k) = RTV%Obb(i,j,k)
 
-            ! For intensity, the phase matrix element must >= ZERO
+            ! For intensity, the phase matrix element must >= ZERO.
+            ! A negative (1,1) is Legendre truncation ringing, and the clamp
+            ! keeps the intensity solve stable. On the vector path the clamp
+            ! alone is not enough: the polarized elements of the same block come
+            ! from the same truncated series, and once (1,1) has been raised to
+            ! PHASE_THRESHOLD they are no longer bounded by it, so the block can
+            ! imply a degree of polarization far above unity (measured at 5.6e6
+            ! in the stress case of test_PhaseMatrix_Invariants). A block whose
+            ! intensity element is numerically meaningless cannot have
+            ! meaningful polarized elements either, so bound the whole block by
+            ! the clamped value, which keeps it physically admissible.
+            ! Measured to fire ZERO times in 7092 assembled elements on the
+            ! shipped CRTM-Exp lookup table, so this is a dormant hazard rather
+            ! than an active correction: it changes no current result.
             IF ( RTV%mth_Azi == 0 ) THEN
-              IF(RTV%Pff(i1,j1,k) < ZERO) RTV%Pff(i1,j1,k) = PHASE_THRESHOLD
-              IF(RTV%Pbb(i1,j1,k) < ZERO) RTV%Pbb(i1,j1,k) = PHASE_THRESHOLD
+              IF(RTV%Pff(i1,j1,k) < ZERO) THEN
+                RTV%Pff(i1,j1,k) = PHASE_THRESHOLD
+                CALL Bound_Phase_Block( RTV%Pff(:,:,k), i1, j1, RTV%n_Stokes, PHASE_THRESHOLD )
+              END IF
+              IF(RTV%Pbb(i1,j1,k) < ZERO) THEN
+                RTV%Pbb(i1,j1,k) = PHASE_THRESHOLD
+                CALL Bound_Phase_Block( RTV%Pbb(:,:,k), i1, j1, RTV%n_Stokes, PHASE_THRESHOLD )
+              END IF
             END IF
 
             ! qliu   set P' = P D

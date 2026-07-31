@@ -779,6 +779,17 @@ target_link_libraries(test_VectorRT_Unsupported PRIVATE crtm)
 add_test(NAME test_VectorRT_Unsupported
          COMMAND $<TARGET_FILE:test_VectorRT_Unsupported>)
 
+# test_VectorRT_Physics: physical invariants of the emergent Stokes vector,
+# asserted clear-sky so no cloud LUT is involved and a failure cannot be blamed
+# on coefficient quality. Covers the n_Stokes 2/3/4 truncation ladder (the only
+# exercise of n_Stokes=3 anywhere), the odd-harmonic degeneracy of U and V at
+# relative azimuth 0 and 180, the polarization bound I^2 >= Q^2+U^2+V^2, and
+# positivity of I.
+add_executable(test_VectorRT_Physics mains/unit/Unit_Test/test_VectorRT_Physics.f90)
+target_link_libraries(test_VectorRT_Physics PRIVATE crtm)
+add_test(NAME test_VectorRT_Physics
+         COMMAND $<TARGET_FILE:test_VectorRT_Physics>)
+
 # test_VectorRT_TLADK: TL/AD/K correctness for the vector-RT (n_Stokes>1)
 # cloud-scattering path. The n_Stokes>1 ADA branch needs a >=6-phase-element
 # LUT (the CRTM-Exp scheme), so it is unreachable by every other test; this is
@@ -1326,3 +1337,13 @@ endif()
 CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
                          ${CMAKE_CURRENT_BINARY_DIR}/testinput
                          ${crtm_test_input} )
+
+# dump_scalar_fullprec: instrument, not a test. Prints scalar-path radiances and
+# brightness temperatures at full double precision so that "the default scalar
+# path is unchanged" can be measured rather than argued. Build it in two trees
+# and diff. Deliberately NOT registered: it asserts nothing.
+# Needed because the regression suite compares against its references at
+# DEFAULT_N_SIGFIG (= SP_N_SIGFIG, about six figures), which cannot see a change
+# in the last bits, so a green suite is not by itself proof of bit-identity.
+add_executable(dump_scalar_fullprec mains/unit/Unit_Test/dump_scalar_fullprec.f90)
+target_link_libraries(dump_scalar_fullprec PRIVATE crtm)

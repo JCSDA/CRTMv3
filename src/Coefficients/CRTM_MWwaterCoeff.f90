@@ -178,6 +178,17 @@ CONTAINS
       pid_msg = ''
     END IF
 
+    ! Discard anything already loaded before loading a different scheme.
+    ! FitCoeff_SetValue only allocates when the target is unassociated, and
+    ! otherwise rejects a shape mismatch by DESTROYING the structure and
+    ! returning no status. The FASTEM4 and FASTEM6 azimuth coefficients have
+    ! different shapes, so switching scheme without this left the shared
+    ! MWwaterC deallocated while this function still reported SUCCESS. That
+    ! matters for polarimetric work specifically: FASTEM6 is the default and
+    ! has no third or fourth Stokes azimuth model, so anyone wanting a
+    ! polarimetric surface has to switch to FASTEM4 or FASTEM5.
+    IF ( MWwaterCoeff_Associated( MWwaterC ) ) CALL MWwaterCoeff_Destroy( MWwaterC )
+
     ! Load MWwaterCoeff data
     SELECT CASE ( FASTEM_Scheme )
       CASE ( 'FASTEM6' )
@@ -190,6 +201,16 @@ CONTAINS
         CALL Display_Message( ROUTINE_NAME, msg, err_stat )
         RETURN
     END SELECT
+
+    ! The loaders return no status of their own, and FitCoeff_SetValue signals
+    ! failure by leaving the structure unassociated. Check rather than assume.
+    IF ( .NOT. MWwaterCoeff_Associated( MWwaterC ) ) THEN
+      err_stat = FAILURE
+      msg = 'MWwaterCoeff structure is unassociated after loading '// &
+            TRIM(FASTEM_Scheme)//TRIM(pid_msg)
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
 
   END FUNCTION CRTM_MWwaterCoeff_Load_FASTEM
 

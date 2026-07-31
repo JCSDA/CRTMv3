@@ -36,6 +36,7 @@
 PROGRAM test_VectorRT_TLADK
 
   USE CRTM_Module
+  USE CRTM_MWwaterCoeff, ONLY: CRTM_MWwaterCoeff_Load_FASTEM
   IMPLICIT NONE
 
   CHARACTER(*), PARAMETER :: PROGRAM_NAME = 'test_VectorRT_TLADK'
@@ -57,6 +58,8 @@ PROGRAM test_VectorRT_TLADK
   ! Small enough that every layer's single-scatter albedo falls below CRTM's
   ! scattering threshold, so the solve leaves ADA for the emission path.
   REAL(fp), PARAMETER :: WC_CLEAR = 1.0e-8_fp
+  REAL(fp), PARAMETER :: WIND_DIR   = 100.0_fp   ! relative azimuth = 60 deg
+  REAL(fp), PARAMETER :: SENSOR_AZI =  40.0_fp
 
   ! The adjoint dot-product tolerance is deliberately tight (the correct code
   ! achieves ~1e-15): a one-sided TL/AD inconsistency in the phase-normalization
@@ -75,6 +78,7 @@ PROGRAM test_VectorRT_TLADK
   LOGICAL :: ok_v_fd_wc1, ok_v_fd_wc2, ok_v_fd_t1, ok_v_fd_t2, ok_v_adj, ok_v_k
   LOGICAL :: ok_c_fd_t1, ok_c_fd_t2, ok_c_adj, ok_c_k
   LOGICAL :: ok_f_fd, ok_f_adj, ok_f_k
+  LOGICAL :: ok_4_fd1, ok_4_fd2, ok_4_fd3, ok_4_fd4, ok_4_adj, ok_4_k
 
   TYPE(CRTM_ChannelInfo_type) :: ChannelInfo(1)
   TYPE(CRTM_Geometry_type)    :: Geometry(N_PROFILES)
@@ -171,9 +175,14 @@ PROGRAM test_VectorRT_TLADK
     Sfc(m)%Water_Coverage    = ONE
     Sfc(m)%Water_Type        = 1
     Sfc(m)%Water_Temperature = 290.0_fp
-    Sfc(m)%Wind_Speed        = 6.0_fp
+    Sfc(m)%Wind_Speed        = 12.0_fp
+    Sfc(m)%Wind_Direction    = WIND_DIR
     Sfc(m)%Salinity          = 33.0_fp
-    CALL CRTM_Geometry_SetValue( Geometry(m), Sensor_Zenith_Angle = ZENITH )
+    ! Non-zero relative wind azimuth. At zero the surface third and fourth
+    ! Stokes components vanish identically (they are odd harmonics), which
+    ! would make every U and V check below vacuous.
+    CALL CRTM_Geometry_SetValue( Geometry(m), Sensor_Zenith_Angle  = ZENITH, &
+                                              Sensor_Azimuth_Angle = SENSOR_AZI )
   END DO
 
   ! --------------------------------------------------------------------------
@@ -232,6 +241,30 @@ PROGRAM test_VectorRT_TLADK
   CALL check_k  ( 2, ok_f_k )
   CALL set_cfrac( ONE )                      ! restore
 
+  ! --------------------------------------------------------------------------
+  ! FULL Stokes vector (n_Stokes = 4). Everything above runs at n_Stokes = 2,
+  ! so the polarized phase-matrix blocks that only exist beyond two components,
+  ! (1,3) (3,1) (2,3) (3,2) (3,3) (2,4) (4,2) (3,4) (4,3) (4,4), have never been
+  ! differentiated, and neither has the U/V chain from the surface through the
+  ! azimuthal accumulation to the reported Stokes vector.
+  !
+  ! FASTEM4 is loaded here because the FASTEM6 default has no third or fourth
+  ! Stokes azimuth model at all, so U and V would be identically zero and every
+  ! check below would pass vacuously.
+  ! --------------------------------------------------------------------------
+  Error_Status = CRTM_MWwaterCoeff_Load_FASTEM( 'FASTEM4', Quiet=.TRUE. )
+  IF ( Error_Status /= SUCCESS ) THEN
+    CALL Display_Message( PROGRAM_NAME, 'FASTEM4 load failed', FAILURE ); STOP 1
+  END IF
+  CALL set_options( 4 )
+  WRITE(*,'(/5x,"=========== n_Stokes = 4 full Stokes (ADA, overcast snow) ===========")')
+  CALL check_fd ( 1, VAR_WC, ok_4_fd1 )      ! dI/dWC
+  CALL check_fd ( 2, VAR_WC, ok_4_fd2 )      ! dQ/dWC
+  CALL check_fd ( 3, VAR_WC, ok_4_fd3 )      ! dU/dWC
+  CALL check_fd ( 4, VAR_WC, ok_4_fd4 )      ! dV/dWC
+  CALL check_adj( 4, ok_4_adj )              ! four-component dot product
+  CALL check_k  ( 4, ok_4_k )
+
   Error_Status = CRTM_Destroy( ChannelInfo )
 
   WRITE(*,'(/5x,a)') '====================================================='
@@ -251,11 +284,19 @@ PROGRAM test_VectorRT_TLADK
   WRITE(*,'(5x,"n_Stokes=2 frac  TL vs FD (dQ/dWC)    : ",a)') MERGE('PASS','FAIL',ok_f_fd)
   WRITE(*,'(5x,"n_Stokes=2 frac  adjoint dot-product  : ",a)') MERGE('PASS','FAIL',ok_f_adj)
   WRITE(*,'(5x,"n_Stokes=2 frac  K vs AD              : ",a)') MERGE('PASS','FAIL',ok_f_k)
+  WRITE(*,'(5x,"n_Stokes=4      TL vs FD (dI/dWC)     : ",a)') MERGE('PASS','FAIL',ok_4_fd1)
+  WRITE(*,'(5x,"n_Stokes=4      TL vs FD (dQ/dWC)     : ",a)') MERGE('PASS','FAIL',ok_4_fd2)
+  WRITE(*,'(5x,"n_Stokes=4      TL vs FD (dU/dWC)     : ",a)') MERGE('PASS','FAIL',ok_4_fd3)
+  WRITE(*,'(5x,"n_Stokes=4      TL vs FD (dV/dWC)     : ",a)') MERGE('PASS','FAIL',ok_4_fd4)
+  WRITE(*,'(5x,"n_Stokes=4      adjoint dot-product   : ",a)') MERGE('PASS','FAIL',ok_4_adj)
+  WRITE(*,'(5x,"n_Stokes=4      K vs AD               : ",a)') MERGE('PASS','FAIL',ok_4_k)
   IF ( ok_s1_fd .AND. ok_s1_adj .AND. ok_s1_k .AND. &
        ok_v_fd_wc1 .AND. ok_v_fd_wc2 .AND. ok_v_fd_t1 .AND. ok_v_fd_t2 .AND. &
        ok_v_adj .AND. ok_v_k .AND. &
        ok_c_fd_t1 .AND. ok_c_fd_t2 .AND. ok_c_adj .AND. ok_c_k .AND. &
-       ok_f_fd .AND. ok_f_adj .AND. ok_f_k ) THEN
+       ok_f_fd .AND. ok_f_adj .AND. ok_f_k .AND. &
+       ok_4_fd1 .AND. ok_4_fd2 .AND. ok_4_fd3 .AND. ok_4_fd4 .AND. &
+       ok_4_adj .AND. ok_4_k ) THEN
     WRITE(*,'(5x,a)') 'ALL CHECKS PASSED'
     STOP 0
   ELSE

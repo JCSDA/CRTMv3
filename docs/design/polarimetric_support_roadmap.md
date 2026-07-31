@@ -138,7 +138,37 @@ Each of these was verified on 2026-07-30, and the 2a to 2d entries on
 | 7 | U and V are never exercised by any test. `test_VectorRT_TLADK` runs at `n_Stokes = 2` with a scalar control. | test header and setup |
 | 8 | No polarized radiance has ever been compared against a reference outside CRTM. | Whole-repository survey of tests touching `n_Stokes` |
 
+## Verification status, 2026-07-31
+
+What has been measured, as distinct from argued. Each entry names the
+instrument so it can be re-run.
+
+| Claim | Evidence |
+|-------|----------|
+| The default scalar path is unchanged, bit for bit | `dump_scalar_fullprec` built in this tree and at the branch point, 90 values across clear, overcast and fractional-cloud scenes, identical to all 17 digits. Necessary because the regression suite compares at `DEFAULT_N_SIGFIG` (= `SP_N_SIGFIG`, about six figures) and cannot see a change in the last bits |
+| The full four-component Jacobian chain is correct | `test_VectorRT_TLADK` at `n_Stokes = 4`: TL against finite difference on dI, dQ, dU and dV, all non-degenerate (dU/dWC = 2.7e-6 agreeing to 6.1e-12), the four-component adjoint dot product exact, and K against AD. Before this, every Jacobian check ran at `n_Stokes = 2`, so the (1,3) (3,1) (2,3) (3,2) (3,3) (2,4) (4,2) (3,4) (4,3) (4,4) blocks and the whole U/V chain had never been differentiated |
+| The emergent Stokes vector is physically admissible | `test_VectorRT_Physics`, clear sky so no cloud lookup table is involved and a failure could not be blamed on coefficient quality. Polarization bound `I^2 >= Q^2+U^2+V^2` holds with margin -7.1e-7, I positive, and the polarized part is genuinely non-zero (1.7e-3) so the bound is not vacuous |
+| `n_Stokes = 3` works, and truncation is consistent | Same test. Running one scene at `n_Stokes` 2, 3 and 4 returns bit-identical I and Q, and bit-identical U between 3 and 4. This is the only exercise of the three-component truncation anywhere; the solver guards U with `n_Stokes > 2` and V with `n_Stokes == 4`, so it is a distinct path |
+| U and V are the azimuthal signal, not something leaking into those slots | Same test: both vanish to 2.7e-21 at relative azimuth 0 and 180, where every odd harmonic must |
+| The `(1,1)` positivity clamp does not fire in practice | Instrumented count over a realistic `n_Stokes = 4` scattering run on the shipped CRTM-Exp table: **0 clamps in 7092 assembled elements**. The clamp is a dormant hazard, not an active defect |
+| The new RTV state is thread safe | `RTV` is a per-thread array (`RTV(n_channel_threads)`), so `e_Rad_UP_Stokes` is per thread by construction |
+
 ## Open questions
+
+- **Normalize_Phase applies inconsistent normalization to below-diagonal
+  polarized blocks.** Found 2026-07-31 while bounding the clamp. For each row
+  `i` the routine scales that row's intensity and polarized elements by the
+  same factor, then performs an intensity-ONLY symmetry copy,
+  `Pff(j1,i1) = Pff(i1,j1)`. The `(1,1)` loop covers columns `>= i` while the
+  polarized loop covers all columns, so a block below the diagonal ends up with
+  its intensity element carrying row `i`'s normalization and its polarized
+  elements carrying row `j`'s. Reconciling them needs the polarized symmetry
+  relations rather than a guess, so nothing was changed. This is not
+  hypothetical: it is why the stress case of `test_PhaseMatrix_Invariants`
+  still shows a ratio near 2 after `Bound_Phase_Block` reduced it from 5.6e6.
+  It does not produce a bound violation on realistic coefficients, where the
+  measured ratio is 0.65.
+
 
 Unknown, and to be resolved in Phase 1 rather than assumed.
 
