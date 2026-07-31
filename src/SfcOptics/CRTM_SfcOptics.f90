@@ -483,13 +483,14 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Compute_SfcOptics'
     ! Local variables
     CHARACTER(ML) :: Message
-    INTEGER :: i
+    INTEGER :: i, j
     INTEGER :: nL, nZ
     REAL(fp) :: SIN2_Angle
     REAL(fp) :: pv
     REAL(fp) :: ph
     REAL(fp) :: phi
     REAL(fp) :: theta_f
+    REAL(fp) :: rV, rH
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES) :: Emissivity
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES, &
                         SfcOptics%n_Angles,MAX_N_STOKES) :: Reflectivity
@@ -808,12 +809,38 @@ CONTAINS
         ELSE
 
 
-          ! ------------------------------------
-          ! Coupled polarization from atmosphere
-          ! considered. Simply copy the data
-          ! ------------------------------------
-          SfcOptics%Emissivity(1:nZ,1:nL)             = Emissivity(1:nZ,1:nL)
+          ! ----------------------------------------------------------------
+          ! Coupled (vector / n_Stokes>1) polarization. The MW/IR surface
+          ! models return emissivity in the (V,H) basis (component 1 = eV,
+          ! component 2 = eH), but the polarimetric RT solver expects the
+          ! Stokes basis (I,Q,U,V). Convert here:
+          !   e_I = (eV+eH)/2 ,  e_Q = (eV-eH)/2 ;  U,V pass through.
+          ! Without this conversion the solver reads eH as e_Q and injects a
+          ! large spurious surface Stokes-Q source (e_Q ~ 0.5 instead of a
+          ! few %), producing an unphysical V-polarized brightness (I+Q can
+          ! exceed the physical temperature). Mirrors the n_Stokes==1 path.
+          ! NOTE: the reflectivity still needs the analogous (V,H)->Stokes
+          ! block conversion for full energy consistency (see follow-up).
+          ! ----------------------------------------------------------------
+          SfcOptics%Emissivity(1:nZ,1) = POINT_5*(Emissivity(1:nZ,1)+Emissivity(1:nZ,2))
+          SfcOptics%Emissivity(1:nZ,2) = POINT_5*(Emissivity(1:nZ,1)-Emissivity(1:nZ,2))
+          IF ( nL > 2 ) SfcOptics%Emissivity(1:nZ,3:nL) = Emissivity(1:nZ,3:nL)
+          ! Reflectivity: copy through, then convert the (V,H) intensity block
+          ! (components 1,2) to the Stokes (I,Q) reflection matrix, consistent
+          ! with the emissivity conversion above (specular MW/IR surface, no
+          ! V<->H cross term):  R_II = R_QQ = (rV+rH)/2 ,  R_IQ = R_QI = (rV-rH)/2 .
+          ! U,V (components 3,4) pass through unchanged.
           SfcOptics%Reflectivity(1:nZ,1:nL,1:nZ,1:nL) = Reflectivity(1:nZ,1:nL,1:nZ,1:nL)
+          DO j = 1, nZ
+            DO i = 1, nZ
+              rV = Reflectivity(i,1,j,1)
+              rH = Reflectivity(i,2,j,2)
+              SfcOptics%Reflectivity(i,1,j,1) = POINT_5*(rV+rH)
+              SfcOptics%Reflectivity(i,1,j,2) = POINT_5*(rV-rH)
+              SfcOptics%Reflectivity(i,2,j,1) = POINT_5*(rV-rH)
+              SfcOptics%Reflectivity(i,2,j,2) = POINT_5*(rV+rH)
+            END DO
+          END DO
 
         END IF Decoupled_Polarization
 
@@ -1273,6 +1300,8 @@ CONTAINS
     ! Local variables
     CHARACTER(ML) :: Message
     INTEGER :: i
+    INTEGER :: j
+    REAL(fp) :: rV_TL, rH_TL
     INTEGER :: nL, nZ
     INTEGER :: Polarization
     REAL(fp) :: SIN2_Angle
@@ -1579,18 +1608,38 @@ CONTAINS
         ELSE
 
 
-          ! ------------------------------------
-          ! Coupled polarization from atmosphere
-          ! considered. Simply copy the data
-          ! ------------------------------------
-          ! NOTE: index the LHS sub-blocks (matching the forward model, L812-813)
+          ! ----------------------------------------------------------------
+          ! Coupled (vector / n_Stokes>1) polarization. Tangent-linear of the
+          ! (V,H) -> Stokes (I,Q) basis conversion applied in the forward
+          ! model: the map is linear with constant coefficients, so the TL
+          ! carries the identical form on the perturbations.
+          !   e_I' = (eV'+eH')/2 ,  e_Q' = (eV'-eH')/2 ;  U,V pass through.
+          ! Keeping this in step with the forward is what makes the vector
+          ! Jacobians consistent; a plain copy here linearizes a different
+          ! surface mapping than the one the forward model used.
+          ! ----------------------------------------------------------------
+          ! NOTE: index the LHS sub-blocks (matching the forward model)
           ! so the allocatable target keeps its (MAX_N_ANGLES,MAX_N_STOKES) size.
           ! A whole-array assignment here reallocates the target to (nZ,nL), which
           ! shrinks SfcOptics_TL%Emissivity below MAX_N_STOKES and causes a
           ! subsequent FASTEM-X surface TL write (Iv/Ih/U/V => 4 Stokes) to run
           ! out of bounds for n_Stokes>1.
-          SfcOptics_TL%Emissivity(1:nZ,1:nL)             = Emissivity_TL(1:nZ,1:nL)
+          SfcOptics_TL%Emissivity(1:nZ,1) = POINT_5*(Emissivity_TL(1:nZ,1)+Emissivity_TL(1:nZ,2))
+          SfcOptics_TL%Emissivity(1:nZ,2) = POINT_5*(Emissivity_TL(1:nZ,1)-Emissivity_TL(1:nZ,2))
+          IF ( nL > 2 ) SfcOptics_TL%Emissivity(1:nZ,3:nL) = Emissivity_TL(1:nZ,3:nL)
+          ! Reflectivity: copy through, then convert the (V,H) intensity block
+          ! exactly as the forward model does.
           SfcOptics_TL%Reflectivity(1:nZ,1:nL,1:nZ,1:nL) = Reflectivity_TL(1:nZ,1:nL,1:nZ,1:nL)
+          DO j = 1, nZ
+            DO i = 1, nZ
+              rV_TL = Reflectivity_TL(i,1,j,1)
+              rH_TL = Reflectivity_TL(i,2,j,2)
+              SfcOptics_TL%Reflectivity(i,1,j,1) = POINT_5*(rV_TL+rH_TL)
+              SfcOptics_TL%Reflectivity(i,1,j,2) = POINT_5*(rV_TL-rH_TL)
+              SfcOptics_TL%Reflectivity(i,2,j,1) = POINT_5*(rV_TL-rH_TL)
+              SfcOptics_TL%Reflectivity(i,2,j,2) = POINT_5*(rV_TL+rH_TL)
+            END DO
+          END DO
 
         END IF Decoupled_Polarization
 
@@ -1914,6 +1963,7 @@ CONTAINS
     ! Local variables
     CHARACTER(256)  :: Message
     INTEGER :: i
+    INTEGER :: j
     INTEGER :: nL, nZ
     INTEGER :: Polarization
     REAL(fp) :: SIN2_Angle
@@ -2143,13 +2193,37 @@ CONTAINS
         ELSE
 
 
-          ! ------------------------------------
-          ! Coupled polarization from atmosphere
-          ! considered. Simply copy the data
-          ! ------------------------------------
-          Emissivity_AD(1:nZ,1:nL) = SfcOptics_AD%Emissivity(1:nZ,1:nL)
+          ! ----------------------------------------------------------------
+          ! Coupled (vector / n_Stokes>1) polarization. Adjoint of the
+          ! (V,H) -> Stokes (I,Q) basis conversion applied in the forward
+          ! model. The forward map on (eV,eH) is
+          !     M = [ 1/2  1/2 ; 1/2  -1/2 ] ,
+          ! which is symmetric, so the adjoint carries the same coefficients
+          ! with the roles of the components exchanged:
+          !     eV_AD = (e_I_AD + e_Q_AD)/2 ,  eH_AD = (e_I_AD - e_Q_AD)/2 .
+          ! U,V pass through. The reflectivity adjoint is the transpose of the
+          ! forward (rV,rH) -> (R_II,R_IQ,R_QI,R_QQ) map, so each of rV,rH
+          ! collects all four Stokes blocks.
+          ! ----------------------------------------------------------------
+          Emissivity_AD(1:nZ,1) = POINT_5*(SfcOptics_AD%Emissivity(1:nZ,1)+SfcOptics_AD%Emissivity(1:nZ,2))
+          Emissivity_AD(1:nZ,2) = POINT_5*(SfcOptics_AD%Emissivity(1:nZ,1)-SfcOptics_AD%Emissivity(1:nZ,2))
+          IF ( nL > 2 ) Emissivity_AD(1:nZ,3:nL) = SfcOptics_AD%Emissivity(1:nZ,3:nL)
           SfcOptics_AD%Emissivity = ZERO
           Reflectivity_AD(1:nZ,1:nL,1:nZ,1:nL) = SfcOptics_AD%Reflectivity(1:nZ,1:nL,1:nZ,1:nL)
+          DO j = 1, nZ
+            DO i = 1, nZ
+              Reflectivity_AD(i,1,j,1) = POINT_5*( SfcOptics_AD%Reflectivity(i,1,j,1) &
+                                                 + SfcOptics_AD%Reflectivity(i,1,j,2) &
+                                                 + SfcOptics_AD%Reflectivity(i,2,j,1) &
+                                                 + SfcOptics_AD%Reflectivity(i,2,j,2) )
+              Reflectivity_AD(i,2,j,2) = POINT_5*( SfcOptics_AD%Reflectivity(i,1,j,1) &
+                                                 - SfcOptics_AD%Reflectivity(i,1,j,2) &
+                                                 - SfcOptics_AD%Reflectivity(i,2,j,1) &
+                                                 + SfcOptics_AD%Reflectivity(i,2,j,2) )
+              Reflectivity_AD(i,1,j,2) = ZERO
+              Reflectivity_AD(i,2,j,1) = ZERO
+            END DO
+          END DO
           SfcOptics_AD%Reflectivity = ZERO
 
         END IF Decoupled_Polarization

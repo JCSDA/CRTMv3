@@ -698,6 +698,16 @@ else()
   message(STATUS "test_CloudCoeff_Exp_Forward not registered (needs mwr_aws coeffs + CloudCoeff_Exp_Full6.nc).")
 endif()
 
+# test_VectorRT_SurfaceBasis: pins the surface (V,H) -> Stokes (I,Q) conversion
+# on the n_Stokes>1 path. Calls CRTM_Compute_SfcOptics directly and checks the
+# vector-path emissivity/reflectivity against eV,eH obtained from the scalar
+# path, so it needs no cloud LUT and no reference radiances. The TL/AD/K
+# self-consistency tests cannot detect a wrong forward basis; this can.
+add_executable(test_VectorRT_SurfaceBasis mains/unit/Unit_Test/test_VectorRT_SurfaceBasis.f90)
+target_link_libraries(test_VectorRT_SurfaceBasis PRIVATE crtm)
+add_test(NAME test_VectorRT_SurfaceBasis
+         COMMAND $<TARGET_FILE:test_VectorRT_SurfaceBasis>)
+
 # test_VectorRT_TLADK: TL/AD/K correctness for the vector-RT (n_Stokes>1)
 # cloud-scattering path. The n_Stokes>1 ADA branch needs a >=6-phase-element
 # LUT (the CRTM-Exp scheme), so it is unreachable by every other test; this is
