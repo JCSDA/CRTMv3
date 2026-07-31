@@ -750,6 +750,19 @@ target_link_libraries(test_VectorRT_SurfaceBasis PRIVATE crtm)
 add_test(NAME test_VectorRT_SurfaceBasis
          COMMAND $<TARGET_FILE:test_VectorRT_SurfaceBasis>)
 
+# test_VectorRT_SurfaceFrame: pins the polarimetric reference frame of the
+# microwave surface optics, and proves the surface model's U and V survive the
+# coverage aggregation into the vector solver input. Mirrors the scene through
+# the view plane and asserts I,Q are even and U,V odd in relative azimuth,
+# which is the symmetry that identifies the reference plane as the meridional
+# plane and so settles whether a surface-to-solver frame rotation is needed.
+# Loads FASTEM4 explicitly: the FASTEM6 default has no third/fourth Stokes
+# azimuth model. No cloud LUT and no reference radiances required.
+add_executable(test_VectorRT_SurfaceFrame mains/unit/Unit_Test/test_VectorRT_SurfaceFrame.f90)
+target_link_libraries(test_VectorRT_SurfaceFrame PRIVATE crtm)
+add_test(NAME test_VectorRT_SurfaceFrame
+         COMMAND $<TARGET_FILE:test_VectorRT_SurfaceFrame>)
+
 # test_VectorRT_TLADK: TL/AD/K correctness for the vector-RT (n_Stokes>1)
 # cloud-scattering path. The n_Stokes>1 ADA branch needs a >=6-phase-element
 # LUT (the CRTM-Exp scheme), so it is unreachable by every other test; this is
