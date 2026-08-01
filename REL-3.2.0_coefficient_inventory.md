@@ -14,7 +14,8 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 
 ## Summary
 
-- **528 sensors** with a SpcCoeff file: 120 microwave, 265 infrared, 135 visible, 6 ultraviolet, 2 invalid (see flags).
+- **538 sensors** with a SpcCoeff file: 120 microwave, 268 infrared, 141 visible, 7 ultraviolet, 2 invalid (see flags). The tables below now enumerate all 538, one row per staged SpcCoeff, with no row lacking a file and no file lacking a row (reconciled 2026-08-01, see the note at the end of this section).
+- **Reconciliation 2026-08-01.** The tables previously listed 522 sensors against 538 staged files. Eleven rows described files that are not in `fix_REL-3.2.0.0/` in any format and were removed: six `_j2` duplicates whose `_n21` counterparts ship (`atms_j2`, `cris-fsr_j2`, `viirs-i_j2`, `viirs-m_j2`, `v.viirs-i_j2`, `v.viirs-m_j2`), plus `atms_j2-srf`, `mwi_metop-sg-a1`, and the three retired OMPS all-FOV products (`u.omps-npAllFOV_j2`, `u.omps-npAllFOVuvsol_j2`, `u.omps-tcAllFOV_j2`) superseded by the per-platform `u.omps-np/tc_n20/n21` sets. Twenty-one staged products had no row at all and were added; their channel counts, algorithms, dates and provenance are read from the files, and their Validation column was then established by evidence rather than assumed. Of the 21: four OMPS products are covered by `test_OMPS_UV_Physics` (registered in `test/CMakeLists.txt`); `gems2_beryl` was confirmed bit-identical to the unit-tested `gems2_amethyst` in both SpcCoeff and TauCoeff; eight AGRI/MERSI products carry the generation gates and cross-sensor envelope from the 2026-07-30 addendum; and all 21 were additionally loaded through `CRTM_Init` and run through `CRTM_Forward` on 2026-08-01. **No ctest covers any of the 21 except the four OMPS products** — the addendum's earlier "+ ctest" claim for the AGRI/MERSI set was checked against `test/` and is not supported, so it has been corrected in place. Separately the five VIIRS NOAA-20 products were renamed from `_j1`, since JPSS-1 is NOAA-20 and every file already carried `WMO_Satellite_Id` 225 ("NOAA 20" in C-5); filename and internal `Sensor_Id` were changed together.
 - **Post-audit additions:** the 2026-07-27 FY-3 microwave sweep (mwhs2_fy3c/d, mwts2_fy3c/d, mwts3_fy3e, mwri_fy3c/d, from NWP-SAF passbands; installed after the audit census and added to the table 2026-07-28), `gems2_amethyst` (Weather Stream GEMS2 MW sounder, ECMWF84+MonoRTM), and the completed INSAT-3DS visible pair (`v.imgr_insat-3ds`, `v.sndr_insat-3ds` gained TauCoeffs and regenerated SpcCoeffs). The headline counts above include all of these; the TauCoeff-coverage, provenance, and validation mixes below predate them (crtm-coeffgen count is now 33). FY-3 sweep 2 (mwhs2_fy3e/f, mwts3_fy3f, mwri2_fy3f, mwrirm_fy3g) completed 2026-07-28; the four quad-carrying sounders were regenerated with the MonoRTM backend after the double-offset and LBLRTM narrow-band findings (crtm-coeffgen#71) and are physics-validated.
 - **TauCoeff coverage:** 267 sensors have both ODPS and ODAS, 117 ODPS only, 118 ODAS only, 8 ODSSU (SSU family), 5 none (cannot run; see flags).
 - **ACCoeff (antenna correction):** 17 sensors (AMSU-A, AMSU-B, MHS families). **NLTECoeff (non-LTE correction):** 39 sensors (hyperspectral IR: AIRS, CrIS, IASI families).
@@ -57,6 +58,16 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
   - `coefficient I/O tests only`: file read/inquire round-trip tests, no RT run.
   - `family-validated`: not itself tested, but the same instrument family (same
     physics path and coefficient format) is regression-tested on another platform.
+  - `load + forward verified <date>`: no in-suite coverage, but the staged files
+    were loaded through `CRTM_Init` and run through `CRTM_Forward` over the 84
+    ECMWF84 profiles at three zenith angles with solar geometry, and every
+    channel returned finite radiances in physical range (IR/MW brightness
+    temperatures 117-314 K; reflective bands positive and finite). This is a
+    smoke test, not a physics validation: it proves the coefficients load and
+    run, not that they are accurate.
+  - `generation gates + cross-sensor envelope`: passed the generation-time
+    verification gates and sits inside the envelope of comparable instruments,
+    per the 2026-07-30 addendum. Not in any ctest.
   - `untested (load-only)`: no in-suite coverage; validity rests on the upstream
     generation process.
 
@@ -80,9 +91,12 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 ## Microwave sensors (120)
 
 | Sensor_Id | Instrument / Platform | Ch | TauCoeff | AC | NLTE | Generated | Provenance | Validation |
+| atms_quicksounder | ATMS / QuickSounder | 22 | ODPS |  |  | 2026-07-30 | crtm-coeffgen | load + forward verified 2026-08-01 (no in-suite coverage) |
+| gems2_beryl | GEMS-2 / Weather Stream Beryl | 24 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | family-validated (bit-identical to gems2_amethyst, test_MW_Sounder_Physics) |
+| mwi_metop-sg-b1 | MWI / MetOp-SG B1 | 26 | ODPS |  |  | 2026-07-27 | crtm-coeffgen | load + forward verified 2026-08-01 (no in-suite coverage) |
 |---|---|---|---|---|---|---|---|---|
 | amsr2_gcom-w1 | AMSR2 / GCOM-W1 | 14 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| amsr3_gosatgw | AMSR3 / GOSAT-GW | 21 | ODPS |  |  | 2026-07-13 | crtm-coeffgen | untested (load-only) |
+| amsr3_gosatgw | AMSR3 / GOSAT-GW | 21 | ODPS |  |  | 2026-08-01 | crtm-coeffgen | load + forward + Jacobian verified 2026-08-01 (no in-suite coverage) |
 | amsre_aqua | AMSR-E / Aqua | 12 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | amsua_aqua | AMSU-A / Aqua | 15 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | coefficient I/O tests only |
 | amsua_metop-a | AMSU-A / MetOp-A | 15 | ODPS+ODAS | yes |  | pre-2024 (conv. 2024-08) | legacy JCSDA | coefficient I/O tests only |
@@ -97,8 +111,6 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | amsub_n15 | AMSU-B / NOAA-15 | 5 | ODPS+ODAS | yes |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | amsub_n16 | AMSU-B / NOAA-16 | 5 | ODPS+ODAS | yes |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | amsub_n17 | AMSU-B / NOAA-17 | 5 | ODPS+ODAS | yes |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| atms_j2 | ATMS / NOAA-21 (JPSS-2) | 22 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
-| atms_j2-srf | ATMS / NOAA-21 (JPSS-2, SRF variant) | 22 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | atms_n20 | ATMS / NOAA-20 | 22 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | atms_n20-srf | ATMS / NOAA-20 (SRF variant) | 22 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | atms_n21 | ATMS / NOAA-21 | 22 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | regression suite (FWD/TL/AD/K baselines) |
@@ -140,14 +152,13 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | mwhs2_fy3f | MWHS-2 (E-variant) / FY-3F | 15 | ODPS |  |  | 2026-07-28 | crtm-coeffgen (NWP-SAF passbands) | validated (physics driver: BT/WF/adjoint/K==AD) |
 | mwhs_fy3a | MWHS / FY-3A | 5 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | mwhs_fy3b | MWHS / FY-3B | 5 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| mwi_metop-sg-a1 | MWI / MetOp-SG A1 | 18 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | mwi_wsf-m1 | MWI / WSF-M1 | 17 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | mwr_aws | MWR / Arctic Weather Satellite (AWS) | 19 | ODPS |  |  | 2026-04-26 | JCSDA emulator (B.T. Johnson) | gated regression (PARMIO, FWD/TL/AD/K) |
+| mwri2_fy3f | MWRI-2 / FY-3F (instrument failed 2025; historical) | 22 | ODPS |  |  | 2026-07-28 | crtm-coeffgen (NWP-SAF passbands) | validated (physics driver: BT/WF/adjoint/K==AD) |
 | mwri_fy3a | MWRI / FY-3A | 10 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | mwri_fy3b | MWRI / FY-3B | 10 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | mwri_fy3c | MWRI / FY-3C | 10 | ODPS |  |  | 2026-07-27 | crtm-coeffgen (NWP-SAF passbands) | validated (physics driver: BT/WF/adjoint/K==AD) |
 | mwri_fy3d | MWRI / FY-3D | 10 | ODPS |  |  | 2026-07-27 | crtm-coeffgen (NWP-SAF passbands) | validated (physics driver: BT/WF/adjoint/K==AD) |
-| mwri2_fy3f | MWRI-2 / FY-3F (instrument failed 2025; historical) | 22 | ODPS |  |  | 2026-07-28 | crtm-coeffgen (NWP-SAF passbands) | validated (physics driver: BT/WF/adjoint/K==AD) |
 | mwrirm_fy3g | MWRI-RM / FY-3G | 26 | ODPS |  |  | 2026-07-28 | crtm-coeffgen (NWP-SAF passbands) | validated (physics driver: BT/WF/adjoint/K==AD) |
 | mws_metop-sg-a1 | MWS / MetOp-SG A1 | 24 | ODPS |  |  | 2026-07-16 | crtm-coeffgen | untested (load-only) |
 | mwts2_fy3c | MWTS-2 / FY-3C | 13 | ODPS |  |  | 2026-07-28 | crtm-coeffgen (NWP-SAF passbands, fixed LBLRTM per #75; final 2026-07-28) | validated (physics driver; WF peaks match AMSU-A heritage exactly) |
@@ -202,9 +213,15 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | tropics_designed_v1 | TROPICS radiometer / design study (v1) | 12 | ODPS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | windsat_coriolis | WindSat / Coriolis | 16 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 
-## Infrared sensors (265)
+## Infrared sensors (268)
 
 | Sensor_Id | Instrument / Platform | Ch | TauCoeff | AC | NLTE | Generated | Provenance | Validation |
+| agri_fy4a | AGRI / Fengyun-4A | 8 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | generation gates + cross-sensor envelope; load + forward verified 2026-08-01 |
+| agri_fy4b | AGRI / Fengyun-4B | 9 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | generation gates + cross-sensor envelope; load + forward verified 2026-08-01 |
+| mersi2_fy3d | MERSI-2 / Fengyun-3D | 6 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | generation gates + cross-sensor envelope; load + forward verified 2026-08-01 |
+| mersi3_fy3f | MERSI-3 / Fengyun-3F | 6 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | generation gates + cross-sensor envelope; load + forward verified 2026-08-01 |
+| viirs-i_j4 | VIIRS I-bands / JPSS-4 | 2 | ODPS |  |  | 2026-07-30 | crtm-coeffgen | load + forward verified 2026-08-01 (no in-suite coverage) |
+| viirs-m_j4 | VIIRS M-bands / JPSS-4 | 5 | ODPS |  |  | 2026-07-30 | crtm-coeffgen | load + forward verified 2026-08-01 (no in-suite coverage) |
 |---|---|---|---|---|---|---|---|---|
 | aatsr_envisat | AATSR / Envisat | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | abi-81K_g17 | ABI (81K subset) / GOES-17 | 10 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
@@ -217,6 +234,7 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | ahi_himawari9 | AHI / Himawari-9 | 10 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | airs281_aqua | AIRS (281-ch subset) / Aqua | 281 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | airs324_aqua | AIRS (324-ch subset) / Aqua | 324 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
+| airs_aqua | AIRS / Aqua | 2378 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | regression (AOD) |
 | airsM10_aqua | AIRS (module 10) / Aqua | 167 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | airsM11_aqua | AIRS (module 11) / Aqua | 144 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | airsM12_aqua | AIRS (module 12) / Aqua | 130 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
@@ -234,7 +252,6 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | airsM7_aqua | AIRS (module 7) / Aqua | 167 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | airsM8_aqua | AIRS (module 8) / Aqua | 161 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | airsM9_aqua | AIRS (module 9) / Aqua | 167 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
-| airs_aqua | AIRS / Aqua | 2378 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | regression (AOD) |
 | ami_gk2 | AMI / GEO-KOMPSAT-2A | 10 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | aster_terra | ASTER / Terra | 5 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | atsr1_ers1 | ATSR-1 / ERS-1 | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
@@ -248,8 +265,6 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | avhrr2_n12 | AVHRR/2 / NOAA-12 | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | avhrr2_n14 | AVHRR/2 / NOAA-14 | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | avhrr2_tirosn | AVHRR/2 / TIROS-N | 2 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| avhrr3JM_n17 | AVHRR/3 (J. Mittaz recal.) / NOAA-17 | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| avhrr3JM_n18 | AVHRR/3 (J. Mittaz recal.) / NOAA-18 | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | avhrr3_metop-a | AVHRR/3 / MetOp-A | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | avhrr3_metop-b | AVHRR/3 / MetOp-B | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | avhrr3_metop-c | AVHRR/3 / MetOp-C | 3 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
@@ -258,34 +273,35 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | avhrr3_n17 | AVHRR/3 / NOAA-17 | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | avhrr3_n18 | AVHRR/3 / NOAA-18 | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | avhrr3_n19 | AVHRR/3 / NOAA-19 | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| avhrr3JM_n17 | AVHRR/3 (J. Mittaz recal.) / NOAA-17 | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| avhrr3JM_n18 | AVHRR/3 (J. Mittaz recal.) / NOAA-18 | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | cris-fsr431_n20 | CrIS-FSR (431-ch subset) / NOAA-20 | 431 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | cris-fsr431_npp | CrIS-FSR (431-ch subset) / Suomi NPP | 431 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
+| cris-fsr_n20 | CrIS-FSR / NOAA-20 | 2211 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
+| cris-fsr_n21 | CrIS-FSR / NOAA-21 | 2211 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | regression suite (FWD/TL/AD/K baselines) |
+| cris-fsr_npp | CrIS-FSR / Suomi NPP | 2211 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | coefficient I/O tests only |
 | cris-fsrB1_n20 | CrIS-FSR (band 1) / NOAA-20 | 713 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | cris-fsrB1_npp | CrIS-FSR (band 1) / Suomi NPP | 713 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | cris-fsrB2_n20 | CrIS-FSR (band 2) / NOAA-20 | 865 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | cris-fsrB2_npp | CrIS-FSR (band 2) / Suomi NPP | 865 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | cris-fsrB3_n20 | CrIS-FSR (band 3) / NOAA-20 | 633 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | cris-fsrB3_npp | CrIS-FSR (band 3) / Suomi NPP | 633 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
-| cris-fsr_j2 | CrIS-FSR / NOAA-21 (JPSS-2) | 2211 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
-| cris-fsr_n20 | CrIS-FSR / NOAA-20 | 2211 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
-| cris-fsr_n21 | CrIS-FSR / NOAA-21 | 2211 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | regression suite (FWD/TL/AD/K baselines) |
-| cris-fsr_npp | CrIS-FSR / Suomi NPP | 2211 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | coefficient I/O tests only |
 | cris374_n20 | CrIS (374-ch subset) / NOAA-20 | 374 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | cris374_npp | CrIS (374-ch subset) / Suomi NPP | 374 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | cris399_n20 | CrIS (399-ch subset) / NOAA-20 | 399 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | cris399_npp | CrIS (399-ch subset) / Suomi NPP | 399 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | regression suite (FWD/TL/AD/K baselines) |
+| cris_n20 | CrIS / NOAA-20 | 1305 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
+| cris_npp | CrIS / Suomi NPP | 1305 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | crisB1_n20 | CrIS (band 1) / NOAA-20 | 713 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | crisB1_npp | CrIS (band 1) / Suomi NPP | 713 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | regression (aircraft) |
 | crisB2_n20 | CrIS (band 2) / NOAA-20 | 433 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | crisB2_npp | CrIS (band 2) / Suomi NPP | 433 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | crisB3_n20 | CrIS (band 3) / NOAA-20 | 159 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | crisB3_npp | CrIS (band 3) / Suomi NPP | 159 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
-| cris_n20 | CrIS / NOAA-20 | 1305 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
-| cris_npp | CrIS / Suomi NPP | 1305 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | fci_mtg-i1 | FCI / MTG-I1 | 8 | ODPS |  |  | 2024-11-27 | JCSDA (2024) | untested (load-only) |
 | giirsB1_fsr_fy4a | GIIRS (band 1) / FY-4A (FSR) | 689 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | giirsB2_fsr_fy4a | GIIRS (band 2) / FY-4A (FSR) | 961 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| gxi_geoxo | GXI (GeoXO Imager) / GeoXO | 11 | ODPS |  |  | 2026-07-26 | crtm-coeffgen | untested (load-only) |
+| gxi_geoxo | GXI (GeoXO Imager) / GeoXO | 11 | ODPS |  |  | 2026-07-26 | crtm-coeffgen | load + forward verified 2026-08-01 (no in-suite coverage; notional pre-launch SRF for the new band) |
 | gxs_geoxo_lw | GXS (GeoXO Sounder) / GeoXO (LW) | 1096 | ODPS |  |  | 2024-10-16 | STAR | untested (load-only) |
 | gxs_geoxo_mw | GXS (GeoXO Sounder) / GeoXO (MW) | 1306 | ODPS |  | yes | 2024-10-16 | STAR | untested (load-only) |
 | hirs2-UWS_n06 | HIRS/2 (UW SSEC shifted SRF) / NOAA-6 | 19 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
@@ -328,6 +344,9 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | iasi616_metop-a | IASI (616-ch subset) / MetOp-A | 616 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | iasi616_metop-b | IASI (616-ch subset) / MetOp-B | 616 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | iasi616_metop-c | IASI (616-ch subset) / MetOp-C | 616 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
+| iasi_metop-a | IASI / MetOp-A | 8461 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | coefficient I/O tests only |
+| iasi_metop-b | IASI / MetOp-B | 8461 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | regression (channel subset, OMP) |
+| iasi_metop-c | IASI / MetOp-C | 8461 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | iasiB1_metop-a | IASI (band 1) / MetOp-A | 2260 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | iasiB1_metop-b | IASI (band 1) / MetOp-B | 2260 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | iasiB1_metop-c | IASI (band 1) / MetOp-C | 2260 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
@@ -337,16 +356,6 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | iasiB3_metop-a | IASI (band 3) / MetOp-A | 3041 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | iasiB3_metop-b | IASI (band 3) / MetOp-B | 3041 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | iasiB3_metop-c | IASI (band 3) / MetOp-C | 3041 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
-| iasi_metop-a | IASI / MetOp-A | 8461 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | coefficient I/O tests only |
-| iasi_metop-b | IASI / MetOp-B | 8461 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | regression (channel subset, OMP) |
-| iasi_metop-c | IASI / MetOp-C | 8461 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
-| imgrD1S2_g13 | GOES Imager (detector 1 S2) / GOES-13 | 4 | NONE |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| imgrD1_g13 | GOES Imager (detector 1) / GOES-13 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| imgrD1_g14 | GOES Imager (detector 1) / GOES-14 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| imgrD1_g15 | GOES Imager (detector 1) / GOES-15 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| imgrD2_g13 | GOES Imager (detector 2) / GOES-13 | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| imgrD2_g14 | GOES Imager (detector 2) / GOES-14 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| imgrD2_g15 | GOES Imager (detector 2) / GOES-15 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | imgr_g08 | GOES Imager / GOES-8 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | imgr_g09 | GOES Imager / GOES-9 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | imgr_g10 | GOES Imager / GOES-10 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
@@ -358,6 +367,13 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | imgr_insat-3ds | GOES Imager / INSAT-3DS | 4 | ODPS |  |  | 2025-03-27 | JCSDA (2025) | untested (load-only) |
 | imgr_mt1r | GOES Imager / MTSAT-1R | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | imgr_mt2 | GOES Imager / MTSAT-2 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| imgrD1_g13 | GOES Imager (detector 1) / GOES-13 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| imgrD1_g14 | GOES Imager (detector 1) / GOES-14 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| imgrD1_g15 | GOES Imager (detector 1) / GOES-15 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| imgrD1S2_g13 | GOES Imager (detector 1 S2) / GOES-13 | 4 | NONE |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| imgrD2_g13 | GOES Imager (detector 2) / GOES-13 | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| imgrD2_g14 | GOES Imager (detector 2) / GOES-14 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| imgrD2_g15 | GOES Imager (detector 2) / GOES-15 | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | iras_fy3a | IRAS / FY-3A | 20 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | iras_fy3b | IRAS / FY-3B | 20 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | irs_mtg-s1 | IRS / MTG-S1 | 1953 | ODPS |  | yes | 2026-07-24 | crtm-coeffgen | untested (load-only) |
@@ -370,6 +386,8 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | mi-l_coms | MI (low-res) / COMS | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | mi-l_coms.v2 | MI (low-res) / COMS (v2) | 4 | ODPS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | mi-m_coms | MI (mid-res) / COMS | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| modis_aqua | MODIS / Aqua | 16 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | regression suite (FWD/TL/AD/K baselines) |
+| modis_terra | MODIS / Terra | 16 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | modisD01S_aqua | MODIS (detector 1 subset) / Aqua | 16 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | modisD01S_terra | MODIS (detector 1 subset) / Terra | 16 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | modisD02S_aqua | MODIS (detector 2 subset) / Aqua | 16 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
@@ -392,8 +410,6 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | modisD10S_terra | MODIS (detector 10 subset) / Terra | 16 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | modisS_aqua | MODIS (subset) / Aqua | 16 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | modisS_terra | MODIS (subset) / Terra | 16 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
-| modis_aqua | MODIS / Aqua | 16 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | regression suite (FWD/TL/AD/K baselines) |
-| modis_terra | MODIS / Terra | 16 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | msi_earthcare | MSI / EarthCARE | 3 | ODPS |  |  | 2026-07-24 | crtm-coeffgen | untested (load-only) |
 | mviriBKUP_m03 | MVIRI (backup) / Meteosat-3 | 2 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | mviriBKUP_m04 | MVIRI (backup) / Meteosat-4 | 2 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
@@ -410,6 +426,15 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | seviri_m10 | SEVIRI / Meteosat-10 | 8 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | seviri_m11 | SEVIRI / Meteosat-11 | 8 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | slstr_sentinel3a | SLSTR / Sentinel-3A | 3 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| sndr_g08 | GOES Sounder / GOES-8 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| sndr_g09 | GOES Sounder / GOES-9 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| sndr_g10 | GOES Sounder / GOES-10 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| sndr_g11 | GOES Sounder / GOES-11 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| sndr_g12 | GOES Sounder / GOES-12 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| sndr_g13 | GOES Sounder / GOES-13 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| sndr_g14 | GOES Sounder / GOES-14 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| sndr_g15 | GOES Sounder / GOES-15 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| sndr_insat-3ds | GOES Sounder / INSAT-3DS | 18 | ODPS+ODAS |  |  | 2025-03-27 | JCSDA (2025) | untested (load-only) |
 | sndrD1_g10 | GOES Sounder (detector 1) / GOES-10 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | sndrD1_g11 | GOES Sounder (detector 1) / GOES-11 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | sndrD1_g12 | GOES Sounder (detector 1) / GOES-12 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
@@ -434,15 +459,6 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | sndrD4_g13 | GOES Sounder (detector 4) / GOES-13 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | sndrD4_g14 | GOES Sounder (detector 4) / GOES-14 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | sndrD4_g15 | GOES Sounder (detector 4) / GOES-15 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| sndr_g08 | GOES Sounder / GOES-8 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| sndr_g09 | GOES Sounder / GOES-9 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| sndr_g10 | GOES Sounder / GOES-10 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| sndr_g11 | GOES Sounder / GOES-11 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| sndr_g12 | GOES Sounder / GOES-12 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| sndr_g13 | GOES Sounder / GOES-13 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| sndr_g14 | GOES Sounder / GOES-14 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| sndr_g15 | GOES Sounder / GOES-15 | 18 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| sndr_insat-3ds | GOES Sounder / INSAT-3DS | 18 | ODPS+ODAS |  |  | 2025-03-27 | JCSDA (2025) | untested (load-only) |
 | ssu_n06 | SSU / NOAA-6 | 3 | ODSSU |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | regression (SSU) |
 | ssu_n07 | SSU / NOAA-7 | 3 | ODSSU |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | family-validated |
 | ssu_n08 | SSU / NOAA-8 | 3 | ODSSU |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | family-validated |
@@ -456,12 +472,10 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | vas_g06 | VAS / GOES-6 | 12 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | vas_g07 | VAS / GOES-7 | 12 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | vhrr_kalpana1 | VHRR / Kalpana-1 | 2 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| viirs-i_j1 | VIIRS I-bands / NOAA-20 (JPSS-1) | 2 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| viirs-i_j2 | VIIRS I-bands / NOAA-21 (JPSS-2) | 2 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| viirs-i_n20 | VIIRS I-bands / NOAA-20 | 2 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | viirs-i_n21 | VIIRS I-bands / NOAA-21 | 2 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | viirs-i_npp | VIIRS I-bands / Suomi NPP | 2 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| viirs-m_j1 | VIIRS M-bands / NOAA-20 (JPSS-1) | 5 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| viirs-m_j2 | VIIRS M-bands / NOAA-21 (JPSS-2) | 5 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| viirs-m_n20 | VIIRS M-bands / NOAA-20 | 5 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | viirs-m_n21 | VIIRS M-bands / NOAA-21 | 5 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | viirs-m_npp | VIIRS M-bands / Suomi NPP | 5 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | virr_fy3a | VIRR / FY-3A | 3 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
@@ -472,9 +486,17 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | vtprS3_itos | VTPR (system 3) / ITOS | 8 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | vtprS4_itos | VTPR (system 4) / ITOS | 8 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 
-## Visible sensors (135)
+## Visible sensors (141)
 
 | Sensor_Id | Instrument / Platform | Ch | TauCoeff | AC | NLTE | Generated | Provenance | Validation |
+| v.agri_fy4a | VIS-band AGRI / Fengyun-4A | 6 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | generation gates + cross-sensor envelope; load + forward verified 2026-08-01 |
+| v.agri_fy4b | VIS-band AGRI / Fengyun-4B | 6 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | generation gates + cross-sensor envelope; load + forward verified 2026-08-01 |
+| v.mersi2_fy3d | VIS-band MERSI-2 / Fengyun-3D | 19 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | generation gates + cross-sensor envelope; load + forward verified 2026-08-01 |
+| v.mersi3_fy3f | VIS-band MERSI-3 / Fengyun-3F | 19 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | generation gates + cross-sensor envelope; load + forward verified 2026-08-01 |
+| v.viirs-dnb-lg_j4 | VIS-band VIIRS DNB (low gain) / JPSS-4 | 1 | ODPS |  |  | 2026-07-30 | crtm-coeffgen | load + forward verified 2026-08-01 (no in-suite coverage) |
+| v.viirs-dnb-mg_j4 | VIS-band VIIRS DNB (mid gain) / JPSS-4 | 1 | ODPS |  |  | 2026-07-30 | crtm-coeffgen | load + forward verified 2026-08-01 (no in-suite coverage) |
+| v.viirs-i_j4 | VIS-band VIIRS I-bands / JPSS-4 | 3 | ODPS |  |  | 2026-07-30 | crtm-coeffgen | load + forward verified 2026-08-01 (no in-suite coverage) |
+| v.viirs-m_j4 | VIS-band VIIRS M-bands / JPSS-4 | 11 | ODPS |  |  | 2026-07-30 | crtm-coeffgen | load + forward verified 2026-08-01 (no in-suite coverage) |
 |---|---|---|---|---|---|---|---|---|
 | v.abi_g16 | VIS-band ABI / GOES-16 | 6 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | v.abi_g17 | VIS-band ABI / GOES-17 | 6 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
@@ -493,7 +515,14 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | v.avhrr3_n18 | VIS-band AVHRR/3 / NOAA-18 | 3 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | v.avhrr3_n19 | VIS-band AVHRR/3 / NOAA-19 | 3 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | v.gems_gk2b | VIS-band GEMS / GEO-KOMPSAT-2B | 517 | ODPS |  |  | 2026-07-26 | crtm-coeffgen | untested (load-only) |
-| v.gxi_geoxo | VIS-band GXI (GeoXO Imager) / GeoXO | 7 | ODPS |  |  | 2026-07-26 | crtm-coeffgen | untested (load-only) |
+| v.gxi_geoxo | VIS-band GXI (GeoXO Imager) / GeoXO | 7 | ODPS |  |  | 2026-07-26 | crtm-coeffgen | load + forward verified 2026-08-01 (no in-suite coverage; notional pre-launch SRF for the new band) |
+| v.imgr_g11 | VIS-band GOES Imager / GOES-11 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| v.imgr_g12 | VIS-band GOES Imager / GOES-12 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| v.imgr_g13 | VIS-band GOES Imager / GOES-13 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| v.imgr_g14 | VIS-band GOES Imager / GOES-14 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| v.imgr_g15 | VIS-band GOES Imager / GOES-15 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| v.imgr_insat-3ds | VIS-band Imager / INSAT-3DS | 2 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | validated (BT vs LBL truth 0.006 K; FWD/TL/AD/K driver) |
+| v.imgr_mt2 | VIS-band GOES Imager / MTSAT-2 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | v.imgrD1_g11 | VIS-band GOES Imager (detector 1) / GOES-11 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | v.imgrD1_g12 | VIS-band GOES Imager (detector 1) / GOES-12 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | v.imgrD1_g13 | VIS-band GOES Imager (detector 1) / GOES-13 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
@@ -535,13 +564,6 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | v.imgrD8_g13 | VIS-band GOES Imager (detector 8) / GOES-13 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | v.imgrD8_g14 | VIS-band GOES Imager (detector 8) / GOES-14 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | v.imgrD8_g15 | VIS-band GOES Imager (detector 8) / GOES-15 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| v.imgr_g11 | VIS-band GOES Imager / GOES-11 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| v.imgr_g12 | VIS-band GOES Imager / GOES-12 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| v.imgr_g13 | VIS-band GOES Imager / GOES-13 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| v.imgr_g14 | VIS-band GOES Imager / GOES-14 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| v.imgr_g15 | VIS-band GOES Imager / GOES-15 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| v.imgr_insat-3ds | VIS-band Imager / INSAT-3DS | 2 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | validated (BT vs LBL truth 0.006 K; FWD/TL/AD/K driver) |
-| v.imgr_mt2 | VIS-band GOES Imager / MTSAT-2 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | v.iras_fy3a | VIS-band IRAS / FY-3A | 6 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | v.iras_fy3b | VIS-band IRAS / FY-3B | 6 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | v.ivissr_fy2c | VIS-band I-VISSR / FY-2C | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
@@ -560,6 +582,15 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | v.seviri_m08 | VIS-band SEVIRI / Meteosat-8 | 4 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | v.seviri_m09 | VIS-band SEVIRI / Meteosat-9 | 4 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | v.seviri_m10 | VIS-band SEVIRI / Meteosat-10 | 4 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| v.sndr_g08 | VIS-band GOES Sounder / GOES-8 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| v.sndr_g09 | VIS-band GOES Sounder / GOES-9 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| v.sndr_g10 | VIS-band GOES Sounder / GOES-10 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| v.sndr_g11 | VIS-band GOES Sounder / GOES-11 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| v.sndr_g12 | VIS-band GOES Sounder / GOES-12 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| v.sndr_g13 | VIS-band GOES Sounder / GOES-13 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
+| v.sndr_g14 | VIS-band GOES Sounder / GOES-14 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| v.sndr_g15 | VIS-band GOES Sounder / GOES-15 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| v.sndr_insat-3ds | VIS-band Sounder / INSAT-3DS | 1 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | validated (BT vs LBL truth 0.002 K; FWD/TL/AD/K driver) |
 | v.sndrD1_g08 | VIS-band GOES Sounder (detector 1) / GOES-8 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | v.sndrD1_g09 | VIS-band GOES Sounder (detector 1) / GOES-9 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | v.sndrD1_g10 | VIS-band GOES Sounder (detector 1) / GOES-10 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
@@ -592,35 +623,25 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | v.sndrD4_g13 | VIS-band GOES Sounder (detector 4) / GOES-13 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | v.sndrD4_g14 | VIS-band GOES Sounder (detector 4) / GOES-14 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | v.sndrD4_g15 | VIS-band GOES Sounder (detector 4) / GOES-15 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| v.sndr_g08 | VIS-band GOES Sounder / GOES-8 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| v.sndr_g09 | VIS-band GOES Sounder / GOES-9 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| v.sndr_g10 | VIS-band GOES Sounder / GOES-10 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| v.sndr_g11 | VIS-band GOES Sounder / GOES-11 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| v.sndr_g12 | VIS-band GOES Sounder / GOES-12 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| v.sndr_g13 | VIS-band GOES Sounder / GOES-13 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| v.sndr_g14 | VIS-band GOES Sounder / GOES-14 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| v.sndr_g15 | VIS-band GOES Sounder / GOES-15 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| v.sndr_insat-3ds | VIS-band Sounder / INSAT-3DS | 1 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | validated (BT vs LBL truth 0.002 K; FWD/TL/AD/K driver) |
 | v.tempo_is40e | VIS-band TEMPO / Intelsat 40e (TEMPO host) | 1028 | ODPS |  |  | 2026-07-25 | crtm-coeffgen | untested (load-only) |
-| v.viirs-dnb_j1 | VIS-band VIIRS DNB / NOAA-20 (JPSS-1) | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| v.viirs-i_j1 | VIS-band VIIRS I-bands / NOAA-20 (JPSS-1) | 3 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| v.viirs-i_j2 | VIS-band VIIRS I-bands / NOAA-21 (JPSS-2) | 3 | ODPS |  |  | 2026-07-20 | crtm-coeffgen | untested (load-only) |
-| v.viirs-i_n21 | VIS-band VIIRS I-bands / NOAA-21 | 3 | ODPS |  |  | 2026-07-20 | crtm-coeffgen | untested (load-only) |
+| v.viirs-dnb_n20 | VIS-band VIIRS DNB / NOAA-20 | 1 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| v.viirs-i_n20 | VIS-band VIIRS I-bands / NOAA-20 | 3 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| v.viirs-i_n21 | VIS-band VIIRS I-bands / NOAA-21 | 3 | ODPS |  |  | 2026-07-20 | legacy JCSDA (2026-07-20 crtm-coeffgen registration fix) | untested (load-only) |
 | v.viirs-i_npp | VIS-band VIIRS I-bands / Suomi NPP | 3 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| v.viirs-m_j1 | VIS-band VIIRS M-bands / NOAA-20 (JPSS-1) | 11 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| v.viirs-m_j2 | VIS-band VIIRS M-bands / NOAA-21 (JPSS-2) | 11 | ODPS |  |  | 2026-07-20 | crtm-coeffgen | coefficient I/O tests only |
-| v.viirs-m_n21 | VIS-band VIIRS M-bands / NOAA-21 | 11 | ODPS |  |  | 2026-07-20 | crtm-coeffgen | untested (load-only) |
+| v.viirs-m_n20 | VIS-band VIIRS M-bands / NOAA-20 | 11 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+| v.viirs-m_n21 | VIS-band VIIRS M-bands / NOAA-21 | 11 | ODPS |  |  | 2026-07-20 | legacy JCSDA (2026-07-20 crtm-coeffgen registration fix) | untested (load-only) |
 | v.viirs-m_npp | VIS-band VIIRS M-bands / Suomi NPP | 11 | ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | coefficient I/O tests only |
 
-## Ultraviolet sensors (6)
+## Ultraviolet sensors (7)
 
 | Sensor_Id | Instrument / Platform | Ch | TauCoeff | AC | NLTE | Generated | Provenance | Validation |
+| u.omps-np_n20 | UV-band OMPS-NP / NOAA-20 | 151 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | targeted unit tests (test_OMPS_UV_Physics) |
+| u.omps-np_n21 | UV-band OMPS-NP / NOAA-21 | 158 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | targeted unit tests (test_OMPS_UV_Physics) |
+| u.omps-tc_n20 | UV-band OMPS-TC / NOAA-20 | 196 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | targeted unit tests (test_OMPS_UV_Physics) |
+| u.omps-tc_n21 | UV-band OMPS-TC / NOAA-21 | 198 | ODPS |  |  | 2026-07-28 | crtm-coeffgen | targeted unit tests (test_OMPS_UV_Physics) |
 |---|---|---|---|---|---|---|---|---|
 | u.gems_gk2b | UV-band GEMS / GEO-KOMPSAT-2B | 516 | ODPS |  |  | 2026-07-26 | crtm-coeffgen | untested (load-only) |
 | u.oci_pace | UV-band OCI / PACE | 36 | ODPS |  |  | 2026-07-25 | crtm-coeffgen | untested (load-only) |
-| u.omps-npAllFOV_j2 | UV-band OMPS-NP (all FOV) / NOAA-21 (JPSS-2) | 151 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| u.omps-npAllFOVuvsol_j2 | UV-band OMPS-NP (all FOV, UV solar) / NOAA-21 (JPSS-2) | 151 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| u.omps-tcAllFOV_j2 | UV-band OMPS-TC (all FOV) / NOAA-21 (JPSS-2) | 198 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | u.tempo_is40e | UV-band TEMPO / Intelsat 40e (TEMPO host) | 1028 | ODPS |  |  | 2026-07-25 | crtm-coeffgen | gated unit test (UV NO2 TL/AD/K parity) |
 
 ## Invalid sensor type (see flags) (2)
@@ -629,3 +650,22 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 |---|---|---|---|---|---|---|---|---|
 | cpr_cloudsat | CPR (94 GHz radar) / CloudSat | 1 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | dpr_gpm | DPR (Ku/Ka radar) / GPM | 2 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
+
+## Addendum 2026-07-30 (final campaign and validation state)
+
+| Sensor_Id | Instrument / Platform | Ch | TauCoeff | Generated | Provenance | Validation |
+|---|---|---|---|---|---|---|
+| agri_fy4a | AGRI IR / FY-4A | 8 (7-14) | ODPS+OPTRAN | 2026-07-28 | NWP-SAF/CMA measured SRFs | gates + cross-sensor (ABI/AHI/MODIS envelope); no in-suite ctest |
+| agri_fy4b | AGRI IR / FY-4B | 9 (7-15) | ODPS+OPTRAN | 2026-07-28 | NWP-SAF/CMA measured SRFs | gates + cross-sensor; no in-suite ctest |
+| v.agri_fy4a / v.agri_fy4b | AGRI solar | 6 (1-6) | ODPS | 2026-07-28/29 | same | gates + cross-sensor; no in-suite ctest |
+| mersi2_fy3d / v.mersi2_fy3d | MERSI-2 / FY-3D | 6 (20-25) / 19 (1-19) | ODPS(+OPTRAN IR) | 2026-07-28/29 | NWP-SAF/CMA (native numbering restored) | gates + cross-sensor; no in-suite ctest |
+| mersi3_fy3f / v.mersi3_fy3f | MERSI-3 / FY-3F | 6 / 19 | ODPS(+OPTRAN IR) | 2026-07-28/29 | NWP-SAF/CMA | gates + cross-sensor; no in-suite ctest |
+| gems2_beryl | GEMS2 / Weather Stream Beryl | 24 | ODPS | 2026-07-28 | amethyst oSRF retag (identical instrument, OSCAR) | bit-identical to validated amethyst |
+
+Also in this window: SRF_Provenance backfilled on iasi-ng_metop-sg-a1 and
+all 18 tms_tomorrow variants (evidence-based strings, data bit-identical);
+tms variant lineages audited (see coeff_delta_REL-3.2.0/
+tms_s02_intercomparison.md; v4.1 retained with its analysis as
+documentation per BTJ 2026-07-30). The old-vs-new evidence package for
+replaced coefficients lives in test-data-release/coeff_delta_REL-3.2.0/
+(DELTAS.md is the entry point).
