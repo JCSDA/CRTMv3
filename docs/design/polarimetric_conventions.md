@@ -233,16 +233,30 @@ For scale, the natural variation inside the Meissner group is +0.0025 over
 4 GHz, so the step is roughly fourteen times the local trend and it happens
 across 1 GHz.
 
-This is not new and it is not an artefact of the regeneration: it is PARMIO's
-two-permittivity construction. In the shipped table the same crossing
-(183.31 to 229) reads only -0.0075, because over 46 GHz the upward frequency
-trend nearly cancels the step. The old grid simply had no nodes near the
-switch, so interpolation smeared the discontinuity across a void and anything
-inside the band was clamped to a node 16 to 28 GHz away. The new table is
-strictly more faithful, with both sides evaluated at the right frequency, but
-it means a sensor with channels straddling 200 GHz now sees a real jump.
-Whether the switch belongs at 200, or wants blending, is a question for the
-model rather than for CRTM.
+This is not new and it is not an artefact of the regeneration. In the shipped
+table the same crossing (183.31 to 229) reads only -0.0075, because over 46 GHz
+the upward frequency trend nearly cancels the step. The old grid simply had no
+nodes near the switch, so interpolation smeared the discontinuity across a void
+and anything inside the band was clamped to a node 16 to 28 GHz away. The new
+table is strictly more faithful, with both sides evaluated at the right
+frequency, but it means a sensor with channels straddling 200 GHz now sees a
+real jump.
+
+An earlier revision of this note called the step "PARMIO's two-permittivity
+construction" and a question "for the model rather than for CRTM". Both are
+wrong, and were corrected on 2026-08-01 after measurement. PARMIO is continuous
+in frequency within either dielectric model: at fixed state, 199.9 to 200.0 GHz
+moves e_v by +0.00007. The whole step is the model switch, and the 200 GHz
+switch frequency is a local choice in our own LUT generator, moved there from
+upstream's 28.837 GHz in parmio commit `5c4579c`. The discontinuity is
+introduced by the table's construction and it is ours to place.
+
+Sweeping both dielectric models over 29 to 700 GHz shows they cross exactly
+once, at 29.9, 43.0 and 155.1 GHz for SST of 0, 15 and 30 C respectively, so
+there is no fixed frequency at which they agree, and 200 GHz sits at 99.5
+percent of the band-maximum disagreement at 15 C. Moving the switch cannot fix
+this. See `docs/design/parmio_permittivity_switch.md` for the measurement and
+the options.
 
 Clamping on the remaining axes is still possible and is now reported once per
 run: the table spans zenith 0 to 65 degrees, wind 1 to 25 m/s and SST -2 to
