@@ -698,6 +698,44 @@ else()
   message(STATUS "test_CloudCoeff_Exp_Forward not registered (needs mwr_aws coeffs + CloudCoeff_Exp_Full6.nc).")
 endif()
 
+# test_VectorRT_ScalarLimit: ground truth for the polarimetric ADA path that does
+# not depend on cloud-LUT quality or any external RT code. With scattering driven
+# below CRTM's albedo threshold the atmosphere is polarization-neutral, so the
+# emergent Stokes vector must satisfy I=(Iv+Ih)/2 and Q=(Iv-Ih)/2 exactly, where
+# Iv and Ih come from scalar runs with the channel forced to pure V and pure H.
+# Validates the surface conversion, the ADA adding machinery under n_Stokes>1,
+# and the surface boundary condition against the trusted scalar path. Same gating
+# as the other Exp-scheme tests.
+add_executable(test_VectorRT_ScalarLimit mains/unit/Unit_Test/test_VectorRT_ScalarLimit.f90)
+target_link_libraries(test_VectorRT_ScalarLimit PRIVATE crtm)
+# Registered 2026-07-31, once the non-scattering path gained a vector solver
+# (CRTM_Emission_Stokes). It now passes at 1.1e-16 in I and 8.2e-17 in Q.
+add_test(NAME test_VectorRT_ScalarLimit
+         COMMAND $<TARGET_FILE:test_VectorRT_ScalarLimit>)
+
+# test_PhaseMatrix_Invariants: asserts physical invariants of the assembled
+# polarized phase matrix (intensity block independent of n_Stokes, degree of
+# polarization bounded by unity, intensity-block symmetry). Drives
+# CRTM_Phase_Matrix directly, so it needs no coefficient files. Deliberately
+# invariant-based rather than a Rayleigh reconstruction: Pff is a Fourier
+# component rather than F(Theta), and the sign of beta1 is convention-dependent.
+add_executable(test_PhaseMatrix_Invariants mains/unit/Unit_Test/test_PhaseMatrix_Invariants.f90)
+target_link_libraries(test_PhaseMatrix_Invariants PRIVATE crtm)
+add_test(NAME test_PhaseMatrix_Invariants
+         COMMAND $<TARGET_FILE:test_PhaseMatrix_Invariants>)
+
+# test_ADA_VectorDecoupling: drives CRTM_ADA directly with a synthetic phase
+# matrix whose polarized blocks are zero and whose I and Q blocks are identical.
+# Such a matrix cannot couple Stokes components, so an n_Stokes=2 solve must
+# reproduce two scalar solves exactly, WITH scattering active. Needs no
+# coefficient files and no cloud LUT, which is what makes it usable while the
+# polarized LUTs are still unsuitable: it tests whether the code is correct
+# independently of whether the data is.
+add_executable(test_ADA_VectorDecoupling mains/unit/Unit_Test/test_ADA_VectorDecoupling.f90)
+target_link_libraries(test_ADA_VectorDecoupling PRIVATE crtm)
+add_test(NAME test_ADA_VectorDecoupling
+         COMMAND $<TARGET_FILE:test_ADA_VectorDecoupling>)
+
 # test_VectorRT_SurfaceBasis: pins the surface (V,H) -> Stokes (I,Q) conversion
 # on the n_Stokes>1 path. Calls CRTM_Compute_SfcOptics directly and checks the
 # vector-path emissivity/reflectivity against eV,eH obtained from the scalar
@@ -707,6 +745,96 @@ add_executable(test_VectorRT_SurfaceBasis mains/unit/Unit_Test/test_VectorRT_Sur
 target_link_libraries(test_VectorRT_SurfaceBasis PRIVATE crtm)
 add_test(NAME test_VectorRT_SurfaceBasis
          COMMAND $<TARGET_FILE:test_VectorRT_SurfaceBasis>)
+
+# test_VectorRT_SurfaceFrame: pins the polarimetric reference frame of the
+# microwave surface optics, and proves the surface model's U and V survive the
+# coverage aggregation into the vector solver input. Mirrors the scene through
+# the view plane and asserts I,Q are even and U,V odd in relative azimuth,
+# which is the symmetry that identifies the reference plane as the meridional
+# plane and so settles whether a surface-to-solver frame rotation is needed.
+# Loads FASTEM4 explicitly: the FASTEM6 default has no third/fourth Stokes
+# azimuth model. No cloud LUT and no reference radiances required.
+add_executable(test_VectorRT_SurfaceFrame mains/unit/Unit_Test/test_VectorRT_SurfaceFrame.f90)
+target_link_libraries(test_VectorRT_SurfaceFrame PRIVATE crtm)
+add_test(NAME test_VectorRT_SurfaceFrame
+         COMMAND $<TARGET_FILE:test_VectorRT_SurfaceFrame>)
+
+# test_MWwaterCoeff_FileSelects: proves MWwaterCoeff_File selects the microwave
+# water emissivity model rather than being silently ignored. The file-based load
+# is commented out and the model comes from the scheme string, so the argument
+# used to be accepted, echoed in the load message, and dropped: a caller asking
+# for FASTEM4 got FASTEM6 with no diagnostic. That matters because FASTEM6 has
+# no third/fourth Stokes azimuth model and returns U = V = 0, indistinguishable
+# from a scene with no polarimetric signal, and JEDI/UFO selects the model
+# through exactly this argument. Uses the one observable separating the two
+# models: FASTEM4 gives nonzero U and V over ocean off-azimuth, FASTEM6 gives
+# exactly zero. Asserts both directions so it cannot pass by always loading
+# FASTEM4. No cloud LUT and no reference radiances required.
+add_executable(test_MWwaterCoeff_FileSelects mains/unit/Unit_Test/test_MWwaterCoeff_FileSelects.f90)
+target_link_libraries(test_MWwaterCoeff_FileSelects PRIVATE crtm)
+add_test(NAME test_MWwaterCoeff_FileSelects
+         COMMAND $<TARGET_FILE:test_MWwaterCoeff_FileSelects>)
+
+# test_VectorRT_StokesSign: pins the ADOPTED sign convention of the third and
+# fourth Stokes surface components, per backend, for FASTEM and PARMIO. V and H
+# ride cosine harmonics and U and V4 ride sine harmonics, so a global sign error
+# in U cancels out of I and Q and is invisible to every other test: the parity
+# assertions in test_VectorRT_SurfaceFrame survive negation, and the
+# self-consistency instruments compare the model to itself. Asserts U and V4
+# vanish at relative azimuth 0 and 180, are odd under phi -> -phi, sit above a
+# non-degeneracy floor, and carry the documented sign at phi = +90. This pins
+# the convention against silent drift; it is not evidence the sign is correct
+# against nature, which needs an external reference. See
+# docs/design/polarimetric_conventions.md. Loads FASTEM4 explicitly (FASTEM6,
+# the default, has no third/fourth Stokes model). No cloud LUT required.
+add_executable(test_VectorRT_StokesSign mains/unit/Unit_Test/test_VectorRT_StokesSign.f90)
+target_link_libraries(test_VectorRT_StokesSign PRIVATE crtm)
+add_test(NAME test_VectorRT_StokesSign
+         COMMAND $<TARGET_FILE:test_VectorRT_StokesSign>)
+
+# test_VectorRT_StokesOutput: proves the third/fourth Stokes components survive
+# the azimuthal Fourier accumulation into RTSolution%Stokes, and that the vector
+# solver preserves the meridional Stokes frame end to end. Runs the mirrored
+# scene pair at n_Stokes=4 and asserts Stokes 1,2 even and 3,4 odd in relative
+# azimuth, plus non-degeneracy. Needs the >=6-phase-element CRTM-Exp LUT (same
+# gating as test_VectorRT_TLADK) and FASTEM4 for a polarimetric surface.
+add_executable(test_VectorRT_StokesOutput mains/unit/Unit_Test/test_VectorRT_StokesOutput.f90)
+target_link_libraries(test_VectorRT_StokesOutput PRIVATE crtm)
+add_test(NAME test_VectorRT_StokesOutput
+         COMMAND $<TARGET_FILE:test_VectorRT_StokesOutput>)
+
+# test_VectorRT_Unsupported: asserts that vector-path combinations CRTM cannot
+# honour are refused rather than silently substituted. Covers RT_SOI with
+# n_Stokes>1, which used to be handed ADA without telling the caller, with an
+# RT_ADA vector run as the control. Needs no cloud LUT.
+add_executable(test_VectorRT_Unsupported mains/unit/Unit_Test/test_VectorRT_Unsupported.f90)
+target_link_libraries(test_VectorRT_Unsupported PRIVATE crtm)
+add_test(NAME test_VectorRT_Unsupported
+         COMMAND $<TARGET_FILE:test_VectorRT_Unsupported>)
+
+# test_VectorRT_Physics: physical invariants of the emergent Stokes vector,
+# asserted clear-sky so no cloud LUT is involved and a failure cannot be blamed
+# on coefficient quality. Covers the n_Stokes 2/3/4 truncation ladder (the only
+# exercise of n_Stokes=3 anywhere), the odd-harmonic degeneracy of U and V at
+# relative azimuth 0 and 180, the polarization bound I^2 >= Q^2+U^2+V^2, and
+# positivity of I.
+add_executable(test_VectorRT_Physics mains/unit/Unit_Test/test_VectorRT_Physics.f90)
+target_link_libraries(test_VectorRT_Physics PRIVATE crtm)
+add_test(NAME test_VectorRT_Physics
+         COMMAND $<TARGET_FILE:test_VectorRT_Physics>)
+
+# test_VectorRT_PARMIO_TLAD: Jacobian coverage for the PARMIO polarimetric
+# surface through the full RT chain. PARMIO is the microwave-water backend at
+# and above 200 GHz and has a four-Stokes azimuth model independent of FASTEM's,
+# which every other polarimetric test bypasses by loading FASTEM4. Reachable
+# because TROPICS channel 12 sits at 204.78 GHz, between the 183 and 325 GHz
+# water-vapour lines, where the surface is still visible (U/I = 1.6e-3); the
+# mwr_aws channels above the gate are at 325.15 GHz and are opaque. Clear sky,
+# so no cloud LUT gating.
+add_executable(test_VectorRT_PARMIO_TLAD mains/unit/Unit_Test/test_VectorRT_PARMIO_TLAD.f90)
+target_link_libraries(test_VectorRT_PARMIO_TLAD PRIVATE crtm)
+add_test(NAME test_VectorRT_PARMIO_TLAD
+         COMMAND $<TARGET_FILE:test_VectorRT_PARMIO_TLAD>)
 
 # test_VectorRT_TLADK: TL/AD/K correctness for the vector-RT (n_Stokes>1)
 # cloud-scattering path. The n_Stokes>1 ADA branch needs a >=6-phase-element
@@ -1255,3 +1383,13 @@ endif()
 CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
                          ${CMAKE_CURRENT_BINARY_DIR}/testinput
                          ${crtm_test_input} )
+
+# dump_scalar_fullprec: instrument, not a test. Prints scalar-path radiances and
+# brightness temperatures at full double precision so that "the default scalar
+# path is unchanged" can be measured rather than argued. Build it in two trees
+# and diff. Deliberately NOT registered: it asserts nothing.
+# Needed because the regression suite compares against its references at
+# DEFAULT_N_SIGFIG (= SP_N_SIGFIG, about six figures), which cannot see a change
+# in the last bits, so a green suite is not by itself proof of bit-identity.
+add_executable(dump_scalar_fullprec mains/unit/Unit_Test/dump_scalar_fullprec.f90)
+target_link_libraries(dump_scalar_fullprec PRIVATE crtm)

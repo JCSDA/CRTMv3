@@ -28,6 +28,7 @@ MODULE RTV_Define
   USE Message_Handler,       ONLY: SUCCESS, FAILURE, Display_Message
   USE CRTM_Parameters,       ONLY: SET, ZERO, ONE, TWO, PI, &
                                    MAX_N_LAYERS, MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, &
+                                   MAX_N_STOKES, &
                                    DEGREES_TO_RADIANS, &
                                    SECANT_DIFFUSIVITY, &
                                    SCATTERING_ALBEDO_THRESHOLD, &
@@ -140,6 +141,10 @@ MODULE RTV_Define
     REAL(fp), DIMENSION(   MAX_N_LAYERS ) :: e_Layer_Trans_DOWN = ZERO
     REAL(fp), DIMENSION( 0:MAX_N_LAYERS ) :: e_Level_Rad_UP     = ZERO
     REAL(fp), DIMENSION( 0:MAX_N_LAYERS ) :: e_Level_Rad_DOWN   = ZERO
+    ! Polarized Stokes components (2:n_Stokes) of the emergent radiance on the
+    ! non-scattering path, at the observer level. Slot 1 is unused: the total
+    ! intensity is e_Level_Rad_UP, which the scalar solver already produces.
+    REAL(fp), DIMENSION( MAX_N_STOKES )   :: e_Rad_UP_Stokes    = ZERO
 
     ! Planck radiances
     REAL(fp)                               :: Planck_Surface    = ZERO

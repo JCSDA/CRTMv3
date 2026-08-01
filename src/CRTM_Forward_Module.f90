@@ -89,6 +89,10 @@ MODULE CRTM_Forward_Module
   USE CRTM_MoleculeScatter,       ONLY: CRTM_Compute_MoleculeScatter
   USE CRTM_AncillaryInput_Define, ONLY: CRTM_AncillaryInput_type
   USE CRTM_CloudCoeff,            ONLY: CRTM_CloudCoeff_IsLoaded
+  USE CRTM_MWwaterCoeff,          ONLY: CRTM_MWwaterCoeff_IsLoaded, &
+                                        CRTM_MWwaterCoeff_PolWarning_Due, &
+                                        CRTM_MWwaterCoeff_HasPolarimetric
+  USE CRTM_MW_Water_SfcOptics,    ONLY: PARMIO_Is_Active_At
   USE CRTM_AerosolCoeff,          ONLY: CRTM_AerosolCoeff_IsLoaded
   USE CRTM_NLTECorrection,        ONLY: NLTE_Predictor_type    , &
                                         NLTE_Predictor_IsActive, &
@@ -255,6 +259,8 @@ CONTAINS
     CHARACTER(256) :: Message
     LOGICAL :: Options_Present
     INTEGER :: n_Sensors
+    LOGICAL :: Unpolarised_Channel
+    INTEGER :: ns, nl
     INTEGER :: n_Channels
     INTEGER :: m, n_Profiles, nc
     ! Local ancillary input structure
@@ -398,6 +404,70 @@ CONTAINS
     IF (Error_Status == FAILURE) THEN
        RETURN
     END IF
+
+    ! Warn once per call if a polarimetric run was requested while the loaded
+    ! microwave water backend has no third or fourth Stokes azimuth model.
+    !
+    ! FASTEM6 is the CRTM default and returns those components as identically
+    ! zero, so the run succeeds and hands back U = V = 0, which is
+    ! indistinguishable from a scene that genuinely has no polarimetric signal.
+    ! Nothing else in the chain says anything, and the default is the likeliest
+    ! path a new polarimetric user takes. Warn rather than fail: the
+    ! configuration is legitimate for the intensity, and refusing it would
+    ! break callers who set n_Stokes globally but only care about I.
+    !
+    ! Placed here, before Profile_Loop2, so it is evaluated once per call rather
+    ! than once per profile, and outside the parallel region. It is latched to
+    ! once per loaded scheme on top of that, because a finite-difference driver
+    ! calls this hundreds of times: unlatched it produced 168 copies in
+    ! test_VectorRT_TLADK alone, which buries the message rather than
+    ! delivering it.
+    !
+    ! The conditions are nested rather than combined with .AND. because Fortran
+    ! does not guarantee short-circuit evaluation, and asking whether the
+    ! warning is due consumes the latch.
+    ! PARMIO must be accounted for, not just the FASTEM scheme. The microwave
+    ! water dispatcher routes a channel to PARMIO when the LUT is loaded and
+    ! the channel is at or above PARMIO_FREQ_THRESHOLD, and PARMIO carries its
+    ! own four-Stokes azimuth model. So a channel is only left without a
+    ! polarimetric surface when it falls through to a non-polarimetric FASTEM,
+    ! and warning on the FASTEM scheme alone is wrong: it fires on runs whose
+    ! polarimetric signal comes entirely from PARMIO and is demonstrably
+    ! nonzero.
+    IF ( Options_Present ) THEN
+       IF ( ANY(Options%n_Stokes > 1) ) THEN
+          IF ( CRTM_MWwaterCoeff_IsLoaded() ) THEN
+             IF ( .NOT. CRTM_MWwaterCoeff_HasPolarimetric() ) THEN
+                ! Any processed microwave channel that PARMIO will not serve?
+                Unpolarised_Channel = .FALSE.
+                DO ns = 1, n_Sensors
+                   IF ( .NOT. SpcCoeff_IsMicrowaveSensor(SC(ns)) ) CYCLE
+                   DO nl = 1, SC(ns)%n_Channels
+                      IF ( .NOT. ChannelInfo(ns)%Process_Channel(nl) ) CYCLE
+                      IF ( PARMIO_Is_Active_At( SC(ns)%Frequency(nl), &
+                                                ANY(Options%Use_PARMIO_MWSSEM) ) ) CYCLE
+                      Unpolarised_Channel = .TRUE.
+                   END DO
+                END DO
+                IF ( Unpolarised_Channel ) THEN
+                   IF ( CRTM_MWwaterCoeff_PolWarning_Due() ) THEN
+                      Message = 'n_Stokes > 1 requested, but the loaded '//&
+                                'microwave water model has no third/fourth '//&
+                                'Stokes azimuth model and one or more '//&
+                                'channels are not served by PARMIO. The '//&
+                                'surface U and V are identically zero for '//&
+                                'those channels. Select FASTEM4 via '//&
+                                'MWwaterCoeff_Scheme or MWwaterCoeff_File, '//&
+                                'or load the PARMIO LUT, if a polarimetric '//&
+                                'surface is intended.'
+                      CALL Display_Message( ROUTINE_NAME, Message, WARNING )
+                   END IF
+                END IF
+             END IF
+          END IF
+       END IF
+    END IF
+
     !$OMP PARALLEL DO PRIVATE ( m, Opt, AncillaryInput ) NUM_THREADS(n_profile_threads) SCHEDULE ( runtime )
     Profile_Loop2: DO m = 1, n_Profiles
        ! Check the optional Options structure argument
@@ -547,6 +617,7 @@ CONTAINS
       !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
       DO nt = 1, n_channel_threads
          SfcOptics(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
+         SfcOptics(nt)%Use_PARMIO_MWSSEM = Opt%Use_PARMIO_MWSSEM
       END DO
       !$OMP END PARALLEL DO
       ! Check whether to skip this profile
@@ -731,6 +802,7 @@ CONTAINS
             END IF
             ! ...Copy over surface optics input
             SfcOptics_Clear(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
+            SfcOptics_Clear(nt)%Use_PARMIO_MWSSEM = Opt%Use_PARMIO_MWSSEM
             SfcOptics_Clear(nt)%n_Stokes = RTV_Clear(nt)%n_Stokes
             ! ...CLEAR SKY average surface skin temperature for multi-surface types
             CALL CRTM_Compute_SurfaceT( Surface(m), SfcOptics_Clear(nt) )
@@ -1186,7 +1258,14 @@ CONTAINS
                      ! ...Save the cloud cover in the output structure
                      RTSolution(ln,m)%Total_Cloud_Cover = CloudCover%Total_Cloud_Cover
                   END DO
-                  RTSolution(ln,m)%Radiance = RTSolution(ln,m)%Stokes(1)
+                  ! The projection onto the channel polarization is linear, and so
+                  ! is this combine, so the combined reported radiance is the same
+                  ! combine applied to the already-projected clear and cloudy
+                  ! radiances. Re-deriving it from Stokes(1) here would silently
+                  ! undo the projection for every fractional-cloud vector scene.
+                  RTSolution(ln,m)%Radiance = &
+                       ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Radiance) + &
+                       (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Radiance)
                   !...Reflectance
                   RTSolution(ln,m)%Reflectance = &
                         ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Reflectance) + &

@@ -7,12 +7,33 @@
 ! The LUT is built offline from the PARMIO reference radiative transfer
 ! model (Dinnat 2023). It stores PARMIO's full azimuthal-harmonic
 ! decomposition of brightness temperature, divided by SST_K, on a 5-D
-! grid (frequency, zenith angle, 10-m wind speed, SST, SSS). To respect
-! PARMIO's discontinuous physics three coefficient *groups* are kept:
+! grid (frequency, zenith angle, 10-m wind speed, SST, SSS). Three
+! coefficient *groups* are kept:
 !
-!   sss_dependent    : f <= 10.65 GHz, Meissner permittivity, SSS axis
-!   sss_nominal_m    : 10.65 < f < 28.8 GHz, Meissner, SSS = 35 only
-!   sss_nominal_h    : f >= 28.8 GHz, high-freq tabulated dielectric
+!   sss_dependent    : f <= 10.65 GHz, SSS axis active
+!   sss_nominal_m    : 10.65 < f < 200 GHz, SSS = 35 only
+!   sss_nominal_h    : f >= 200 GHz, SSS = 35 only
+!
+! All three use the Meissner and Wentz (2004, 2012) dielectric. That is
+! PARMIO's own reference configuration: Kilic et al. 2023
+! (doi:10.1029/2022EA002785) runs PARMIO with Meissner across 500 MHz to
+! 700 GHz and uses the same for SURFEM-Ocean in RTTOV, and Dinnat et al.
+! 2023 (doi:10.1175/BAMS-D-23-0023.1) records it as the team default in the
+! microwaves. PARMIO's other dielectric option, the high-frequency tabulated
+! model, is its infrared model and is not used here.
+!
+! The 200 GHz boundary is therefore a grid partition and not a physics
+! switch. The two nominal-SSS groups hold the same physics and the table is
+! continuous across it. Earlier tables switched dielectric there, which
+! manufactured a step of up to 0.056 in emissivity that PARMIO does not have;
+! see docs/design/parmio_permittivity_switch.md. The group names are kept as
+! they are for on-disk compatibility.
+!
+! The boundaries above are the group-SELECTION rule (SSS_CUTOFF_GHZ and
+! PERMITTIVITY_SWITCH_GHZ). They are not the same thing as the frequencies
+! the table actually holds. Use PARMIOCoeff_Covers_Frequency to ask what the
+! table actually spans; the interpolator clamps silently to the nearest grid
+! edge otherwise.
 !
 ! At runtime the PARMIO_MWSSEM module looks up the 14 harmonic terms in
 ! the appropriate group, recombines them through cos/sin in azimuth, and
@@ -45,6 +66,7 @@ MODULE PARMIOCoeff_Define
   PUBLIC :: PARMIOCoeff_Info
   ! Group-name helpers
   PUBLIC :: PARMIOCoeff_GroupName_For_Frequency
+  PUBLIC :: PARMIOCoeff_Covers_Frequency
 
   ! ---------------------
   ! Procedure overloading
@@ -216,6 +238,55 @@ CONTAINS
       group_id = PARMIO_GROUP_SSS_NOMINAL_H
     END IF
   END FUNCTION PARMIOCoeff_GroupName_For_Frequency
+
+
+  !-----------------------------------------------------------------
+  !  Does the table actually hold data at this frequency?
+  !
+  !  The groups are gridded separately either side of the group boundaries,
+  !  and their grids need not meet them. In the table shipped before
+  !  2026-08-01 they did not: sss_nominal_m ended at 183.31 GHz and
+  !  sss_nominal_h began at 229 GHz, so 183.31 to 229 had no data on either
+  !  side, and the 10.65 to 15 GHz band was the same at the salinity
+  !  boundary. Both holes are closed in the current table, but the check
+  !  stays because nothing guarantees a future table meets its own
+  !  boundaries.
+  !
+  !  This matters because Bracket clamps an out-of-range query to the
+  !  nearest grid edge, silently. A 204.78 GHz channel selected the high
+  !  group, fell below its first node and was evaluated at 229 GHz,
+  !  roughly 24 GHz away, with no indication in the result.
+  !
+  !  Callers use this to decline PARMIO where it has nothing to say,
+  !  rather than accepting a confident number from the wrong frequency.
+  !  Returns .FALSE. for an unallocated or empty group.
+  !-----------------------------------------------------------------
+  PURE FUNCTION PARMIOCoeff_Covers_Frequency( self, Frequency_GHz ) RESULT( Covers )
+    TYPE(PARMIOCoeff_type), INTENT(IN) :: self
+    REAL(fp),               INTENT(IN) :: Frequency_GHz
+    LOGICAL :: Covers
+    INTEGER :: g, n
+
+    Covers = .FALSE.
+    ! Select the group exactly as PARMIO_LUT_Interp_Forward does, using the
+    ! cutoffs carried by this table rather than the module defaults. A table
+    ! written with different boundaries would otherwise be probed against one
+    ! group here and interpolated in another, and the coverage answer would be
+    ! about the wrong grid.
+    g = PARMIOCoeff_GroupName_For_Frequency( &
+          Frequency_GHz, &
+          SSS_Cutoff_GHz_Override          = self%SSS_Cutoff_GHz, &
+          Permittivity_Switch_GHz_Override = self%Permittivity_Switch_GHz )
+    IF ( g < 1 .OR. g > PARMIO_N_GROUPS ) RETURN
+    IF ( .NOT. self%Group(g)%Is_Allocated ) RETURN
+    IF ( .NOT. ALLOCATED(self%Group(g)%Frequency) ) RETURN
+    n = SIZE(self%Group(g)%Frequency)
+    IF ( n < 1 ) RETURN
+
+    Covers = ( Frequency_GHz >= REAL(self%Group(g)%Frequency(1), fp) ) .AND. &
+             ( Frequency_GHz <= REAL(self%Group(g)%Frequency(n), fp) )
+
+  END FUNCTION PARMIOCoeff_Covers_Frequency
 
 
   !-----------------------------------------------------------------

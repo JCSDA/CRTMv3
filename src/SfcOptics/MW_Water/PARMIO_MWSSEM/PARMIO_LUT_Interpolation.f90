@@ -33,6 +33,7 @@ MODULE PARMIO_LUT_Interpolation
   PUBLIC :: PARMIO_LUT_Interp_Forward
   PUBLIC :: PARMIO_LUT_Interp_TL
   PUBLIC :: PARMIO_LUT_Interp_AD
+  PUBLIC :: PARMIO_LUT_Clamped_Axes
 
   ! ---------------------------------------------------------------
   ! 1-D bracket descriptor: lo/hi indices and the linear weight
@@ -63,6 +64,40 @@ MODULE PARMIO_LUT_Interpolation
   END TYPE PARMIO_LUT_iVar_type
 
 CONTAINS
+
+
+  !-----------------------------------------------------------------
+  !  Which axes, if any, were clamped at the last lookup?
+  !
+  !  Bracket silently pins an out-of-range query to the nearest grid
+  !  edge, so the caller gets a confident number computed somewhere
+  !  other than where it asked. That is defensible as a fallback and
+  !  indefensible as a silent one, particularly for a user deliberately
+  !  testing PARMIO outside its default band.
+  !
+  !  Returns a blank string when nothing was clamped, otherwise a
+  !  space-separated list of axis names suitable for a message.
+  !-----------------------------------------------------------------
+  PURE FUNCTION PARMIO_LUT_Clamped_Axes( iVar ) RESULT( axes )
+    TYPE(PARMIO_LUT_iVar_type), INTENT(IN) :: iVar
+    CHARACTER(64) :: axes
+
+    axes = ''
+    IF ( iVar%B_Frequency%clamped_low .OR. iVar%B_Frequency%clamped_high ) &
+      axes = TRIM(axes)//' frequency'
+    IF ( iVar%B_Theta%clamped_low     .OR. iVar%B_Theta%clamped_high     ) &
+      axes = TRIM(axes)//' zenith-angle'
+    IF ( iVar%B_Wind%clamped_low      .OR. iVar%B_Wind%clamped_high      ) &
+      axes = TRIM(axes)//' wind-speed'
+    IF ( iVar%B_SST%clamped_low       .OR. iVar%B_SST%clamped_high       ) &
+      axes = TRIM(axes)//' SST'
+    IF ( iVar%SSS_Active ) THEN
+      IF ( iVar%B_SSS%clamped_low     .OR. iVar%B_SSS%clamped_high       ) &
+        axes = TRIM(axes)//' salinity'
+    END IF
+    axes = ADJUSTL(axes)
+
+  END FUNCTION PARMIO_LUT_Clamped_Axes
 
 
   !-----------------------------------------------------------------

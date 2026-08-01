@@ -34,6 +34,7 @@ MODULE CRTM_LifeCycle
   ! Environment setup
   ! -----------------
   ! Module usage
+  USE Type_Kinds             , ONLY: fp
   USE Message_Handler
   USE File_Utility           , ONLY: File_Exists, Join_Path
   USE CRTM_ChannelInfo_Define, ONLY: CRTM_ChannelInfo_type, &
@@ -703,6 +704,7 @@ CONTAINS
     CHARACTER(SL) :: Default_VISiceCoeff_File
     CHARACTER(:), ALLOCATABLE :: Default_MWwaterCoeff_File
     CHARACTER(SL) :: Default_MWwaterCoeff_Scheme
+    CHARACTER(SL) :: Derived_Scheme
     CHARACTER(:), ALLOCATABLE :: Resolved_PARMIOCoeff_File
     CHARACTER(:), ALLOCATABLE :: Resolved_MWlandCoeff_File
     CHARACTER(SL) :: Default_IRwaterCoeff_Format
@@ -846,6 +848,40 @@ CONTAINS
     IF ( PRESENT(VISiceCoeff_Format  ) ) Default_VISiceCoeff_Format   = TRIM(ADJUSTL(VISiceCoeff_Format))
     ! ...MW water emissivity scheme
     IF ( PRESENT(MWwaterCoeff_Scheme ) ) Default_MWwaterCoeff_Scheme  = TRIM(ADJUSTL(MWwaterCoeff_Scheme))
+
+    ! ...Honour MWwaterCoeff_File as a model selector.
+    !
+    !    The file-based MWwaterCoeff load is commented out below (it was only
+    !    ever needed for the FASTEM5 binary lookup tables), so the microwave
+    !    water model is chosen by the scheme string alone. That left
+    !    MWwaterCoeff_File accepted, stored, echoed in the "Loading MW water
+    !    emissivity coefficients" message, and otherwise ignored: a caller
+    !    asking for FASTEM4 silently got FASTEM6. That is not a harmless no-op,
+    !    because FASTEM6 has no third or fourth Stokes azimuth model and returns
+    !    U and V as identically zero, so a polarimetric caller who selected a
+    !    polarimetric backend received an unpolarised surface and no diagnostic.
+    !    JEDI/UFO reaches CRTM this way: it builds the argument as
+    !    TRIM(MWwaterCoeff)//".MWwater.EmisCoeff.nc" from its own yaml key.
+    !
+    !    The filenames are exactly <SCHEME>.MWwater.EmisCoeff.nc, so the scheme
+    !    is recovered as the leading component of the base name. An explicitly
+    !    supplied MWwaterCoeff_Scheme is the direct selector and still wins; a
+    !    disagreement between the two is reported rather than resolved silently.
+    !    Deriving before the File_Path join below keeps this working whether or
+    !    not a path was supplied.
+    IF ( PRESENT(MWwaterCoeff_File) ) THEN
+      Derived_Scheme = MWwaterCoeff_Scheme_From_File( Default_MWwaterCoeff_File )
+      IF ( LEN_TRIM(Derived_Scheme) > 0 ) THEN
+        IF ( .NOT. PRESENT(MWwaterCoeff_Scheme) ) THEN
+          Default_MWwaterCoeff_Scheme = Derived_Scheme
+        ELSE IF ( TRIM(Derived_Scheme) /= TRIM(Default_MWwaterCoeff_Scheme) ) THEN
+          msg = 'MWwaterCoeff_File implies '//TRIM(Derived_Scheme)//' but '//&
+                'MWwaterCoeff_Scheme requests '//TRIM(Default_MWwaterCoeff_Scheme)//&
+                '. Using the scheme; the file argument selects no model.'
+          CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),WARNING )
+        END IF
+      END IF
+    END IF
 
     ! ...Was a path specified?
     IF ( PRESENT(File_Path) ) THEN
@@ -1159,8 +1195,12 @@ CONTAINS
     END IF Visible_Sensor
 
     ! ...Microwave
+    ! Report the scheme actually loaded. This used to name
+    ! Default_MWwaterCoeff_File, which is never read: the file-based load below
+    ! is commented out and the model comes from the scheme string, so the
+    ! message asserted a file had been loaded when it had not.
     IF ( .NOT. Quiet_ ) THEN
-      WRITE(*, '("Loading MW water emissivity coefficients: ", a) ') TRIM(Default_MWwaterCoeff_File)
+      WRITE(*, '("Loading MW water emissivity model: ", a) ') TRIM(Default_MWwaterCoeff_Scheme)
     END IF
     Microwave_Sensor: IF ( ANY(SpcCoeff_IsMicrowaveSensor(SC)) ) THEN
 
@@ -1670,5 +1710,48 @@ CONTAINS
         INFORMATION )
     END IF
   END SUBROUTINE Resolve_Coeff_Format
+
+
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       MWwaterCoeff_Scheme_From_File
+!
+! PURPOSE:
+!       Recover the microwave water emissivity scheme name from a MWwaterCoeff
+!       filename.
+!
+!       The shipped names are exactly <SCHEME>.MWwater.EmisCoeff.<ext>, for
+!       example FASTEM6.MWwater.EmisCoeff.nc, so the scheme is the leading
+!       component of the base name. Any directory prefix is stripped first so
+!       the result does not depend on whether a File_Path was joined on.
+!
+!       Returns an empty string when the name does not follow that pattern, in
+!       which case the caller keeps whatever scheme it already had rather than
+!       guessing.
+!
+!--------------------------------------------------------------------------------
+
+  FUNCTION MWwaterCoeff_Scheme_From_File( Filename ) RESULT( Scheme )
+    ! Arguments
+    CHARACTER(*), INTENT(IN) :: Filename
+    ! Function result
+    CHARACTER(SL) :: Scheme
+    ! Local variables
+    CHARACTER(SL) :: base
+    INTEGER :: i
+
+    Scheme = ''
+
+    ! ...Strip any directory prefix
+    base = ADJUSTL(Filename)
+    i = INDEX(base, '/', BACK=.TRUE.)
+    IF ( i > 0 ) base = base(i+1:)
+
+    ! ...The scheme is everything before the first separator
+    i = INDEX(base, '.')
+    IF ( i > 1 ) Scheme = base(:i-1)
+
+  END FUNCTION MWwaterCoeff_Scheme_From_File
 
 END MODULE CRTM_LifeCycle

@@ -129,6 +129,16 @@ MODULE CRTM_Options_Define
     ! User defined MW water emissivity algorithm
     LOGICAL :: Use_Old_MWSSEM = .FALSE.
 
+    ! Use PARMIO as the MW water emissivity backend wherever its table has
+    ! data, instead of only at and above the conservative default frequency
+    ! floor. The floor exists so that enabling PARMIO could not disturb the
+    ! operational sounding channels, not because PARMIO is unsuitable below
+    ! it, so this is the switch for exercising PARMIO deliberately. It never
+    ! grants access to frequencies the table does not cover: coverage is
+    ! checked independently, because the alternative is a silently
+    ! edge-clamped result from the wrong frequency.
+    LOGICAL :: Use_PARMIO_MWSSEM = .FALSE.
+
     ! Antenna correction application
     LOGICAL :: Use_Antenna_Correction = .FALSE.
 
@@ -408,6 +418,7 @@ CONTAINS
     self                         , &
     Check_Input                  , &
     Use_Old_MWSSEM               , &
+    Use_PARMIO_MWSSEM            , &
     Use_Antenna_Correction       , &
     Apply_NLTE_Correction        , &
     Set_ADA_RT                   , &
@@ -429,6 +440,7 @@ CONTAINS
     TYPE(CRTM_Options_type), INTENT(IN OUT) :: self
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Check_Input
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_Old_MWSSEM
+    LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_PARMIO_MWSSEM
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_Antenna_Correction
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Apply_NLTE_Correction
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Set_ADA_RT
@@ -450,6 +462,7 @@ CONTAINS
     ! Set the "direct copy" components
     IF ( PRESENT(Check_Input           ) ) self%Check_Input            = Check_Input
     IF ( PRESENT(Use_Old_MWSSEM        ) ) self%Use_Old_MWSSEM         = Use_Old_MWSSEM
+    IF ( PRESENT(Use_PARMIO_MWSSEM     ) ) self%Use_PARMIO_MWSSEM      = Use_PARMIO_MWSSEM
     IF ( PRESENT(Use_Antenna_Correction) ) self%Use_Antenna_Correction = Use_Antenna_Correction
     IF ( PRESENT(Apply_NLTE_Correction ) ) self%Apply_NLTE_Correction  = Apply_NLTE_Correction
     IF ( PRESENT(Include_Scattering    ) ) self%Include_Scattering     = Include_Scattering
@@ -880,6 +893,7 @@ CONTAINS
     ! Display components
     WRITE(*,'(3x,"Check input flag            :",1x,l1)') self%Check_Input
     WRITE(*,'(3x,"Use old MWSSEM flag         :",1x,l1)') self%Use_Old_MWSSEM
+    WRITE(*,'(3x,"Use PARMIO MWSSEM flag      :",1x,l1)') self%Use_PARMIO_MWSSEM
     WRITE(*,'(3x,"Use antenna correction flag :",1x,l1)') self%Use_Antenna_Correction
     WRITE(*,'(3x,"Apply NLTE correction flag  :",1x,l1)') self%Apply_NLTE_Correction
     WRITE(*,'(3x,"Aircraft pressure altitude  :",1x,es22.15)') self%Aircraft_Pressure
@@ -1402,6 +1416,7 @@ CONTAINS
 
     is_equal = (x%Check_Input              .EQV.   y%Check_Input           ) .AND. &
                (x%Use_Old_MWSSEM           .EQV.   y%Use_Old_MWSSEM        ) .AND. &
+               (x%Use_PARMIO_MWSSEM        .EQV.   y%Use_PARMIO_MWSSEM     ) .AND. &
                (x%Use_Antenna_Correction   .EQV.   y%Use_Antenna_Correction) .AND. &
                (x%Apply_NLTE_Correction    .EQV.   y%Apply_NLTE_Correction ) .AND. &
                (x%RT_Algorithm_Id           ==     y%RT_Algorithm_Id       ) .AND. &
@@ -1497,7 +1512,8 @@ CONTAINS
     ! Read the optional values
     ! NOTE: the binary record format deliberately excludes the newer type
     ! components (n_Stokes, Compute_Down_Radiance, Compute_Down_Radiance_Profile,
-    ! Compute_Up_Radiance_Profile) -- they take their type defaults on read.
+    ! Compute_Up_Radiance_Profile, Use_PARMIO_MWSSEM) -- they take their type
+    ! defaults on read.
     ! Adding them is a file-format change that must be coordinated with
     ! Write_Record and existing Options files.
     ! ...Input checking logical

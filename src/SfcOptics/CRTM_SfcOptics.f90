@@ -484,7 +484,7 @@ CONTAINS
     ! Local variables
     CHARACTER(ML) :: Message
     INTEGER :: i, j
-    INTEGER :: nL, nZ
+    INTEGER :: nL, nZ, nS
     REAL(fp) :: SIN2_Angle
     REAL(fp) :: pv
     REAL(fp) :: ph
@@ -504,6 +504,12 @@ CONTAINS
     Error_Status = SUCCESS
     nL = SfcOptics%n_Stokes
     nZ = SfcOptics%n_Angles
+    ! Number of Stokes components to carry through the microwave coverage
+    ! aggregation. The scalar path needs both V and H even at nL = 1, because
+    ! its polarization mixing forms combinations of the two, so the floor is 2
+    ! rather than nL. On the vector path the surface model's third and fourth
+    ! Stokes components must reach the solver rather than being dropped here.
+    nS = MAX(2, nL)
     Polarization = SC(SensorIndex)%Polarization(ChannelIndex)
     ! Initialise the local emissivity and reflectivities
     Emissivity   = ZERO
@@ -571,11 +577,20 @@ CONTAINS
 
 
           ! Accumulate the surface optics properties
-          ! based on water coverage fraction
-          Emissivity(1:nZ,1:2) = Emissivity(1:nZ,1:2) + &
-            (SfcOptics%Emissivity(1:nZ,1:2)*Surface%Water_Coverage)
-          Reflectivity(1:nZ,1:2,1:nZ,1:2) = Reflectivity(1:nZ,1:2,1:nZ,1:2) + &
-            (SfcOptics%Reflectivity(1:nZ,1:2,1:nZ,1:2)*Surface%Water_Coverage)
+          ! based on water coverage fraction.
+          ! Water is the only microwave surface with a polarimetric model, so
+          ! it is the only one aggregated over nS rather than the first two
+          ! components: FastemX (FASTEM4/5) and PARMIO both return a full
+          ! four-component emissivity, whose third and fourth components carry
+          ! the wind-direction signal. Dropping them here left the vector
+          ! solver with U = V = 0 whatever the surface model computed. The land,
+          ! snow and ice models write components 1 and 2 only and never define
+          ! 3 and 4, so they must stay at 1:2; the accumulator is zeroed above,
+          ! which is the physically correct contribution for them.
+          Emissivity(1:nZ,1:nS) = Emissivity(1:nZ,1:nS) + &
+            (SfcOptics%Emissivity(1:nZ,1:nS)*Surface%Water_Coverage)
+          Reflectivity(1:nZ,1:nS,1:nZ,1:nS) = Reflectivity(1:nZ,1:nS,1:nZ,1:nS) + &
+            (SfcOptics%Reflectivity(1:nZ,1:nS,1:nZ,1:nS)*Surface%Water_Coverage)
 
          END IF Microwave_Water
 
@@ -1302,7 +1317,7 @@ CONTAINS
     INTEGER :: i
     INTEGER :: j
     REAL(fp) :: rV_TL, rH_TL
-    INTEGER :: nL, nZ
+    INTEGER :: nL, nZ, nS
     INTEGER :: Polarization
     REAL(fp) :: SIN2_Angle
     REAL(fp) :: pv
@@ -1320,6 +1335,7 @@ CONTAINS
     Error_Status = SUCCESS
     nL = SfcOptics%n_Stokes
     nZ = SfcOptics%n_Angles
+    nS = MAX(2, nL)   ! see the forward model for why the floor is 2
     Polarization = SC(SensorIndex)%Polarization( ChannelIndex )
     ! Initialise the local emissivity and reflectivities
     Emissivity_TL   = ZERO
@@ -1387,11 +1403,14 @@ CONTAINS
           END IF
 
           ! Accumulate the surface optics properties
-          ! based on water coverage fraction
-          Emissivity_TL(1:nZ,1:2) = Emissivity_TL(1:nZ,1:2) + &
-            ( SfcOptics_TL%Emissivity(1:nZ,1:2) * Surface%Water_Coverage )
-          Reflectivity_TL(1:nZ,1:2,1:nZ,1:2) = Reflectivity_TL(1:nZ,1:2,1:nZ,1:2) + &
-            ( SfcOptics_TL%Reflectivity(1:nZ,1:2,1:nZ,1:2) * Surface%Water_Coverage )
+          ! based on water coverage fraction. Carried over nS to match the
+          ! forward model, which aggregates the water surface's third and
+          ! fourth Stokes components; a TL truncated at 1:2 would linearize a
+          ! different surface mapping than the forward model used.
+          Emissivity_TL(1:nZ,1:nS) = Emissivity_TL(1:nZ,1:nS) + &
+            ( SfcOptics_TL%Emissivity(1:nZ,1:nS) * Surface%Water_Coverage )
+          Reflectivity_TL(1:nZ,1:nS,1:nZ,1:nS) = Reflectivity_TL(1:nZ,1:nS,1:nZ,1:nS) + &
+            ( SfcOptics_TL%Reflectivity(1:nZ,1:nS,1:nZ,1:nS) * Surface%Water_Coverage )
 
         END IF Microwave_Water
 
@@ -1964,7 +1983,7 @@ CONTAINS
     CHARACTER(256)  :: Message
     INTEGER :: i
     INTEGER :: j
-    INTEGER :: nL, nZ
+    INTEGER :: nL, nZ, nS
     INTEGER :: Polarization
     REAL(fp) :: SIN2_Angle
     REAL(fp) :: theta_f
@@ -1980,6 +1999,7 @@ CONTAINS
     Error_Status = SUCCESS
     nL = SfcOptics%n_Stokes
     nZ = SfcOptics%n_Angles
+    nS = MAX(2, nL)   ! see the forward model for why the floor is 2
     Polarization = SC(SensorIndex)%Polarization( ChannelIndex )
     ! Initialise the local emissivity and reflectivity adjoints
     Emissivity_AD = ZERO
@@ -2291,12 +2311,15 @@ CONTAINS
           ! The surface optics properties based on water coverage fraction
           ! Note that the Emissivity_AD and Reflectivity_AD local adjoints
           ! are NOT zeroed here.
-          SfcOptics_AD%Emissivity(1:nZ,1:2) = &
-            SfcOptics_AD%Emissivity(1:nZ,1:2) + &
-            (Emissivity_AD(1:nZ,1:2)*Surface%Water_Coverage)
-          SfcOptics_AD%Reflectivity(1:nZ,1:2,1:nZ,1:2) = &
-            SfcOptics_AD%Reflectivity(1:nZ,1:2,1:nZ,1:2) + &
-            (Reflectivity_AD(1:nZ,1:2,1:nZ,1:2)*Surface%Water_Coverage)
+          ! Carried over nS, the exact transpose of the forward model's water
+          ! aggregation, so the third and fourth Stokes sensitivities reach the
+          ! surface model adjoint instead of being discarded.
+          SfcOptics_AD%Emissivity(1:nZ,1:nS) = &
+            SfcOptics_AD%Emissivity(1:nZ,1:nS) + &
+            (Emissivity_AD(1:nZ,1:nS)*Surface%Water_Coverage)
+          SfcOptics_AD%Reflectivity(1:nZ,1:nS,1:nZ,1:nS) = &
+            SfcOptics_AD%Reflectivity(1:nZ,1:nS,1:nZ,1:nS) + &
+            (Reflectivity_AD(1:nZ,1:nS,1:nZ,1:nS)*Surface%Water_Coverage)
 
           ! Compute the surface optics adjoints
           Error_Status = Compute_MW_Water_SfcOptics_AD( &

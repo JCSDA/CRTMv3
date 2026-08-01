@@ -577,6 +577,7 @@ CONTAINS
       REAL(fp) :: transmittance, transmittance_K
       REAL(fp) :: transmittance_clear, transmittance_clear_K
       REAL(fp) :: r_cloudy(4)
+      REAL(fp) :: r_cloudy_rad
       REAL(fp) :: r_cloudy_dn
       REAL(fp) :: r_cloudy_dn_prof(MAX_N_LAYERS)  ! pre-combine cloudy downwelling profile (thread-private)
       REAL(fp) :: r_cloudy_up_prof(MAX_N_LAYERS)  ! pre-combine cloudy upwelling profile (thread-private)
@@ -648,6 +649,7 @@ CONTAINS
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
       DO nt = 1, n_channel_threads
         SfcOptics(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
+        SfcOptics(nt)%Use_PARMIO_MWSSEM = Opt%Use_PARMIO_MWSSEM
       END DO
 !$OMP END PARALLEL DO
 
@@ -772,6 +774,8 @@ CONTAINS
           RTV(nt)%Compute_Down_Radiance_Profile = Opt%Compute_Down_Radiance_Profile
           RTV(nt)%Compute_Up_Radiance_Profile = Opt%Compute_Up_Radiance_Profile
           IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
+          ! Clear column must match the cloudy one; see CRTM_Adjoint_Module.
+          IF( Opt%n_Stokes > 0 ) RTV_Clear(nt)%n_Stokes = Opt%n_Stokes
           AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
           AtmOptics_K(nt)%n_Stokes = RTV(nt)%n_Stokes
           ! Re-sync SfcOptics%n_Stokes here: it was set from RTV(nt)%n_Stokes at
@@ -866,6 +870,7 @@ CONTAINS
           END IF
           ! ...Copy over surface optics input
           SfcOptics_Clear(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
+          SfcOptics_Clear(nt)%Use_PARMIO_MWSSEM = Opt%Use_PARMIO_MWSSEM
           SfcOptics_Clear(nt)%n_Stokes = RTV(nt)%n_Stokes
           SfcOptics_Clear_K(nt)%n_Stokes = RTV(nt)%n_Stokes
 
@@ -1029,7 +1034,7 @@ CONTAINS
         END IF
 #else
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
-!$OMP    FIRSTPRIVATE(ln, r_cloudy, r_cloudy_dn, r_cloudy_dn_prof, r_cloudy_up_prof) &
+!$OMP    FIRSTPRIVATE(ln, r_cloudy, r_cloudy_rad, r_cloudy_dn, r_cloudy_dn_prof, r_cloudy_up_prof) &
 !$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, Err_Thread,     &
 !$OMP            start_ch, end_ch, Wavenumber, Status_FWD, Status_K,    &
 !$OMP            transmittance, transmittance_K, transmittance_clear,   &
@@ -1416,7 +1421,15 @@ CONTAINS
                         ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Stokes(ks)) + &
                         (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Stokes(ks))
                     END DO
-                    RTSolution(ln,m)%Radiance = RTSolution(ln,m)%Stokes(1)
+                    ! The projection onto the channel polarization is linear, and so
+                    ! is this combine, so the combined reported radiance is the same
+                    ! combine applied to the already-projected clear and cloudy
+                    ! radiances. Re-deriving it from Stokes(1) here would silently
+                    ! undo the projection for every fractional-cloud vector scene.
+                    r_cloudy_rad = RTSolution(ln,m)%Radiance
+                    RTSolution(ln,m)%Radiance = &
+                        ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Radiance) + &
+                        (CloudCover%Total_Cloud_Cover * r_cloudy_rad)
                   END IF
                   ! ...Save the cloud cover in the output structure
                   RTSolution(ln,m)%Total_Cloud_Cover = CloudCover%Total_Cloud_Cover
@@ -1493,10 +1506,32 @@ CONTAINS
                     ! The adjoint of the clear and cloudy radiance combination
                     CloudCover_K(nt)%Total_Cloud_Cover = RTSolution_K(ln,m)%Total_Cloud_Cover
                     RTSolution_K(ln,m)%Total_Cloud_Cover = ZERO
+                    IF( RTV(nt)%n_Stokes == 1 ) THEN
                     RTSolution_Clear_K(nt)%Radiance = (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_K(ln,m)%Radiance
                     CloudCover_K(nt)%Total_Cloud_Cover = CloudCover_K(nt)%Total_Cloud_Cover + &
                                ((r_cloudy(1) - RTSolution_Clear(nt)%Radiance) * RTSolution_K(ln,m)%Radiance)
                     RTSolution_K(ln,m)%Radiance    = CloudCover%Total_Cloud_Cover * RTSolution_K(ln,m)%Radiance
+                    ELSE
+                    ! Transpose of the Stokes-wise forward combine; see the
+                    ! matching block in CRTM_Adjoint_Module for why %Radiance
+                    ! alone was not enough on the vector path.
+                    DO ks = 1, RTV(nt)%n_Stokes
+                      RTSolution_Clear_K(nt)%Stokes(ks) = &
+                          (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_K(ln,m)%Stokes(ks)
+                      CloudCover_K(nt)%Total_Cloud_Cover = CloudCover_K(nt)%Total_Cloud_Cover + &
+                          ((r_cloudy(ks) - RTSolution_Clear(nt)%Stokes(ks)) * RTSolution_K(ln,m)%Stokes(ks))
+                      RTSolution_K(ln,m)%Stokes(ks) = &
+                          CloudCover%Total_Cloud_Cover * RTSolution_K(ln,m)%Stokes(ks)
+                    END DO
+                    ! Split the reported-radiance seed between the columns the
+                    ! same way; see the matching block in CRTM_Adjoint_Module.
+                    RTSolution_Clear_K(nt)%Radiance = &
+                        (ONE - CloudCover%Total_Cloud_Cover) * RTSolution_K(ln,m)%Radiance
+                    CloudCover_K(nt)%Total_Cloud_Cover = CloudCover_K(nt)%Total_Cloud_Cover + &
+                        ((r_cloudy_rad - RTSolution_Clear(nt)%Radiance) * RTSolution_K(ln,m)%Radiance)
+                    RTSolution_K(ln,m)%Radiance = &
+                        CloudCover%Total_Cloud_Cover * RTSolution_K(ln,m)%Radiance
+                    END IF
                     ! Adjoint of the surface downwelling radiance (scalar) combine (opt-in),
                     ! mirroring the Radiance combine adjoint above (including the TCC term).
                     IF ( Opt%Compute_Down_Radiance ) THEN
@@ -1960,7 +1995,14 @@ CONTAINS
       ! without this the n_Stokes>1 Jacobians come out identically zero.  %Radiance
       ! is left intact for the scalar-style fractional-cloud clear/cloudy combine
       ! (a full Stokes-space fractional combine for n_Stokes>1 remains separate).
-      IF ( Opt%n_Stokes > 1 ) rts_K%Stokes(1) = rts_K%Stokes(1) + rts_K%Radiance
+      ! Historically this mirrored %Radiance into %Stokes(1) for vector runs,
+      ! because Assign_Common_Input_AD read the seed from %Stokes and ignored
+      ! %Radiance entirely, so without it the n_Stokes>1 Jacobians came out
+      ! identically zero. That is no longer true: %Radiance is now the Stokes
+      ! vector projected onto the channel polarization, and its adjoint is
+      ! distributed over every Stokes component by the transpose of that
+      ! projection. Mirroring here as well would double count the seed, which
+      ! the adjoint dot-product identity detects.
     END SUBROUTINE Pre_Process_RTSolution_K
   END FUNCTION CRTM_K_Matrix
 END MODULE CRTM_K_Matrix_Module

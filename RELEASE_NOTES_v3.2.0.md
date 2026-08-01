@@ -1,7 +1,8 @@
 # CRTM v3.2.0 Release Notes
 
 **Release date:** July 31, 2026
-**Coefficient data:** `fix_REL-3.2.0.0.tgz` (~3.5 GB), auto-downloaded at build
+**Coefficient data:** `fix_REL-3.2.0.0.tgz` (~3.4 GB, rolled 2026-07-30,
+md5 `725760925e79c8ec7ecfd03884cde5fa`), auto-downloaded at build
 time (or via `Get_CRTM_Binary_Files.sh`).
 
 Developer-facing detail for every item below (commits, affected tests, TB
@@ -35,9 +36,19 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
   combined correctly for fractional cloud. The surface downwelling radiance
   `RTSolution%Down_Radiance` is a first-class output (always populated on the
   emission path; enabled via `Options%Compute_Down_Radiance` for scattering).
-- **Vector radiative transfer (`Options%n_Stokes > 1`) usability fixes**,
-  including nonzero Jacobians, polarized phase-matrix normalization, and
-  SfcOptics Stokes-dimension handling.
+- **Vector radiative transfer (`Options%n_Stokes > 1`) substantially repaired.**
+  The surface is now handed to the solver in the Stokes basis rather than
+  (V,H); the third and fourth Stokes components survive the surface aggregation
+  and the azimuthal accumulation instead of being zeroed at both ends; the
+  clear-sky path gained a vector solver, so a cloud-free polarimetric run no
+  longer returns Q = U = V = 0; the fractional-cloud clear/cloudy combine is
+  differentiated across all Stokes components; and `RTSolution%Radiance` is now
+  the channel-polarized measurement rather than Stokes I (see behavior change
+  11). Tangent-linear, adjoint and K are verified at `n_Stokes = 4` against
+  finite differences, the adjoint dot-product identity and K against AD, for
+  both atmospheric and surface control variables including wind direction.
+  **This path has not been validated against an external model; see the known
+  issues before using U or V quantitatively.**
 - **Analytic MW-land surface Jacobians** (issue #281) — the NESDIS_LandEM
   microwave land path (< 80 GHz) now returns analytic TL/AD/K sensitivities for
   **every physical land-state variable**: LAI, vegetation fraction, soil
@@ -170,11 +181,18 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
    for users with existing binary trees, but they should be considered
    deprecated (removal expected in a later v3.2.x, per the README).
 
-9. **Duplicate `_j2` sensor aliases removed from the fix tree.** Seven
+9. **Duplicate `_j2` sensor aliases removed from the fix tree.** Six
    sensors shipped twice under both a `_j2` and an `_n21` name for the same
-   satellite (JPSS-2 = NOAA-21), with bit-identical coefficients differing
-   only in the internal `Sensor_Id` string and the creation timestamp. The
-   `_j2` copies are gone; use the `_n21` name:
+   satellite (JPSS-2 = NOAA-21). Five of those pairs are identical in every
+   data variable; the sixth (`atms_j2` / `atms_n21`) agrees to
+   floating-point round-off only (largest difference 5.7e-14 in
+   `Frequency`, with the derived Planck and band-correction coefficients
+   differing in their last bits from independent computation), which is
+   radiometrically identical but not literally bit-identical. Otherwise the
+   pairs differ only in the internal `Sensor_Id` string and the creation
+   timestamp. A seventh entry, `v.viirs-m_j2`, had no `_n21` counterpart in
+   v3.1.4 and is a straight rename rather than a de-duplication. The `_j2`
+   copies are gone; use the `_n21` name:
 
    | removed | use instead |
    |---|---|
@@ -239,17 +257,113 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
     NOAA-21 nadir mapper radiances below 302 nm (roughly `u.omps-tc_n21`
     channels 1 to 10) as not validated for operational use.
 
+11. **`RTSolution%Radiance` is now the channel-polarized measurement when
+    `n_Stokes > 1`, not Stokes I.** The emergent Stokes vector is projected onto
+    the channel's polarization, so a vertically polarized channel reports I+Q
+    where it previously reported I. `Brightness_Temperature`, which is derived
+    from it, moves with it. `RTSolution%Stokes` is unchanged and still holds the
+    physical (I, Q, U, V). Anyone already running `n_Stokes > 1` on a polarized
+    channel will see the reported radiance and brightness temperature change by
+    the polarization difference, which over ocean is order 20 percent of the
+    signal. The projection weights are taken from the scalar path's own
+    polarization handling, so the two now agree: a run with the channel forced
+    to pure vertical or pure horizontal reproduces the corresponding scalar
+    radiance to machine precision. Nothing at `n_Stokes = 1` changes.
+
+12. **`RTSolution_AD%Radiance` and `RTSolution_K%Radiance` are now honoured as
+    input seeds on the vector path.** Previously `%Radiance` was an output alias
+    for `Stokes(1)` but not an input one, and seeding it for an `n_Stokes > 1`
+    run silently produced a zero Jacobian; only `%Stokes` or
+    `%Brightness_Temperature` worked. Both now work. Code that seeded
+    `%Radiance` and `%Stokes(1)` together to work around this will now double
+    count.
+
+13. **`RT_Algorithm_Id = RT_SOI` with `n_Stokes > 1` is now an error.**
+    Previously the vector branch was taken before the algorithm selector was
+    consulted, so the caller silently received ADA results labelled as SOI. SOI
+    has no vector solver, so this is now rejected with a message naming RT_ADA.
+
+14. **`CRTM_MWwaterCoeff_Load_FASTEM` discards the previously loaded scheme and
+    reports failure.** Switching scheme, for example FASTEM6 to FASTEM4, used to
+    leave the shared coefficient structure deallocated while the function
+    returned SUCCESS, because the underlying setter rejects a shape mismatch by
+    destroying the target. Scheme switching now works, and a failed load returns
+    FAILURE instead of SUCCESS. Related: a coefficient dimension mismatch used to
+    terminate the program with a Fortran runtime formatting error rather than
+    reporting cleanly.
+
 ## Known issues and limitations
 
 - **Sub-mm thin frozen cloud (≈ 325 GHz):** optically thin frozen-cloud
   layers can produce nonphysical TBs through the adding-doubling/MOM path
   (small-τ matrix conditioning with high phase-function truncation orders).
   Affects sub-mm scattering scenes only; under investigation.
-- **Fractional cloud with `n_Stokes > 1`:** the K/AD Jacobian seed uses the
-  scalar-Radiance approximation; a full Stokes-space fractional combine
-  remains future work.
 - **ODSSU netCDF supports the ODPS sub-algorithm only** (the shipped SSU
   files are ODPS-based; ODAS-based SSU coefficient files remain binary-only).
 - **Options binary I/O does not persist the new fields** (`n_Stokes` and the
   radiance-profile switches); they will be added with the next format
   revision.
+
+### Polarimetric (`Options%n_Stokes > 1`) radiative transfer
+
+The vector path is functional and internally verified, but it has **not been
+validated against an independent radiative transfer model or against
+observations**. Treat it as a capability under development rather than a
+production-ready product. The specific limitations follow.
+
+- **No external reference.** Every check on this path compares CRTM against
+  itself: tangent-linear against finite differences, the adjoint dot-product
+  identity, K against AD, physical invariants such as the polarization bound,
+  and agreement with the scalar path in the limits where the two must agree.
+  None of that can fix a convention that is consistently wrong. In particular
+  the **sign convention of the third Stokes component** between the surface
+  models and the solver is unverified: every internal test passes unchanged if
+  the sign of U is flipped. Anyone using U or V quantitatively should establish
+  the sign against an external reference first.
+- **The default microwave water surface has no polarimetric model.** The
+  `CRTM_Init` default is FASTEM6, whose azimuth model parameterises the
+  vertical and horizontal components only and returns the third and fourth
+  Stokes components as identically zero. A polarimetric surface requires
+  `MWwaterCoeff_Scheme = 'FASTEM4'` (or FASTEM5), or PARMIO, which is used
+  automatically at and above 200 GHz when its lookup table is present. Note
+  that `MWwaterCoeff_File` does **not** select the model; the scheme argument
+  does.
+- **Microwave only.** The coupled (V,H) to Stokes surface branch exists only in
+  the microwave section of the surface optics. Infrared and visible sensors
+  populate the first Stokes component alone, so a vector run there returns
+  Q = U = V = 0 from the surface regardless of geometry.
+- **Aerosols contribute no polarization.** The shipped `AerosolCoeff` carries a
+  single phase element, so a vector run mixes polarized cloud scattering with
+  unpolarized aerosol scattering. This is deliberate and is not blocked, since
+  a scalar aerosol table must not prevent a polarized cloud run.
+- **The surface reflects no U or V.** Both FASTEM and PARMIO set the third and
+  fourth Stokes reflectivity components to zero, so U and V are emitted by the
+  surface but never reflected. This is exact for clear sky, where the
+  downwelling reaching a specular surface is unpolarized and symmetry about the
+  meridional plane forbids a reflected U. It is an approximation once the
+  downwelling is itself polarized by scattering.
+- **Polarimetric cloud lookup tables are not validated.** The `n_Stokes > 1`
+  scattering path requires a six-phase-element table (the experimental
+  `CRTM-Exp` scheme). Those tables have not been validated for full-Stokes
+  work, so polarized scattering results carry that uncertainty independently of
+  the code.
+- **Phase-matrix normalization is inconsistent for below-diagonal polarized
+  blocks.** `Normalize_Phase` scales each row's intensity and polarized
+  elements together and then applies an intensity-only symmetry copy, so a
+  block below the diagonal ends up with its (1,1) element carrying one row's
+  normalization and its polarized elements another. This does not produce a
+  polarization-bound violation with the shipped coefficients, where the
+  measured worst ratio is 0.65, but it is not the correct polarized symmetry
+  treatment.
+- **Mixed-polarization channels are projected at the sensor angle.** For the
+  V/H-mixed, constant-mixed and PRA polarizations the vector path applies the
+  polarization mixing once, to the emergent radiance at the sensor angle, which
+  is where a receiver projects. The scalar path instead applies it to the
+  surface emissivity at every quadrature angle. The two coincide when there is
+  a single angle, and differ slightly for a scattering mixed-polarization
+  channel.
+- **`plus45L`, `minus45L`, `RC` and `LC` polarizations are treated as
+  vertical**, inherited unchanged from the scalar path so that the two agree.
+  These are placeholders, not the true projections.
+- **`RT_Algorithm_Id = RT_SOI` is not supported with `n_Stokes > 1`** and is now
+  rejected; see the behavior changes above. SOI has no vector solver.

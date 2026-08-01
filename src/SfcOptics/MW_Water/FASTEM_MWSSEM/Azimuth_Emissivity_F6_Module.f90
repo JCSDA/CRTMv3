@@ -184,6 +184,19 @@ CONTAINS
       iVar%A2v_theta(j) = POINT5*(TWO*iVar%A2s1_theta(j) + iVar%A2s2_theta(j))
       iVar%A2h_theta(j) = POINT5*(TWO*iVar%A2s1_theta(j) - iVar%A2s2_theta(j))
 
+      ! Vertical and horizontal only, cosine harmonics, matching the shared
+      ! azimuth convention defined in CRTM_MW_Water_SfcOptics.f90.
+      !
+      ! FASTEM6 has no third or fourth Stokes azimuth model, so e_Azimuth(3)
+      ! and e_Azimuth(4) keep the ZERO set on entry. Since FASTEM6 is the
+      ! CRTM default, a polarimetric (n_Stokes > 1) run over water returns a
+      ! surface U and V of exactly zero unless the backend is switched to
+      ! FASTEM4 or PARMIO, which is indistinguishable from a scene that
+      ! genuinely has no polarimetric signal. Select the backend with either
+      ! MWwaterCoeff_Scheme or MWwaterCoeff_File; the latter used to select
+      ! nothing at all and was fixed on 2026-07-31. FASTEM4 and FASTEM6 are
+      ! the only loadable schemes.
+      ! See docs/design/polarimetric_conventions.md, section 4.
       iVar%azimuth_component(j,IVPOL) = (iVar%A1v_theta(j) * COS(iVar%phi)) + (iVar%A2v_theta(j) * COS(TWO*iVar%phi))
       iVar%azimuth_component(j,IHPOL) = (iVar%A1h_theta(j) * COS(iVar%phi)) + (iVar%A2h_theta(j) * COS(TWO*iVar%phi))
 

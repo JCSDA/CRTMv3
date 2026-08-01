@@ -518,7 +518,7 @@ CONTAINS
       INTEGER :: ln, nc, ks
       INTEGER :: n_Full_Streams, mth_Azi
       INTEGER :: cloud_coverage_flag
-      REAL(fp) :: Source_ZA, r_cloudy, r_cloudy_dn
+      REAL(fp) :: Source_ZA, r_cloudy, r_cloudy_dn, r_cloudy_rad
       REAL(fp) :: Wavenumber
       REAL(fp) :: transmittance, transmittance_clear
       REAL(fp) :: transmittance_TL, transmittance_clear_TL
@@ -588,7 +588,9 @@ CONTAINS
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
       DO nt = 1, n_channel_threads
         SfcOptics(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
+        SfcOptics(nt)%Use_PARMIO_MWSSEM = Opt%Use_PARMIO_MWSSEM
         SfcOptics_TL(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
+        SfcOptics_TL(nt)%Use_PARMIO_MWSSEM = Opt%Use_PARMIO_MWSSEM
       END DO
 !$OMP END PARALLEL DO
 
@@ -717,6 +719,8 @@ CONTAINS
         AtmOptics(nt)%depolarization = Opt%depolarization
         AtmOptics_TL(nt)%depolarization = Opt%depolarization
         IF( Opt%n_Stokes > 0 ) RTV(nt)%n_Stokes = Opt%n_Stokes
+        ! Clear column must match the cloudy one; see CRTM_Adjoint_Module.
+        IF( Opt%n_Stokes > 0 ) RTV_Clear(nt)%n_Stokes = Opt%n_Stokes
         AtmOptics(nt)%n_Stokes = RTV(nt)%n_Stokes
         AtmOptics_TL(nt)%n_Stokes = RTV(nt)%n_Stokes
         AtmOptics(nt)%Include_Scattering = Opt%Include_Scattering
@@ -802,7 +806,9 @@ CONTAINS
 
           ! ...Copy over surface optics input
           SfcOptics_Clear(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
+          SfcOptics_Clear(nt)%Use_PARMIO_MWSSEM = Opt%Use_PARMIO_MWSSEM
           SfcOptics_Clear_TL(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
+          SfcOptics_Clear_TL(nt)%Use_PARMIO_MWSSEM = Opt%Use_PARMIO_MWSSEM
           SfcOptics_Clear(nt)%n_Stokes = RTV(nt)%n_Stokes               ! It may be changed for CSEM.
           SfcOptics_Clear_TL(nt)%n_Stokes = RTV(nt)%n_Stokes            ! It may be changed for CSEM.
 
@@ -960,7 +966,7 @@ CONTAINS
         ! never lost to a later SUCCESS write by another thread.
         thread_error = SUCCESS
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
-!$OMP    FIRSTPRIVATE(ln, r_cloudy, r_cloudy_dn)                                  &
+!$OMP    FIRSTPRIVATE(ln, r_cloudy, r_cloudy_dn, r_cloudy_rad)                                  &
 !$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, Err_Thread,    &
 !$OMP          start_ch, end_ch, Wavenumber, transmittance, transmittance_TL,   &
 !$OMP          transmittance_clear, transmittance_clear_TL, l, mth_Azi, ks, Status_FWD,Status_TL) &
@@ -1400,8 +1406,21 @@ CONTAINS
                   (CloudCover%Total_Cloud_Cover * RTSolution(ln,m)%Upwelling_Radiance)
             END IF
 
-            RTSolution(ln,m)%Radiance = RTSolution(ln,m)%Stokes(1)
-            RTSolution_TL(ln,m)%Radiance = RTSolution_TL(ln,m)%Stokes(1)
+            ! The projection onto the channel polarization is linear, and so
+            ! is this combine, so the combined reported radiance is the same
+            ! combine applied to the already-projected clear and cloudy
+            ! radiances. Re-deriving it from Stokes(1) here would silently
+            ! undo the projection for every fractional-cloud vector scene.
+            ! The cloud-cover term needs the PRE-combine cloudy radiance, so save
+            ! it and compute the tangent linear before overwriting the forward.
+            r_cloudy_rad = RTSolution(ln,m)%Radiance
+            RTSolution_TL(ln,m)%Radiance = &
+                ((r_cloudy_rad - RTSolution_Clear(nt)%Radiance) * CloudCover_TL%Total_Cloud_Cover) + &
+                ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear_TL(nt)%Radiance) + &
+                (CloudCover%Total_Cloud_Cover * RTSolution_TL(ln,m)%Radiance)
+            RTSolution(ln,m)%Radiance = &
+                ((ONE - CloudCover%Total_Cloud_Cover) * RTSolution_Clear(nt)%Radiance) + &
+                (CloudCover%Total_Cloud_Cover * r_cloudy_rad)
           END IF
 
           ! Combine cloudy and clear radiances for fractional cloud coverage
