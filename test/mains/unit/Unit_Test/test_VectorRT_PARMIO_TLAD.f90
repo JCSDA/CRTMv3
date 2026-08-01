@@ -61,7 +61,7 @@ PROGRAM test_VectorRT_PARMIO_TLAD
   ! inside sss_nominal_m and is a window channel, so the surface polarimetric
   ! signal actually reaches the top of the atmosphere. That makes this a
   ! stronger test than it was: the signal is real rather than clamped.
-  REAL(fp),     PARAMETER :: PARMIO_TEST_FLOOR = 50.0_fp
+  LOGICAL,      PARAMETER :: USE_PARMIO_EVERYWHERE = .TRUE.
 
   INTEGER,  PARAMETER :: N_PROFILES  = 2      ! the ECMWF84 loader fills atm(1) and atm(2)
   INTEGER,  PARAMETER :: N_LAYERS    = 100
@@ -95,8 +95,7 @@ PROGRAM test_VectorRT_PARMIO_TLAD
   WRITE(*,'(/5x,a)') 'PARMIO polarimetric surface: Jacobians through the full RT chain'
   WRITE(*,'(5x,a/)') 'CRTM Version: '//TRIM(Version)
 
-  Error_Status = CRTM_Init( (/ SENSOR /), ChannelInfo, File_Path=PATH, Quiet=.TRUE., &
-                            PARMIO_Frequency_Threshold = PARMIO_TEST_FLOOR )
+  Error_Status = CRTM_Init( (/ SENSOR /), ChannelInfo, File_Path=PATH, Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     CALL Display_Message( PROGRAM_NAME, 'CRTM_Init failed', FAILURE ); STOP 1
   END IF
@@ -136,7 +135,8 @@ PROGRAM test_VectorRT_PARMIO_TLAD
     Sfc(m)%Salinity          = 33.0_fp
     CALL CRTM_Geometry_SetValue( Geometry(m), Sensor_Zenith_Angle  = ZENITH, &
                                               Sensor_Azimuth_Angle = SENSOR_AZI )
-    Options(m)%n_Stokes        = 4
+    Options(m)%n_Stokes          = 4
+    Options(m)%Use_PARMIO_MWSSEM = USE_PARMIO_EVERYWHERE
     Options(m)%RT_Algorithm_Id = RT_ADA
   END DO
 
@@ -152,9 +152,9 @@ PROGRAM test_VectorRT_PARMIO_TLAD
   DO l = 1, n_Channels
     ui = ABS(RTS(l,1)%Stokes(3)) / MAX(ABS(RTS(l,1)%Stokes(1)), TINY(ONE))
     WRITE(*,'(4x,i2,2x,f10.3,2x,a,2(2x,es15.6),2x,es11.3)') &
-      l, SC(1)%Frequency(l), MERGE('PARMIO','FASTEM', PARMIO_Is_Active_At(SC(1)%Frequency(l))), &
+      l, SC(1)%Frequency(l), MERGE('PARMIO','FASTEM', PARMIO_Is_Active_At(SC(1)%Frequency(l), USE_PARMIO_EVERYWHERE)), &
       RTS(l,1)%Stokes(1), RTS(l,1)%Stokes(3), ui
-    IF ( PARMIO_Is_Active_At(SC(1)%Frequency(l)) .AND. ui > best_ui ) THEN
+    IF ( PARMIO_Is_Active_At(SC(1)%Frequency(l), USE_PARMIO_EVERYWHERE) .AND. ui > best_ui ) THEN
       best_ui = ui ; ch_parmio = l
     END IF
   END DO

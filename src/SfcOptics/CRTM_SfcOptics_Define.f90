@@ -86,6 +86,11 @@ MODULE CRTM_SfcOptics_Define
 
     ! MW Water SfcOptics options
     LOGICAL  :: Use_New_MWSSEM = .TRUE.    ! Flag for MW Water SfcOptics algorithm switch
+    ! Caller opted into PARMIO across its full covered range rather than only
+    ! at and above the conservative default frequency floor. Carried here from
+    ! Options for the same reason Use_New_MWSSEM is: the MW water dispatcher
+    ! needs it and does not see Options.
+    LOGICAL  :: Use_PARMIO_MWSSEM = .FALSE.
     REAL(fp) :: Azimuth_Angle  = 999.9_fp  ! Relative azimuth angle
     REAL(fp) :: Transmittance  = ZERO      ! Total atmospheric transmittance
 
@@ -391,6 +396,7 @@ CONTAINS
     ! Display components
     WRITE(*, '(3x,"Compute flag              :",1x,l1)') self%Compute
     WRITE(*, '(3x,"Use_New_MWSSEM flag       :",1x,l1)') self%Use_New_MWSSEM
+    WRITE(*, '(3x,"Use_PARMIO_MWSSEM flag    :",1x,l1)') self%Use_PARMIO_MWSSEM
     WRITE(*, '(3x,"  MWSSEM- azimuth angle   :",1x,es22.15)') self%Azimuth_Angle
     WRITE(*, '(3x,"  MWSSEM- transmittance   :",1x,es22.15)') self%Transmittance
     WRITE(*, '(3x,"Satellite view angle index:",1x,i0)') self%Index_Sat_Ang

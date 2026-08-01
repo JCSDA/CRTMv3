@@ -131,15 +131,34 @@ that needs to know asks that rather than re-deriving the rule, so the call
 sites cannot drift apart:
 
 1. the LUT is loaded;
-2. the frequency is at or above the dispatch floor, default 200 GHz. That
-   default is not arbitrary: it comes from obs-space validation against
-   ATMS-NPP, where FASTEM6 is competitive through the whole ATMS band (top
-   183.31 GHz) and PARMIO's advantage appears where FASTEM6 extrapolates.
-   `CRTM_Init(PARMIO_Frequency_Threshold=...)` overrides it for users who
-   want to exercise PARMIO outside that band;
+2. the frequency is at or above the default dispatch floor of 200 GHz, **or**
+   the caller set `Options%Use_PARMIO_MWSSEM`. The floor is a safety gate
+   rather than physics: it sits where the traditional sounding sensors stop,
+   so that enabling PARMIO could not disturb operational channels while the
+   implementation was still being shaken out. Nothing at or above 200 GHz was
+   exercised operationally, so nothing could regress. Obs-space validation
+   against ATMS-NPP supports the same placement from the other side: FASTEM6
+   is competitive through the whole ATMS band (top 183.31 GHz) and PARMIO's
+   advantage appears where FASTEM6 extrapolates;
 3. **the table actually holds data at that frequency.**
 
-The third condition is a hard requirement and is not relaxed by the override.
+`Use_PARMIO_MWSSEM` is a logical in `CRTM_Options_type`, sitting beside
+`Use_Old_MWSSEM`, which is the existing switch for selecting the microwave
+water surface model. That placement is deliberate. `CRTM_Init` is about what
+to load; which model runs is a runtime choice, and `Use_Old_MWSSEM` is the
+precedent. An earlier revision put a real-valued frequency threshold on
+`CRTM_Init` instead, which matched nothing there: of that routine's optional
+arguments, 30 are CHARACTER (paths, filenames, formats, scheme names), 4 are
+LOGICAL feature toggles and 2 are MPI process IDs. A boolean also states the
+actual intent better than a magic number, since the floor is a safety gate
+rather than a physical boundary.
+
+Following the precedent set by `Compute_Up_Radiance_Profile` and the other
+newer Options components, `Use_PARMIO_MWSSEM` is deliberately excluded from
+the Options binary record and takes its type default on read, so the on-disk
+format is unchanged.
+
+The third condition is a hard requirement and is not relaxed by opting in.
 The coefficient groups are gridded separately either side of the permittivity
 switch and their grids do not meet it: `sss_nominal_m` stops at 183.31 GHz and
 `sss_nominal_h` starts at 229 GHz, so 183.31 to 229 selects a group with

@@ -92,8 +92,7 @@ MODULE CRTM_Forward_Module
   USE CRTM_MWwaterCoeff,          ONLY: CRTM_MWwaterCoeff_IsLoaded, &
                                         CRTM_MWwaterCoeff_PolWarning_Due, &
                                         CRTM_MWwaterCoeff_HasPolarimetric
-  USE CRTM_PARMIOCoeff,           ONLY: CRTM_PARMIOCoeff_IsLoaded
-  USE CRTM_MW_Water_SfcOptics,    ONLY: PARMIO_FREQ_THRESHOLD
+  USE CRTM_MW_Water_SfcOptics,    ONLY: PARMIO_Is_Active_At
   USE CRTM_AerosolCoeff,          ONLY: CRTM_AerosolCoeff_IsLoaded
   USE CRTM_NLTECorrection,        ONLY: NLTE_Predictor_type    , &
                                         NLTE_Predictor_IsActive, &
@@ -445,8 +444,8 @@ CONTAINS
                    IF ( .NOT. SpcCoeff_IsMicrowaveSensor(SC(ns)) ) CYCLE
                    DO nl = 1, SC(ns)%n_Channels
                       IF ( .NOT. ChannelInfo(ns)%Process_Channel(nl) ) CYCLE
-                      IF ( CRTM_PARMIOCoeff_IsLoaded() .AND. &
-                           SC(ns)%Frequency(nl) >= PARMIO_FREQ_THRESHOLD ) CYCLE
+                      IF ( PARMIO_Is_Active_At( SC(ns)%Frequency(nl), &
+                                                ANY(Options%Use_PARMIO_MWSSEM) ) ) CYCLE
                       Unpolarised_Channel = .TRUE.
                    END DO
                 END DO
@@ -618,6 +617,7 @@ CONTAINS
       !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)
       DO nt = 1, n_channel_threads
          SfcOptics(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
+         SfcOptics(nt)%Use_PARMIO_MWSSEM = Opt%Use_PARMIO_MWSSEM
       END DO
       !$OMP END PARALLEL DO
       ! Check whether to skip this profile
@@ -802,6 +802,7 @@ CONTAINS
             END IF
             ! ...Copy over surface optics input
             SfcOptics_Clear(nt)%Use_New_MWSSEM = .NOT. Opt%Use_Old_MWSSEM
+            SfcOptics_Clear(nt)%Use_PARMIO_MWSSEM = Opt%Use_PARMIO_MWSSEM
             SfcOptics_Clear(nt)%n_Stokes = RTV_Clear(nt)%n_Stokes
             ! ...CLEAR SKY average surface skin temperature for multi-surface types
             CALL CRTM_Compute_SurfaceT( Surface(m), SfcOptics_Clear(nt) )

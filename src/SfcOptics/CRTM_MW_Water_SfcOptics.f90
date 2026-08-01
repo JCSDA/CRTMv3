@@ -70,8 +70,6 @@ MODULE CRTM_MW_Water_SfcOptics
   ! at this frequency?". Everything that needs to know asks this rather than
   ! re-deriving it, so the policy and the table-coverage rule cannot drift
   ! apart between call sites.
-  PUBLIC :: PARMIO_Set_Freq_Threshold
-  PUBLIC :: PARMIO_Get_Freq_Threshold
   PUBLIC :: PARMIO_Is_Active_At
 
 
@@ -98,26 +96,21 @@ MODULE CRTM_MW_Water_SfcOptics
   ! The policy threshold above is only half the question. Being loaded and
   ! being above the threshold does not mean the table has data at a given
   ! frequency: the coefficient groups are gridded separately either side of
-  ! the permittivity switch and their grids do not meet it. In the shipped
-  ! production LUT sss_nominal_m stops at 183.31 GHz and sss_nominal_h starts
-  ! at 229 GHz, so 183.31 to 229 selects a group with nothing in it and the
-  ! interpolator clamps to the nearest grid edge without saying so. A
-  ! 204.78 GHz channel was being evaluated at 229 GHz.
+  ! the permittivity switch and their grids need not meet it. Where they do
+  ! not, the interpolator clamps to the nearest grid edge without saying so,
+  ! and a 204.78 GHz channel was being evaluated at 229 GHz.
   !
-  ! So the dispatch asks both questions: is PARMIO allowed here (policy), and
-  ! does it have data here (the table). With the shipped LUT that makes the
-  ! effective floor 229 GHz rather than 200, and it will become 200 on its own
-  ! if the 183 to 229 band is ever filled in, with no constant to update.
+  ! So the dispatch asks both questions, in PARMIO_Is_Active_At: is PARMIO
+  ! wanted here, and does the table have data here. Coverage is a hard
+  ! requirement and is not relaxed by opting in, because the alternative is a
+  ! confident number computed at the wrong frequency.
   !
-  ! The effective threshold is a variable rather than a parameter so users can
-  ! test PARMIO outside its default band. It is written once at
-  ! initialization, before any forward call, and read-only thereafter, so it
-  ! carries the same threading characteristics as the coefficient data.
-  REAL(fp), SAVE :: PARMIO_Threshold_InUse = PARMIO_FREQ_THRESHOLD
+  ! The floor itself is a safety gate rather than physics. It was set where
+  ! the traditional sounding sensors stop, so that enabling PARMIO could not
+  ! disturb operational channels while the implementation was still being
+  ! shaken out. Options%Use_PARMIO_MWSSEM is how a caller opts out of it and
+  ! exercises PARMIO across everything the table covers.
 
-  ! Latch for the edge-clamp report, so it is stated once rather than on every
-  ! angle of every channel of every profile. Re-armed whenever the dispatch
-  ! threshold is set, which CRTM_Init always does, so each run reports afresh.
   LOGICAL, SAVE :: PARMIO_Clamp_Warn_Pending = .TRUE.
 
 
@@ -145,42 +138,23 @@ CONTAINS
 
 !--------------------------------------------------------------------------------
 !
-! PARMIO dispatch control.
+! PARMIO_Is_Active_At: the single predicate answering whether PARMIO will
+! serve a given frequency. Everything that needs to know asks this rather
+! than re-deriving the rule, so the policy and the coverage requirement
+! cannot drift apart between call sites.
 !
-!   PARMIO_Set_Freq_Threshold  set the frequency at and above which PARMIO is
-!                              permitted, for users who want to exercise it
-!                              outside its default band. Call before any
-!                              forward call; CRTM_Init does this from its
-!                              optional PARMIO_Freq_Threshold argument.
-!   PARMIO_Get_Freq_Threshold  report the value in force.
-!   PARMIO_Is_Active_At        the one predicate answering whether PARMIO will
-!                              actually serve a given frequency.
-!
-! Lowering the threshold does not let a caller into a band the table does not
-! cover: coverage is a hard requirement, not a preference, because the
-! alternative is a silently clamped result from the wrong frequency. If the
-! band is genuinely wanted, the fix is LUT data, not a looser gate.
+!   Use_PARMIO  caller opted into PARMIO across its full covered range
+!               (Options%Use_PARMIO_MWSSEM). Opting in drops the default
+!               frequency floor; it does not drop the coverage requirement.
 !
 !--------------------------------------------------------------------------------
 
-  SUBROUTINE PARMIO_Set_Freq_Threshold( Frequency_GHz )
-    REAL(fp), INTENT(IN) :: Frequency_GHz
-    PARMIO_Threshold_InUse    = Frequency_GHz
-    PARMIO_Clamp_Warn_Pending = .TRUE.
-  END SUBROUTINE PARMIO_Set_Freq_Threshold
-
-
-  PURE FUNCTION PARMIO_Get_Freq_Threshold() RESULT( Frequency_GHz )
-    REAL(fp) :: Frequency_GHz
-    Frequency_GHz = PARMIO_Threshold_InUse
-  END FUNCTION PARMIO_Get_Freq_Threshold
-
-
-  PURE FUNCTION PARMIO_Is_Active_At( Frequency ) RESULT( Active )
+  PURE FUNCTION PARMIO_Is_Active_At( Frequency, Use_PARMIO ) RESULT( Active )
     REAL(fp), INTENT(IN) :: Frequency
+    LOGICAL,  INTENT(IN) :: Use_PARMIO
     LOGICAL :: Active
     Active = CRTM_PARMIOCoeff_IsLoaded()
-    IF ( Active ) Active = ( Frequency >= PARMIO_Threshold_InUse )
+    IF ( Active .AND. (.NOT. Use_PARMIO) ) Active = ( Frequency >= PARMIO_FREQ_THRESHOLD )
     IF ( Active ) Active = CRTM_PARMIOCoeff_Covers_Frequency( Frequency )
   END FUNCTION PARMIO_Is_Active_At
 
@@ -375,7 +349,7 @@ CONTAINS
     ! threshold the FASTEM/Stogryn legacy path is used. If no LUT was
     ! loaded the path is byte-identical to a pre-PARMIO build at every
     ! frequency.
-    IF( PARMIO_Is_Active_At( Frequency ) ) THEN
+    IF( PARMIO_Is_Active_At( Frequency, SfcOptics%Use_PARMIO_MWSSEM ) ) THEN
 
       ! PARMIO_MWSSEM (LUT-driven, replaces FASTEM at runtime)
       SfcOptics%Azimuth_Angle = Surface%Wind_Direction - Sensor_Azimuth_Angle
@@ -634,7 +608,7 @@ CONTAINS
     ! Compute the tangent-linear surface optical parameters
     ! Dispatch matches the Forward path: PARMIO at and above
     ! PARMIO_FREQ_THRESHOLD when the LUT is loaded.
-    IF( PARMIO_Is_Active_At( Frequency ) ) THEN
+    IF( PARMIO_Is_Active_At( Frequency, SfcOptics%Use_PARMIO_MWSSEM ) ) THEN
 
       ! PARMIO_MWSSEM (LUT-driven)
       DO i = 1, SfcOptics%n_Angles
@@ -855,7 +829,7 @@ CONTAINS
     ! Compute the adjoint surface optical parameters
     ! Dispatch matches the Forward path: PARMIO at and above
     ! PARMIO_FREQ_THRESHOLD when the LUT is loaded.
-    IF( PARMIO_Is_Active_At( Frequency ) ) THEN
+    IF( PARMIO_Is_Active_At( Frequency, SfcOptics%Use_PARMIO_MWSSEM ) ) THEN
 
       ! PARMIO_MWSSEM (LUT-driven)
       Azimuth_Angle_AD = ZERO
