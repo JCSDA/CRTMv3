@@ -92,6 +92,8 @@ MODULE CRTM_Forward_Module
   USE CRTM_MWwaterCoeff,          ONLY: CRTM_MWwaterCoeff_IsLoaded, &
                                         CRTM_MWwaterCoeff_PolWarning_Due, &
                                         CRTM_MWwaterCoeff_HasPolarimetric
+  USE CRTM_PARMIOCoeff,           ONLY: CRTM_PARMIOCoeff_IsLoaded
+  USE CRTM_MW_Water_SfcOptics,    ONLY: PARMIO_FREQ_THRESHOLD
   USE CRTM_AerosolCoeff,          ONLY: CRTM_AerosolCoeff_IsLoaded
   USE CRTM_NLTECorrection,        ONLY: NLTE_Predictor_type    , &
                                         NLTE_Predictor_IsActive, &
@@ -258,6 +260,8 @@ CONTAINS
     CHARACTER(256) :: Message
     LOGICAL :: Options_Present
     INTEGER :: n_Sensors
+    LOGICAL :: Unpolarised_Channel
+    INTEGER :: ns, nl
     INTEGER :: n_Channels
     INTEGER :: m, n_Profiles, nc
     ! Local ancillary input structure
@@ -423,18 +427,42 @@ CONTAINS
     ! The conditions are nested rather than combined with .AND. because Fortran
     ! does not guarantee short-circuit evaluation, and asking whether the
     ! warning is due consumes the latch.
+    ! PARMIO must be accounted for, not just the FASTEM scheme. The microwave
+    ! water dispatcher routes a channel to PARMIO when the LUT is loaded and
+    ! the channel is at or above PARMIO_FREQ_THRESHOLD, and PARMIO carries its
+    ! own four-Stokes azimuth model. So a channel is only left without a
+    ! polarimetric surface when it falls through to a non-polarimetric FASTEM,
+    ! and warning on the FASTEM scheme alone is wrong: it fires on runs whose
+    ! polarimetric signal comes entirely from PARMIO and is demonstrably
+    ! nonzero.
     IF ( Options_Present ) THEN
-       IF ( ANY(Options%n_Stokes > 1) .AND. ANY(SpcCoeff_IsMicrowaveSensor(SC)) ) THEN
+       IF ( ANY(Options%n_Stokes > 1) ) THEN
           IF ( CRTM_MWwaterCoeff_IsLoaded() ) THEN
              IF ( .NOT. CRTM_MWwaterCoeff_HasPolarimetric() ) THEN
-                IF ( CRTM_MWwaterCoeff_PolWarning_Due() ) THEN
-                   Message = 'n_Stokes > 1 requested but the loaded microwave '//&
-                             'water model has no third/fourth Stokes azimuth '//&
-                             'model, so the surface U and V are identically '//&
-                             'zero. Select FASTEM4 via MWwaterCoeff_Scheme or '//&
-                             'MWwaterCoeff_File, or use PARMIO, if a '//&
-                             'polarimetric surface is intended.'
-                   CALL Display_Message( ROUTINE_NAME, Message, WARNING )
+                ! Any processed microwave channel that PARMIO will not serve?
+                Unpolarised_Channel = .FALSE.
+                DO ns = 1, n_Sensors
+                   IF ( .NOT. SpcCoeff_IsMicrowaveSensor(SC(ns)) ) CYCLE
+                   DO nl = 1, SC(ns)%n_Channels
+                      IF ( .NOT. ChannelInfo(ns)%Process_Channel(nl) ) CYCLE
+                      IF ( CRTM_PARMIOCoeff_IsLoaded() .AND. &
+                           SC(ns)%Frequency(nl) >= PARMIO_FREQ_THRESHOLD ) CYCLE
+                      Unpolarised_Channel = .TRUE.
+                   END DO
+                END DO
+                IF ( Unpolarised_Channel ) THEN
+                   IF ( CRTM_MWwaterCoeff_PolWarning_Due() ) THEN
+                      Message = 'n_Stokes > 1 requested, but the loaded '//&
+                                'microwave water model has no third/fourth '//&
+                                'Stokes azimuth model and one or more '//&
+                                'channels are not served by PARMIO. The '//&
+                                'surface U and V are identically zero for '//&
+                                'those channels. Select FASTEM4 via '//&
+                                'MWwaterCoeff_Scheme or MWwaterCoeff_File, '//&
+                                'or load the PARMIO LUT, if a polarimetric '//&
+                                'surface is intended.'
+                      CALL Display_Message( ROUTINE_NAME, Message, WARNING )
+                   END IF
                 END IF
              END IF
           END IF
