@@ -2015,7 +2015,7 @@ CONTAINS
     REAL(fp) :: w(MAX_N_STOKES)
     ! Local variables
     INTEGER  :: isat
-    REAL(fp) :: SIN2_Angle, phi, theta_f, ph, pv
+    REAL(fp) :: SIN2_Angle, phi, theta_f
 
     ! Default to reporting the total intensity, which is what the vector path
     ! did before any projection existed.
@@ -2075,11 +2075,7 @@ CONTAINS
       CASE( PRA_POLARIZATION )
         phi     = GeometryInfo%Sensor_Scan_Radian
         theta_f = DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)
-        ph = SIN(phi) * ( COS(phi) + SIN(theta_f)*(ONE - COS(phi))  ) &
-             / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(ONE - COS(phi)**2) )
-        pv = - ( SIN(phi)**2 - SIN(theta_f)*(ONE - COS(phi))*COS(phi) ) &
-             / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(ONE - COS(phi)**2) )
-        SIN2_Angle = SIN(ATAN( -pv/ph ))**2
+        SIN2_Angle = PRA_Sin2_Angle( phi, theta_f )
         w(1) = ONE ; w(2) = TWO*SIN2_Angle - ONE
 
       ! Anything else keeps the total-intensity default set above.

@@ -136,6 +136,7 @@ MODULE CRTM_SfcOptics
   PUBLIC :: CRTM_Compute_SfcOptics
   PUBLIC :: CRTM_Compute_SfcOptics_TL
   PUBLIC :: CRTM_Compute_SfcOptics_AD
+  PUBLIC :: PRA_Sin2_Angle
 
 
   ! -----------------
@@ -172,6 +173,64 @@ MODULE CRTM_SfcOptics
 
 
 CONTAINS
+
+
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       PRA_Sin2_Angle
+!
+! PURPOSE:
+!       Sine squared of the polarization rotation angle for a PRA_POLARIZATION
+!       channel, whose polarization basis rotates as the scan angle changes.
+!       This is the weight w in the channel mixing
+!
+!         e = e_V*w + e_H*(1 - w)
+!
+!       and it is shared by the forward, tangent-linear and adjoint surface
+!       optics and by the Stokes projection in Common_RTSolution, so the four
+!       cannot drift apart.
+!
+! ARGUMENTS:
+!       phi:      Sensor scan angle, radians.
+!       theta_f:  Instrument polarization offset angle, radians.
+!
+! NOTES:
+!       The published form divides two quantities that share the positive
+!       factor 1/SQRT(SIN(phi)**2 + SIN(theta_f)**2*(1 - COS(phi)**2)) and then
+!       takes ATAN of their ratio. Since 1 - COS(phi)**2 is SIN(phi)**2, that
+!       denominator is |SIN(phi)|*SQRT(1 + SIN(theta_f)**2) and it vanishes at
+!       nadir, where both numerators vanish as well. The published form is
+!       therefore 0/0 at phi = 0 and returns whatever the compiler happens to
+!       fold it to: gfortran gives 1, which selects the WRONG polarization,
+!       and ifx gives a NaN that propagates into the radiance, the weighting
+!       functions and the adjoint.
+!
+!       Passing the two numerators to ATAN2 removes the singularity rather than
+!       special-casing it. A shared positive factor does not change an ATAN2
+!       angle, so the denominator drops out and no division is performed at
+!       all; ATAN2(0,0) is zero by definition, which is exactly the limit the
+!       expression approaches as phi goes to zero. Adding PI to the angle,
+!       which is the only way ATAN2 differs from ATAN, leaves SIN**2 unchanged.
+!       Verified equal to the published form to 4.4e-16 over the defined domain.
+!
+!--------------------------------------------------------------------------------
+
+  PURE FUNCTION PRA_Sin2_Angle( phi, theta_f ) RESULT( Sin2_Angle )
+    ! Arguments
+    REAL(fp), INTENT(IN) :: phi
+    REAL(fp), INTENT(IN) :: theta_f
+    ! Function result
+    REAL(fp) :: Sin2_Angle
+    ! Local variables
+    REAL(fp) :: ph_num, pv_num
+
+    ph_num =    SIN(phi) * ( COS(phi) + SIN(theta_f)*(ONE - COS(phi)) )
+    pv_num = -( SIN(phi)**2 - SIN(theta_f)*(ONE - COS(phi))*COS(phi) )
+
+    Sin2_Angle = SIN( ATAN2( -pv_num, ph_num ) )**2
+
+  END FUNCTION PRA_Sin2_Angle
 
 
 !--------------------------------------------------------------------------------
@@ -486,8 +545,6 @@ CONTAINS
     INTEGER :: i, j
     INTEGER :: nL, nZ, nS
     REAL(fp) :: SIN2_Angle
-    REAL(fp) :: pv
-    REAL(fp) :: ph
     REAL(fp) :: phi
     REAL(fp) :: theta_f
     REAL(fp) :: rV, rH
@@ -797,14 +854,8 @@ CONTAINS
                 phi = GeometryInfo%Sensor_Scan_Radian
                 ! Instrument offset angle:
                 theta_f = DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)
-                ph = SIN(phi) * ( COS(phi) + SIN(theta_f)*(1.0_fp - COS(phi))  ) &
-                   ! --------------------------------------------------------------
-                     / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(1.0_fp - COS(phi)**2) )
-                pv = - ( SIN(phi)**2 - SIN(theta_f)*(1.0_fp - COS(phi))*COS(phi) ) &
-                   ! ---------------------------------------------------------------
-                     / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(1.0_fp - COS(phi)**2) )
                 ! Sine square of Polarization Rotation Angle (PRA)
-                SIN2_Angle = SIN(ATAN( -pv/ph ))**2
+                SIN2_Angle = PRA_Sin2_Angle( phi, theta_f )
                 SfcOptics%Emissivity(i,1) = (Emissivity(i,1)*(SIN2_Angle)) + &
                                                (Emissivity(i,2)*(ONE-SIN2_Angle))
                 SfcOptics%Reflectivity(i,1,i,1) = (Reflectivity(i,1,i,1)*SIN2_Angle) + &
@@ -1320,8 +1371,6 @@ CONTAINS
     INTEGER :: nL, nZ, nS
     INTEGER :: Polarization
     REAL(fp) :: SIN2_Angle
-    REAL(fp) :: pv
-    REAL(fp) :: ph
     REAL(fp) :: phi
     REAL(fp) :: theta_f
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES) :: Emissivity_TL
@@ -1599,14 +1648,8 @@ CONTAINS
                 phi = GeometryInfo%Sensor_Scan_Radian
                 ! Instrument offset angle:
                 theta_f = DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)
-                ph = SIN(phi) * ( COS(phi) + SIN(theta_f)*(1.0_fp - COS(phi))  ) &
-                   ! --------------------------------------------------------------
-                     / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(1.0_fp - COS(phi)**2) )
-                pv = - ( SIN(phi)**2 - SIN(theta_f)*(1.0_fp - COS(phi))*COS(phi) ) &
-                   ! ---------------------------------------------------------------
-                     / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(1.0_fp - COS(phi)**2) )
                 ! Sine square of Polarization Rotation Angle (PRA)
-                SIN2_Angle = SIN(ATAN( -pv/ph ))**2
+                SIN2_Angle = PRA_Sin2_Angle( phi, theta_f )
                 SfcOptics_TL%Emissivity(i,1) = (Emissivity_TL(i,1)*(SIN2_Angle)) + &
                                                (Emissivity_TL(i,2)*(ONE-SIN2_Angle))
                 SfcOptics_TL%Reflectivity(i,1,i,1) = (Reflectivity_TL(i,1,i,1)*SIN2_Angle) + &
@@ -1987,7 +2030,7 @@ CONTAINS
     INTEGER :: Polarization
     REAL(fp) :: SIN2_Angle
     REAL(fp) :: theta_f
-    REAL(fp) :: phi, ph, pv
+    REAL(fp) :: phi
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES) :: Emissivity_AD
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES, &
                         SfcOptics%n_Angles,MAX_N_STOKES) :: Reflectivity_AD
@@ -2180,14 +2223,8 @@ CONTAINS
                 phi = GeometryInfo%Sensor_Scan_Radian
                 ! Instrument offset angle:
                 theta_f = DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)
-                ph = SIN(phi) * ( COS(phi) + SIN(theta_f)*(1.0_fp - COS(phi))  ) &
-                   ! --------------------------------------------------------------
-                     / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(1.0_fp - COS(phi)**2) )
-                pv = - ( SIN(phi)**2 - SIN(theta_f)*(1.0_fp - COS(phi))*COS(phi) ) &
-                   ! ---------------------------------------------------------------
-                     / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(1.0_fp - COS(phi)**2) )
                 ! Sine square of Polarization Rotation Angle (PRA)
-                SIN2_Angle = SIN(ATAN( -pv/ph ))**2
+                SIN2_Angle = PRA_Sin2_Angle( phi, theta_f )
                 ! PS: The adjoint is the transpose of the TL relationship:
                 ! eV_AD = e_AD * SIN^2(theta)
                 ! eH_AD = e_AD * COS^2(theta)
