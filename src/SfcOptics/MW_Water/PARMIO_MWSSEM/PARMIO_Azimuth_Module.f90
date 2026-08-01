@@ -85,7 +85,10 @@ CONTAINS
                   + Coefficients(6)  * c1                          &
                   + Coefficients(10) * c2                          &
                   + Coefficients(14)
-    ! 3rd Stokes (U) = eU1 s1 + eU2 s2
+    ! 3rd Stokes (U) = eU1 s1 + eU2 s2. Sine, so U is odd in the relative
+    ! azimuth while V-pol and H-pol above are even. Same convention as the
+    ! FASTEM4/5 backend; defined once in CRTM_MW_Water_SfcOptics.f90 and
+    ! stated in full in docs/design/polarimetric_conventions.md.
     Emissivity(3) = Coefficients(7)  * s1 + Coefficients(11) * s2
     ! 4th Stokes (V_Stokes) = eV1 s1 + eV2 s2
     Emissivity(4) = Coefficients(8)  * s1 + Coefficients(12) * s2

@@ -237,7 +237,58 @@ CONTAINS
            Source_Azimuth_Angle = Source_Azimuth_Angle, &
            Sensor_Azimuth_Angle = Sensor_Azimuth_Angle  )
 
-    
+
+    ! ------------------------------------------------------------------
+    ! Polarimetric azimuth convention (authoritative definition)
+    ! ------------------------------------------------------------------
+    ! Every microwave water backend below takes its relative azimuth from
+    ! the single expression
+    !
+    !     phi = Surface%Wind_Direction - Sensor_Azimuth_Angle   [degrees]
+    !
+    ! and each applies it as phi_radians = phi * DEGREES_TO_RADIANS with no
+    ! further reflection or offset. The two terms are defined by CRTM as
+    !
+    !   Wind_Direction       the direction the wind blows TOWARD, clockwise
+    !                        from North. Zero is a wind blowing toward the
+    !                        north, i.e. a southerly. This is the opposite
+    !                        of the meteorological convention
+    !                        (CRTM_Surface_Define.f90, DEFAULT_WIND_DIRECTION).
+    !   Sensor_Azimuth_Angle the azimuth of the horizontal projection of the
+    !                        line from the satellite to the FOV, clockwise
+    !                        from North (CRTM_Geometry_Define.f90:312-316).
+    !
+    ! so phi = 0 means the wind blows toward the same compass azimuth as the
+    ! satellite-to-FOV horizontal projection.
+    !
+    ! The azimuthal emissivity is expanded as (Liu et al., FASTEM-4
+    ! validation, NWPSAF-MO-VS-045, equations 2a-2d)
+    !
+    !     e_V = ... + SUM_m c_m cos(m phi)      e_U   = SUM_m e_m sin(m phi)
+    !     e_H = ... + SUM_m d_m cos(m phi)      e_V4  = SUM_m g_m sin(m phi)
+    !
+    ! Cosine for V and H, sine for the third and fourth Stokes components.
+    ! All three backends implement exactly this: Azimuth_Emissivity_Module
+    ! (FASTEM4/5), Azimuth_Emissivity_F6_Module (FASTEM6) and
+    ! PARMIO_Azimuth_Module. The third Stokes component follows the standard
+    ! radiometric definition U = T(+45) - T(-45), as used by WindSat, whose
+    ! measurements the FASTEM azimuth coefficients were fitted to, and by
+    ! RTTOV.
+    !
+    ! Consequences worth knowing:
+    !   * V and H are EVEN in phi and U and V4 are ODD. A sign error in the
+    !     azimuth convention is therefore invisible in I and Q and shows up
+    !     only in U and V4. test_VectorRT_SurfaceFrame pins that parity.
+    !   * FASTEM6, the CRTM default, parameterises V and H only and returns
+    !     the third and fourth Stokes components as identically zero. A
+    !     polarimetric run has a real surface U and V4 only on FASTEM4,
+    !     FASTEM5 or PARMIO.
+    !
+    ! See docs/design/polarimetric_conventions.md for the full statement,
+    ! the literature basis, and the one item still open (whether this phi
+    ! origin matches the one the FASTEM coefficients were fitted under).
+    ! ------------------------------------------------------------------
+    !
     ! Compute the surface optical parameters
     ! PARMIO dispatch is gated by frequency: at and above
     ! PARMIO_FREQ_THRESHOLD (and provided the LUT was loaded at CRTM_Init

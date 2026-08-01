@@ -759,6 +759,23 @@ target_link_libraries(test_VectorRT_SurfaceFrame PRIVATE crtm)
 add_test(NAME test_VectorRT_SurfaceFrame
          COMMAND $<TARGET_FILE:test_VectorRT_SurfaceFrame>)
 
+# test_VectorRT_StokesSign: pins the ADOPTED sign convention of the third and
+# fourth Stokes surface components, per backend, for FASTEM and PARMIO. V and H
+# ride cosine harmonics and U and V4 ride sine harmonics, so a global sign error
+# in U cancels out of I and Q and is invisible to every other test: the parity
+# assertions in test_VectorRT_SurfaceFrame survive negation, and the
+# self-consistency instruments compare the model to itself. Asserts U and V4
+# vanish at relative azimuth 0 and 180, are odd under phi -> -phi, sit above a
+# non-degeneracy floor, and carry the documented sign at phi = +90. This pins
+# the convention against silent drift; it is not evidence the sign is correct
+# against nature, which needs an external reference. See
+# docs/design/polarimetric_conventions.md. Loads FASTEM4 explicitly (FASTEM6,
+# the default, has no third/fourth Stokes model). No cloud LUT required.
+add_executable(test_VectorRT_StokesSign mains/unit/Unit_Test/test_VectorRT_StokesSign.f90)
+target_link_libraries(test_VectorRT_StokesSign PRIVATE crtm)
+add_test(NAME test_VectorRT_StokesSign
+         COMMAND $<TARGET_FILE:test_VectorRT_StokesSign>)
+
 # test_VectorRT_StokesOutput: proves the third/fourth Stokes components survive
 # the azimuthal Fourier accumulation into RTSolution%Stokes, and that the vector
 # solver preserves the meridional Stokes frame end to end. Runs the mirrored
