@@ -59,6 +59,20 @@ MODULE TELSEM2Atlas_netCDF_IO
   CHARACTER(*), PARAMETER :: RESOLUTION_GATTNAME = 'Resolution'
   CHARACTER(*), PARAMETER :: NCELLS_GATTNAME     = 'n_Cells'
 
+  ! Largest number of elements handed to the netCDF Fortran interface in one
+  ! call. The atlas is big: n_data is 2,770,889, so cell_number alone is 11 MB
+  ! and emissivity is 155 MB. Reading either whole is not safe, because
+  ! nf90_get_var takes an assumed-shape dummy and passes it down to an F77
+  ! layer that takes an assumed-size one, and the compiler materialises a
+  ! contiguous copy-in temporary to bridge the two. That temporary is created
+  ! inside the netCDF library's own compiled code, so it obeys the flags netCDF
+  ! was built with and not this project's: -heap-arrays here does not reach it.
+  ! With Intel it lands on the stack and overflows the 8 MB a stock Linux
+  ! gives you, and CRTM_Init dies with a SIGSEGV raised inside libnetcdff.
+  ! Reading in bounded slices keeps every temporary small however netCDF was
+  ! built. 262144 elements is 1 MB of INTEGER(4) and 2 MB of REAL(8).
+  INTEGER, PARAMETER :: MAX_READ_ELEMENTS = 262144
+
 
 CONTAINS
 
@@ -277,8 +291,7 @@ CONTAINS
       GOTO 900
     END IF
     ! Emissivity
-    IF (.NOT. check(NF90_INQ_VARID(ncid,EMIS_VARNAME,vid),'inq emis')) GOTO 900
-    IF (.NOT. check(NF90_GET_VAR(ncid,vid,Atlas%Emissivity),'get emis')) GOTO 900
+    IF (.NOT. read_emis(ncid,EMIS_VARNAME,Atlas%Emissivity)) GOTO 900
 
     IF (.NOT. check(NF90_CLOSE(ncid),'close')) THEN
       CALL TELSEM2Atlas_Destroy(Atlas); RETURN
@@ -296,24 +309,58 @@ CONTAINS
 !##                          ## PRIVATE PROCEDURES ##                          ##
 !################################################################################
 
-  ! Read an integer vector variable into an INTEGER(Long) array via a temporary.
+  ! Read an integer vector variable into an INTEGER(Long) array via a temporary,
+  ! in slices no larger than MAX_READ_ELEMENTS. See that parameter for why the
+  ! whole array cannot be read in one call.
   FUNCTION read_int_vec( ncid, varname, out ) RESULT( ok )
     INTEGER,       INTENT(IN)  :: ncid
     CHARACTER(*),  INTENT(IN)  :: varname
     INTEGER(Long), INTENT(OUT) :: out(:)
     LOGICAL :: ok
-    INTEGER :: vid
+    INTEGER :: vid, n, i, nslice
     INTEGER, ALLOCATABLE :: tmp(:)
     ok = .FALSE.
     IF (.NOT. check(NF90_INQ_VARID(ncid,varname,vid),'inq '//varname)) RETURN
-    ALLOCATE( tmp(SIZE(out)) )
-    IF (.NOT. check(NF90_GET_VAR(ncid,vid,tmp),'get '//varname)) THEN
-      DEALLOCATE(tmp); RETURN
-    END IF
-    out = INT(tmp, Long)
+    n = SIZE(out)
+    ALLOCATE( tmp(MIN(n,MAX_READ_ELEMENTS)) )
+    i = 1
+    DO WHILE ( i <= n )
+      nslice = MIN( MAX_READ_ELEMENTS, n-i+1 )
+      IF (.NOT. check(NF90_GET_VAR(ncid,vid,tmp(1:nslice), &
+                                   start=[i],count=[nslice]),'get '//varname)) THEN
+        DEALLOCATE(tmp); RETURN
+      END IF
+      out(i:i+nslice-1) = INT(tmp(1:nslice), Long)
+      i = i + nslice
+    END DO
     DEALLOCATE(tmp)
     ok = .TRUE.
   END FUNCTION read_int_vec
+
+
+  ! Read a (n_Data x n_Channels) double variable in slices, one channel at a
+  ! time and each channel in chunks. Same reason as read_int_vec.
+  FUNCTION read_emis( ncid, varname, out ) RESULT( ok )
+    INTEGER,      INTENT(IN)  :: ncid
+    CHARACTER(*), INTENT(IN)  :: varname
+    REAL(Double), INTENT(OUT) :: out(:,:)
+    LOGICAL :: ok
+    INTEGER :: vid, n, nc, i, k, nslice
+    ok = .FALSE.
+    IF (.NOT. check(NF90_INQ_VARID(ncid,varname,vid),'inq '//varname)) RETURN
+    n  = SIZE(out,1)
+    nc = SIZE(out,2)
+    DO k = 1, nc
+      i = 1
+      DO WHILE ( i <= n )
+        nslice = MIN( MAX_READ_ELEMENTS, n-i+1 )
+        IF (.NOT. check(NF90_GET_VAR(ncid,vid,out(i:i+nslice-1,k), &
+                                     start=[i,k],count=[nslice,1]),'get '//varname)) RETURN
+        i = i + nslice
+      END DO
+    END DO
+    ok = .TRUE.
+  END FUNCTION read_emis
 
 
   ! Return a dimension length, or -1 on error.
