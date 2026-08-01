@@ -17,3 +17,12 @@ conductor/
 test-data-release/
 .claude/
 test/testinput/*.nc
+
+# Analysis artifacts. Working scripts, plots, coefficient tooling and session
+# notes live outside the git tree, under /home/ben/CRTM/release_wrap_*/ or
+# equivalent. Findings belong in a commit message or a docs/design note, not
+# in the repository as files.
+tools/
+*.png
+*.patch
+HANDOFF_*.md
