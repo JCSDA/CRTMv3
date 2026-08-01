@@ -155,6 +155,34 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
   `Surface_K%Water_Temperature` carried only the skin-emission term. The
   Jacobian is now complete and validated against finite differences. The
   default (FastemX) path was never affected.
+- **Intel builds fixed: TELSEM2 atlas load and the PRA polarization angle.**
+  Two defects that a GNU-only test suite had been passing, both found by adding
+  an `ifx` build to the release verification.
+
+  On Intel, `CRTM_Init` segmentation faulted whenever the TELSEM2 atlas was
+  requested, on any machine with the stock 8 MB Linux stack limit. The atlas is
+  large: `n_data` is 2,770,889, so `cell_number` is 11 MB and `emissivity` is
+  155 MB. `nf90_get_var` takes an assumed-shape dummy and passes it down to an
+  F77 layer that takes an assumed-size one, and the compiler bridges the two
+  with a contiguous copy-in temporary. That temporary is created inside the
+  netCDF library's own compiled code, so it follows the flags netCDF was built
+  with and not CRTM's, which is why no CRTM compiler flag can prevent it. The
+  reader now takes the atlas in bounded slices, so every temporary stays small
+  however netCDF was built. This is a read-path change only; the values loaded
+  are identical.
+
+  Separately, the `PRA_POLARIZATION` surface-optics branch divided zero by zero
+  at nadir scan angle. The shared denominator reduces exactly to
+  `|sin(phi)|*sqrt(1 + sin(theta_f)^2)`, and both numerators vanish with it, so
+  the expression was undefined there and returned whatever the compiler folded
+  it to: GNU gave a polarization weight of 1, which selects the **opposite**
+  polarization to the correct limit of 0, and Intel gave a NaN that propagated
+  into the radiance, the weighting functions and the adjoint. The singularity is
+  removable, and passing the two numerators to `ATAN2` removes it rather than
+  special-casing it. This affects `gems2_amethyst` and `gems2_beryl` only, both
+  new in this release, so no previously released sensor changes behavior. The
+  expression had been duplicated in the forward, tangent-linear, adjoint and
+  Stokes-projection paths and is now one shared function.
 - **Runtime OpenMP control.** `OMP_NUM_THREADS` is honored at run time (no
   longer captured at configure time).
 - **Expanded self-checking test coverage.** New baseline-independent checks

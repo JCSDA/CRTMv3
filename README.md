@@ -160,6 +160,27 @@ example:
 ```
 cmake -DCMAKE_BUILD_TYPE=DEBUG -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=./install ..
 ```
+
+**Building inside a spack-stack environment: a trap.** A spack-stack unified
+environment normally already contains a CRTM package, and sourcing its `load.sh`
+puts that CRTM's `lib/` on `LD_LIBRARY_PATH`. For a shared-library build that
+path outranks the build tree's RPATH, so `ctest` will silently run every test
+against the *environment's* CRTM rather than the one you just compiled. The
+symptom is a version banner reporting the wrong version, usually followed by
+mass segmentation faults in `CRTM_Init` as the older library is handed newer
+coefficient files. Put the build's library first:
+
+```
+export LD_LIBRARY_PATH=<build>/lib:$LD_LIBRARY_PATH
+```
+
+Check which library actually resolves before believing any test result:
+
+```
+ldd <build>/bin/test_check_crtm | grep crtm
+```
+
+This applies to any host application linking `libcrtm.so`, not only to `ctest`.
 this would make a debug build of CRTM, static library (`libcrtm.a`) and set the optional install location to `<build>/install/.` (or something similar, search for `libcrtm.*` and `*.mod`).  Custom Install only happens if you issue the `make install` command. 
 
 The first time you run `cmake`, it will check for a `fix/` directory one level above (or `FIX_FILE_PATH` CMake variable), and if it doesn't find it, it will download the binary files (according to `test/CMakeLists.txt` file information), and store them in `<build>/test_data/**`.
