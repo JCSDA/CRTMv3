@@ -327,6 +327,77 @@ NLTE correctly active; suite 215/215 after). Summary:
   tests (#335). Suite at 227/227 after the #343 merge. **None changes any
   common-suite TB.**
 
+## 12. Release-candidate wrap (2026-08-01)
+
+The work that closed the release candidate, after §11. **None of it changes any
+common-suite TB**: the suite is 239/239 before and after, on a from-scratch
+build.
+
+* **Polarimetric work merged into the staging branch.** 33 commits folded from
+  `feature/btj_polarimetric_support` into `feature/btj_REL-3.2.0`, which is now
+  the single branch the candidate is cut from. Deliberately excluded, each for
+  a stated reason: `feature/btj_vector_rt_surface_basis` (its own commit says
+  not for 3.2.0, the surface basis question is unresolved),
+  `feature/btj_ml_emulator_internal` and `feature/btj_ml-emulator-onnx-bridge`
+  (the ONNX bridge is experimental and absent from `src/` by design), and
+  `feature/btj_exp_cloud_optics` (a work branch that never merges; the part
+  that ships is already in as `CloudCoeff_Exp_*`). `release/REL-3.2.0` was not
+  touched.
+
+* **PARMIO permittivity switch removed** (see `docs/design/parmio_permittivity_switch.md`).
+  The 200 GHz dielectric switch in the shipped table was ours, not PARMIO's,
+  and put an infrared dielectric model on sub-millimetre channels. The table
+  is regenerated with Meissner and Wentz throughout, matching PARMIO's own
+  reference configuration and SURFEM-Ocean. The 200 GHz group boundary
+  survives as a grid partition only, so the table is now continuous across it.
+  Staged LUT md5 `1c760585a416039b77a514c8921edb97`. The table's
+  `confidence_label` was also corrected: it had marked 166.0 to 222.0 GHz
+  `extrapolated-defensible` where the corrected generator says
+  `extrapolated-experimental`, which is exactly the band above PARMIO's
+  165.5 GHz validation ceiling. Metadata only, verified rather than argued:
+  regenerating from the same CSV leaves all 121 variables numerically
+  identical and moves only the two label arrays.
+
+* **AMSR3 humidity bandwidths corrected to WMO OSCAR.** See the release notes
+  for the evidence. Only the TauCoeff changes; the regenerated SpcCoeff was
+  compared variable by variable against the staged one and is identical, which
+  is now recorded in the staged SpcCoeff's `SRF_Provenance` so the pair does
+  not read as inconsistent.
+
+* **707 TauCoeff files stopped saying `Placeholder`.** Their
+  `write_module_history` held that literal string. Their upstream provenance is
+  genuinely unrecorded, so nothing was invented; what was established is that
+  they are inherited. Each was compared variable by variable against the
+  v3.1.4 baseline tree and only files whose data matched a baseline file were
+  rewritten. All 707 matched. Six matched under a former name (the five VIIRS
+  `_j1` to `_n20` renames, plus `amsua_metop-a_v2` matching `amsua_metop-a`)
+  and record that name rather than a bare claim. Zero remain.
+
+* **Retirement and rename reconciliation.** Running the reconciliation tool
+  against the staged tree found twelve renames and five withdrawals that the
+  release notes did not mention: the five VIIRS `_j1` to `_n20`,
+  `mwi_metop-sg-a1` to `mwi_metop-sg-b1`, six `tms_tomorrow-sNN_v4` lineage
+  relabels, and the withdrawal of `airs_g13`, `iasi_g13`, `atms-ng_v1`,
+  `ssmis_f20` and `zssmis_f20`. `airs_g13` and `iasi_g13` turned out to be
+  data-identical duplicates of `airs281_aqua` and `iasi616_metop-a/b/c` under
+  a name that never described their content. All of it is now behavior changes
+  10 and 11 in the release notes. This is the second time an unreconciled
+  retirement list has hidden renames of operational sensors, so the tool
+  should be run before any future tag rather than after.
+
+* **Twelve unnamed CloudCoeff development artifacts dropped**, about 540 MB.
+  Behavior change 12.
+
+* **Repository hygiene.** Roughly 7 GB of working material was sitting
+  untracked and unignored in the tree, including the DDA source archives and
+  the coefficient evidence tooling. It now lives outside the repository under
+  `release_wrap_2026-08/`, and `.gitignore` covers the patterns so it cannot
+  recur. The coefficient audit and evidence scripts (`pair_census.py`,
+  `retirement_reconcile.py`, `sensor_id_consistency.py`,
+  `staging_staleness_audit.py`, `compare_meta.py`, `backfill_provenance.py`,
+  `optran_tail_audit.py`) went with them, under
+  `release_wrap_2026-08/tools_CRTMv3/coeff_delta/`.
+
 ## Appendix: commits `develop..HEAD` (oldest → newest)
 
 > **Note:** the list below is the original snapshot through `57c9911`. The

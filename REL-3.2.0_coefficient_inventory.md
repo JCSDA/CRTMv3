@@ -23,6 +23,29 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 - **Provenance mix:** 247 legacy JCSDA, 212 old / unknown (heritage), 23 crtm-coeffgen, 14 STAR, 11 JCSDA (2025), 2 JCSDA (2024), 2 JCSDA (2023), 2 JCSDA (2022), 1 JCSDA emulator (B.T. Johnson), 1 JCSDA (2026).
 - **Validation mix:** 352 untested (load-only), 109 family-validated, 25 targeted unit tests (pol-13, PARMIO sweeps), 9 coefficient I/O tests only, 8 regression suite (FWD/TL/AD/K baselines), 4 regression (Zeeman), 2 regression (SSU), 1 regression (AOD), 1 regression (Simple sweep), 1 regression (aircraft), 1 regression (channel subset, OMP), 1 gated regression (PARMIO, FWD/TL/AD/K), 1 gated unit test (UV NO2 TL/AD/K parity).
 
+- **PENDING REGENERATION, as of 2026-08-01.** Five rows carry this flag. They are
+  staged and they load, but each is known to need replacement before the
+  coefficient tarball is rolled, and the row describes the file that is there
+  today rather than the file that will ship.
+  - `iasi-ng_metop-sg-a1`: generated against the bundled ECMWF84 profile set,
+    whose CO2 mean is 383.3 ppmv against 428.4 ppmv for epoch 2026.5. That is a
+    45 ppmv shortfall on a hyperspectral infrared sounder with CO2-sensitive
+    channels, which makes it the most consequential of the products on the stale
+    gas epoch. Regenerating onto `ECMWF84_epoch2026p5`.
+  - `gxi_geoxo`: the same CO2 epoch problem, plus a notional pre-launch SRF for
+    the new band. Regeneration in progress.
+  - `gxs_geoxo_lw`, `gxs_geoxo_mw`: unchanged v3.1.4 inheritances with no
+    provenance, sitting on a grid stretched relative to the 2024 prototype SRFs.
+    Both also carry the internal `Sensor_Id` `gxs_geoxo`, which matches neither
+    filename. `CRTM_Init` resolves by filename so they load, but the pair is the
+    only `Sensor_Id`-versus-filename disagreement left in the staged tree.
+  - `metimage_metop-sg-a1`: its regeneration failed for a reason unrelated to the
+    gas epoch. Channel 20's flattened SRF has four disjoint passbands but carries
+    no band structure, so integrating it flat would bridge the gaps. That is a
+    real SRF structure problem and needs its own diagnosis.
+  - `amsr3_gosatgw` is **not** on this list. It was regenerated on 2026-08-01
+    with the WMO OSCAR bandwidths and is final.
+
 ## Column definitions and judgment calls
 
 - **Generated:** the `creation_date_and_time` global attribute. 459 files carry a
@@ -96,7 +119,7 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | mwi_metop-sg-b1 | MWI / MetOp-SG B1 | 26 | ODPS |  |  | 2026-07-27 | crtm-coeffgen | load + forward verified 2026-08-01 (no in-suite coverage) |
 |---|---|---|---|---|---|---|---|---|
 | amsr2_gcom-w1 | AMSR2 / GCOM-W1 | 14 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| amsr3_gosatgw | AMSR3 / GOSAT-GW | 21 | ODPS |  |  | 2026-08-01 | crtm-coeffgen | load + forward + Jacobian verified 2026-08-01 (no in-suite coverage) |
+| amsr3_gosatgw | AMSR3 / GOSAT-GW | 21 | ODPS |  |  | 2026-08-01 | crtm-coeffgen (ch19/20/21 bandwidths per WMO OSCAR) | load + forward + Jacobian verified 2026-08-01; O-B against 2152 observations (no in-suite coverage) |
 | amsre_aqua | AMSR-E / Aqua | 12 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | amsua_aqua | AMSU-A / Aqua | 15 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | coefficient I/O tests only |
 | amsua_metop-a | AMSU-A / MetOp-A | 15 | ODPS+ODAS | yes |  | pre-2024 (conv. 2024-08) | legacy JCSDA | coefficient I/O tests only |
@@ -301,9 +324,9 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | fci_mtg-i1 | FCI / MTG-I1 | 8 | ODPS |  |  | 2024-11-27 | JCSDA (2024) | untested (load-only) |
 | giirsB1_fsr_fy4a | GIIRS (band 1) / FY-4A (FSR) | 689 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | giirsB2_fsr_fy4a | GIIRS (band 2) / FY-4A (FSR) | 961 | ODPS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| gxi_geoxo | GXI (GeoXO Imager) / GeoXO | 11 | ODPS |  |  | 2026-07-26 | crtm-coeffgen | load + forward verified 2026-08-01 (no in-suite coverage; notional pre-launch SRF for the new band) |
-| gxs_geoxo_lw | GXS (GeoXO Sounder) / GeoXO (LW) | 1096 | ODPS |  |  | 2024-10-16 | STAR | untested (load-only) |
-| gxs_geoxo_mw | GXS (GeoXO Sounder) / GeoXO (MW) | 1306 | ODPS |  | yes | 2024-10-16 | STAR | untested (load-only) |
+| gxi_geoxo | GXI (GeoXO Imager) / GeoXO | 11 | ODPS |  |  | 2026-07-26 | crtm-coeffgen | PENDING REGENERATION (see note below); load + forward verified 2026-08-01 (no in-suite coverage; notional pre-launch SRF for the new band) |
+| gxs_geoxo_lw | GXS (GeoXO Sounder) / GeoXO (LW) | 1096 | ODPS |  |  | 2024-10-16 | STAR | PENDING REGENERATION (see note below); untested (load-only); internal Sensor_Id reads gxs_geoxo, not the filename |
+| gxs_geoxo_mw | GXS (GeoXO Sounder) / GeoXO (MW) | 1306 | ODPS |  | yes | 2024-10-16 | STAR | PENDING REGENERATION (see note below); untested (load-only); internal Sensor_Id reads gxs_geoxo, not the filename |
 | hirs2-UWS_n06 | HIRS/2 (UW SSEC shifted SRF) / NOAA-6 | 19 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | hirs2-UWS_n07 | HIRS/2 (UW SSEC shifted SRF) / NOAA-7 | 19 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | hirs2-UWS_n09 | HIRS/2 (UW SSEC shifted SRF) / NOAA-9 | 19 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
@@ -334,7 +357,7 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | hirs4_metop-b | HIRS/4 / MetOp-B | 19 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | hirs4_n18 | HIRS/4 / NOAA-18 | 19 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
 | hirs4_n19 | HIRS/4 / NOAA-19 | 19 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | legacy JCSDA | untested (load-only) |
-| iasi-ng_metop-sg-a1 | IASI-NG / MetOp-SG A1 | 16921 | ODPS |  | yes | 2026-07-21 | crtm-coeffgen | untested (load-only) |
+| iasi-ng_metop-sg-a1 | IASI-NG / MetOp-SG A1 | 16921 | ODPS |  | yes | 2026-07-21 | crtm-coeffgen | PENDING REGENERATION (see note below); untested (load-only) |
 | iasi300_metop-a | IASI (300-ch subset) / MetOp-A | 300 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | iasi300_metop-b | IASI (300-ch subset) / MetOp-B | 300 | ODPS+ODAS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
 | iasi300_metop-c | IASI (300-ch subset) / MetOp-C | 300 | ODPS |  | yes | pre-2024 (conv. 2024-08) | legacy JCSDA | family-validated |
@@ -382,7 +405,7 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 | ivissr_fy2e | I-VISSR / FY-2E | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | ivissr_fy2f | I-VISSR / FY-2F | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | mersi_fy3a | MERSI / FY-3A | 1 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
-| metimage_metop-sg-a1 | METimage / MetOp-SG A1 | 9 | ODPS |  |  | 2026-07-24 | crtm-coeffgen | untested (load-only) |
+| metimage_metop-sg-a1 | METimage / MetOp-SG A1 | 9 | ODPS |  |  | 2026-07-24 | crtm-coeffgen | PENDING REGENERATION (see note below); untested (load-only) |
 | mi-l_coms | MI (low-res) / COMS | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | mi-l_coms.v2 | MI (low-res) / COMS (v2) | 4 | ODPS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |
 | mi-m_coms | MI (mid-res) / COMS | 4 | ODPS+ODAS |  |  | pre-2024 (conv. 2024-08) | old / unknown (heritage) | untested (load-only) |

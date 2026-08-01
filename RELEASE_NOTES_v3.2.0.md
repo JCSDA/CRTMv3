@@ -1,9 +1,23 @@
 # CRTM v3.2.0 Release Notes
 
-**Release date:** July 31, 2026
-**Coefficient data:** `fix_REL-3.2.0.0.tgz` (~3.4 GB, rolled 2026-07-30,
-md5 `725760925e79c8ec7ecfd03884cde5fa`), auto-downloaded at build
-time (or via `Get_CRTM_Binary_Files.sh`).
+**Status:** release candidate. The library code is frozen; the coefficient
+tarball is not yet published.
+
+**Coefficient data:** the v3.2.0 coefficient tarball has **not been rolled or
+published**. Two coefficient efforts are still in progress and both change files
+that would ship in it: the IASI-NG regeneration onto the 2026 gas epoch, and the
+GeoXO `gxi`/`gxs` rework. The tarball will be rolled once those land, and this
+section will then carry its size and checksum.
+
+Until then the checksum pinned in `test/CMakeLists.txt` and
+`Get_CRTM_Binary_Files.sh` still refers to the **June 2026** tarball, which
+predates the whole of the July coefficient campaign. A default build therefore
+downloads a coefficient tree that cannot reproduce this release's test suite.
+Build a release candidate against the staging tree instead:
+
+```
+cmake .. -DFIX_FILE_PATH=<path-to>/fix_REL-3.2.0.0/fix
+```
 
 Developer-facing detail for every item below (commits, affected tests, TB
 impact) is in `REL-3.2.0_changes_vs_develop.md`. Changes are stated relative
@@ -44,7 +58,7 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
   longer returns Q = U = V = 0; the fractional-cloud clear/cloudy combine is
   differentiated across all Stokes components; and `RTSolution%Radiance` is now
   the channel-polarized measurement rather than Stokes I (see behavior change
-  11). Tangent-linear, adjoint and K are verified at `n_Stokes = 4` against
+  14). Tangent-linear, adjoint and K are verified at `n_Stokes = 4` against
   finite differences, the adjoint dot-product identity and K against AD, for
   both atmospheric and surface control variables including wind direction.
   **This path has not been validated against an external model; see the known
@@ -90,6 +104,25 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
   passband definitions and validated with forward, weighting-function, and
   adjoint physics checks; the 57 GHz line-splitting channels reproduce the
   AMSU-A weighting-function progression.
+- **AMSR3 humidity-channel bandwidths corrected to WMO OSCAR.** The bundled
+  AMSR3 spectral response function was too wide on its three highest channels:
+  165.5 GHz by a factor of 1.25, 183.31 +/- 7 by 2.35, and 183.31 +/- 3 by 2.72,
+  all against the per-sideband figures published by WMO OSCAR. The other 18 of
+  21 channels matched OSCAR exactly and are unchanged, and STAR independently
+  revised the same three. Against 2152 collocated observations the 183.31 +/- 3
+  bias improves from +4.270 K to +3.422 K and 183.31 +/- 7 from +3.118 K to
+  +2.906 K, with channels 1 to 18 unmoved. The larger effect is on the
+  Jacobians: the 183.31 +/- 3 water vapour Jacobian error against a
+  reference-free tiled-channel truth falls from 9.468 percent to 0.338 percent,
+  which retires the belief that ODPS could not represent a wide double-sideband
+  channel. That was never an ODPS limitation, only a band 2.72 times too wide.
+  Recorded caveat: 165.5 GHz moved the wrong way on observation-minus-background
+  (+3.951 K to +4.168 K), but that channel sits inside a 3.4 to 4.2 K
+  common-mode bias shared by every variant including STAR's, so
+  observation-minus-background cannot arbitrate it; the change rests on OSCAR,
+  on STAR's independent revision, and on the 18-of-21 exact match. Spectroscopy,
+  training profiles and algorithm are unchanged, and only the TauCoeff differs
+  (the regenerated SpcCoeff is identical in every data variable).
 - **INSAT-3DS visible sensors completed.** `v.imgr_insat-3ds` and
   `v.sndr_insat-3ds` previously shipped a SpcCoeff with no TauCoeff and
   could not pass `CRTM_Init`; both now carry TauCoeffs generated from the
@@ -167,6 +200,16 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
    (LAI, vegetation, soil moisture, soil/land temperature) are zero; the
    atlas is a climatology and does not depend on them; the analytic
    NESDIS_LandEM Jacobians apply only when the atlas is not loaded.
+
+   The 200 GHz figure is a safety floor, not physics. It was placed where the
+   traditional sounding sensors stop so that enabling PARMIO could not disturb
+   operational channels. `Options%Use_PARMIO_MWSSEM` drops the floor and runs
+   PARMIO everywhere its table has data. Table coverage is checked separately
+   and is never relaxed, including when a caller opts in, because the
+   alternative is a confident number computed at the wrong frequency: the
+   interpolator otherwise clamps silently, and a 204.78 GHz channel was being
+   evaluated at 229 GHz. Channels where PARMIO is wanted but uncovered fall
+   back to FASTEM.
 7. **OpenMP threading.** `CRTM_Init` reads `OMP_NUM_THREADS` at run time; if
    it is **unset or empty, CRTM defaults to a single thread** via
    `OMP_SET_NUM_THREADS(1)`. Because that call is process-global, it also
@@ -219,7 +262,52 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
    channels differ; they share a common visible channel by instrument design
    and are all retained.
 
-10. **OMPS replaced by per-platform NOAA-20 and NOAA-21 products.** The two
+10. **Twelve further sensor renames.** These are name changes only: in every
+    case the replacement file is identical to the removed one in every data
+    variable, and only the filename and the internal `Sensor_Id` differ.
+    `CRTM_Init` resolves coefficients by filename, so a caller configured with
+    an old name will fail to initialize and must be updated.
+
+    | removed | use instead | why |
+    |---|---|---|
+    | `viirs-i_j1` | `viirs-i_n20` | JPSS-1 became NOAA-20 at launch. Every one of these files already carried `WMO_Satellite_Id` 225, which is NOAA-20 in WMO C-5, so the `_j1` name contradicted the file's own content. |
+    | `viirs-m_j1` | `viirs-m_n20` | as above |
+    | `v.viirs-i_j1` | `v.viirs-i_n20` | as above |
+    | `v.viirs-m_j1` | `v.viirs-m_n20` | as above |
+    | `v.viirs-dnb_j1` | `v.viirs-dnb_n20` | as above |
+    | `mwi_metop-sg-a1` | `mwi_metop-sg-b1` | platform correction. MWI flies on Metop-SG-B, not Metop-SG-A. |
+    | `tms_tomorrow-s01_v4` | `tms_tomorrow-s01_v4-STAR` | lineage relabel, so the v4 delivery is tagged to the organization it came from. Six sensors, `s01` through `s06`. |
+
+    The six `tms_tomorrow-sNN_v4` entries follow the same pattern and are not
+    listed individually.
+
+11. **Five products withdrawn.** Two were duplicates under a nonsensical name
+    and three were never-flown or notional instruments:
+
+    | withdrawn | why |
+    |---|---|
+    | `airs_g13` | identical in every data variable to `airs281_aqua`, which still ships. Its own `WMO_Satellite_Id` is 784 (Aqua) and its sensor id is 420 (AIRS), so the `g13` suffix never described the content. |
+    | `iasi_g13` | identical in every data variable to `iasi616_metop-a`, `-b` and `-c`, all of which still ship and which are distinguished from each other only by their WMO satellite ids (4, 3 and 5), as they should be for one instrument design on three platforms. `iasi_g13` carried WMO satellite 1022, which identifies no platform. `iasi_g13.NLTECoeff.nc` went with it. |
+    | `ssmis_f20` | DMSP F-20 was cancelled and never launched. The file carried `WMO_Satellite_Id` 1023, the invalid-value sentinel, because no satellite id was ever assigned. |
+    | `zssmis_f20` | the Zeeman companion to the above, withdrawn with it. |
+    | `atms-ng_v1` | a notional next-generation ATMS with 1169 channels and placeholder WMO ids (satellite 1, sensor 1). No such instrument exists. |
+
+    Nothing that still ships is lost by any of these: users of `airs_g13` or
+    `iasi_g13` should switch to the correctly named file, which holds the same
+    numbers.
+
+12. **Twelve unnamed CloudCoeff development artifacts removed.** The v3.1.4
+    tree carried `test_new.bin_type0` through `test_new.bin_type10` and
+    `test_new.bin_MIESNOW` under `CloudCoeff/Little_Endian/`, and the netCDF
+    transition converted them along with everything else. They carry no title,
+    history or comment attribute of any kind, nothing in the library or the
+    test suite references them, and their names describe a conversion run
+    rather than a product. Removing them takes about 540 MB off the tarball.
+    The named cloud tables are all retained, including the microphysics-scheme
+    variants (`CloudCoeff.GFDLFV3`, `CloudCoeff.Thompson08`, `CloudCoeff.WSM6`)
+    and the TAMU tables, none of which the test suite exercises either.
+
+13. **OMPS replaced by per-platform NOAA-20 and NOAA-21 products.** The two
     shipped OMPS files were unusable and mislabelled, and have been retired in
     favor of four regenerated products:
 
@@ -257,7 +345,7 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
     NOAA-21 nadir mapper radiances below 302 nm (roughly `u.omps-tc_n21`
     channels 1 to 10) as not validated for operational use.
 
-11. **`RTSolution%Radiance` is now the channel-polarized measurement when
+14. **`RTSolution%Radiance` is now the channel-polarized measurement when
     `n_Stokes > 1`, not Stokes I.** The emergent Stokes vector is projected onto
     the channel's polarization, so a vertically polarized channel reports I+Q
     where it previously reported I. `Brightness_Temperature`, which is derived
@@ -270,7 +358,7 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
     to pure vertical or pure horizontal reproduces the corresponding scalar
     radiance to machine precision. Nothing at `n_Stokes = 1` changes.
 
-12. **`RTSolution_AD%Radiance` and `RTSolution_K%Radiance` are now honoured as
+15. **`RTSolution_AD%Radiance` and `RTSolution_K%Radiance` are now honoured as
     input seeds on the vector path.** Previously `%Radiance` was an output alias
     for `Stokes(1)` but not an input one, and seeding it for an `n_Stokes > 1`
     run silently produced a zero Jacobian; only `%Stokes` or
@@ -278,12 +366,12 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
     `%Radiance` and `%Stokes(1)` together to work around this will now double
     count.
 
-13. **`RT_Algorithm_Id = RT_SOI` with `n_Stokes > 1` is now an error.**
+16. **`RT_Algorithm_Id = RT_SOI` with `n_Stokes > 1` is now an error.**
     Previously the vector branch was taken before the algorithm selector was
     consulted, so the caller silently received ADA results labelled as SOI. SOI
     has no vector solver, so this is now rejected with a message naming RT_ADA.
 
-14. **`CRTM_MWwaterCoeff_Load_FASTEM` discards the previously loaded scheme and
+17. **`CRTM_MWwaterCoeff_Load_FASTEM` discards the previously loaded scheme and
     reports failure.** Switching scheme, for example FASTEM6 to FASTEM4, used to
     leave the shared coefficient structure deallocated while the function
     returned SUCCESS, because the underlying setter rejects a shape mismatch by
@@ -298,6 +386,17 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
   layers can produce nonphysical TBs through the adding-doubling/MOM path
   (small-τ matrix conditioning with high phase-function truncation orders).
   Affects sub-mm scattering scenes only; under investigation.
+- **The FASTEM to PARMIO handover at 200 GHz is a step, not a blend.** The two
+  models are independent and are not reconciled at the boundary, so a sensor
+  with channels either side of 200 GHz sees a discontinuity in ocean
+  emissivity there. Measured at -1.42 K mean in brightness temperature for
+  TROPICS channel 12. This is a consequence of switching models at a frequency
+  rather than a defect in either one, and it is why the floor sits where no
+  operational sounding channel crosses it. PARMIO's own published validation
+  stops at 165.5 GHz, so its whole default dispatch range is above the range
+  its authors validated; the table labels that band
+  `extrapolated-experimental` in its `confidence_label` variable, and callers
+  should read that label rather than assume the table is uniform.
 - **ODSSU netCDF supports the ODPS sub-algorithm only** (the shipped SSU
   files are ODPS-based; ODAS-based SSU coefficient files remain binary-only).
 - **Options binary I/O does not persist the new fields** (`n_Stokes` and the
