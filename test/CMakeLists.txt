@@ -759,6 +759,22 @@ target_link_libraries(test_VectorRT_SurfaceFrame PRIVATE crtm)
 add_test(NAME test_VectorRT_SurfaceFrame
          COMMAND $<TARGET_FILE:test_VectorRT_SurfaceFrame>)
 
+# test_MWwaterCoeff_FileSelects: proves MWwaterCoeff_File selects the microwave
+# water emissivity model rather than being silently ignored. The file-based load
+# is commented out and the model comes from the scheme string, so the argument
+# used to be accepted, echoed in the load message, and dropped: a caller asking
+# for FASTEM4 got FASTEM6 with no diagnostic. That matters because FASTEM6 has
+# no third/fourth Stokes azimuth model and returns U = V = 0, indistinguishable
+# from a scene with no polarimetric signal, and JEDI/UFO selects the model
+# through exactly this argument. Uses the one observable separating the two
+# models: FASTEM4 gives nonzero U and V over ocean off-azimuth, FASTEM6 gives
+# exactly zero. Asserts both directions so it cannot pass by always loading
+# FASTEM4. No cloud LUT and no reference radiances required.
+add_executable(test_MWwaterCoeff_FileSelects mains/unit/Unit_Test/test_MWwaterCoeff_FileSelects.f90)
+target_link_libraries(test_MWwaterCoeff_FileSelects PRIVATE crtm)
+add_test(NAME test_MWwaterCoeff_FileSelects
+         COMMAND $<TARGET_FILE:test_MWwaterCoeff_FileSelects>)
+
 # test_VectorRT_StokesSign: pins the ADOPTED sign convention of the third and
 # fourth Stokes surface components, per backend, for FASTEM and PARMIO. V and H
 # ride cosine harmonics and U and V4 ride sine harmonics, so a global sign error

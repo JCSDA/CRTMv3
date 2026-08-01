@@ -281,8 +281,10 @@ CONTAINS
     !     only in U and V4. test_VectorRT_SurfaceFrame pins that parity.
     !   * FASTEM6, the CRTM default, parameterises V and H only and returns
     !     the third and fourth Stokes components as identically zero. A
-    !     polarimetric run has a real surface U and V4 only on FASTEM4,
-    !     FASTEM5 or PARMIO.
+    !     polarimetric run has a real surface U and V4 only on FASTEM4 or
+    !     PARMIO. Note that only FASTEM4 and FASTEM6 can actually be loaded;
+    !     Azimuth_Emissivity_Module serves FASTEM4 and FASTEM5, but FASTEM5
+    !     is not a selectable scheme and asking for it is a hard error.
     !
     ! See docs/design/polarimetric_conventions.md for the full statement,
     ! the literature basis, and the one item still open (whether this phi

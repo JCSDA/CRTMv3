@@ -100,10 +100,21 @@ All three agree on the angle convention and on the cosine/sine parity.
 
 **FASTEM6 is the default and has no third or fourth Stokes model.** A
 polarimetric run over water therefore has a real surface U and V4 only on
-FASTEM4, FASTEM5, or PARMIO. Select the backend with the
-`MWwaterCoeff_Scheme` argument, not `MWwaterCoeff_File`. This is a silent
-trap: the run succeeds and returns U = 0, which is indistinguishable from
-a scene with no polarimetric signal.
+FASTEM4 or PARMIO. Note that `CRTM_MWwaterCoeff_Load_FASTEM` accepts only
+`FASTEM4` and `FASTEM6`; any other scheme string, FASTEM5 included, is a hard
+error rather than a fallback.
+
+Either `MWwaterCoeff_Scheme` or `MWwaterCoeff_File` selects the model. The
+filename form used to select nothing at all and was fixed on 2026-07-31: the
+shipped names are `<SCHEME>.MWwater.EmisCoeff.<ext>` and the scheme is now
+recovered from the leading component. If both arguments are given and
+disagree, the scheme wins and the disagreement is reported. See roadmap gap
+2c, pinned by `test_MWwaterCoeff_FileSelects`.
+
+What remains a silent trap is the default itself: requesting `n_Stokes > 1`
+while FASTEM6 is loaded succeeds and returns U = 0, which is
+indistinguishable from a scene with no polarimetric signal. Nothing warns
+about that combination yet.
 
 ## 5. Verified, and what is not
 
