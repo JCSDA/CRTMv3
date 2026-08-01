@@ -85,12 +85,24 @@ MODULE CRTM_MW_Water_SfcOptics
   ! PARMIO LUT is the surface-emissivity backend at and above this frequency
   ! when the LUT has been loaded. Below this threshold the FASTEM/Stogryn
   ! legacy path is used.
-  ! Set from obs-space validation against ATMS-NPP (see
-  !   PARMIO vs FASTEM6 — ATMS-NPP obs-space validation report, 2026-05-13):
-  ! FASTEM6 is tuned and competitive against real obs through the entire ATMS
-  ! band (max 183.31 GHz); PARMIO's physical-reference advantage only shows
-  ! cleanly where FASTEM6 extrapolates beyond its tuning band (e.g. 325 GHz
-  ! synthetic-RT wind-roughness sign flip).
+  ! The value is arbitrary and is a safety gate, not a physical boundary. It
+  ! was placed above where the traditional sounding sensors stop, so that
+  ! enabling PARMIO could not disturb anything exercised operationally while
+  ! the implementation was still being shaken out: nothing at or above
+  ! 200 GHz was in operational use, so nothing could regress. Any round number
+  ! above the ATMS band would have served equally.
+  !
+  ! Obs-space validation against ATMS-NPP (2026-05-13) supports keeping FASTEM
+  ! below the gate rather than choosing this number: FASTEM6 is tuned and
+  ! competitive against real obs through the entire ATMS band (max
+  ! 183.31 GHz), and PARMIO's physical-reference advantage shows cleanly only
+  ! where FASTEM6 extrapolates beyond its tuning band (e.g. the 325 GHz
+  ! synthetic-RT wind-roughness sign flip). That argues for a gate somewhere
+  ! above 183.31, not for 200 in particular.
+  !
+  ! One consequence of the arbitrariness is worth knowing: 200 happens to land
+  ! inside a hole in the shipped coefficient table (see below), which is why
+  ! coverage is now checked separately rather than inferred from this value.
   REAL(fp), PARAMETER :: PARMIO_FREQ_THRESHOLD = 200.0_fp ! GHz
 
   ! The policy threshold above is only half the question. Being loaded and

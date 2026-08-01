@@ -132,14 +132,18 @@ sites cannot drift apart:
 
 1. the LUT is loaded;
 2. the frequency is at or above the default dispatch floor of 200 GHz, **or**
-   the caller set `Options%Use_PARMIO_MWSSEM`. The floor is a safety gate
-   rather than physics: it sits where the traditional sounding sensors stop,
-   so that enabling PARMIO could not disturb operational channels while the
-   implementation was still being shaken out. Nothing at or above 200 GHz was
-   exercised operationally, so nothing could regress. Obs-space validation
-   against ATMS-NPP supports the same placement from the other side: FASTEM6
-   is competitive through the whole ATMS band (top 183.31 GHz) and PARMIO's
-   advantage appears where FASTEM6 extrapolates;
+   the caller set `Options%Use_PARMIO_MWSSEM`. **The value 200 is arbitrary.**
+   It is a safety gate, not a physical boundary: it was placed above where the
+   traditional sounding sensors stop, so that enabling PARMIO could not
+   disturb anything in operational use while the implementation was still
+   being shaken out. Nothing at or above 200 GHz was exercised operationally,
+   so nothing could regress. Any round number above the ATMS band would have
+   served equally, and 200 happens to land inside a hole in the coefficient
+   table, which is why condition 3 exists as a separate check rather than
+   being inferred from this number. Obs-space validation against ATMS-NPP
+   argues for putting a gate somewhere above 183.31 GHz, since FASTEM6 is
+   competitive through the whole ATMS band and PARMIO's advantage shows where
+   FASTEM6 extrapolates, but it does not select 200 in particular;
 3. **the table actually holds data at that frequency.**
 
 `Use_PARMIO_MWSSEM` is a logical in `CRTM_Options_type`, sitting beside
