@@ -7,21 +7,33 @@
 ! The LUT is built offline from the PARMIO reference radiative transfer
 ! model (Dinnat 2023). It stores PARMIO's full azimuthal-harmonic
 ! decomposition of brightness temperature, divided by SST_K, on a 5-D
-! grid (frequency, zenith angle, 10-m wind speed, SST, SSS). To respect
-! PARMIO's discontinuous physics three coefficient *groups* are kept:
+! grid (frequency, zenith angle, 10-m wind speed, SST, SSS). Three
+! coefficient *groups* are kept:
 !
-!   sss_dependent    : f <= 10.65 GHz, Meissner permittivity, SSS axis
-!   sss_nominal_m    : 10.65 < f < 200 GHz, Meissner, SSS = 35 only
-!   sss_nominal_h    : f >= 200 GHz, high-freq tabulated dielectric
+!   sss_dependent    : f <= 10.65 GHz, SSS axis active
+!   sss_nominal_m    : 10.65 < f < 200 GHz, SSS = 35 only
+!   sss_nominal_h    : f >= 200 GHz, SSS = 35 only
+!
+! All three use the Meissner and Wentz (2004, 2012) dielectric. That is
+! PARMIO's own reference configuration: Kilic et al. 2023
+! (doi:10.1029/2022EA002785) runs PARMIO with Meissner across 500 MHz to
+! 700 GHz and uses the same for SURFEM-Ocean in RTTOV, and Dinnat et al.
+! 2023 (doi:10.1175/BAMS-D-23-0023.1) records it as the team default in the
+! microwaves. PARMIO's other dielectric option, the high-frequency tabulated
+! model, is its infrared model and is not used here.
+!
+! The 200 GHz boundary is therefore a grid partition and not a physics
+! switch. The two nominal-SSS groups hold the same physics and the table is
+! continuous across it. Earlier tables switched dielectric there, which
+! manufactured a step of up to 0.056 in emissivity that PARMIO does not have;
+! see docs/design/parmio_permittivity_switch.md. The group names are kept as
+! they are for on-disk compatibility.
 !
 ! The boundaries above are the group-SELECTION rule (SSS_CUTOFF_GHZ and
 ! PERMITTIVITY_SWITCH_GHZ). They are not the same thing as the frequencies
-! the table actually holds, and the two do not meet: in the shipped
-! production LUT sss_nominal_m stops at 183.31 GHz and sss_nominal_h starts
-! at 229 GHz, so 183.31 to 229 selects a group that has no data there. The
-! 10.65 to 15 GHz band is the same situation at the salinity boundary.
-! Use PARMIOCoeff_Covers_Frequency to ask what the table actually spans;
-! the interpolator clamps silently to the nearest grid edge otherwise.
+! the table actually holds. Use PARMIOCoeff_Covers_Frequency to ask what the
+! table actually spans; the interpolator clamps silently to the nearest grid
+! edge otherwise.
 !
 ! At runtime the PARMIO_MWSSEM module looks up the 14 harmonic terms in
 ! the appropriate group, recombines them through cos/sin in azimuth, and
@@ -231,15 +243,18 @@ CONTAINS
   !-----------------------------------------------------------------
   !  Does the table actually hold data at this frequency?
   !
-  !  The groups are gridded separately either side of the permittivity
-  !  switch, and their grids do not meet it: sss_nominal_m ends at
-  !  183.31 GHz and sss_nominal_h begins at 229 GHz, so 183.31 to 229
-  !  has no data on either side. The 10.65 to 15 GHz band is the same
-  !  situation at the salinity boundary.
+  !  The groups are gridded separately either side of the group boundaries,
+  !  and their grids need not meet them. In the table shipped before
+  !  2026-08-01 they did not: sss_nominal_m ended at 183.31 GHz and
+  !  sss_nominal_h began at 229 GHz, so 183.31 to 229 had no data on either
+  !  side, and the 10.65 to 15 GHz band was the same at the salinity
+  !  boundary. Both holes are closed in the current table, but the check
+  !  stays because nothing guarantees a future table meets its own
+  !  boundaries.
   !
   !  This matters because Bracket clamps an out-of-range query to the
-  !  nearest grid edge, silently. A 204.78 GHz channel selects the high
-  !  group, falls below its first node and is evaluated at 229 GHz,
+  !  nearest grid edge, silently. A 204.78 GHz channel selected the high
+  !  group, fell below its first node and was evaluated at 229 GHz,
   !  roughly 24 GHz away, with no indication in the result.
   !
   !  Callers use this to decline PARMIO where it has nothing to say,

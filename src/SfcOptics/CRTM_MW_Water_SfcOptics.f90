@@ -100,17 +100,23 @@ MODULE CRTM_MW_Water_SfcOptics
   ! synthetic-RT wind-roughness sign flip). That argues for a gate somewhere
   ! above 183.31, not for 200 in particular.
   !
-  ! One consequence of the arbitrariness is worth knowing: 200 happens to land
+  ! One consequence of the arbitrariness was worth knowing: 200 used to land
   ! inside a hole in the shipped coefficient table (see below), which is why
-  ! coverage is now checked separately rather than inferred from this value.
+  ! coverage is checked separately rather than inferred from this value. The
+  ! hole is closed, the check stays.
+  !
+  ! Note this value is unrelated to the coefficient table's own 200 GHz group
+  ! boundary, which they share only by coincidence. That one is a grid
+  ! partition inside the table; this one is a dispatch policy. Neither is
+  ! physics, and changing one does not imply changing the other.
   REAL(fp), PARAMETER :: PARMIO_FREQ_THRESHOLD = 200.0_fp ! GHz
 
   ! The policy threshold above is only half the question. Being loaded and
   ! being above the threshold does not mean the table has data at a given
-  ! frequency: the coefficient groups are gridded separately either side of
-  ! the permittivity switch and their grids need not meet it. Where they do
-  ! not, the interpolator clamps to the nearest grid edge without saying so,
-  ! and a 204.78 GHz channel was being evaluated at 229 GHz.
+  ! frequency: the coefficient groups are gridded separately, and their grids
+  ! need not meet the group boundaries. Where they do not, the interpolator
+  ! clamps to the nearest grid edge without saying so, and a 204.78 GHz
+  ! channel was being evaluated at 229 GHz.
   !
   ! So the dispatch asks both questions, in PARMIO_Is_Active_At: is PARMIO
   ! wanted here, and does the table have data here. Coverage is a hard
