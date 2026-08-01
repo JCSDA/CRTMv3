@@ -52,6 +52,8 @@ MODULE CRTM_MWwaterCoeff
   PUBLIC :: CRTM_MWwaterCoeff_Load
   PUBLIC :: CRTM_MWwaterCoeff_Destroy
   PUBLIC :: CRTM_MWwaterCoeff_IsLoaded
+  PUBLIC :: CRTM_MWwaterCoeff_HasPolarimetric
+  PUBLIC :: CRTM_MWwaterCoeff_PolWarning_Due
 
 
   ! -----------------
@@ -65,6 +67,20 @@ MODULE CRTM_MWwaterCoeff
   ! The shared microwave water surface emissivity data
   ! --------------------------------------------------
   TYPE(MWwaterCoeff_type), TARGET, SAVE :: MWwaterC
+  ! ...The scheme that produced it. Written once at load time alongside
+  !    MWwaterC and read-only thereafter, so it carries the same (benign)
+  !    threading characteristics as the coefficient data itself.
+  CHARACTER(16), SAVE :: MWwaterC_Scheme = ''
+  ! ...Latch so the "polarimetric run on a non-polarimetric surface" warning is
+  !    emitted once per loaded scheme rather than once per forward call. A
+  !    finite-difference driver calls the forward model hundreds of times and a
+  !    data assimilation system calls it once per batch, so a per-call warning
+  !    buries the message it is trying to deliver: 168 repeats were measured in
+  !    test_VectorRT_TLADK alone. Armed at load time, which is single threaded,
+  !    so switching scheme re-arms it. The only write during compute flips
+  !    .TRUE. to .FALSE. and never back, so a concurrent read can at worst
+  !    produce one duplicate message and cannot affect any result.
+  LOGICAL, SAVE :: MWwaterC_PolWarn_Pending = .FALSE.
 
 
 CONTAINS
@@ -211,6 +227,13 @@ CONTAINS
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
       RETURN
     END IF
+
+    ! Record which scheme is loaded, so callers can ask what the surface can
+    ! actually produce rather than inferring it from coefficient shapes. Set
+    ! only on success, and written here exactly as MWwaterC itself is: once at
+    ! load time, read-only for the rest of the run.
+    MWwaterC_Scheme = FASTEM_Scheme
+    MWwaterC_PolWarn_Pending = .TRUE.
 
   END FUNCTION CRTM_MWwaterCoeff_Load_FASTEM
 
@@ -445,5 +468,63 @@ CONTAINS
     LOGICAL :: IsLoaded
     IsLoaded = MWwaterCoeff_Associated( MWwaterC )
   END FUNCTION CRTM_MWwaterCoeff_IsLoaded
+
+
+!------------------------------------------------------------------------------
+!
+! NAME:
+!       CRTM_MWwaterCoeff_HasPolarimetric
+!
+! PURPOSE:
+!       Report whether the loaded microwave water emissivity scheme carries an
+!       azimuth model for the third and fourth Stokes components.
+!
+!       FASTEM4 parameterises all four components (Azimuth_Emissivity_Module).
+!       FASTEM6, the CRTM default, parameterises the vertical and horizontal
+!       components only and returns the third and fourth as identically zero
+!       (Azimuth_Emissivity_F6_Module), so a vector run over water on FASTEM6
+!       has no surface polarimetric signal at all.
+!
+!       This exists so a caller can say that plainly rather than inferring it
+!       from coefficient array shapes, and so a polarimetric run on a
+!       non-polarimetric backend can be reported instead of silently returning
+!       U = V = 0, which is indistinguishable from a scene that genuinely has
+!       no polarimetric signal.
+!
+!       Returns .FALSE. when nothing is loaded.
+!
+!------------------------------------------------------------------------------
+
+  FUNCTION CRTM_MWwaterCoeff_HasPolarimetric() RESULT( HasPol )
+    LOGICAL :: HasPol
+    HasPol = MWwaterCoeff_Associated( MWwaterC ) .AND. &
+             ( TRIM(MWwaterC_Scheme) == 'FASTEM4' )
+  END FUNCTION CRTM_MWwaterCoeff_HasPolarimetric
+
+
+!------------------------------------------------------------------------------
+!
+! NAME:
+!       CRTM_MWwaterCoeff_PolWarning_Due
+!
+! PURPOSE:
+!       Report whether the "polarimetric run on a non-polarimetric surface"
+!       warning is still owed for the currently loaded scheme, and consume it.
+!
+!       Returns .TRUE. at most once per load, so the caller emits the message
+!       once rather than on every forward call. Call it only after deciding the
+!       warning is otherwise warranted, since asking consumes the latch.
+!
+!       Note that Fortran does not guarantee short-circuit evaluation of .AND.,
+!       so this must not be placed in a compound condition with the tests that
+!       decide whether the warning applies. Nest the conditions instead.
+!
+!------------------------------------------------------------------------------
+
+  FUNCTION CRTM_MWwaterCoeff_PolWarning_Due() RESULT( Due )
+    LOGICAL :: Due
+    Due = MWwaterC_PolWarn_Pending
+    IF ( Due ) MWwaterC_PolWarn_Pending = .FALSE.
+  END FUNCTION CRTM_MWwaterCoeff_PolWarning_Due
 
 END MODULE CRTM_MWwaterCoeff

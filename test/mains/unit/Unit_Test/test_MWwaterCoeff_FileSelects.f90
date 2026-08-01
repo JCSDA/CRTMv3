@@ -56,6 +56,7 @@ PROGRAM test_MWwaterCoeff_FileSelects
   USE CRTM_GeometryInfo_Define, ONLY: CRTM_GeometryInfo_type, &
                                       CRTM_GeometryInfo_SetValue
   USE CRTM_GeometryInfo       , ONLY: CRTM_GeometryInfo_Compute
+  USE CRTM_MWwaterCoeff       , ONLY: CRTM_MWwaterCoeff_HasPolarimetric
   IMPLICIT NONE
 
   CHARACTER(*), PARAMETER :: PROGRAM_NAME = 'test_MWwaterCoeff_FileSelects'
@@ -85,30 +86,41 @@ PROGRAM test_MWwaterCoeff_FileSelects
 
   CHARACTER(256) :: Version
   REAL(fp) :: eU_f4, eV_f4, eU_f6, eV_f6
-  LOGICAL  :: ok_selects_f4, ok_selects_f6, all_ok
+  LOGICAL  :: haspol_f4, haspol_f6
+  LOGICAL  :: ok_selects_f4, ok_selects_f6, ok_query, all_ok
 
   CALL CRTM_Version(Version)
   WRITE(*,'(/5x,a)') 'MWwaterCoeff_File model-selection verification'
   WRITE(*,'(5x,a/)') 'CRTM Version: '//TRIM(Version)
 
-  CALL surface_UV_for_file( FILE_F4, eU_f4, eV_f4 )
-  CALL surface_UV_for_file( FILE_F6, eU_f6, eV_f6 )
+  CALL surface_UV_for_file( FILE_F4, eU_f4, eV_f4, haspol_f4 )
+  CALL surface_UV_for_file( FILE_F6, eU_f6, eV_f6, haspol_f6 )
 
   ! Asking for FASTEM4 must give the model that carries U and V ...
   ok_selects_f4 = ( ABS(eU_f4) > SIGNAL_FLOOR ) .AND. ( ABS(eV_f4) > SIGNAL_FLOOR )
   ! ... and asking for FASTEM6 must give the model that does not, so that the
   ! first assertion demonstrates selection rather than a new fixed default.
   ok_selects_f6 = ( ABS(eU_f6) <= TOL ) .AND. ( ABS(eV_f6) <= TOL )
+  ! CRTM_MWwaterCoeff_HasPolarimetric is what gates the "n_Stokes > 1 on a
+  ! non-polarimetric backend" warning in the forward entry points, so tie it to
+  ! the measured surface rather than letting it agree only with itself: it must
+  ! be true exactly when the surface actually produces a polarimetric signal.
+  ok_query = ( haspol_f4 .EQV. (ABS(eU_f4) > SIGNAL_FLOOR) ) .AND. &
+             ( haspol_f6 .EQV. (ABS(eU_f6) > SIGNAL_FLOOR) )
 
   WRITE(*,'(5x,a,a)')              'MWwaterCoeff_File = ', FILE_F4
   WRITE(*,'(5x,a,es14.6,a,es14.6)')'    surface  U = ', eU_f4, '   V = ', eV_f4
   WRITE(*,'(5x,a,a)')              'MWwaterCoeff_File = ', FILE_F6
   WRITE(*,'(5x,a,es14.6,a,es14.6)')'    surface  U = ', eU_f6, '   V = ', eV_f6
 
+  WRITE(*,'(5x,a,l1,a,l1)')'HasPolarimetric: FASTEM4 = ', haspol_f4, &
+                           '   FASTEM6 = ', haspol_f6
+
   WRITE(*,'(/5x,a,l1)') 'FASTEM4 requested and delivered (U,V nonzero) ...  pass = ', ok_selects_f4
   WRITE(*,'(5x,a,l1)')  'FASTEM6 requested and delivered (U,V zero) ......  pass = ', ok_selects_f6
+  WRITE(*,'(5x,a,l1)')  'HasPolarimetric agrees with the surface .........  pass = ', ok_query
 
-  all_ok = ok_selects_f4 .AND. ok_selects_f6
+  all_ok = ok_selects_f4 .AND. ok_selects_f6 .AND. ok_query
 
   WRITE(*,'(/5x,a)') '=================================================='
   IF ( all_ok ) THEN
@@ -128,9 +140,10 @@ CONTAINS
 
   ! Initialise CRTM selecting the water model by filename alone, evaluate the
   ! ocean surface optics once, and return the polarimetric components.
-  SUBROUTINE surface_UV_for_file( MWfile, eU, eV )
+  SUBROUTINE surface_UV_for_file( MWfile, eU, eV, HasPol )
     CHARACTER(*), INTENT(IN)  :: MWfile
     REAL(fp)    , INTENT(OUT) :: eU, eV
+    LOGICAL     , INTENT(OUT) :: HasPol
 
     INTEGER                      :: err
     TYPE(CRTM_ChannelInfo_type)  :: ChannelInfo(1)
@@ -181,6 +194,8 @@ CONTAINS
 
     eU = SfcOptics%Emissivity(1,3)
     eV = SfcOptics%Emissivity(1,4)
+    ! Queried while the scheme is still loaded, before CRTM_Destroy.
+    HasPol = CRTM_MWwaterCoeff_HasPolarimetric()
 
     CALL CRTM_SfcOptics_Destroy( SfcOptics )
     err = CRTM_Destroy( ChannelInfo )

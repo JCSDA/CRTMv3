@@ -336,14 +336,26 @@ identically zero (gap 2b). Together, a user could select what looks like a
 polarimetric backend, get a successful run, and receive U = 0 that is
 indistinguishable from a scene with no polarimetric signal.
 
-Gap 2c is fixed and the filename argument is now honoured, which breaks the
-compound and makes the JEDI path work as written. What remains is the second
-half: **nothing warns when `n_Stokes > 1` is requested while a backend with no
-polarimetric model is loaded.** That combination is now reachable only by
-asking for FASTEM6 explicitly or by taking the default, but it is still
-silent, and the default is the likeliest path a new polarimetric user takes. A
-warning at initialization, or at the first vector forward call, closes it.
-Small, and worth doing before anyone assimilates a polarimetric instrument.
+**Both halves are now done.** Gap 2c is fixed and the filename argument is
+honoured, so the JEDI path works as written. The second half is closed too:
+`CRTM_Forward` now warns when `n_Stokes > 1` is requested while the loaded
+microwave water backend has no third or fourth Stokes azimuth model, naming
+FASTEM4 and PARMIO as the alternatives. It warns rather than fails, because
+the configuration is legitimate for the intensity and refusing it would break
+callers who set `n_Stokes` globally but only want I.
+
+Two details worth keeping. The check sits before the profile loop, so it is
+evaluated once per call and outside the parallel region, and it is latched to
+once per loaded scheme on top of that: unlatched it produced 168 copies in
+`test_VectorRT_TLADK` alone, which buries the message rather than delivering
+it. And the conditions are nested rather than combined with `.AND.`, because
+Fortran does not guarantee short-circuit evaluation and querying the latch
+consumes it.
+
+The discriminator is `CRTM_MWwaterCoeff_HasPolarimetric`, tied to the measured
+surface by `test_MWwaterCoeff_FileSelects` rather than left to agree only with
+itself: it must be true exactly when the surface actually produces a
+polarimetric signal.
 
 ## Sequencing
 

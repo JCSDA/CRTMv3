@@ -111,10 +111,17 @@ recovered from the leading component. If both arguments are given and
 disagree, the scheme wins and the disagreement is reported. See roadmap gap
 2c, pinned by `test_MWwaterCoeff_FileSelects`.
 
-What remains a silent trap is the default itself: requesting `n_Stokes > 1`
-while FASTEM6 is loaded succeeds and returns U = 0, which is
-indistinguishable from a scene with no polarimetric signal. Nothing warns
-about that combination yet.
+The default itself used to be a silent trap: requesting `n_Stokes > 1` while
+FASTEM6 is loaded succeeds and returns U = 0, indistinguishable from a scene
+with no polarimetric signal. `CRTM_Forward` now warns on that combination,
+naming FASTEM4 and PARMIO as the alternatives. It warns rather than fails,
+since the configuration is legitimate for the intensity. The warning is
+latched to once per loaded scheme, so a finite-difference driver calling the
+forward model hundreds of times reports it once.
+
+`CRTM_MWwaterCoeff_HasPolarimetric` is the public query behind it, and
+answers whether the loaded scheme carries an azimuth model for the third and
+fourth Stokes components at all.
 
 ## 5. Verified, and what is not
 
