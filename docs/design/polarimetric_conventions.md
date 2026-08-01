@@ -123,6 +123,47 @@ forward model hundreds of times reports it once.
 answers whether the loaded scheme carries an azimuth model for the third and
 fourth Stokes components at all.
 
+## 5. PARMIO dispatch and its coverage
+
+PARMIO serves a microwave water channel when three things hold, and
+`PARMIO_Is_Active_At` is the single predicate that answers it. Everything
+that needs to know asks that rather than re-deriving the rule, so the call
+sites cannot drift apart:
+
+1. the LUT is loaded;
+2. the frequency is at or above the dispatch floor, default 200 GHz. That
+   default is not arbitrary: it comes from obs-space validation against
+   ATMS-NPP, where FASTEM6 is competitive through the whole ATMS band (top
+   183.31 GHz) and PARMIO's advantage appears where FASTEM6 extrapolates.
+   `CRTM_Init(PARMIO_Frequency_Threshold=...)` overrides it for users who
+   want to exercise PARMIO outside that band;
+3. **the table actually holds data at that frequency.**
+
+The third condition is a hard requirement and is not relaxed by the override.
+The coefficient groups are gridded separately either side of the permittivity
+switch and their grids do not meet it: `sss_nominal_m` stops at 183.31 GHz and
+`sss_nominal_h` starts at 229 GHz, so 183.31 to 229 selects a group with
+nothing in it. The interpolator clamps an out-of-range query to the nearest
+grid node and returns a confident number computed somewhere else, so before
+this check a 204.78 GHz channel was being evaluated at **229 GHz**, about
+24 GHz away, with nothing in the result to say so.
+
+With the shipped LUT that makes the effective floor 229 GHz rather than 200.
+It becomes 200 by itself if the 183 to 229 band is ever filled in, with no
+constant to update. The gap is a grid-spacing choice in the offline generator
+(`parmio/scripts/parmio_lut_grid.py`, `PRODUCTION_FREQS` jumps 183.31 to 229),
+not a limitation of the model, so it is fillable by regenerating the table.
+
+Clamping on the remaining axes is still possible and is now reported once per
+run: the table spans zenith 0 to 65 degrees, wind 1 to 25 m/s and SST -2 to
+30 C, all of which real scenes exceed.
+
+One consequence worth recording. `test_VectorRT_PARMIO_TLAD` used TROPICS
+channel 12 at 204.78 GHz, which is exactly the band with no data, so it was
+demonstrating PARMIO Jacobians on clamped coefficients. It now lowers the
+floor to reach 91.319 GHz, well inside `sss_nominal_m`, where the signal is
+real: |U/I| is 8.7e-3 against 1.6e-3 before.
+
 ## 5. Verified, and what is not
 
 Verified by measurement:

@@ -43,12 +43,25 @@ PROGRAM test_VectorRT_PARMIO_TLAD
 
   USE CRTM_Module
   USE CRTM_SpcCoeff, ONLY: SC
+  USE CRTM_MW_Water_SfcOptics, ONLY: PARMIO_Is_Active_At
   IMPLICIT NONE
 
   CHARACTER(*), PARAMETER :: PROGRAM_NAME = 'test_VectorRT_PARMIO_TLAD'
   CHARACTER(*), PARAMETER :: PATH   = './testinput/'
   CHARACTER(*), PARAMETER :: SENSOR = 'tms_tropics-01'
-  REAL(fp),     PARAMETER :: PARMIO_GATE = 200.0_fp
+  ! Drive PARMIO down into a band the LUT actually covers.
+  !
+  ! The default 200 GHz floor lands in a hole: the production table's
+  ! sss_nominal_m group stops at 183.31 GHz and sss_nominal_h starts at 229,
+  ! so this sensor's only above-floor channel, 204.783 GHz, has no data and
+  ! the dispatcher correctly declines it. Before coverage was checked it was
+  ! served anyway, silently evaluated at 229 GHz.
+  !
+  ! Lowering the floor puts the 91.319 GHz channel on PARMIO, which sits well
+  ! inside sss_nominal_m and is a window channel, so the surface polarimetric
+  ! signal actually reaches the top of the atmosphere. That makes this a
+  ! stronger test than it was: the signal is real rather than clamped.
+  REAL(fp),     PARAMETER :: PARMIO_TEST_FLOOR = 50.0_fp
 
   INTEGER,  PARAMETER :: N_PROFILES  = 2      ! the ECMWF84 loader fills atm(1) and atm(2)
   INTEGER,  PARAMETER :: N_LAYERS    = 100
@@ -82,7 +95,8 @@ PROGRAM test_VectorRT_PARMIO_TLAD
   WRITE(*,'(/5x,a)') 'PARMIO polarimetric surface: Jacobians through the full RT chain'
   WRITE(*,'(5x,a/)') 'CRTM Version: '//TRIM(Version)
 
-  Error_Status = CRTM_Init( (/ SENSOR /), ChannelInfo, File_Path=PATH, Quiet=.TRUE. )
+  Error_Status = CRTM_Init( (/ SENSOR /), ChannelInfo, File_Path=PATH, Quiet=.TRUE., &
+                            PARMIO_Frequency_Threshold = PARMIO_TEST_FLOOR )
   IF ( Error_Status /= SUCCESS ) THEN
     CALL Display_Message( PROGRAM_NAME, 'CRTM_Init failed', FAILURE ); STOP 1
   END IF
@@ -138,9 +152,9 @@ PROGRAM test_VectorRT_PARMIO_TLAD
   DO l = 1, n_Channels
     ui = ABS(RTS(l,1)%Stokes(3)) / MAX(ABS(RTS(l,1)%Stokes(1)), TINY(ONE))
     WRITE(*,'(4x,i2,2x,f10.3,2x,a,2(2x,es15.6),2x,es11.3)') &
-      l, SC(1)%Frequency(l), MERGE('PARMIO','FASTEM', SC(1)%Frequency(l) >= PARMIO_GATE), &
+      l, SC(1)%Frequency(l), MERGE('PARMIO','FASTEM', PARMIO_Is_Active_At(SC(1)%Frequency(l))), &
       RTS(l,1)%Stokes(1), RTS(l,1)%Stokes(3), ui
-    IF ( SC(1)%Frequency(l) >= PARMIO_GATE .AND. ui > best_ui ) THEN
+    IF ( PARMIO_Is_Active_At(SC(1)%Frequency(l)) .AND. ui > best_ui ) THEN
       best_ui = ui ; ch_parmio = l
     END IF
   END DO

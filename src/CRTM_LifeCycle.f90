@@ -34,6 +34,7 @@ MODULE CRTM_LifeCycle
   ! Environment setup
   ! -----------------
   ! Module usage
+  USE Type_Kinds             , ONLY: fp
   USE Message_Handler
   USE File_Utility           , ONLY: File_Exists, Join_Path
   USE CRTM_ChannelInfo_Define, ONLY: CRTM_ChannelInfo_type, &
@@ -84,7 +85,8 @@ MODULE CRTM_LifeCycle
   USE CRTM_MWlandCoeff       , ONLY: CRTM_MWlandCoeff_Load, &
                                      CRTM_MWlandCoeff_Destroy, &
                                      CRTM_MWlandCoeff_IsLoaded
-  USE CRTM_MW_Water_SfcOptics, ONLY: PARMIO_FREQ_THRESHOLD
+  USE CRTM_MW_Water_SfcOptics, ONLY: PARMIO_FREQ_THRESHOLD, &
+                                     PARMIO_Set_Freq_Threshold
   ! ...OpenMP API
 #ifdef _OPENMP
   USE OMP_LIB
@@ -618,6 +620,7 @@ CONTAINS
     MWwaterCoeff_File   , &  ! Optional input
     MWwaterCoeff_Scheme , &  ! Optional input
     PARMIOCoeff_File    , &  ! Optional input
+    PARMIO_Frequency_Threshold, &  ! Optional input
     MWlandCoeff_File    , &  ! Optional input
     Use_MWland_Atlas    , &  ! Optional input
     IRwaterCoeff_Format , &  ! Optional input
@@ -660,6 +663,7 @@ CONTAINS
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: MWwaterCoeff_File
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: MWwaterCoeff_Scheme
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: PARMIOCoeff_File
+    REAL(fp)    ,      OPTIONAL, INTENT(IN)  :: PARMIO_Frequency_Threshold
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: MWlandCoeff_File
     LOGICAL     ,      OPTIONAL, INTENT(IN)  :: Use_MWland_Atlas
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRwaterCoeff_Format
@@ -847,6 +851,18 @@ CONTAINS
     IF ( PRESENT(VISiceCoeff_Format  ) ) Default_VISiceCoeff_Format   = TRIM(ADJUSTL(VISiceCoeff_Format))
     ! ...MW water emissivity scheme
     IF ( PRESENT(MWwaterCoeff_Scheme ) ) Default_MWwaterCoeff_Scheme  = TRIM(ADJUSTL(MWwaterCoeff_Scheme))
+
+    ! ...PARMIO dispatch floor. Set unconditionally, so an override supplied to
+    !    an earlier CRTM_Init cannot leak into a later one that does not ask
+    !    for it. Lowering this does not grant access to frequencies the LUT
+    !    does not cover: coverage is checked independently, because the
+    !    alternative is a silently edge-clamped result from the wrong
+    !    frequency. See CRTM_MW_Water_SfcOptics, PARMIO_Is_Active_At.
+    IF ( PRESENT(PARMIO_Frequency_Threshold) ) THEN
+      CALL PARMIO_Set_Freq_Threshold( PARMIO_Frequency_Threshold )
+    ELSE
+      CALL PARMIO_Set_Freq_Threshold( PARMIO_FREQ_THRESHOLD )
+    END IF
 
     ! ...Honour MWwaterCoeff_File as a model selector.
     !
