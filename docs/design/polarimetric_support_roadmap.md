@@ -135,7 +135,7 @@ Each of these was verified on 2026-07-30, and the 2a to 2d entries on
 | 4 | ~~Selecting SOI with `n_Stokes > 1` silently yields ADA.~~ **FIXED 2026-07-31.** Now an explicit failure with a message naming the alternative, rather than a substitution the caller cannot see. Refusal was chosen over a warning because the caller receives a different algorithm's numbers under the name of the one they asked for. Verified by reverting the guard and rebuilding: without it the SOI call returns SUCCESS. | Guard at the head of the `n_Stokes > 1` branch, `src/RTSolution/CRTM_RTSolution.f90`. Pinned by `test_VectorRT_Unsupported`, which also runs an RT_ADA vector control so the test cannot pass by rejecting everything |
 | 5 | Aerosols contribute no polarization. The shipped `AerosolCoeff.nc` carries `n_Phase_Elements = 1`, and the scatter routine fills `MIN(n_Phase_Elements, AeroC%N_PHASE_ELEMENTS)`. A vector run therefore mixes polarized cloud scattering with unpolarized aerosol scattering. | Coefficient file dimension; `src/AtmScatter/CRTM_AerosolScatter.f90:316` |
 | 6 | Polarimetric support is microwave-only. The coupled-polarization branch exists solely in the microwave section; infrared and visible set component 1 only. | Section banners at `CRTM_SfcOptics.f90:517`, `:852`, `:992`; branch spans `:655` to `:845` |
-| 7 | U and V are never exercised by any test. `test_VectorRT_TLADK` runs at `n_Stokes = 2` with a scalar control. | test header and setup |
+| 7 | ~~U and V are never exercised by any test. `test_VectorRT_TLADK` runs at `n_Stokes = 2` with a scalar control.~~ **NO LONGER TRUE, struck 2026-07-31.** `test_VectorRT_TLADK` now runs at `n_Stokes = 4` and differentiates dU and dV, including dU/d(wind direction). `test_VectorRT_Physics` checks U and V vanish at relative azimuth 0 and 180, `test_VectorRT_SurfaceFrame` pins their odd parity on both surface backends, `test_VectorRT_StokesOutput` proves they survive the Fourier accumulation, and `test_VectorRT_StokesSign` pins their sign. Retained here only so the claim is not re-derived from an older revision. | superseded by the verification table below |
 | 8 | No polarized radiance has ever been compared against a reference outside CRTM. | Whole-repository survey of tests touching `n_Stokes` |
 
 ## Verification status, 2026-07-31
@@ -155,6 +155,8 @@ instrument so it can be re-run.
 | PARMIO's polarimetric surface uses the same frame convention as FASTEM, and its Jacobians are correct | `test_VectorRT_SurfaceFrame` runs both backends at the surface interface: amsua_n19 channel 1 (23.8 GHz, FASTEM) and mwr_aws channel 16 (325 GHz, above the PARMIO gate). Both give U and V reaching the solver exactly and the exact even/odd mirror signature, so two independent surface models agree on the convention. `test_VectorRT_PARMIO_TLAD` then covers PARMIO through the full radiative transfer chain on TROPICS channel 12: dU/d(wind direction) against finite differences at 1.96e-10, the adjoint dot product at 1.6e-16 with a 40.8 percent surface share, and K against AD exact. Note the FASTEM channels in that test carry no U at all, because it takes the FASTEM6 default, so the signal is unambiguously PARMIO's |
 | Which channels can see the PARMIO surface at all | Only two shipped sensors exceed the 200 GHz gate. mwr_aws is at 325.15 GHz, on a water-vapour line, and is opaque: measured Stokes U there is 1e-16 to 1e-13, against 3.7e-5 on the FASTEM channels. TROPICS is at 204.783 GHz, between the 183 and 325 GHz lines, and is **not** opaque: U/I is 1.6e-3, comparable to the best FASTEM window channels. An earlier revision of this document asserted that both sat on lines and that PARMIO could therefore never influence a top-of-atmosphere radiance. The 325 GHz half was measured; the 204.78 GHz half was inferred and is wrong. The gate is a compile-time parameter and a policy choice, not a data limit: the PARMIO table itself spans 1.4 to 700 GHz |
 | The new RTV state is thread safe | `RTV` is a per-thread array (`RTV(n_channel_threads)`), so `e_Rad_UP_Stokes` is per thread by construction |
+| **The polarized cloud phase matrix drives a real observable, and it is the only thing that can produce the sub-millimetre signal** | Measured in the jedi bundle on PolSIR, not in this suite, because it needs the ablated CRTM-Exp tables. `CloudCoeff_Exp_Full6_noAllPol.nc` zeroes phase elements 2 to 6 exactly and leaves element 1 untouched (verified directly against the full table), so the ablation is real rather than a no-op. At 40 degrees the 683 GHz polarization difference between the two identically-polarized channels, ch5 (VL_MIXED) and ch6 (HL_MIXED), which share frequency, wavenumber, Planck and band-correction coefficients and differ only in polarization, is: cloud polarization ON, mean -0.010974 K, range -0.218 to +0.121; cloud polarization OFF, mean +0.000004 K, max +0.007263 K. The OFF case reproduces the **scalar** path for the same scene to 0.0009 K, and the scalar path structurally cannot represent cloud polarization at all. So the entire 683 GHz signal is cloud-scattering induced. At nadir the same ablation changes the split by ~1e-5 K, which is correct physics rather than a null result: 180 degree backscatter suppresses the polarization, though the polarized elements still couple into multiply-scattered **intensity** there by up to 0.128 K, almost entirely from the frozen habit (liquid contributes 3e-5 K). An earlier reading of the nadir ablation alone as "the polarized elements do nothing" was wrong, and wrong because nadir is the one geometry that cannot see the effect |
+| The convention is written down and cannot drift silently | `docs/design/polarimetric_conventions.md` states the adopted azimuth and Stokes-sign convention; `test_VectorRT_StokesSign` pins the sign per backend. Flipping U's sign consistently across the forward, tangent-linear and adjoint routines was shown by measurement to leave `test_VectorRT_SurfaceFrame`, `test_VectorRT_StokesOutput` and `test_VectorRT_TLADK` all passing, so before this test nothing in the suite could detect a convention change. FASTEM and PARMIO were also measured to agree in the sign of U, which establishes the two independently fitted coefficient sets share a convention, but not that CRTM's `phi` origin matches it |
 
 ## Open questions
 
@@ -206,8 +208,22 @@ single-scatter Rayleigh has known polarization. Follow with an independent code,
 either RTTOV-SCATT's polarimetric path or a PolRadtran or VDISORT reference, for
 scattering configurations.
 
+This phase also owns the **third Stokes sign question**, which Phase 1 pinned
+but cannot validate. CRTM's adopted convention is self-consistent and cannot
+now drift silently, but whether its relative-azimuth origin matches the one
+the FASTEM azimuth coefficients were regressed under is undetermined, and no
+internal instrument can determine it: V and H ride cosine harmonics and are
+even in the azimuth, so they are structurally blind to it. The cheapest
+closure is a single RTTOV run at a nonzero wind direction, since RTTOV
+consumes the same model from the same coefficient lineage; failing that,
+WindSat's published upwind and downwind harmonic amplitudes pin it against
+measurement. This matters in practice because a sign error is invisible until
+it reaches O minus B, where it doubles the innovation on the one observable a
+polarimetric instrument exists to measure.
+
 *Exit:* a registered test comparing CRTM vector output against a closed-form
-solution for at least one clear-sky and one single-scatter configuration.
+solution for at least one clear-sky and one single-scatter configuration, and
+an external confirmation of the third Stokes sign convention.
 
 ### Phase 1. Convention audit, written down and pinned
 
@@ -216,12 +232,33 @@ model output, solver state vector, phase matrix expansion ordering and reference
 frame, azimuthal Fourier assignment, and the surface-to-meridional frame
 relationship.
 
-**Partly done, 2026-07-31.** The surface-to-meridional frame relationship is
+**Mostly done, 2026-07-31.** The surface-to-meridional frame relationship is
 resolved and pinned by two tests, and the azimuthal Fourier assignment is
 resolved as far as the accumulation weights go (gap 2a, including the proof
 that the m = 0 phase matrix is block diagonal in {I,Q} and {U,V} because
-`Pminus` vanishes there). Phase matrix expansion ordering and the reflectivity
-structure remain open.
+`Pminus` vanishes there).
+
+The surface convention is now written down and pinned:
+`docs/design/polarimetric_conventions.md` is the design note this phase asked
+for, stating the relative azimuth definition in terms of CRTM's own
+`Wind_Direction` (direction-toward, opposite the meteorological convention) and
+`Sensor_Azimuth_Angle` (satellite-to-FOV, clockwise from north), the harmonic
+form against its primary source, and `U = T(+45) - T(-45)` per WindSat and
+RTTOV. The authoritative statement sits at the single point the angle is formed
+(`CRTM_MW_Water_SfcOptics.f90`), with pointers from all three azimuth backends.
+`test_VectorRT_StokesSign` is the assertion test, and it was verified to fail
+against a deliberately sign-flipped build while the rest of the suite passed.
+
+Note what this does and does not settle. The convention is now explicit,
+self-consistent across FASTEM4/5, FASTEM6 and PARMIO, and protected against
+silent drift. Whether CRTM's `phi` origin matches the one the FASTEM
+coefficients were regressed under is **not** settled and cannot be: the
+FASTEM-4 report (NWPSAF-MO-VS-045) gives the harmonic form in equations 2a-2d
+but never defines its `phi_R`, and no accessible RTTOV or NWP SAF document
+states it either. That question is Phase 0 work, and one RTTOV run at a nonzero
+wind direction closes it.
+
+Phase matrix expansion ordering and the reflectivity structure remain open.
 
 *Exit:* a design note plus assertion tests pinning each interface independently,
 so that a later change violating one fails immediately rather than silently.
@@ -290,6 +327,20 @@ the work above, and it costs a fraction of any single phase.
 **Correct the release documentation.** The v3.2.0 notes list vector radiative
 transfer among the highlights in terms that read as readiness. The known-issues
 section should carry gaps 1 through 6.
+
+**Make the backend selection honest.** Two gaps compound into a silent-zeros
+trap for exactly the users this capability targets. `MWwaterCoeff_File` does
+not select the microwave water model at all: the file-based load is commented
+out and selection is by the `MWwaterCoeff_Scheme` string, so passing
+`MWwaterCoeff_File='FASTEM4...'` leaves FASTEM6 loaded and reports nothing
+(gap 2c). FASTEM6 is the default and has no third or fourth Stokes azimuth
+model, returning both as identically zero (gap 2b). A user can therefore
+believe they have selected a polarimetric backend, get a successful run, and
+receive U = 0, which is indistinguishable from a scene with no polarimetric
+signal. Either honour the filename argument or reject it, and consider warning
+when `n_Stokes > 1` is requested while a backend with no polarimetric model is
+loaded. Both are small changes and they remove the most likely way for this
+capability to be silently misused.
 
 ## Sequencing
 
