@@ -823,6 +823,20 @@ target_link_libraries(test_VectorRT_Physics PRIVATE crtm)
 add_test(NAME test_VectorRT_Physics
          COMMAND $<TARGET_FILE:test_VectorRT_Physics>)
 
+# test_VectorRT_IR_Surface: the polarized INFRARED water surface, which is the
+# first polarimetric capability outside the microwave. Fresnel supplies the V/H
+# shape and the WuSmith/Nalli lookup table the magnitude, so I is the scalar
+# value by construction. Asserts Q exactly zero at nadir, strictly growing with
+# view angle (the check the unfixed code fails, having returned zero at every
+# angle), I bit-identical between n_Stokes 1 and 4, U and V exactly zero, an
+# opaque channel acquiring no surface Q, plus TL against finite differences,
+# the adjoint dot product and K against AD. Clear sky and night-time geometry,
+# so no cloud LUT and no solar BRDF are involved.
+add_executable(test_VectorRT_IR_Surface mains/unit/Unit_Test/test_VectorRT_IR_Surface.f90)
+target_link_libraries(test_VectorRT_IR_Surface PRIVATE crtm)
+add_test(NAME test_VectorRT_IR_Surface
+         COMMAND $<TARGET_FILE:test_VectorRT_IR_Surface>)
+
 # test_VectorRT_PARMIO_TLAD: Jacobian coverage for the PARMIO polarimetric
 # surface through the full RT chain. PARMIO is the microwave-water backend at
 # and above 200 GHz and has a four-Stokes azimuth model independent of FASTEM's,

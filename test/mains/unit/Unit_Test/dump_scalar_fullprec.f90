@@ -20,12 +20,17 @@
 !                  Fourier accumulation was refactored in all four, so covering
 !                  Forward alone would leave three quarters of that change
 !                  unmeasured.
-!   Sensors      : a microwave sounder and a VISIBLE imager. The visible sensor
-!                  is the important one: it is the only class for which
+!   Sensors      : a microwave sounder, a VISIBLE imager and an INFRARED
+!                  imager. The visible sensor is the only class for which
 !                  n_Azi > 0, so it is the only case in which the accumulation
 !                  weight COS(mth_Azi*dphi) is evaluated at a non-zero
 !                  argument. The geometry below deliberately sets the sensor
-!                  and source azimuths apart so dphi is not zero.
+!                  and source azimuths apart so dphi is not zero. The infrared
+!                  sensor covers the IR water surface and, on its solar
+!                  channels, the Cox-Munk sun-glint BRDF, both of which the
+!                  polarized IR surface work sits next to. Certifying
+!                  bit-identity without executing the modified path would be
+!                  a certificate of nothing.
 !   Surfaces     : ocean and land. The microwave coverage aggregation was
 !                  changed at the water sites only, so both need checking.
 !   Cloud states : clear, overcast and fractional. The fractional case is the
@@ -43,9 +48,13 @@ PROGRAM dump_scalar_fullprec
 
   CHARACTER(*), PARAMETER :: PROGRAM_NAME = 'dump_scalar_fullprec'
   CHARACTER(*), PARAMETER :: PATH = './testinput/'
-  ! Microwave sounder plus a visible imager: the visible one is what drives
-  ! n_Azi > 0 and so the only non-trivial evaluation of the cosine weight.
-  CHARACTER(*), PARAMETER :: SENSORS(2) = (/ 'amsua_n19', 'v.abi_g18' /)
+  ! Microwave sounder, visible imager, infrared imager. The visible one drives
+  ! n_Azi > 0 and so the only non-trivial evaluation of the cosine weight. The
+  ! infrared one was added for the polarized IR water surface work: without it
+  ! this instrument would certify bit-identity while never executing the path
+  ! that work modifies. abi_g18 is padded to the array's character length;
+  ! CRTM_SpcCoeff.f90:295 applies TRIM(ADJUSTL(...)) so the blanks are dropped.
+  CHARACTER(*), PARAMETER :: SENSORS(3) = (/ 'amsua_n19', 'v.abi_g18', 'abi_g18  ' /)
 
   INTEGER,  PARAMETER :: N_PROFILES  = 2
   INTEGER,  PARAMETER :: N_LAYERS    = 100

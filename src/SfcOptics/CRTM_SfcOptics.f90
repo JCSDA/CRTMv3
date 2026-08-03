@@ -978,6 +978,26 @@ CONTAINS
           Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1) + &
             ( SfcOptics%Direct_Reflectivity(1:nZ,1) * Surface%Water_Coverage )
 
+          ! Polarized components, WATER ONLY and deliberately so. Infrared
+          ! land, snow and ice have no Fresnel basis and never write
+          ! components 2 and above, and nothing zeroes SfcOptics%Emissivity
+          ! between calls, so aggregating theirs would fold in whatever a
+          ! previous water channel left behind. Water is the only infrared
+          ! surface with a polarized model, and the accumulator is zeroed at
+          ! entry, so leaving the other three out is also the physically
+          ! correct contribution: an unpolarized emitter contributes nothing
+          ! to Q. Same reasoning as the microwave water sites.
+          IF ( nL > 1 ) THEN
+            Emissivity(1:nZ,2:nL) = Emissivity(1:nZ,2:nL) + &
+              ( SfcOptics%Emissivity(1:nZ,2:nL) * Surface%Water_Coverage )
+            Reflectivity(1:nZ,1,1:nZ,2:nL) = Reflectivity(1:nZ,1,1:nZ,2:nL) + &
+              ( SfcOptics%Reflectivity(1:nZ,1,1:nZ,2:nL) * Surface%Water_Coverage )
+            Reflectivity(1:nZ,2:nL,1:nZ,1) = Reflectivity(1:nZ,2:nL,1:nZ,1) + &
+              ( SfcOptics%Reflectivity(1:nZ,2:nL,1:nZ,1) * Surface%Water_Coverage )
+            Reflectivity(1:nZ,2:nL,1:nZ,2:nL) = Reflectivity(1:nZ,2:nL,1:nZ,2:nL) + &
+              ( SfcOptics%Reflectivity(1:nZ,2:nL,1:nZ,2:nL) * Surface%Water_Coverage )
+          END IF
+
         END IF Infrared_Water
 
 
@@ -1050,6 +1070,18 @@ CONTAINS
         SfcOptics%Emissivity(1:nZ,1)          = Emissivity(1:nZ,1)
         SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1)
         SfcOptics%Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1)
+
+        ! Assigned, not accumulated, so that a land, snow or ice only scene
+        ! gets an explicit zero here rather than inheriting the polarized
+        ! components of whichever water channel ran before it. The
+        ! accumulator was zeroed on entry, so this is that zero.
+        IF ( nL > 1 ) THEN
+          SfcOptics%Emissivity(1:nZ,2:nL)             = Emissivity(1:nZ,2:nL)
+          SfcOptics%Reflectivity(1:nZ,1,1:nZ,2:nL)    = Reflectivity(1:nZ,1,1:nZ,2:nL)
+          SfcOptics%Reflectivity(1:nZ,2:nL,1:nZ,1)    = Reflectivity(1:nZ,2:nL,1:nZ,1)
+          SfcOptics%Reflectivity(1:nZ,2:nL,1:nZ,2:nL) = Reflectivity(1:nZ,2:nL,1:nZ,2:nL)
+          SfcOptics%Direct_Reflectivity(1:nZ,2:nL)    = Direct_Reflectivity(1:nZ,2:nL)
+        END IF
 
 
       !##########################################################################
@@ -1774,6 +1806,18 @@ CONTAINS
           Direct_Reflectivity_TL(1:nZ,1) = Direct_Reflectivity_TL(1:nZ,1) + &
             ( SfcOptics_TL%Direct_Reflectivity(1:nZ,1) * Surface%Water_Coverage )
 
+          ! Polarized components, water only. See the forward routine.
+          IF ( nL > 1 ) THEN
+            Emissivity_TL(1:nZ,2:nL) = Emissivity_TL(1:nZ,2:nL) + &
+              ( SfcOptics_TL%Emissivity(1:nZ,2:nL) * Surface%Water_Coverage )
+            Reflectivity_TL(1:nZ,1,1:nZ,2:nL) = Reflectivity_TL(1:nZ,1,1:nZ,2:nL) + &
+              ( SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,2:nL) * Surface%Water_Coverage )
+            Reflectivity_TL(1:nZ,2:nL,1:nZ,1) = Reflectivity_TL(1:nZ,2:nL,1:nZ,1) + &
+              ( SfcOptics_TL%Reflectivity(1:nZ,2:nL,1:nZ,1) * Surface%Water_Coverage )
+            Reflectivity_TL(1:nZ,2:nL,1:nZ,2:nL) = Reflectivity_TL(1:nZ,2:nL,1:nZ,2:nL) + &
+              ( SfcOptics_TL%Reflectivity(1:nZ,2:nL,1:nZ,2:nL) * Surface%Water_Coverage )
+          END IF
+
         END IF Infrared_Water
 
 
@@ -1843,6 +1887,15 @@ CONTAINS
         SfcOptics_TL%Emissivity(1:nZ,1)          = Emissivity_TL(1:nZ,1)
         SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,1,1:nZ,1)
         SfcOptics_TL%Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity_TL(1:nZ,1)
+
+        ! Assigned, not accumulated. See the forward routine.
+        IF ( nL > 1 ) THEN
+          SfcOptics_TL%Emissivity(1:nZ,2:nL)             = Emissivity_TL(1:nZ,2:nL)
+          SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,2:nL)    = Reflectivity_TL(1:nZ,1,1:nZ,2:nL)
+          SfcOptics_TL%Reflectivity(1:nZ,2:nL,1:nZ,1)    = Reflectivity_TL(1:nZ,2:nL,1:nZ,1)
+          SfcOptics_TL%Reflectivity(1:nZ,2:nL,1:nZ,2:nL) = Reflectivity_TL(1:nZ,2:nL,1:nZ,2:nL)
+          SfcOptics_TL%Direct_Reflectivity(1:nZ,2:nL)    = Direct_Reflectivity_TL(1:nZ,2:nL)
+        END IF
 
 
       !##########################################################################
@@ -2419,12 +2472,18 @@ CONTAINS
 
       ELSE IF ( SpcCoeff_IsInfraredSensor( SC(SensorIndex) ) ) THEN
 
-        Reflectivity_AD(1:nZ,1,1:nZ,1:nL) = SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1:nL)
+        ! Transpose of the forward "assign the final result" block. The
+        ! reflectivity capture spans all nL Stokes ROWS, not just the first:
+        ! the polarized infrared water surface writes the (2,1) and (2,2)
+        ! blocks as well as (1,2), and seeding row 1 alone would drop their
+        ! adjoint silently. At nL = 1 these slices are identical to the
+        ! previous row-1-only form, so the scalar path is unchanged.
+        Reflectivity_AD(1:nZ,1:nL,1:nZ,1:nL) = SfcOptics_AD%Reflectivity(1:nZ,1:nL,1:nZ,1:nL)
         SfcOptics_AD%Reflectivity = ZERO
         Emissivity_AD(1:nZ,1:nL) = SfcOptics_AD%Emissivity(1:nZ,1:nL)
         SfcOptics_AD%Emissivity = ZERO
-        Direct_Reflectivity_AD(1:nZ,1) = SfcOptics_AD%Direct_Reflectivity(1:nZ,1)
-        SfcOptics_AD%Direct_Reflectivity(1:nZ,1) = ZERO
+        Direct_Reflectivity_AD(1:nZ,1:nL) = SfcOptics_AD%Direct_Reflectivity(1:nZ,1:nL)
+        SfcOptics_AD%Direct_Reflectivity(1:nZ,1:nL) = ZERO
 
         ! ------------------------------------
         ! Infrared ICE emissivity/reflectivity

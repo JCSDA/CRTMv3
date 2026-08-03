@@ -199,6 +199,7 @@ CONTAINS
     INTEGER  :: j, nZ, iZ
     REAL(fp) :: Frequency
     REAL(fp) :: Relative_Azimuth_Radian, brdf
+    REAL(fp) :: rv, rh
 
 
     ! Set up
@@ -250,6 +251,77 @@ CONTAINS
     DO j = 1, nZ
       SfcOptics%Reflectivity(j,1,j,1) = ONE-SfcOptics%Emissivity(j,1)
     END DO
+
+    ! ------------------------------------------------------------------
+    ! Polarized (n_Stokes > 1) surface, in the Stokes basis
+    !
+    ! Purely additive. Nothing above this point is touched, so the scalar
+    ! path is unchanged bit for bit, and this block cannot execute at all
+    ! for a scalar caller.
+    !
+    ! NOTE the convention here differs from the microwave surface models,
+    ! and the difference is deliberate. The microwave models write (V,H)
+    ! into components 1 and 2 and CRTM_SfcOptics converts to (I,Q),
+    ! because the microwave scalar path itself mixes V and H according to
+    ! the channel polarization. Infrared channels have no such mixing:
+    ! component 1 is already the intensity emissivity that the scalar path
+    ! consumes directly. So this routine writes (I,Q) and no conversion
+    ! happens downstream. Do not "fix" it to match the microwave models;
+    ! that would redefine component 1 and break every scalar infrared user.
+    !
+    ! The emissivity lookup table (WuSmith or Nalli) supplies the
+    ! MAGNITUDE, which is validated and wind-roughened. Fresnel supplies
+    ! only the V/H SHAPE, from the seawater refractive index that already
+    ! ships in this module. Splitting as
+    !
+    !   e_V = e * 2(1-rv) / ((1-rv)+(1-rh)),  e_H = e * 2(1-rh) / (...)
+    !
+    ! makes (e_V + e_H)/2 identically e, so the first Stokes component is
+    ! the lookup table value untouched and nothing here can perturb it.
+    ! The second component then reduces to a single expression,
+    !
+    !   e_Q = e * (rh - rv) / (2 - rv - rh)
+    !
+    ! which is exactly zero at nadir, where rv == rh, and grows with view
+    ! angle. The denominator is 2 - rv - rh, which is bounded below by
+    ! about 1.9 for seawater in the infrared, so it needs no guard.
+    !
+    ! Thermal emission from an azimuthally symmetric surface carries no
+    ! third or fourth Stokes component, so those stay zero. A wind-roughened
+    ! sea does have a small azimuthal signal, but no infrared model for it
+    ! exists and claiming zero is the honest statement rather than a
+    ! placeholder.
+    !
+    ! Reflection is the similarity transform of the specular (V,H) pair
+    ! diag(rv,rh) into the Stokes basis, using rv = 1 - e_V and rh = 1 - e_H
+    ! so that Kirchhoff holds component by component:
+    !
+    !   R_II = R_QQ = (rv+rh)/2 = 1 - e_I   (the existing scalar value)
+    !   R_IQ = R_QI = (rv-rh)/2 = -e_Q
+    !
+    ! Physically the two combine to give a surface Q of e_Q*(B(Ts) - I_down):
+    ! the polarization signal is proportional to the sea/sky thermal
+    ! contrast, and it vanishes when the surface and the downwelling sky
+    ! are at the same temperature.
+    ! ------------------------------------------------------------------
+    IF ( SfcOptics%n_Stokes > 1 ) THEN
+      ! The off-diagonal-in-angle terms of the polarized blocks are never
+      ! filled by this specular model. Zero them explicitly rather than
+      ! inherit whatever a previous channel left behind.
+      SfcOptics%Emissivity(1:nZ,2:SfcOptics%n_Stokes)                        = ZERO
+      SfcOptics%Reflectivity(1:nZ,1,1:nZ,2:SfcOptics%n_Stokes)               = ZERO
+      SfcOptics%Reflectivity(1:nZ,2:SfcOptics%n_Stokes,1:nZ,1)               = ZERO
+      SfcOptics%Reflectivity(1:nZ,2:SfcOptics%n_Stokes,1:nZ,2:SfcOptics%n_Stokes) = ZERO
+      DO j = 1, nZ
+        CALL Fresnel_Reflectance_VH( Frequency, &
+                                     SfcOptics%Angle(j)*DEGREES_TO_RADIANS, rv, rh )
+        SfcOptics%Emissivity(j,2) = SfcOptics%Emissivity(j,1) * &
+                                    (rh - rv)/(TWO - rv - rh)
+        SfcOptics%Reflectivity(j,2,j,2) =  SfcOptics%Reflectivity(j,1,j,1)
+        SfcOptics%Reflectivity(j,1,j,2) = -SfcOptics%Emissivity(j,2)
+        SfcOptics%Reflectivity(j,2,j,1) = -SfcOptics%Emissivity(j,2)
+      END DO
+    END IF
 
   END FUNCTION Compute_IR_Water_SfcOptics
 
@@ -387,6 +459,7 @@ CONTAINS
     ! Local variables
     INTEGER  :: j, nZ, iZ
     REAL(fp) :: Relative_Azimuth_Radian, brdf_TL
+    REAL(fp) :: Frequency, rv, rh
 
     ! Set up
     Error_Status = SUCCESS
@@ -430,6 +503,42 @@ CONTAINS
     DO j = 1, nZ
       SfcOptics_TL%Reflectivity(j,1,j,1) = -SfcOptics_TL%Emissivity(j,1)
     END DO
+
+    ! ------------------------------------------------------------------
+    ! Tangent-linear of the polarized surface. See the forward routine for
+    ! the model and for why the convention here is (I,Q) rather than (V,H).
+    !
+    ! The split factor
+    !
+    !   f = (rh - rv) / (2 - rv - rh)
+    !
+    ! depends only on frequency and view angle. Ref_Index is a function of
+    ! frequency alone, and the angle is geometry, so f is CONSTANT with
+    ! respect to every element of the control vector: it has no dependence
+    ! on wind speed, water temperature or salinity. The tangent linear of
+    ! e_Q = f*e_I is therefore just f*e_I_TL, and this block introduces no
+    ! new Jacobian dependency at all.
+    !
+    ! If a temperature or salinity dependent infrared refractive index is
+    ! ever adopted, that stops being true and f acquires its own tangent
+    ! linear. This comment is here so that change is not made silently.
+    ! ------------------------------------------------------------------
+    IF ( SfcOptics%n_Stokes > 1 ) THEN
+      Frequency = SC(SensorIndex)%Wavenumber(ChannelIndex)
+      SfcOptics_TL%Emissivity(1:nZ,2:SfcOptics%n_Stokes)                            = ZERO
+      SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,2:SfcOptics%n_Stokes)                   = ZERO
+      SfcOptics_TL%Reflectivity(1:nZ,2:SfcOptics%n_Stokes,1:nZ,1)                   = ZERO
+      SfcOptics_TL%Reflectivity(1:nZ,2:SfcOptics%n_Stokes,1:nZ,2:SfcOptics%n_Stokes) = ZERO
+      DO j = 1, nZ
+        CALL Fresnel_Reflectance_VH( Frequency, &
+                                     SfcOptics%Angle(j)*DEGREES_TO_RADIANS, rv, rh )
+        SfcOptics_TL%Emissivity(j,2) = SfcOptics_TL%Emissivity(j,1) * &
+                                       (rh - rv)/(TWO - rv - rh)
+        SfcOptics_TL%Reflectivity(j,2,j,2) =  SfcOptics_TL%Reflectivity(j,1,j,1)
+        SfcOptics_TL%Reflectivity(j,1,j,2) = -SfcOptics_TL%Emissivity(j,2)
+        SfcOptics_TL%Reflectivity(j,2,j,1) = -SfcOptics_TL%Emissivity(j,2)
+      END DO
+    END IF
 
   END FUNCTION Compute_IR_Water_SfcOptics_TL
 
@@ -571,12 +680,56 @@ CONTAINS
     ! Local variables
     INTEGER  :: j, nZ, iZ
     REAL(fp) :: Relative_Azimuth_Radian, brdf_AD
+    REAL(fp) :: Frequency, rv, rh
 
     ! Set up
     Error_Status = SUCCESS
     ! ...Short name for angle dimensions
     nZ = SfcOptics%n_Angles
     iZ = SfcOptics%Index_Sat_Ang
+
+    ! ------------------------------------------------------------------
+    ! Adjoint of the polarized surface. Exact transpose of the tangent
+    ! linear, and it must run FIRST, because in the tangent linear this
+    ! block ran LAST. In particular it feeds Reflectivity(j,1,j,1) and
+    ! Emissivity(j,1), both of which the existing code below consumes and
+    ! then zeroes, so putting it after would silently drop every polarized
+    ! contribution.
+    !
+    ! The split factor is constant with respect to the control vector, so
+    ! there is no Surface_AD contribution from this block directly: it
+    ! only routes the second Stokes component's sensitivity back onto the
+    ! first, where IRSSEM_AD below turns it into wind speed and water
+    ! temperature.
+    ! ------------------------------------------------------------------
+    IF ( SfcOptics%n_Stokes > 1 ) THEN
+      Frequency = SC(SensorIndex)%Wavenumber(ChannelIndex)
+      DO j = nZ, 1, -1
+        CALL Fresnel_Reflectance_VH( Frequency, &
+                                     SfcOptics%Angle(j)*DEGREES_TO_RADIANS, rv, rh )
+        ! ...transpose of  R_TL(j,1,j,2) = R_TL(j,2,j,1) = -e_Q_TL
+        SfcOptics_AD%Emissivity(j,2) = SfcOptics_AD%Emissivity(j,2)          - &
+                                       SfcOptics_AD%Reflectivity(j,1,j,2)    - &
+                                       SfcOptics_AD%Reflectivity(j,2,j,1)
+        SfcOptics_AD%Reflectivity(j,1,j,2) = ZERO
+        SfcOptics_AD%Reflectivity(j,2,j,1) = ZERO
+        ! ...transpose of  R_TL(j,2,j,2) = R_TL(j,1,j,1)
+        SfcOptics_AD%Reflectivity(j,1,j,1) = SfcOptics_AD%Reflectivity(j,1,j,1) + &
+                                             SfcOptics_AD%Reflectivity(j,2,j,2)
+        SfcOptics_AD%Reflectivity(j,2,j,2) = ZERO
+        ! ...transpose of  e_Q_TL = f * e_I_TL
+        SfcOptics_AD%Emissivity(j,1) = SfcOptics_AD%Emissivity(j,1) + &
+                                       SfcOptics_AD%Emissivity(j,2)*(rh - rv)/(TWO - rv - rh)
+        SfcOptics_AD%Emissivity(j,2) = ZERO
+      END DO
+      ! Transpose of the tangent linear's zeroing of the remaining polarized
+      ! blocks. Those outputs do not depend on any input, so their adjoints
+      ! propagate nowhere and are simply cleared.
+      SfcOptics_AD%Emissivity(1:nZ,3:SfcOptics%n_Stokes)                            = ZERO
+      SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,2:SfcOptics%n_Stokes)                   = ZERO
+      SfcOptics_AD%Reflectivity(1:nZ,2:SfcOptics%n_Stokes,1:nZ,1)                   = ZERO
+      SfcOptics_AD%Reflectivity(1:nZ,2:SfcOptics%n_Stokes,1:nZ,2:SfcOptics%n_Stokes) = ZERO
+    END IF
 
     ! Surface reflectance (currently assumed to be specular ALWAYS)
     DO j = nZ, 1, -1
@@ -833,6 +986,46 @@ CONTAINS
     r = (rv + rh) / TWO
 
   END FUNCTION Fresnel_Reflectance
+
+  !---------------------------------------------------------
+  ! Fresnel sea surface reflectivity, V and H kept separate
+  !
+  !  input:
+  !      Frequency - wavenumber cm-1
+  !      Ang_i     - incidence angle, radians
+  !  output:
+  !      rv, rh    - Fresnel reflectivity, vertical and horizontal
+  !
+  ! This duplicates the body of Fresnel_Reflectance above rather than
+  ! refactoring it, deliberately. That function is a scalar-path consumer:
+  ! the Cox-Munk sun-glint BRDF calls it for every infrared solar channel,
+  ! so changing its signature or its arithmetic would put every infrared
+  ! solar reflection radiance at risk for no benefit here. The duplication
+  ! is four lines and is the cheap side of that trade.
+  !
+  ! Fresnel_Reflectance returns (rv+rh)/2 and remains the only routine the
+  ! scalar path touches.
+  !---------------------------------------------------------
+  SUBROUTINE Fresnel_Reflectance_VH(Frequency, Ang_i, rv, rh)
+
+    REAL(fp), INTENT(IN)  :: Frequency
+    REAL(fp), INTENT(IN)  :: Ang_i
+    REAL(fp), INTENT(OUT) :: rv, rh
+
+    ! LOCAL
+    COMPLEX(fp) :: CCos_i, CCos_t, n, z
+
+    n = Ref_Index(Frequency)
+
+    z = CMPLX(SIN(Ang_i), ZERO, fp)/n
+    CCos_t = SQRT(CMPLX(ONE, ZERO, fp) - z*z)
+
+    CCos_i = CMPLX(COS(Ang_i), ZERO, fp)
+
+    rv = ( ABS( (n*CCos_i - CCos_t) / (n*CCos_i + CCos_t) ) )**2
+    rh = ( ABS( (CCos_i - n*CCos_t) / (CCos_i + n*CCos_t) ) )**2
+
+  END SUBROUTINE Fresnel_Reflectance_VH
 
   !------------------------------------------------------------
   ! Obtain IR refractive index
