@@ -432,3 +432,67 @@ test that fails against the unfixed code. Self-consistency checks remain
 valuable and should be kept, but they must never again be the only coverage of a
 physics path, because they are structurally incapable of detecting the class of
 defect described at the top of this document.
+
+## State of play, and how to resume
+
+**Paused 2026-08-03 by BTJ, deliberately and with the work in a green state.**
+This section exists so a later session can restart without re-deriving anything.
+Read it first, then the "Known defects and gaps" table, then the open questions.
+
+**Where the code lives.** `feature/btj_polarimetric_ir_surface`, branched from
+the v3.2.0 staging branch and pushed to origin. Two commits beyond it:
+
+- `7d65256` polarized infrared water surface, Fresnel shape on lookup-table
+  magnitude, forward, tangent-linear and adjoint, plus
+  `test_VectorRT_IR_Surface`
+- `73ad4cf` `test_VectorRT_VIS_Rayleigh`, the first coverage of any kind on the
+  visible vector path
+
+Suite is 241/241 on a clean build. **This branch is deliberately NOT merged into
+v3.2.0**, so the release stays unchanged for scalar users. No pull request was
+opened for the same reason. Nothing here is release-blocking.
+
+**Verify before trusting any of it.** Rebuild from scratch, and confirm the
+scalar path is still bit-identical with `dump_scalar_fullprec` before and after
+any change: the regression suite compares at about six significant figures and
+cannot see a change in the last bits.
+
+**What is done.** Phases 1 through 4 are complete. The microwave path is
+correct end to end and differentiated at `n_Stokes = 4`. The third-Stokes sign
+is settled externally against RTTOV. The infrared water surface is polarized.
+The visible was found to have been working all along through Rayleigh and now
+has a test.
+
+**What remains, in the order I would take it.**
+
+1. **The visible surface is unpolarized.** The largest remaining physical gap.
+   Molecular polarization is correct; sun-glint polarization is entirely
+   missing, and glint is most of what visible and shortwave polarimetry is
+   about. Same Fresnel-shape-on-LUT-magnitude approach as the infrared should
+   apply, but the visible surface is Lambertian (SEcategory) rather than
+   specular, so the model choice is a real decision rather than a port.
+2. **`Normalize_Phase` below-diagonal normalization** (open question 1). A real
+   inconsistency, needs the polarized symmetry relations rather than a guess.
+3. **Phase-matrix element ordering** is one comment line and nothing verifies
+   the code honours it (open question 2).
+4. **The sine-tier adjoint residual**, 1.9e-10 against 1.9e-13 for the cosine
+   components. Not established whether it is conditioning or a small genuine
+   non-transpose. `test_VectorRT_VIS_Rayleigh` asserts the two tiers separately
+   so this cannot regress unnoticed; do not collapse them into one tolerance.
+5. **`Bound_Phase_Block` is forward-only**, with no tangent-linear or adjoint
+   counterpart. Harmless only while the clamp never fires, which is measured on
+   both a microwave scattering scene and a visible Rayleigh scene. Treat it as
+   a live forward-versus-Jacobian inconsistency the moment any coefficient set
+   makes it active.
+6. **Reflectivity structure** (open question 3), and gap 2d, the scalar-path
+   polarization-3/4 channels. Note gap 2d changes scalar-path behaviour, so it
+   belongs on a feature branch too, not on a release branch.
+7. **Closed-form external validation** (gap 8, the remaining half of Phase 0).
+   The surface sign is externally confirmed; the emergent radiance still has no
+   reference outside CRTM.
+
+**Two traps worth re-reading before touching anything.** Infrared surface
+models write (I,Q) while microwave models write (V,H), deliberately, and
+"fixing" that would break every scalar infrared user; and a scalar phase
+lookup table is a perfect depolarizer rather than a neutral placeholder, which
+is why the sub-six-element guard must stay.
