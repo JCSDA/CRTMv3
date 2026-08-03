@@ -202,6 +202,49 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
   new in this release, so no previously released sensor changes behavior. The
   expression had been duplicated in the forward, tangent-linear, adjoint and
   Stokes-projection paths and is now one shared function.
+- **netCDF `SpcCoeff` now loads its `NLTECoeff` and `ACCoeff` siblings.** The
+  binary `SpcCoeff` reader streams both substructures inline from the same file
+  via a `DATA_PRESENT` indicator; the netCDF layout instead stores them as
+  separate `<sensor>.NLTECoeff.nc` and `<sensor>.ACCoeff.nc`. In v3.1.4 the
+  runtime read path never looked for them, so a netCDF run silently attached
+  neither. The machinery existed but was wired only into
+  `SpcCoeff_netCDF_to_Binary` and `SpcCoeff_Binary_to_netCDF`, so placing the
+  siblings next to the `SpcCoeff` did not help either, contrary to a
+  reasonable expectation. v3.2.0 resolves the sibling from the canonical
+  `fix/NLTECoeff/netCDF/` layout and falls back to a flat co-located layout.
+
+  Measured on AIRS by running both libraries against **identical** coefficients:
+  brightness temperatures differ by up to **36.4 K** on the 4.3 um shortwave CO2
+  channels in daylight, confined to channels 1900-2114 (the NLTE set), with
+  identical optical depths, and **exactly zero** difference at night where the
+  NLTE correction is inactive. The Jacobian effect is proportionally larger:
+  peak `dTB/dT` on the affected channels changes by a median of 23 percent and
+  up to 90 percent.
+
+  The antenna-correction half was measured the same way, on AMSU-A with
+  `Options%Use_Antenna_Correction = .TRUE.` and a non-zero `iFOV`: deleting
+  `amsua_n19.ACCoeff.nc` changes v3.1.4's answer on **zero** of 3780 rows and
+  v3.2.0's on **all** of them, by up to **1.225 K** with a mean of 0.611 K.
+  Smaller than the NLTE effect but it touches every channel and enters as a
+  systematic bias rather than a scatter.
+
+  In the v3.1.4 coefficient tree this reaches **7 sensors with an NLTE sibling**
+  (AIRS and its module variants, CrIS B3, IASI B3) and **17 with an
+  antenna-correction sibling** (AMSU-A, AMSU-B, MHS). Users reading binary
+  coefficients were never affected, since that reader streams both
+  substructures inline.
+
+- **A visible-sensor hang without cloud coefficients is gone.** Under v3.1.4 a
+  clear-sky visible forward run with `Load_CloudCoeff=.FALSE.` and
+  `Load_AerosolCoeff=.FALSE.` initialized normally, entered the first
+  `CRTM_Forward` call and did not return: one call exceeded 100 seconds of CPU
+  where the full 84-profile, three-angle run otherwise finishes inside that.
+  Loading the two coefficient sets avoids it, and v3.2.0 runs the same
+  configuration to completion. Reported for the benefit of anyone who hit this
+  and worked around it; the trigger is identified, but the underlying
+  non-convergence was not traced and it was not proven that the v3.1.4 call
+  never terminates.
+
 - **Runtime OpenMP control.** `OMP_NUM_THREADS` is honored at run time (no
   longer captured at configure time).
 - **Expanded self-checking test coverage.** New baseline-independent checks
