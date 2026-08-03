@@ -14,6 +14,7 @@ build therefore still downloads the June 2026 tarball, which predates the July
 coefficient campaign. Build against the staging tree with
 `-DFIX_FILE_PATH=<path-to>/fix_REL-3.2.0.0/fix` until the new tarball ships.
 See RELEASE_NOTES_v3.2.0.md.
+v3.1.4 released June 8, 2026
 v3.1.3 released February 12, 2026 (small release)
 v3.1.2 released July 11, 2025
 v3.1.1 released August 12, 2024
@@ -126,7 +127,7 @@ But after a clean clone of the development repository, none of the links to sour
 Configuration
 -------------
 By default, the `fix/` directory is provided through ftp using the Get_CRTM_Binary_Files.sh script to obtain and unpack the dataset. 
-If this directory doesn't exist during the `cmake` step, then cmake will download and install into `build/test_data/fix_REL-3.2.0.x/fix/`.
+If this directory doesn't exist during the `cmake` step, then cmake will download and install into `./test-data-release/fix_REL-3.2.0.x/fix/` (no longer in the build directory, but off of the source directory).
 The path to an existing fix file installation can be specified using the `FIX_FILE_PATH` option (see CMake variables summary below).
 
 The fix/ directory (as of v3.2.0) contains most of the netCDF SpcCoeff and TauCoeff files, as part of our ongoing effort to transition toward netCDF-only CRTM.  We expect to deprecate the binary formats in v3.2.x, but code to read / convert binary format will continue.  
