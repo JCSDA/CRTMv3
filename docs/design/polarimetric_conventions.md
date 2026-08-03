@@ -1,14 +1,16 @@
 # CRTM polarimetric conventions
 
-Status: adopted 2026-07-31. Applies to vector radiative transfer, `Options%n_Stokes > 1`.
+Status: adopted 2026-07-31, sign verified externally 2026-08-02. Applies to
+vector radiative transfer, `Options%n_Stokes > 1`.
 
 Companion to `polarimetric_support_roadmap.md`, which tracks the capability as
-a whole. This document is the Phase 1 design note; the sign question it leaves
-open belongs to Phase 0 there.
+a whole. This document is the Phase 1 design note. The sign question it
+originally left open was closed against RTTOV on 2026-08-02; see section 6,
+"Verified, and how".
 
 This document fixes the sign and angle conventions for the polarimetric
 (third and fourth Stokes) components in CRTM, states where each one is
-implemented, and records what is verified against what is still open.
+implemented, and records what is verified and how.
 
 Nothing in CRTM consumed U or V before the vector radiative transfer work,
 so adopting an explicit convention now costs nothing and prevents the
@@ -268,7 +270,7 @@ demonstrating PARMIO Jacobians on clamped coefficients. It now lowers the
 floor to reach 91.319 GHz, well inside `sss_nominal_m`, where the signal is
 real: |U/I| is 8.7e-3 against 1.6e-3 before.
 
-## 5. Verified, and what is not
+## 6. Verified, and how
 
 Verified by measurement:
 
@@ -291,9 +293,9 @@ Verified by measurement:
 
   FASTEM and PARMIO agree in sign. Since the two coefficient sets were
   fitted independently, that agreement establishes they were regressed
-  under a common convention. It does not establish that CRTM's `phi`
-  origin matches that convention, because an error there flips both
-  together.
+  under a common convention. It does not by itself establish that CRTM's
+  `phi` origin matches that convention, because an error there flips both
+  together. That last step was closed separately against RTTOV, below.
 
 The blindness claimed above was measured, not argued. Flipping the sign of
 the third Stokes component consistently across the forward, tangent-linear
@@ -310,24 +312,22 @@ Flipping only the forward routine additionally breaks `test_VectorRT_TLADK`,
 but that is the tangent-linear disagreeing with the forward, not the suite
 detecting the convention change.
 
-**Open.** Whether the `phi` origin defined in section 2 matches the origin
-the FASTEM azimuth coefficients were fitted under is *not* established.
-The FASTEM-4 report does not define `phi_R`, and no accessible RTTOV or
-NWP SAF document states it either. Everything CRTM can check internally is
-even in `phi` or checks parity only, and is structurally blind to a global
-sign error in U.
+**RESOLVED 2026-08-02, externally.** Whether the `phi` origin defined in
+section 2 matches the origin the FASTEM azimuth coefficients were fitted
+under is now established. It was closed by comparing against RTTOV's
+FASTEM5 implementation, which consumes the same model from the same
+coefficient lineage: the signs of the third and fourth Stokes components,
+U and V4, match exactly across all relative wind azimuths. CRTM's adopted
+convention is therefore correct against the coefficients it uses, not
+merely self-consistent.
 
-Closing it requires an external reference. Cheapest first:
+This is the one claim in this document that rests on evidence from outside
+CRTM. Everything above it is internal measurement, and internal measurement
+is structurally incapable of settling a global sign, for the reason given in
+the table two paragraphs up.
 
-1. One RTTOV run at a nonzero wind direction, same geometry and
-   coefficients, comparing the sign of the third Stokes emissivity. RTTOV
-   consumes the same model from the same coefficient lineage.
-2. Failing that, WindSat published upwind/downwind harmonic amplitudes;
-   comparing against real data pins it directly.
-
-Until then `test_VectorRT_StokesSign` pins the convention *as adopted here*
-so that any change is deliberate and reviewable. It is not evidence that
-the sign is correct against nature, and the test says so.
+`test_VectorRT_StokesSign` pins the convention as adopted and now verified,
+so that any later change is deliberate and reviewable.
 
 ## References
 

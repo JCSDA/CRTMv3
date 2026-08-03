@@ -433,28 +433,36 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
 
 ### Polarimetric (`Options%n_Stokes > 1`) radiative transfer
 
-The vector path is functional and internally verified, but it has **not been
-validated against an independent radiative transfer model or against
-observations**. Treat it as a capability under development rather than a
-production-ready product. The specific limitations follow.
+The vector path is functional and internally verified, and its surface sign
+convention has been checked against RTTOV, but the emergent radiance has **not
+been validated end to end against an independent radiative transfer model or
+against observations**. Treat it as a capability under development rather than
+a production-ready product. The specific limitations follow.
 
-- **No external reference.** Every check on this path compares CRTM against
-  itself: tangent-linear against finite differences, the adjoint dot-product
-  identity, K against AD, physical invariants such as the polarization bound,
-  and agreement with the scalar path in the limits where the two must agree.
-  None of that can fix a convention that is consistently wrong. In particular
-  the **sign convention of the third Stokes component** between the surface
-  models and the solver is unverified: every internal test passes unchanged if
-  the sign of U is flipped. Anyone using U or V quantitatively should establish
-  the sign against an external reference first.
+- **No external reference for the emergent radiance.** Every check on the
+  radiance itself compares CRTM against CRTM: tangent-linear against finite
+  differences, the adjoint dot-product identity, K against AD, physical
+  invariants such as the polarization bound, and agreement with the scalar path
+  in the limits where the two must agree. None of that can catch a convention
+  that is consistently wrong. One such convention has now been settled
+  externally: the **sign of the third and fourth Stokes components** at the
+  surface was compared against RTTOV's FASTEM5 and matches at every relative
+  wind azimuth, so U and V may be used quantitatively without first
+  establishing the sign yourself. That validates one interface. The solver, the
+  polarized phase matrix and the transport still have no independent reference,
+  so a top-of-atmosphere U or V remains unvalidated end to end.
 - **The default microwave water surface has no polarimetric model.** The
   `CRTM_Init` default is FASTEM6, whose azimuth model parameterises the
   vertical and horizontal components only and returns the third and fourth
   Stokes components as identically zero. A polarimetric surface requires
   `MWwaterCoeff_Scheme = 'FASTEM4'` (or FASTEM5), or PARMIO, which is used
-  automatically at and above 200 GHz when its lookup table is present. Note
-  that `MWwaterCoeff_File` does **not** select the model; the scheme argument
-  does.
+  automatically at and above 200 GHz when its lookup table is present. Either
+  argument selects the model: `MWwaterCoeff_Scheme` is the direct selector, and
+  `MWwaterCoeff_File` is now honoured as one too, with the scheme recovered
+  from the leading component of the file name. An explicit scheme wins if the
+  two disagree, and the disagreement is reported rather than resolved silently.
+  In v3.1.4 and earlier, `MWwaterCoeff_File` selected nothing at all and a
+  request for FASTEM4 through it silently left FASTEM6 loaded.
 - **Microwave only.** The coupled (V,H) to Stokes surface branch exists only in
   the microwave section of the surface optics. Infrared and visible sensors
   populate the first Stokes component alone, so a vector run there returns

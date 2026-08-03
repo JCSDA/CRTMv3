@@ -355,9 +355,9 @@ CONTAINS
     !     Azimuth_Emissivity_Module serves FASTEM4 and FASTEM5, but FASTEM5
     !     is not a selectable scheme and asking for it is a hard error.
     !
-    ! See docs/design/polarimetric_conventions.md for the full statement,
-    ! the literature basis, and the one item still open (whether this phi
-    ! origin matches the one the FASTEM coefficients were fitted under).
+    ! See docs/design/polarimetric_conventions.md for the full statement
+    ! and the literature basis. The phi origin and U/V sign conventions
+    ! have been verified against RTTOV FASTEM5 (2026-08-02).
     ! ------------------------------------------------------------------
     !
     ! Compute the surface optical parameters
