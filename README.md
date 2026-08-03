@@ -8,11 +8,12 @@ Preamble
 
 CRTM v3.2.0 release (`REL-3.2.0`)
 
-v3.2.0 is a **release candidate**. The library code is frozen; the coefficient
-tarball has not yet been rolled or published, so a default build downloads the
-June 2026 tarball, which predates this release's coefficients. Build against
-the staging tree with `-DFIX_FILE_PATH=<path-to>/fix_REL-3.2.0.0/fix` until the
-tarball ships. See RELEASE_NOTES_v3.2.0.md.
+v3.2.0 is a **release candidate**. The library code is frozen and the
+coefficient tarball has been rolled, but it is **not yet published**. A default
+build therefore still downloads the June 2026 tarball, which predates the July
+coefficient campaign. Build against the staging tree with
+`-DFIX_FILE_PATH=<path-to>/fix_REL-3.2.0.0/fix` until the new tarball ships.
+See RELEASE_NOTES_v3.2.0.md.
 v3.1.3 released February 12, 2026 (small release)
 v3.1.2 released July 11, 2025
 v3.1.1 released August 12, 2024

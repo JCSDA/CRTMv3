@@ -1,19 +1,38 @@
 # CRTM v3.2.0 Release Notes
 
 **Status:** release candidate. The library code is frozen; the coefficient
-tarball is not yet published.
+tarball has been rolled but is not yet published.
 
-**Coefficient data:** the v3.2.0 coefficient tarball has **not been rolled or
-published**. Two coefficient efforts are still in progress and both change files
-that would ship in it: the IASI-NG regeneration onto the 2026 gas epoch, and the
-GeoXO `gxi`/`gxs` rework. The tarball will be rolled once those land, and this
-section will then carry its size and checksum.
+**Coefficient data.** The two efforts that were holding the roll have both
+landed: the IASI-NG regeneration (SpcCoeff and ODPS TauCoeff, regenerated
+2026-08-01 by `crtm-coeffgen` on the LBLRTM backend) and the GeoXO `gxi` rework
+(`gxi_geoxo` and `v.gxi_geoxo`, same date). Note that `gxs_geoxo_lw` and
+`gxs_geoxo_mw` are unchanged v3.1.4 inheritances and were not part of that
+rework.
 
-Until then the checksum pinned in `test/CMakeLists.txt` and
-`Get_CRTM_Binary_Files.sh` still refers to the **June 2026** tarball, which
-predates the whole of the July coefficient campaign. A default build therefore
-downloads a coefficient tree that cannot reproduce this release's test suite.
-Build a release candidate against the staging tree instead:
+The tarball was rolled on 2026-08-01 and verified against the staging tree file
+by file: **1440 files, all netCDF, zero differences**, extracting to
+`fix_REL-3.2.0.0/fix/`.
+
+| | |
+|---|---|
+| file | `fix_REL-3.2.0.0.tgz` |
+| size | 3,377,500,279 bytes |
+| md5 | `7cd36fb18e3c69d5f4399a31009cc4ce` |
+
+It is smaller than the June tarball because the July campaign retired and
+replaced coefficient files and the tree is now uniformly netCDF.
+
+**It is not yet published.** `bin.ssec.wisc.edu` still serves the June 2026
+tarball, so the checksum pinned in `test/CMakeLists.txt` and
+`Get_CRTM_Binary_Files.sh` deliberately still refers to that older file: it
+matches what a default build actually downloads, and changing it before the
+upload would break every default build and CI job. Those pins are updated as
+part of publishing, not before it.
+
+Until the upload lands, a default build downloads a coefficient tree that
+cannot reproduce this release's test suite. Build a release candidate against
+the staging tree instead:
 
 ```
 cmake .. -DFIX_FILE_PATH=<path-to>/fix_REL-3.2.0.0/fix

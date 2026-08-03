@@ -478,3 +478,18 @@ bdc7fb9  fix(SfcOptics): drop Distance_Ratio scaling in CONST_MIXED_POLARIZATION
 > AMSR3, the VIIRS VIS correction) - 143 files newer than the tarball. A re-roll
 > plus md5 update in `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt` is
 > required before the release is cut. See `REL-3.2.0_coefficient_inventory.md`.
+>
+> **Update 2026-08-03: the re-roll is DONE.** `fix_REL-3.2.0.0.tgz` was rebuilt
+> on 2026-08-01 and verified against the staging tree file by file: 1440 files,
+> all netCDF, zero differences. Size 3,377,500,279 bytes, md5
+> `7cd36fb18e3c69d5f4399a31009cc4ce`. It is smaller than the June tarball
+> because the July campaign retired and replaced files and the tree is now
+> uniformly netCDF. The IASI-NG regeneration and the GeoXO `gxi` rework, both
+> previously listed as blocking the roll, landed on 2026-08-01 and are included.
+>
+> The md5 pins in `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt` are
+> **deliberately still at the June value**, because `bin.ssec.wisc.edu` still
+> serves the June tarball (checked 2026-08-03: `Last-Modified: 07 Jun 2026`,
+> `Content-Length: 3549130021`). The pins match what a default build actually
+> downloads. They get updated as part of publishing, after the upload, never
+> before it.
