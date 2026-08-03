@@ -203,6 +203,42 @@ Unknown, and to be resolved in Phase 1 rather than assumed.
   (`Common_RTSolution.f90` around `:1276`). This is the standard convention, but
   it has not been verified against the solver's internal expansion.
 
+  **Refined 2026-08-03 by measurement, on the visible path where `n_Azi > 0` and
+  the Fourier sum is actually exercised.** The adjoint dot-product residual on a
+  fixed clear-sky visible scene, ozone control vector, is:
+
+  | `n_Stokes` | residual |
+  |---|---|
+  | 1 (seeded through `%Radiance`) | 2.41e-13 |
+  | 2 | 1.94e-13 |
+  | 3 | 9.71e-11 |
+  | 4 | 1.87e-10 |
+
+  The degradation appears **exactly when U enters**, and I and Q close to the
+  same precision as the scalar path. The structural reading is that U and V ride
+  sine harmonics, so their m = 0 term vanishes identically and they are built
+  entirely from the higher Fourier components, whose adding-doubling solves are
+  more poorly conditioned; I and Q take most of their value from the
+  well-conditioned m = 0 solve. Two alternatives were ruled out by measurement
+  rather than argument: cancellation in the test's own inner product (the
+  factor `sum|t|/|sum t|` is exactly 1.0), and the phase-matrix positivity
+  clamp (instrumented on this exact scene, it fires **0 times in 19200**
+  assembled blocks, which also extends the earlier CRTM-Exp-only result to
+  Rayleigh).
+
+  What is still not established is whether the remaining 1.9e-10 is purely
+  conditioning or hides a small genuine non-transpose in the sine-weighted
+  accumulation. `test_VectorRT_VIS_Rayleigh` therefore asserts the two tiers
+  separately, tight on the cosine components and loose on the sine ones, so a
+  real break in I or Q cannot hide behind the looser bound.
+
+  Note also that `Bound_Phase_Block` is called from the **forward** phase-matrix
+  assembly only, and has no tangent-linear or adjoint counterpart. That is
+  harmless while it never fires, which is now measured on both a microwave
+  scattering scene and a visible Rayleigh scene, but it is a latent
+  forward-versus-Jacobian inconsistency and should be treated as one if any
+  future coefficient set makes the clamp active.
+
 ## Phased plan
 
 ### Phase 0. External ground truth

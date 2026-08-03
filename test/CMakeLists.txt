@@ -823,6 +823,20 @@ target_link_libraries(test_VectorRT_Physics PRIVATE crtm)
 add_test(NAME test_VectorRT_Physics
          COMMAND $<TARGET_FILE:test_VectorRT_Physics>)
 
+# test_VectorRT_VIS_Rayleigh: first test of the VISIBLE vector path, which was
+# documented as unsupported and was in fact producing large, correct Rayleigh
+# polarization all along (CRTM_MoleculeScatter fills the polarized expansion
+# coefficients under an n_Stokes gate, and visible/UV is the only class with
+# n_Azi > 0). Asserts the odd-harmonic vanishing of U in the principal plane,
+# the sign and peak of Q there, the lambda^-4 fall of the polarization with
+# wavelength, V zero, the polarization bound, and that the vector and scalar
+# intensities genuinely differ so the rest cannot pass on a degenerated path.
+# Adds the first Jacobian coverage of any kind on the visible vector path.
+add_executable(test_VectorRT_VIS_Rayleigh mains/unit/Unit_Test/test_VectorRT_VIS_Rayleigh.f90)
+target_link_libraries(test_VectorRT_VIS_Rayleigh PRIVATE crtm)
+add_test(NAME test_VectorRT_VIS_Rayleigh
+         COMMAND $<TARGET_FILE:test_VectorRT_VIS_Rayleigh>)
+
 # test_VectorRT_IR_Surface: the polarized INFRARED water surface, which is the
 # first polarimetric capability outside the microwave. Fresnel supplies the V/H
 # shape and the WuSmith/Nalli lookup table the magnitude, so I is the scalar
