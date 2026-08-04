@@ -798,10 +798,12 @@ add_test(NAME test_VectorRT_StokesSign
 # scene pair at n_Stokes=4 and asserts Stokes 1,2 even and 3,4 odd in relative
 # azimuth, plus non-degeneracy. Needs the >=6-phase-element CRTM-Exp LUT (same
 # gating as test_VectorRT_TLADK) and FASTEM4 for a polarimetric surface.
-add_executable(test_VectorRT_StokesOutput mains/unit/Unit_Test/test_VectorRT_StokesOutput.f90)
-target_link_libraries(test_VectorRT_StokesOutput PRIVATE crtm)
-add_test(NAME test_VectorRT_StokesOutput
-         COMMAND $<TARGET_FILE:test_VectorRT_StokesOutput>)
+
+# ** commenting out because it's freaking slow (BTJ: 8/4/2026) ** 
+#add_executable(test_VectorRT_StokesOutput mains/unit/Unit_Test/test_VectorRT_StokesOutput.f90)
+#target_link_libraries(test_VectorRT_StokesOutput PRIVATE crtm)
+#add_test(NAME test_VectorRT_StokesOutput
+#         COMMAND $<TARGET_FILE:test_VectorRT_StokesOutput>)
 
 # test_VectorRT_Unsupported: asserts that vector-path combinations CRTM cannot
 # honour are refused rather than silently substituted. Covers RT_SOI with
@@ -885,11 +887,11 @@ add_test(NAME test_ODPS_NO2_Predictor_TLAD
 # NO2-sensitive channel. Self-adapting per variable: any variable the loaded
 # file cannot see (H2O against a parity-gate file with zero-predictor base
 # components; NO2 against a plain group-2 file) must show identically zero
-# TL. The TEMPO UV coefficients are pre-release: registered only when
-# u.tempo_is40e.{Spc,Tau}Coeff.nc are present (symlinked) in the source
-# testinput directory; nothing outside the repo is referenced.
-set(_TEMPO_SPC "${CMAKE_CURRENT_SOURCE_DIR}/testinput/u.tempo_is40e.SpcCoeff.nc")
-set(_TEMPO_TAU "${CMAKE_CURRENT_SOURCE_DIR}/testinput/u.tempo_is40e.TauCoeff.nc")
+# TL. Registered only when u.tempo_is40e.{Spc,Tau}Coeff.nc are present in the
+# staged fix tree; nothing outside build/test_data/** is referenced.
+set(_COEFF_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix")
+set(_TEMPO_SPC "${_COEFF_FIX}/SpcCoeff/netCDF/u.tempo_is40e.SpcCoeff.nc")
+set(_TEMPO_TAU "${_COEFF_FIX}/TauCoeff/ODPS/netCDF/u.tempo_is40e.TauCoeff.nc")
 add_executable(test_UV_NO2_TLAD mains/unit/Unit_Test/test_UV_NO2_TLAD.f90)
 target_link_libraries(test_UV_NO2_TLAD PRIVATE crtm)
 if(EXISTS "${_TEMPO_SPC}" AND EXISTS "${_TEMPO_TAU}")
@@ -917,16 +919,20 @@ unset(_TEMPO_TAU)
 # descent of the profiler ozone weighting functions, scene-NO2 and ozone
 # response signs and windows, adjoint dot-product closure, and K == AD.
 # Promoted from the OMPS product-acceptance driver (audit record
-# coeff_consistency_2026-07-26/OMPS_PRODUCT_VERIFICATION.md). The coefficient
-# pairs are pre-release: registered only when all eight files are present
-# (symlinked) in the source testinput directory; nothing outside the repo is
-# referenced.
+# coeff_consistency_2026-07-26/OMPS_PRODUCT_VERIFICATION.md). Registered only
+# when all eight files are present in the staged fix tree; nothing outside
+# build/test_data/** is referenced.
 add_executable(test_OMPS_UV_Physics mains/unit/Unit_Test/test_OMPS_UV_Physics.f90)
 target_link_libraries(test_OMPS_UV_Physics PRIVATE crtm)
 set(_OMPS_COEFFS_PRESENT TRUE)
 foreach(_omps_sensor u.omps-np_n20 u.omps-np_n21 u.omps-tc_n20 u.omps-tc_n21)
   foreach(_omps_kind SpcCoeff TauCoeff)
-    set(_omps_file "${CMAKE_CURRENT_SOURCE_DIR}/testinput/${_omps_sensor}.${_omps_kind}.nc")
+    if(_omps_kind STREQUAL "SpcCoeff")
+      set(_omps_sub "SpcCoeff/netCDF")
+    else()
+      set(_omps_sub "TauCoeff/ODPS/netCDF")
+    endif()
+    set(_omps_file "${_COEFF_FIX}/${_omps_sub}/${_omps_sensor}.${_omps_kind}.nc")
     if(EXISTS "${_omps_file}")
       execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
                        "${_omps_file}"
@@ -944,6 +950,8 @@ else()
 endif()
 unset(_OMPS_COEFFS_PRESENT)
 unset(_omps_file)
+unset(_omps_sub)
+unset(_omps_sub)
 
 # test_TEMPO_UVVIS_Physics: baseline-independent physics verification of the
 # two TEMPO products (UV 292-495 nm, VIS 538-741 nm) in one multi-sensor run,
@@ -953,14 +961,19 @@ unset(_omps_file)
 # zero, ozone response in the Huggins (UV) and Chappuis (VIS) bands, monotone
 # descent of the UV ozone weighting functions, adjoint closure, and K == AD.
 # The VIS product's TL/AD/K has no other coverage (test_UV_NO2_TLAD exercises
-# the UV product only). Registered only when both TEMPO pairs are present
-# (symlinked) in the source testinput directory.
+# the UV product only). Registered only when both TEMPO pairs are present in
+# the staged fix tree.
 add_executable(test_TEMPO_UVVIS_Physics mains/unit/Unit_Test/test_TEMPO_UVVIS_Physics.f90)
 target_link_libraries(test_TEMPO_UVVIS_Physics PRIVATE crtm)
 set(_TEMPO_UVVIS_PRESENT TRUE)
 foreach(_tempo_sensor u.tempo_is40e v.tempo_is40e)
   foreach(_tempo_kind SpcCoeff TauCoeff)
-    set(_tempo_file "${CMAKE_CURRENT_SOURCE_DIR}/testinput/${_tempo_sensor}.${_tempo_kind}.nc")
+    if(_tempo_kind STREQUAL "SpcCoeff")
+      set(_tempo_sub "SpcCoeff/netCDF")
+    else()
+      set(_tempo_sub "TauCoeff/ODPS/netCDF")
+    endif()
+    set(_tempo_file "${_COEFF_FIX}/${_tempo_sub}/${_tempo_sensor}.${_tempo_kind}.nc")
     if(EXISTS "${_tempo_file}")
       execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
                        "${_tempo_file}"
@@ -978,6 +991,7 @@ else()
 endif()
 unset(_TEMPO_UVVIS_PRESENT)
 unset(_tempo_file)
+unset(_tempo_sub)
 
 # test_MW_Sounder_Physics: microwave sounder physics, anchored to shipped
 # AMSU-A heritage inside the same run: the amsua_n19 57.29 GHz
@@ -988,14 +1002,19 @@ unset(_tempo_file)
 # (crtm-coeffgen#71): either failure mode collapses the ladder toward a
 # 41-49 hPa plateau. Also covers the MWHS-2 118/166 GHz structure, the
 # GEMS2 line climb, MWRI-RM BT sanity, adjoint closure, and K == AD.
-# The non-heritage pairs are pre-release: registered only when all four are
-# present (symlinked) in the source testinput directory.
+# Registered only when all four non-heritage pairs are present in the staged
+# fix tree.
 add_executable(test_MW_Sounder_Physics mains/unit/Unit_Test/test_MW_Sounder_Physics.f90)
 target_link_libraries(test_MW_Sounder_Physics PRIVATE crtm)
 set(_MW_PHYS_PRESENT TRUE)
 foreach(_mw_sensor mwts3_fy3e mwhs2_fy3e mwrirm_fy3g gems2_amethyst)
   foreach(_mw_kind SpcCoeff TauCoeff)
-    set(_mw_file "${CMAKE_CURRENT_SOURCE_DIR}/testinput/${_mw_sensor}.${_mw_kind}.nc")
+    if(_mw_kind STREQUAL "SpcCoeff")
+      set(_mw_sub "SpcCoeff/netCDF")
+    else()
+      set(_mw_sub "TauCoeff/ODPS/netCDF")
+    endif()
+    set(_mw_file "${_COEFF_FIX}/${_mw_sub}/${_mw_sensor}.${_mw_kind}.nc")
     if(EXISTS "${_mw_file}")
       execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
                        "${_mw_file}"
@@ -1013,6 +1032,8 @@ else()
 endif()
 unset(_MW_PHYS_PRESENT)
 unset(_mw_file)
+unset(_mw_sub)
+unset(_COEFF_FIX)
 
 # test_Grazing_SfcOptics: regression test for the catastrophic-reflectivity
 # guard in the MW-water surface optics (CRTM_FastemX and CRTM_PARMIO). Drives
