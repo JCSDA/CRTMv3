@@ -105,12 +105,12 @@ write_basic_package_version_file(
 install(FILES 
               "${CMAKE_CURRENT_BINARY_DIR}/crtm-config.cmake"
               "${CMAKE_CURRENT_BINARY_DIR}/crtm-config-version.cmake"
-        DESTINATION ${CRTM_INSTALL_PREFIX}/cmake/${PROJECT_NAME})
+        DESTINATION ${CRTM_INSTALL_PREFIX}/lib/cmake/${PROJECT_NAME})
 
 # Install the export set for use with the install-tree (unchanged, with modified destination)
 install(EXPORT ${PROJECT_NAME}-config
 	FILE "${PROJECT_NAME}-targets.cmake"
-	DESTINATION ${CRTM_INSTALL_PREFIX}/cmake/${PROJECT_NAME})
+	DESTINATION ${CRTM_INSTALL_PREFIX}/lib/cmake/${PROJECT_NAME})
 
 # For build-tree linkage (unchanged from original)
 export(EXPORT ${PROJECT_NAME}-config

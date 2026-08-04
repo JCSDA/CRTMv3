@@ -255,6 +255,42 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
   (each registered when its pre-release coefficient pairs are present), and
   OpenMP thread-count consistency tests (#111).
 
+## Coefficient changes
+
+The shipped tree is **1440 files, all netCDF**. Every one was hash-classified
+against the v3.1.4 baseline (`fix_REL-3.1.2.0`), with NaN bit-patterns
+canonicalised and VLEN strings hashed by content:
+
+| classification | files | meaning |
+|---|---|---|
+| identical | 403 | byte-equivalent content |
+| metadata-only | 789 | provenance attributes written or backfilled; **no physics change** |
+| **data-changed** | **14** | the actual work list |
+| new | 234 | products that did not exist in v3.1.4 |
+
+The 14 data-changed files are the only ones whose numbers moved:
+`airs_aqua.NLTECoeff`; SpcCoeff for `iasi-ng_metop-sg-a1`,
+`metimage_metop-sg-a1`, `mws_metop-sg-a1`, `v.abi_g18`, `v.imgr_insat-3ds`,
+`v.metimage_metop-sg-a1`, `v.sndr_insat-3ds`, `v.viirs-i_n21`; and TauCoeff for
+`iasi-ng_metop-sg-a1`, `metimage_metop-sg-a1`, `mws_metop-sg-a1`,
+`v.metimage_metop-sg-a1`, `v.viirs-i_n21`.
+
+**On the large "retired" count, which is easy to misread.** The census records
+3605 retired paths, but **2612 of those are `.bin` files** removed by the
+deliberate binary-format drop, not products withdrawn. Of the 993 netCDF
+retirements, the overwhelming majority are per-detector and spectral-shift
+variant families withdrawn deliberately, plus **14 renames whose counterparts
+are verified present** (JPSS-2 became NOAA-21 at launch, and similar), and 7
+individually justified withdrawals. No operational product disappeared without
+a counterpart.
+
+Per-sensor detail (id, platform, generation date, provenance, ACCoeff/NLTECoeff
+presence, validation status) is in `REL-3.2.0_coefficient_inventory.md`. The
+evidence behind the data-changed entries — line-by-line truth comparisons,
+observation closure, Jacobian statistics, cross-sensor validation and a
+standing adversarial audit — is in
+`test-data-release/coeff_delta_REL-3.2.0/`, indexed by its `DELTAS.md`.
+
 ## Breaking and behavior changes
 
 1. **RTSolution file formats changed incompatibly.** The netCDF reader
