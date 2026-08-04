@@ -112,14 +112,13 @@ risk can now be quantified rather than merely flagged.
 3. The 2.4 Big_Endian/Little_Endian binary split disappears; netCDF is
    portable. ~~Blocker note: the 3.2.0 tarball itself must be re-rolled first
    (staging tree is 143 files ahead; tracked in the release docs).~~
-   **Updated 2026-08-04: the re-roll is done.** `fix_REL-3.2.0.0.tgz` was
-   rebuilt 2026-08-01 and verified against the staging tree file by file:
-   1440 files, all netCDF, zero differences. Size 3,377,500,279 bytes, md5
-   `7cd36fb18e3c69d5f4399a31009cc4ce`. The remaining gate is **publication**,
-   not the roll: `bin.ssec.wisc.edu` still serves the June tarball, so the
-   checksums pinned in `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt`
-   deliberately still reference it and move only as part of the upload. Until
-   then, build against the staging tree with `-DFIX_FILE_PATH=`.
+   **Updated 2026-08-04: rolled AND published, so this is no longer a
+   blocker at all.** `fix_REL-3.2.0.0.tgz` is on `bin.ssec.wisc.edu`, size
+   3,377,514,134 bytes, md5 `bc25af8f83e9ab7b5ed2080507aded15`, verified
+   against the staging tree file by file at 1440 files, all netCDF, zero
+   differences. Both pins (`Get_CRTM_Binary_Files.sh`, `test/CMakeLists.txt`)
+   match, so GSI can pull the coefficient set the normal way rather than
+   needing a hand-staged tree.
 
 ## 3. Code changes in GSI (small; compile-driven)
 

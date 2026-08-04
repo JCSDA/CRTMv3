@@ -1,7 +1,7 @@
 # CRTM v3.2.0 Release Notes
 
-**Status:** release candidate. The library code is frozen; the coefficient
-tarball has been rolled but is not yet published.
+**Status:** release candidate. The library code is frozen and the coefficient
+tarball is **published**.
 
 **Coefficient data.** The two efforts that were holding the roll have both
 landed: the IASI-NG regeneration (SpcCoeff and ODPS TauCoeff, regenerated
@@ -10,29 +10,24 @@ landed: the IASI-NG regeneration (SpcCoeff and ODPS TauCoeff, regenerated
 `gxs_geoxo_mw` are unchanged v3.1.4 inheritances and were not part of that
 rework.
 
-The tarball was rolled on 2026-08-01 and verified against the staging tree file
-by file: **1440 files, all netCDF, zero differences**, extracting to
-`fix_REL-3.2.0.0/fix/`.
+The tarball was verified against the staging tree file by file: **1440 files,
+all netCDF, zero differences**, extracting to `fix_REL-3.2.0.0/fix/`.
 
 | | |
 |---|---|
 | file | `fix_REL-3.2.0.0.tgz` |
-| size | 3,377,500,279 bytes |
-| md5 | `7cd36fb18e3c69d5f4399a31009cc4ce` |
+| size | 3,377,514,134 bytes |
+| md5 | `bc25af8f83e9ab7b5ed2080507aded15` |
+| published | 2026-08-04, `https://bin.ssec.wisc.edu/pub/s4/CRTM/` |
 
-It is smaller than the June tarball because the July campaign retired and
+It is smaller than the June 2026 tarball because the July campaign retired and
 replaced coefficient files and the tree is now uniformly netCDF.
 
-**It is not yet published.** `bin.ssec.wisc.edu` still serves the June 2026
-tarball, so the checksum pinned in `test/CMakeLists.txt` and
-`Get_CRTM_Binary_Files.sh` deliberately still refers to that older file: it
-matches what a default build actually downloads, and changing it before the
-upload would break every default build and CI job. Those pins are updated as
-part of publishing, not before it.
-
-Until the upload lands, a default build downloads a coefficient tree that
-cannot reproduce this release's test suite. Build a release candidate against
-the staging tree instead:
+**A default build now works.** The checksum above is what
+`test/CMakeLists.txt` and `Get_CRTM_Binary_Files.sh` pin, and it is what the
+server serves, so `cmake ..` downloads and verifies the correct tree with no
+extra arguments. Building against an unpacked tree remains supported if you
+already have one:
 
 ```
 cmake .. -DFIX_FILE_PATH=<path-to>/fix_REL-3.2.0.0/fix

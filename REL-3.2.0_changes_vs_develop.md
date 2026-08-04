@@ -490,17 +490,22 @@ bdc7fb9  fix(SfcOptics): drop Distance_Ratio scaling in CONST_MIXED_POLARIZATION
 > plus md5 update in `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt` is
 > required before the release is cut. See `REL-3.2.0_coefficient_inventory.md`.
 >
-> **Update 2026-08-03: the re-roll is DONE.** `fix_REL-3.2.0.0.tgz` was rebuilt
-> on 2026-08-01 and verified against the staging tree file by file: 1440 files,
-> all netCDF, zero differences. Size 3,377,500,279 bytes, md5
-> `7cd36fb18e3c69d5f4399a31009cc4ce`. It is smaller than the June tarball
-> because the July campaign retired and replaced files and the tree is now
-> uniformly netCDF. The IASI-NG regeneration and the GeoXO `gxi` rework, both
-> previously listed as blocking the roll, landed on 2026-08-01 and are included.
+> **Update 2026-08-04: the tarball is rolled AND published.**
+> `fix_REL-3.2.0.0.tgz` was re-rolled on 2026-08-04 and verified against the
+> staging tree file by file: 1440 files, all netCDF, zero differences. Size
+> 3,377,514,134 bytes, md5 `bc25af8f83e9ab7b5ed2080507aded15`. It is smaller
+> than the June tarball because the July campaign retired and replaced files and
+> the tree is now uniformly netCDF. The IASI-NG regeneration and the GeoXO
+> `gxi` rework, both previously listed as blocking the roll, are included.
 >
-> The md5 pins in `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt` are
-> **deliberately still at the June value**, because `bin.ssec.wisc.edu` still
-> serves the June tarball (checked 2026-08-03: `Last-Modified: 07 Jun 2026`,
-> `Content-Length: 3549130021`). The pins match what a default build actually
-> downloads. They get updated as part of publishing, after the upload, never
-> before it.
+> The md5 pins in `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt` were
+> updated to that value in `81632f4`, after the upload. Verified 2026-08-04:
+> the local file, the file served by `bin.ssec.wisc.edu`
+> (`Content-Length: 3377514134`, `Last-Modified: 04 Aug 2026 17:02`) and both
+> pins all agree. A default build therefore downloads and checksum-verifies the
+> correct tree with no extra arguments.
+>
+> *Note for anyone reading older revisions of this file:* an intermediate roll
+> on 2026-08-01 had size 3,377,500,279 and md5
+> `7cd36fb18e3c69d5f4399a31009cc4ce`. That roll was never published and is
+> superseded. If you have a copy with that checksum, discard it.
