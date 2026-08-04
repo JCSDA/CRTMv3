@@ -1868,7 +1868,11 @@ CONTAINS
           Error_Status = FAILURE
           RETURN
         END IF
-        ln = ln + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
+        ! Advance from ln_base, not the loop-exit ln: on the serial paths
+        ! (OPENMP=OFF builds, and the legacy-ifort gate above) Thread_Loop
+        ! mutates the outer ln and accumulating here would double-count
+        ! this sensor's channels.
+        ln = ln_base + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
 
       END DO Sensor_Loop
 

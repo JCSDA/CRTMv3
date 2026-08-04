@@ -1338,7 +1338,10 @@ CONTAINS
             RETURN
          END IF
 
-         ln = ln + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
+         ! Advance from ln_base, not the loop-exit ln: without OpenMP compiled in,
+         ! Thread_Loop mutates the outer ln and accumulating here would
+         ! double-count this sensor's channels.
+         ln = ln_base + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
 
       END DO Sensor_Loop
 
