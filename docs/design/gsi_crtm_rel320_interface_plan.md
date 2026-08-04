@@ -8,6 +8,14 @@ as-of state, and re-verify against GSI `develop` before acting on it.
 Drafted 2026-07-27 against NOAA-EMC/GSI `develop` @ `ec8215d` (2026-07-15, shallow
 clone at `/home/ben/CRTM/GSI`) and CRTM `feature/btj_REL-3.2.0` @ `670d271`.
 
+**Re-pinned 2026-08-04** to CRTM `feature/btj_REL-3.2.0` @ `830a280`, 53 commits
+later. The GSI side is unchanged and still as of `ec8215d`. Every symbol in the
+API surface listed below was re-checked against the new head and is still
+present; the only `CRTM_Init`-adjacent signature change in those 53 commits is
+an added argument on an unrelated internal routine. So section 0 stands as
+written. What changed materially is section 2, where the coefficient-staging
+risk can now be quantified rather than merely flagged.
+
 ## 0. Baseline: how GSI couples to CRTM today
 
 - **Version pins:** modulefiles load `crtm/2.4.0.1` and set `CRTM_FIX` to a
@@ -73,9 +81,45 @@ clone at `/home/ben/CRTM/GSI`) and CRTM `feature/btj_REL-3.2.0` @ `670d271`.
    `use_antenna_correction`), NLTECoeff for CrIS/IASI/AIRS, zssmis f16-f19
    (no f20 in 3.2.0), SSU, and the viirs-m companion files that `read_cris`
    stages for CADS.
+
+   **This is the highest-consequence item in the migration, and it fails
+   silently.** Measured 2026-08-04 by running the v3.1.4 and v3.2.0 libraries
+   over 84 profiles against identical coefficients (harness in
+   `release_wrap_2026-08/code_delta_314_vs_320/`):
+
+   - A netCDF `SpcCoeff` read with the `NLTECoeff` sibling absent loses the
+     non-LTE correction entirely. On AIRS that is **up to 36.4 K** on the
+     4.3 um shortwave CO2 channels in daylight, and the **temperature
+     Jacobians on those channels change by a median of 23 percent, up to 90
+     percent**. The affected set is channels 1900-2114. At night the
+     difference is exactly zero, since the correction is solar-driven.
+   - With the `ACCoeff` sibling absent and `use_antenna_correction` set, AMSU-A
+     loses antenna correction: **up to 1.225 K, mean 0.611 K, on every
+     channel**. A systematic bias rather than scatter, which for assimilation
+     is the worse shape.
+   - There is **no warning and no error**. The file is simply never opened.
+     Verified directly: deleting the sibling changes the answer on zero rows.
+
+   Practical consequence for GSI: the sibling files are not optional companions
+   to be staged when convenient. Omitting them produces a run that completes
+   cleanly and is wrong, and the failure is invisible in anything short of a
+   radiance comparison. Stage them, then confirm by deleting one in a scratch
+   copy and checking that the radiances move.
+
+   Note this bites only the netCDF path. GSI's current v2.4 binary `SpcCoeff`
+   streams both substructures inline, which is why the issue does not exist
+   today and appears only on migration.
 3. The 2.4 Big_Endian/Little_Endian binary split disappears; netCDF is
-   portable. Blocker note: the 3.2.0 tarball itself must be re-rolled first
-   (staging tree is 143 files ahead; tracked in the release docs).
+   portable. ~~Blocker note: the 3.2.0 tarball itself must be re-rolled first
+   (staging tree is 143 files ahead; tracked in the release docs).~~
+   **Updated 2026-08-04: the re-roll is done.** `fix_REL-3.2.0.0.tgz` was
+   rebuilt 2026-08-01 and verified against the staging tree file by file:
+   1440 files, all netCDF, zero differences. Size 3,377,500,279 bytes, md5
+   `7cd36fb18e3c69d5f4399a31009cc4ce`. The remaining gate is **publication**,
+   not the roll: `bin.ssec.wisc.edu` still serves the June tarball, so the
+   checksums pinned in `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt`
+   deliberately still reference it and move only as part of the upload. Until
+   then, build against the staging tree with `-DFIX_FILE_PATH=`.
 
 ## 3. Code changes in GSI (small; compile-driven)
 
