@@ -228,8 +228,8 @@ PROGRAM test_emis_coeff_io
                netCDF        = netCDF, &
                Quiet         = Quiet, &
                File_Path     = File_Path)
-  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
+  CALL ioTest%Assert((err_stat==SUCCESS) )
+  testPassed = ioTest%Passed()
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_VISsnowCoeff_Load' ,'Error loading VISsnowCoeff data', err_stat )
     STOP 1
