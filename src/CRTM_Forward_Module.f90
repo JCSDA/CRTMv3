@@ -528,6 +528,7 @@ CONTAINS
       INTEGER :: SensorIndex
       INTEGER :: ChannelIndex
       INTEGER :: ln, nc, ks
+      INTEGER :: ln_base
       INTEGER :: n_Full_Streams, mth_Azi
       INTEGER :: cloud_coverage_flag
       REAL(fp) :: Source_ZA
@@ -963,9 +964,16 @@ CONTAINS
          ! aggregated via a MAX reduction so a FAILURE in one thread is never lost
          ! to a later SUCCESS write by another thread (SUCCESS < WARNING < FAILURE).
          thread_error = SUCCESS
+         ! ln_base holds the cumulative channel count of all previous sensors and
+         ! is never modified inside the region. ln itself must be PRIVATE and
+         ! rebuilt from ln_base on every iteration: a thread may execute more than
+         ! one Thread_Loop iteration (NUM_THREADS is a request, not a guarantee),
+         ! and a FIRSTPRIVATE ln would still hold the previous chunk's final value,
+         ! indexing RTSolution past n_Channels.
+         ln_base = ln
          !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
-         !$OMP    FIRSTPRIVATE(ln)                                               &
-         !$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, Err_Thread,     &
+         !$OMP    FIRSTPRIVATE(ln_base)                                          &
+         !$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, Err_Thread, ln,  &
          !$OMP          start_ch, end_ch, Wavenumber, transmittance,             &
          !$OMP          transmittance_clear, l, mth_Azi, ks)                     &
          !$OMP    REDUCTION(MAX:thread_error)
@@ -977,9 +985,9 @@ CONTAINS
             ELSE
                end_ch = MIN( start_ch + chunk_ch - 1, n_sensor_channels )
             END IF
-            ! ln enters FIRSTPRIVATE holding the cumulative channel count of all
-            ! previous sensors in this call; offset it by this thread's chunk.
-            ln = ln + (start_ch - 1) - n_inactive_channels(nt)
+            ! Rebuild ln from the per-sensor base every iteration, offset by this
+            ! chunk. Never accumulate onto the previous iteration's ln.
+            ln = ln_base + (start_ch - 1) - n_inactive_channels(nt)
             ! -------------
             ! CHANNEL LOOP
             ! -------------

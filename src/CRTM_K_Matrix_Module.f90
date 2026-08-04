@@ -570,6 +570,7 @@ CONTAINS
       INTEGER :: SensorIndex
       INTEGER :: ChannelIndex
       INTEGER :: ln
+      INTEGER :: ln_base
       INTEGER :: n_Full_Streams, mth_Azi
       INTEGER :: cloud_coverage_flag
       REAL(fp) :: Source_ZA
@@ -1024,6 +1025,9 @@ CONTAINS
         ! status is aggregated via a MAX reduction so a FAILURE in one thread is
         ! never lost to a later SUCCESS write by another thread.
         thread_error = SUCCESS
+        ! ln_base is the read-only per-sensor base. It is set outside the
+        ! preprocessor gate below because Thread_Loop reads it on both paths.
+        ln_base = ln
 !** See the dispatch-side note above for the legacy-ifort gate (JCSDA/CRTMv3#231).
 #if defined(__INTEL_COMPILER) && !defined(__INTEL_LLVM_COMPILER)
         IF (n_channel_threads > 1) THEN
@@ -1034,8 +1038,8 @@ CONTAINS
         END IF
 #else
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
-!$OMP    FIRSTPRIVATE(ln, r_cloudy, r_cloudy_rad, r_cloudy_dn, r_cloudy_dn_prof, r_cloudy_up_prof) &
-!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, Err_Thread,     &
+!$OMP    FIRSTPRIVATE(ln_base, r_cloudy, r_cloudy_rad, r_cloudy_dn, r_cloudy_dn_prof, r_cloudy_up_prof) &
+!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, Err_Thread, ln,  &
 !$OMP            start_ch, end_ch, Wavenumber, Status_FWD, Status_K,    &
 !$OMP            transmittance, transmittance_K, transmittance_clear,   &
 !$OMP            transmittance_clear_K, l, mth_Azi, ks)                 &
@@ -1049,9 +1053,9 @@ CONTAINS
           ELSE
             end_ch = MIN( start_ch + chunk_ch - 1, n_sensor_channels )
           END IF
-          ! ln enters FIRSTPRIVATE holding the cumulative channel count of all
-          ! previous sensors in this call; offset it by this thread's chunk.
-          ln = ln + (start_ch - 1) - n_inactive_channels(nt)
+          ! Rebuild ln from the per-sensor base every iteration, offset by this
+          ! chunk. Never accumulate onto the previous iteration's ln.
+          ln = ln_base + (start_ch - 1) - n_inactive_channels(nt)
 
           ! -------------
           ! CHANNEL LOOP

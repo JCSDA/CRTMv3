@@ -516,6 +516,7 @@ CONTAINS
       INTEGER :: SensorIndex
       INTEGER :: ChannelIndex
       INTEGER :: ln, nc, ks
+      INTEGER :: ln_base
       INTEGER :: n_Full_Streams, mth_Azi
       INTEGER :: cloud_coverage_flag
       REAL(fp) :: Source_ZA, r_cloudy, r_cloudy_dn, r_cloudy_rad
@@ -965,9 +966,12 @@ CONTAINS
         ! status is aggregated via a MAX reduction so a FAILURE in one thread is
         ! never lost to a later SUCCESS write by another thread.
         thread_error = SUCCESS
+        ! ln_base is the read-only per-sensor base; ln must be PRIVATE and rebuilt from
+        ! it each iteration, since a thread may run more than one Thread_Loop iteration.
+        ln_base = ln
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
-!$OMP    FIRSTPRIVATE(ln, r_cloudy, r_cloudy_dn, r_cloudy_rad)                                  &
-!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, Err_Thread,    &
+!$OMP    FIRSTPRIVATE(ln_base, r_cloudy, r_cloudy_dn, r_cloudy_rad)                             &
+!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, Err_Thread, ln, &
 !$OMP          start_ch, end_ch, Wavenumber, transmittance, transmittance_TL,   &
 !$OMP          transmittance_clear, transmittance_clear_TL, l, mth_Azi, ks, Status_FWD,Status_TL) &
 !$OMP    REDUCTION(MAX:thread_error)
@@ -979,9 +983,9 @@ CONTAINS
           ELSE
             end_ch = MIN( start_ch + chunk_ch - 1, n_sensor_channels )
           END IF
-          ! ln enters FIRSTPRIVATE holding the cumulative channel count of all
-          ! previous sensors in this call; offset it by this thread's chunk.
-          ln = ln + (start_ch - 1) - n_inactive_channels(nt)
+          ! Rebuild ln from the per-sensor base every iteration, offset by this
+          ! chunk. Never accumulate onto the previous iteration's ln.
+          ln = ln_base + (start_ch - 1) - n_inactive_channels(nt)
 
           ! -------------
           ! CHANNEL LOOP
