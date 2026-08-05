@@ -842,6 +842,54 @@ target_link_libraries(test_VectorRT_Unsupported PRIVATE crtm)
 add_test(NAME test_VectorRT_Unsupported
          COMMAND $<TARGET_FILE:test_VectorRT_Unsupported>)
 
+# test_SNICAR_VISsnow_Physics: the SNICAR visible-snow reflectance LUT, new and
+# opt-in in REL-3.2.0. Until this test its only coverage anywhere was an I/O
+# check that the file parses, so nothing verified it produced a reflectance or
+# that selecting it had any effect. Asserts that the table is actually consumed
+# (the dispatch prefers the NPOESS SEcategory path when both are loaded, so a
+# regression would be silent), that reflectance responds to grain size, depth
+# and density while the NPOESS control stays invariant (the solar-angle check
+# covers illumination geometry only; the solar zenith never reaches the LUT's
+# angle dimension, a known defect), that the
+# SWIR decrease with coarsening grain is monotonic, that out-of-LUT snow states
+# stay finite and bounded (the forward path applies no bounds guard; only TL and
+# AD do), and that an unrecognised filename prefix is rejected rather than
+# silently falling back. Doubles as the worked example of how to select the
+# table, since selection is by filename prefix and there is no scheme argument.
+add_executable(test_SNICAR_VISsnow_Physics mains/unit/Unit_Test/test_SNICAR_VISsnow_Physics.f90)
+target_link_libraries(test_SNICAR_VISsnow_Physics PRIVATE crtm)
+# Gate on the SOURCE files in the fix tree and stage the links here, like the
+# other coefficient-gated tests (TEMPO, OMPS): the bulk testinput staging runs
+# later in this file, so a destination-side EXISTS check is always false on a
+# fresh configure and the test silently vanishes from the suite.
+set(_SNICAR_COEFF_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix")
+set(_SNICAR_PRESENT TRUE)
+foreach(_snicar_rel
+        EmisCoeff/VIS_Snow/SNICAR/netCDF/SNICAR.VISsnow.EmisCoeff.nc
+        EmisCoeff/VIS_Snow/SEcategory/netCDF/NPOESS.VISsnow.EmisCoeff.nc
+        SpcCoeff/netCDF/v.viirs-m_n21.SpcCoeff.nc
+        TauCoeff/ODPS/netCDF/v.viirs-m_n21.TauCoeff.nc)
+  set(_snicar_file "${_SNICAR_COEFF_FIX}/${_snicar_rel}")
+  if(EXISTS "${_snicar_file}")
+    get_filename_component(_snicar_base "${_snicar_rel}" NAME)
+    execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                     "${_snicar_file}"
+                     "${CMAKE_CURRENT_BINARY_DIR}/testinput/${_snicar_base}" )
+  else()
+    set(_SNICAR_PRESENT FALSE)
+  endif()
+endforeach()
+if(_SNICAR_PRESENT)
+  add_test(NAME test_SNICAR_VISsnow_Physics
+           COMMAND $<TARGET_FILE:test_SNICAR_VISsnow_Physics>)
+else()
+  message(STATUS "test_SNICAR_VISsnow_Physics not registered (needs the SNICAR and NPOESS VISsnow tables and the v.viirs-m_n21 pair in the fix tree).")
+endif()
+unset(_SNICAR_PRESENT)
+unset(_SNICAR_COEFF_FIX)
+unset(_snicar_file)
+unset(_snicar_base)
+
 # test_VectorRT_Physics: physical invariants of the emergent Stokes vector,
 # asserted clear-sky so no cloud LUT is involved and a failure cannot be blamed
 # on coefficient quality. Covers the n_Stokes 2/3/4 truncation ladder (the only
