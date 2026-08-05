@@ -1,17 +1,64 @@
 # CRTM v3.2.0 Release Notes
 
-**Status:** release candidate. The library code is frozen and the coefficient
-tarball is **published**.
+**Status:** release candidate. The library code is frozen. The coefficient
+tarball has been rolled and verified, and **the upload is outstanding**.
 
-**Coefficient data.** The two efforts that were holding the roll have both
-landed: the IASI-NG regeneration (SpcCoeff and ODPS TauCoeff, regenerated
-2026-08-01 by `crtm-coeffgen` on the LBLRTM backend) and the GeoXO `gxi` rework
-(`gxi_geoxo` and `v.gxi_geoxo`, same date). Note that `gxs_geoxo_lw` and
-`gxs_geoxo_mw` are unchanged v3.1.4 inheritances and were not part of that
-rework.
+**Coefficient data.** Three efforts landed: the IASI-NG regeneration (SpcCoeff
+and ODPS TauCoeff, regenerated 2026-08-01 by `crtm-coeffgen` on the LBLRTM
+backend), the GeoXO `gxi` rework (`gxi_geoxo` and `v.gxi_geoxo`, same date), and
+the ABI ODPS family regeneration (2026-08-03/04, see below). Note that
+`gxs_geoxo_lw` and `gxs_geoxo_mw` are unchanged v3.1.4 inheritances and were not
+part of the GeoXO rework.
 
 The tarball was verified against the staging tree file by file: **1440 files,
 all netCDF, zero differences**, extracting to `fix_REL-3.2.0.0/fix/`.
+
+### Scope of the coefficient change
+
+Every file classified against the v3.1.4 baseline (`fix_REL-3.1.2.0`, md5
+`0e5888cae80aa674b2e67ecd4490317d`, the tarball v3.1.4 itself pinned). Method
+and full artifacts: `test-data-release/coeff_delta_REL-3.2.0/`.
+
+| family | identical | metadata-only | data-changed | new | retired |
+|---|---|---|---|---|---|
+| SpcCoeff | 396 | 53 | 14 | 75 | 1172 |
+| TauCoeff | 0 | 705 | 11 | 93 | 1883 |
+| NLTECoeff | 0 | 6 | 1 | 32 | 0 |
+| EmisCoeff | 3 | 0 | 0 | 19 | 2 |
+| CloudCoeff | 1 | 0 | 0 | 9 | 15 |
+| AerosolCoeff | 0 | 0 | 0 | 4 | 0 |
+| ACCoeff | 0 | 15 | 0 | 2 | 2 |
+| BeCoeff | 1 | 0 | 0 | 0 | 0 |
+| test_data | 0 | 0 | 0 | 0 | 531 |
+| **total** | **401** | **779** | **26** | **234** | **3605** |
+
+Reading that table:
+
+- **234 files are new** and **26 have changed numbers**. Those 26 are the only
+  files that can move a brightness temperature for a sensor you already use.
+- **779 are metadata-only**: the provenance backfill wrote Title, History,
+  Comment and Profile_Set_Id where they had never been written. No radiometric
+  change.
+- **3605 "retired" overstates the loss.** 2558 of those are format drops, not
+  retirements: the Big_Endian/Little_Endian binary split disappears because the
+  tree is now uniformly netCDF. Of the genuine netCDF retirements, 14 are
+  renames with verified counterparts (JPSS-2 became NOAA-21 at launch, so
+  `atms_j2` is now `atms_n21`, and similarly for its siblings), 361 are bulk
+  per-detector and passband variants, and 7 are withdrawals with individual
+  justification. The reconciliation is in
+  `coeff_delta_REL-3.2.0/retirement_reconciliation/RETIREMENT_RECONCILIATION.md`.
+  **If a sensor you use appears to have vanished, check the rename list first.**
+
+**The ABI infrared family was regenerated late in the cycle.** All six products
+(`abi_g16`, `abi_g17`, `abi_g18`, `abi_g19`, `abi_gr`, `abi-81K_g17`; SpcCoeff
+and ODPS TauCoeff each) carry new numbers. The staged `abi_g19` was a 2024 STAR
+test article whose fitted-CO2 extrapolation produced a measured -1.67 K channel
+16 bias against 1279 GOES-19 clear-ocean superobs, plus spurious stratospheric
+water Jacobians in the window channels; it had shipped since REL-3.1.2.0. The
+family was rebuilt at the 2026.5 gas epoch with per-flight-model CWG SRFs
+authenticated against NOAA NCC. **ABI users should expect a brightness
+temperature change and should not carry forward bias corrections trained on the
+old coefficients.** The `v.abi_*` visible halves were not part of this pass.
 
 | | |
 |---|---|
@@ -23,11 +70,13 @@ all netCDF, zero differences**, extracting to `fix_REL-3.2.0.0/fix/`.
 It is smaller than the June 2026 tarball because the July campaign retired and
 replaced coefficient files and the tree is now uniformly netCDF.
 
-**A default build now works.** The checksum above is what
-`test/CMakeLists.txt` and `Get_CRTM_Binary_Files.sh` pin, and it is what the
-server serves, so `cmake ..` downloads and verifies the correct tree with no
-extra arguments. Building against an unpacked tree remains supported if you
-already have one:
+**A default build works once the upload lands.** The checksum above is what
+`test/CMakeLists.txt` and `Get_CRTM_Binary_Files.sh` pin. Until the new archive
+replaces the one currently on the server, those pins deliberately disagree with
+what is served and a default `cmake ..` will fail its checksum. That is the
+intended behaviour: the pins describe the tree this release ships, and the
+served copy is missing the ABI regeneration. Building against an unpacked tree
+is unaffected:
 
 ```
 cmake .. -DFIX_FILE_PATH=<path-to>/fix_REL-3.2.0.0/fix
