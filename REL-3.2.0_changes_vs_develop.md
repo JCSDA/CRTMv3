@@ -525,20 +525,39 @@ bdc7fb9  fix(SfcOptics): drop Distance_Ratio scaling in CONST_MIXED_POLARIZATION
 > plus md5 update in `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt` is
 > required before the release is cut. See `REL-3.2.0_coefficient_inventory.md`.
 >
-> **Update 2026-08-04: the tarball is rolled AND published.**
-> `fix_REL-3.2.0.0.tgz` was re-rolled on 2026-08-04 and verified against the
-> staging tree file by file: 1440 files, all netCDF, zero differences. Size
+> **Update 2026-08-04 (morning): the tarball was rolled AND published.**
+> `fix_REL-3.2.0.0.tgz` was re-rolled on 2026-08-04 at 11:45 and verified against
+> the staging tree file by file: 1440 files, all netCDF, zero differences. Size
 > 3,377,514,134 bytes, md5 `bc25af8f83e9ab7b5ed2080507aded15`. It is smaller
 > than the June tarball because the July campaign retired and replaced files and
 > the tree is now uniformly netCDF. The IASI-NG regeneration and the GeoXO
 > `gxi` rework, both previously listed as blocking the roll, are included.
 >
-> The md5 pins in `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt` were
-> updated to that value in `81632f4`, after the upload. Verified 2026-08-04:
-> the local file, the file served by `bin.ssec.wisc.edu`
-> (`Content-Length: 3377514134`, `Last-Modified: 04 Aug 2026 17:02`) and both
-> pins all agree. A default build therefore downloads and checksum-verifies the
-> correct tree with no extra arguments.
+> **Superseded the same evening. The published tarball is now STALE and must be
+> re-uploaded before REL-3.2.0 is tagged.** The ABI ODPS family regeneration
+> (see section 13) was staged at 18:52, seven hours after the 11:45 roll, so
+> ten files were left out of the published archive:
+>
+> ```
+> SpcCoeff/netCDF/{abi-81K_g17,abi_g16,abi_g17,abi_g18,abi_gr}.SpcCoeff.nc
+> TauCoeff/ODPS/netCDF/{abi-81K_g17,abi_g16,abi_g17,abi_g18,abi_gr}.TauCoeff.nc
+> ```
+>
+> This was caught by comparing md5 of files extracted from the published tarball
+> against the staging tree, not by timestamps alone: `abi_g18.SpcCoeff.nc` read
+> `ce9a40a6d2e5` in the tarball against `3c3f2028cb2e` staged. `abi_g19` was
+> staged on 08-03 and did make the 11:45 roll, so the published ABI family is
+> internally inconsistent, one platform regenerated and five not.
+>
+> **Current state: rolled again on 2026-08-04 at 22:52, NOT yet uploaded.**
+> Size 3,377,517,263 bytes, md5 `2170582827633c83946e6b4b97ee7c7d`, verified
+> before replacing the previous archive: 1440 files matching the staging tree,
+> same top-level layout, and every extracted ABI file md5-identical to staged.
+> The pins in `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt` now carry the
+> new value, so until the upload happens **a default build will fail its
+> checksum against the file still served by `bin.ssec.wisc.edu`**. That is
+> deliberate: the pins describe the tree the release actually ships. Upload, then
+> confirm the served `Content-Length` is 3377517263.
 >
 > *Note for anyone reading older revisions of this file:* an intermediate roll
 > on 2026-08-01 had size 3,377,500,279 and md5

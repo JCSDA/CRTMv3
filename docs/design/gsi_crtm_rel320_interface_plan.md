@@ -112,13 +112,18 @@ risk can now be quantified rather than merely flagged.
 3. The 2.4 Big_Endian/Little_Endian binary split disappears; netCDF is
    portable. ~~Blocker note: the 3.2.0 tarball itself must be re-rolled first
    (staging tree is 143 files ahead; tracked in the release docs).~~
-   **Updated 2026-08-04: rolled AND published, so this is no longer a
-   blocker at all.** `fix_REL-3.2.0.0.tgz` is on `bin.ssec.wisc.edu`, size
-   3,377,514,134 bytes, md5 `bc25af8f83e9ab7b5ed2080507aded15`, verified
-   against the staging tree file by file at 1440 files, all netCDF, zero
-   differences. Both pins (`Get_CRTM_Binary_Files.sh`, `test/CMakeLists.txt`)
-   match, so GSI can pull the coefficient set the normal way rather than
-   needing a hand-staged tree.
+   **Updated 2026-08-04: rolled, with an upload still outstanding.** The archive
+   was rolled and published in the morning, then superseded that evening when the
+   ABI ODPS family regeneration was staged after the roll, leaving ten ABI files
+   out of the published copy. It was rolled again at 22:52: size 3,377,517,263
+   bytes, md5 `2170582827633c83946e6b4b97ee7c7d`, verified against the staging
+   tree at 1440 files, all netCDF, zero differences. Both pins
+   (`Get_CRTM_Binary_Files.sh`, `test/CMakeLists.txt`) carry the new value.
+
+   For GSI: once the upload lands, GSI can pull the coefficient set the normal
+   way rather than needing a hand-staged tree. Until then the pins intentionally
+   disagree with the file `bin.ssec.wisc.edu` still serves, so a default build
+   cannot fetch a checksum-clean tree and a local copy is required.
 
 ## 3. Code changes in GSI (small; compile-driven)
 

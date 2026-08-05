@@ -16,9 +16,9 @@ all netCDF, zero differences**, extracting to `fix_REL-3.2.0.0/fix/`.
 | | |
 |---|---|
 | file | `fix_REL-3.2.0.0.tgz` |
-| size | 3,377,514,134 bytes |
-| md5 | `bc25af8f83e9ab7b5ed2080507aded15` |
-| published | 2026-08-04, `https://bin.ssec.wisc.edu/pub/s4/CRTM/` |
+| size | 3,377,517,263 bytes |
+| md5 | `2170582827633c83946e6b4b97ee7c7d` |
+| published | pending upload to `https://bin.ssec.wisc.edu/pub/s4/CRTM/` |
 
 It is smaller than the June 2026 tarball because the July campaign retired and
 replaced coefficient files and the tree is now uniformly netCDF.
