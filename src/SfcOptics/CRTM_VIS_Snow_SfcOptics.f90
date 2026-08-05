@@ -18,7 +18,7 @@ MODULE CRTM_VIS_Snow_SfcOptics
   ! -----------------
   ! Module use
   USE Type_Kinds               , ONLY: fp
-  USE Message_Handler          , ONLY: SUCCESS, Display_Message
+  USE Message_Handler          , ONLY: SUCCESS, FAILURE, Display_Message
   USE Spectral_Units_Conversion, ONLY: Inverse_cm_to_Micron
   USE CRTM_Parameters          , ONLY: ZERO, ONE, MAX_N_ANGLES
   USE CRTM_SpcCoeff            , ONLY: SC
@@ -232,10 +232,16 @@ CONTAINS
         SfcOptics%Reflectivity(1:SfcOptics%n_Angles,1,j,1) = SfcOptics%Direct_Reflectivity(j,1)*SfcOptics%Weight(j)
       END DO
 
-      ! Cheng: is this needed? 
+      ! Cheng: is this needed?
       ! Fill the return emissivity arrays
       SfcOptics%Emissivity(1:SfcOptics%n_Angles,1) = ONE - SfcOptics%Direct_Reflectivity(1:nZ,1)
 
+    ELSE
+      ! Neither table is loaded: returning SUCCESS here would hand the caller
+      ! whatever SfcOptics already held, with no message at any point.
+      err_stat = FAILURE
+      msg = 'No visible snow reflectance data loaded (neither SEcategory nor VISsnowCoeff)'
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
     END IF
 
   END FUNCTION Compute_VIS_Snow_SfcOptics

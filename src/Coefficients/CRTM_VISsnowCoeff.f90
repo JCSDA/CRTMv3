@@ -205,10 +205,11 @@ CONTAINS
     !Classification_Name = Filename(:index(Filename,'.')-1) !this is the one-line replacement if confident
     pos = index(Filename, '.')
     IF (pos == 0) THEN
+      err_stat = FAILURE
       CALL Display_Message( ROUTINE_NAME, &
           'Invalid classification filename: '//TRIM(Filename)// &
           '. Expected format <Classification_Name>.<CoefType>.', &
-          FAILURE )
+          err_stat )
       RETURN
     END IF
     Classification_Name = Filename(:pos-1)
@@ -258,8 +259,9 @@ CONTAINS
           CALL Load_Cleanup(); RETURN
         END IF
       CASE DEFAULT
+        err_stat = FAILURE
         msg = 'Unsupported visible snow reflectance classification: '//TRIM(Classification_Name)
-        CALL Display_Message( ROUTINE_NAME, msg, FAILURE ); RETURN 
+        CALL Display_Message( ROUTINE_NAME, msg, err_stat ); RETURN
     END SELECT
 
 

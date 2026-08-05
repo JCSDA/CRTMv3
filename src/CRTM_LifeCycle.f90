@@ -433,11 +433,13 @@ CONTAINS
 !                           ATTRIBUTES: INTENT(IN), OPTIONAL
 !
 !       VISsnowCoeff_File:  Name of the data file containing the coefficient
-!                           data for the visible snow emissivity model.
+!                           data for the visible snow reflectance model. The
+!                           scheme is selected by the filename prefix (the text
+!                           before the first dot); unrecognised prefixes are
+!                           rejected at load time.
 !                           Available datafiles:
 !                           - NPOESS.VISsnow.EmisCoeff.nc  [DEFAULT]
-!                           - IGBP.VISsnow.EmisCoeff.nc
-!                           - USGS.VISsnow.EmisCoeff.nc
+!                           - SNICAR.VISsnow.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
