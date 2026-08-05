@@ -14,6 +14,34 @@ message (STATUS "Building tests for CRTM v${PROJECT_VERSION}.")
 list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )
 set( CMAKE_DIRECTORY_LABELS ${PROJECT_NAME} )
 
+# Register a long-running test in the tier2 group.
+#
+# These four tests are about 75 percent of suite CPU under gfortran and ifx and
+# about 84 percent under nvfortran, while the other ~234 tests are each under
+# 4 s. Deferring them takes the default suite from roughly 155-292 s of wall
+# time down to roughly 25-30 s at -j4.
+#
+# Only add_test is gated, never add_executable: the sources must keep compiling
+# on every build, because compiler-portability defects have been found in test
+# sources that a gated build would simply have skipped.
+#
+# Run them with:  cmake -DBUILD_TIER2_TESTS=ON <build> && ctest -L tier2
+# Exclude them:   ctest -LE tier2      (when they are registered)
+#
+# Run tier2 whenever the RT or OpenMP threading path changes (CRTM_Forward /
+# Tangent_Linear / Adjoint / K_Matrix_Module, Common_RTSolution, the
+# profile/channel thread split) and before tagging a release. Those tests are
+# the main coverage of nested channel threading: all four use N_PROFILES=2 and
+# do not pin OMP_NUM_THREADS, so they engage the nested path, and two of them
+# (test_OMPS_UV_Physics with 4 sensors, test_TEMPO_UVVIS_Physics with 2) are
+# among the strongest coverage of multi-sensor RTSolution indexing under it.
+function(crtm_add_tier2_test test_name)
+  if(BUILD_TIER2_TESTS)
+    add_test(NAME ${test_name} COMMAND $<TARGET_FILE:${test_name}>)
+    set_tests_properties(${test_name} PROPERTIES LABELS tier2)
+  endif()
+endfunction()
+
 # macro to create a symlink from src to dst
 function(CREATE_SYMLINK src dst)
     foreach (FILENAME ${ARGN})
@@ -849,8 +877,7 @@ add_test(NAME test_VectorRT_PARMIO_TLAD
 add_executable(test_VectorRT_TLADK mains/unit/Unit_Test/test_VectorRT_TLADK.f90)
 target_link_libraries(test_VectorRT_TLADK PRIVATE crtm)
 if(AWS_COEFFS_PRESENT AND CLOUDCOEFF_EXP_PRESENT)
-  add_test(NAME test_VectorRT_TLADK
-           COMMAND $<TARGET_FILE:test_VectorRT_TLADK>)
+  crtm_add_tier2_test(test_VectorRT_TLADK)
 else()
   message(STATUS "test_VectorRT_TLADK not registered (needs mwr_aws coeffs + CloudCoeff_Exp_Full6.nc).")
 endif()
@@ -901,8 +928,7 @@ if(EXISTS "${_TEMPO_SPC}" AND EXISTS "${_TEMPO_TAU}")
   execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
                    "${_TEMPO_TAU}"
                    "${CMAKE_CURRENT_BINARY_DIR}/testinput/u.tempo_is40e.TauCoeff.nc" )
-  add_test(NAME test_UV_NO2_TLAD
-           COMMAND $<TARGET_FILE:test_UV_NO2_TLAD>)
+  crtm_add_tier2_test(test_UV_NO2_TLAD)
 else()
   message(STATUS "test_UV_NO2_TLAD not registered (needs u.tempo_is40e coeffs in testinput).")
 endif()
@@ -943,8 +969,7 @@ foreach(_omps_sensor u.omps-np_n20 u.omps-np_n21 u.omps-tc_n20 u.omps-tc_n21)
   endforeach()
 endforeach()
 if(_OMPS_COEFFS_PRESENT)
-  add_test(NAME test_OMPS_UV_Physics
-           COMMAND $<TARGET_FILE:test_OMPS_UV_Physics>)
+  crtm_add_tier2_test(test_OMPS_UV_Physics)
 else()
   message(STATUS "test_OMPS_UV_Physics not registered (needs the four u.omps-* coefficient pairs in testinput).")
 endif()
@@ -984,8 +1009,7 @@ foreach(_tempo_sensor u.tempo_is40e v.tempo_is40e)
   endforeach()
 endforeach()
 if(_TEMPO_UVVIS_PRESENT)
-  add_test(NAME test_TEMPO_UVVIS_Physics
-           COMMAND $<TARGET_FILE:test_TEMPO_UVVIS_Physics>)
+  crtm_add_tier2_test(test_TEMPO_UVVIS_Physics)
 else()
   message(STATUS "test_TEMPO_UVVIS_Physics not registered (needs both tempo_is40e coefficient pairs in testinput).")
 endif()

@@ -4,6 +4,12 @@ project(crtm VERSION 3.2.0 LANGUAGES Fortran)
 
 option(OPENMP "Build crtm with OpenMP support" ON)
 option(FIX_FILE_PATH "Path to fix files (default: fix/)" OFF)
+# Long-running tests are registered only when this is ON, and carry the ctest
+# label "tier2" so they can also be selected with `ctest -L tier2` or excluded
+# with `ctest -LE tier2`. Their executables are always built, so compiler
+# coverage of those sources is never lost; only the ctest registration is gated.
+# Toggling this is therefore a reconfigure with no recompilation.
+option(BUILD_TIER2_TESTS "Register long-running (tier2) tests" OFF)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 set(CMAKE_DIRECTORY_LABELS ${PROJECT_NAME})

@@ -155,6 +155,42 @@ The CMake variables of interest are:
 `-DFIX_FILE_PATH=<path-to-fix-files>` (default is `fix/`, populated by Get_CRTM_Binary_Files.sh if needed)
 `-DBUILD_TESTING = ON / OFF` (enables/disabled testing under `test/`; default is ON)
 `-DOPENMP = ON / OFF` (build with OpenMP support; default is ON. `OFF` produces a fully serial library -- see "OpenMP and thread safety" below)
+`-DBUILD_TIER2_TESTS = ON / OFF` (register the long-running "tier2" tests; default is OFF -- see "Test tiers" below)
+
+
+Test tiers
+-------------
+
+Four tests account for roughly 75-84% of the suite's CPU time while every other
+test runs in under four seconds. They are deferred by default, which takes a
+routine `ctest -j4` from several minutes to well under one:
+
+| test | what it covers |
+|------|----------------|
+| `test_UV_NO2_TLAD` | TL/AD/K parity, TEMPO UV NO2 |
+| `test_VectorRT_TLADK` | TL/AD/K for vector RT (`n_Stokes > 1`) |
+| `test_TEMPO_UVVIS_Physics` | TEMPO UV/VIS physics, 2 sensors |
+| `test_OMPS_UV_Physics` | OMPS UV physics, 4 sensors |
+
+Their executables are **always built**, so compiler coverage of those sources is
+never lost; only the `ctest` registration is gated. Toggling the option is a
+reconfigure with no recompilation:
+
+<pre>
+cmake -DBUILD_TIER2_TESTS=ON ..   # ~5 s, nothing rebuilds
+ctest -L tier2                    # run only these four
+ctest -LE tier2                   # run everything except them
+</pre>
+
+**Run tier2 before tagging a release, and whenever the radiative-transfer or
+OpenMP threading path changes** (`CRTM_Forward_Module`,
+`CRTM_Tangent_Linear_Module`, `CRTM_Adjoint_Module`, `CRTM_K_Matrix_Module`,
+`Common_RTSolution`, or the profile/channel thread-split logic). All four use
+`N_PROFILES = 2` and do not pin `OMP_NUM_THREADS`, so they engage the nested
+channel-threading path, and two of them exercise multi-sensor `RTSolution`
+indexing under it. That combination is where an out-of-bounds defect was found
+during v3.2.0 preparation, so these tests are the main guard against its
+recurrence.
 
 
 example:
