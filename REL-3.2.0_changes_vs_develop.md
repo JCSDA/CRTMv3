@@ -549,15 +549,16 @@ bdc7fb9  fix(SfcOptics): drop Distance_Ratio scaling in CONST_MIXED_POLARIZATION
 > staged on 08-03 and did make the 11:45 roll, so the published ABI family is
 > internally inconsistent, one platform regenerated and five not.
 >
-> **Current state: rolled again on 2026-08-04 at 22:52, NOT yet uploaded.**
+> **Current state: rolled again on 2026-08-04 at 22:52 and uploaded.**
 > Size 3,377,517,263 bytes, md5 `2170582827633c83946e6b4b97ee7c7d`, verified
 > before replacing the previous archive: 1440 files matching the staging tree,
 > same top-level layout, and every extracted ABI file md5-identical to staged.
-> The pins in `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt` now carry the
-> new value, so until the upload happens **a default build will fail its
-> checksum against the file still served by `bin.ssec.wisc.edu`**. That is
-> deliberate: the pins describe the tree the release actually ships. Upload, then
-> confirm the served `Content-Length` is 3377517263.
+> The pins in `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt` carry the new
+> value. Upload confirmed 2026-08-05 against `bin.ssec.wisc.edu`:
+> `Content-Length: 3377517263`, `Last-Modified: Wed, 05 Aug 2026 03:15:19 GMT`.
+> The size alone distinguishes the new archive from the superseded one
+> (3,377,514,134), so the served file is definitively the re-roll. A default
+> build downloads and checksum-verifies the correct tree.
 >
 > *Note for anyone reading older revisions of this file:* an intermediate roll
 > on 2026-08-01 had size 3,377,500,279 and md5

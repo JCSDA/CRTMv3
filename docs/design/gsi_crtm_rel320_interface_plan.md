@@ -112,7 +112,7 @@ risk can now be quantified rather than merely flagged.
 3. The 2.4 Big_Endian/Little_Endian binary split disappears; netCDF is
    portable. ~~Blocker note: the 3.2.0 tarball itself must be re-rolled first
    (staging tree is 143 files ahead; tracked in the release docs).~~
-   **Updated 2026-08-04: rolled, with an upload still outstanding.** The archive
+   **Updated 2026-08-05: rolled and published.** The archive
    was rolled and published in the morning, then superseded that evening when the
    ABI ODPS family regeneration was staged after the roll, leaving ten ABI files
    out of the published copy. It was rolled again at 22:52: size 3,377,517,263
@@ -120,10 +120,9 @@ risk can now be quantified rather than merely flagged.
    tree at 1440 files, all netCDF, zero differences. Both pins
    (`Get_CRTM_Binary_Files.sh`, `test/CMakeLists.txt`) carry the new value.
 
-   For GSI: once the upload lands, GSI can pull the coefficient set the normal
-   way rather than needing a hand-staged tree. Until then the pins intentionally
-   disagree with the file `bin.ssec.wisc.edu` still serves, so a default build
-   cannot fetch a checksum-clean tree and a local copy is required.
+   For GSI: the upload landed on 2026-08-05 (`Content-Length: 3377517263`
+   confirmed against the server), so GSI can pull the coefficient set the normal
+   way rather than needing a hand-staged tree.
 
 ## 3. Code changes in GSI (small; compile-driven)
 
