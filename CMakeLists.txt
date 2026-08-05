@@ -14,6 +14,17 @@ option(BUILD_TIER2_TESTS "Register long-running (tier2) tests" OFF)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 set(CMAKE_DIRECTORY_LABELS ${PROJECT_NAME})
 
+# In-build binaries must always run the in-build libcrtm. With the linker's
+# default RUNPATH dtags, LD_LIBRARY_PATH takes precedence at load time, and a
+# spack environment carrying its own crtm package silently substitutes its
+# library: the test suite then executes a different CRTM release against this
+# build's module interfaces (observed as 230/235 failures with garbage
+# optional arguments when spack's crtm-3.1.2 shadowed an ifx build). Classic
+# RPATH outranks LD_LIBRARY_PATH, so force it.
+if(UNIX AND NOT APPLE)
+  add_link_options(LINKER:--disable-new-dtags)
+endif()
+
 # Include GNUInstallDirs to get the standard installation directory variables
 include(GNUInstallDirs)
 
