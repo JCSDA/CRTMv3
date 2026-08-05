@@ -194,11 +194,34 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
 - **CRTM-Exp cloud-optics schema (experimental, opt-in).** A new
   habit-resolved cloud LUT format selected explicitly with
   `Cloud_Model='CRTM-Exp'`; the default cloud path is unchanged.
-- **SNICAR visible snow emissivity scheme (new, opt-in).** A SNICAR-based
-  VIS-snow reflectance LUT (`SNICAR.VISsnow.EmisCoeff.nc`, shipped in the fix
-  tarball) selectable through the VISsnowCoeff scheme machinery, alongside
-  updated IR snow emissivity modules. The default (NPOESS) snow surface path
-  is unchanged.
+- **SNICAR visible snow reflectance LUT (new, opt-in).** A SNICAR-based VIS-snow
+  reflectance table, `SNICAR.VISsnow.EmisCoeff.nc`, ships in the fix tarball
+  alongside updated IR snow emissivity modules. The default snow surface path
+  (NPOESS) is unchanged: you get SNICAR only by asking for it by filename, since
+  there is no `VISsnowCoeff_Scheme` argument (unlike `MWwaterCoeff_Scheme`).
+
+  ```fortran
+  err = CRTM_Init( Sensor_Id, ChannelInfo, &
+                   VISsnowCoeff_File = 'SNICAR.VISsnow.EmisCoeff.nc', &
+                   File_Path         = coeff_path )
+  ```
+
+  `VISsnowCoeff_Format` selects the file format and defaults to `netCDF`.
+  An unrecognised filename prefix (anything other than `NPOESS` or `SNICAR`)
+  is a hard `CRTM_Init` failure rather than a silent fallback to no snow table.
+
+  **Maturity, stated plainly:** this table is shipped, loadable, and exercised
+  by one radiance-level test (`test_SNICAR_VISsnow_Physics`) that pins the
+  grain-size, depth and density response against an invariant NPOESS control
+  through the full radiative transfer path. That is the extent of what is
+  verified. Two known limitations remain: the table's angle dimension is
+  labelled "Solar Zenith Angle" in the file but is interpolated at the RT
+  view/quadrature angles, so the solar zenith angle never reaches the table;
+  and the forward path applies no bounds guard, so snow states outside the
+  table extrapolate silently while the tangent-linear and adjoint return
+  exactly zero. It carries no validation package of the kind behind the ABI or
+  IASI-NG coefficient work. Treat it as experimental and evaluate it against
+  your own cases before operational use.
 - **ODPS transmittance-algorithm modernization** (issue #343). The ODPS group
   system was rebuilt on a single group registry with load-time validation of
   `Group_Index` and the `Component_ID`/`Absorber_ID` rosters (malformed or
@@ -549,6 +572,30 @@ standing adversarial audit — is in
     terminate the program with a Fortran runtime formatting error rather than
     reporting cleanly.
 
+18. **Surface reflectance from category tables is clamped to the physical
+    range.** The 4-point Lagrange interpolation across SEcategory reflectance
+    spectra overshoots [0,1] where the tabulated spectrum has sharp structure.
+    The NPOESS VIS snow table holds exact zeros at 4000 and 5000 cm-1 with
+    positive neighbours, which produced a reflectance near -0.03 at 2.25
+    micron for both snow types, a negative top-of-atmosphere radiance (about
+    -0.17 mW/(m2 sr cm-1) for VIIRS M11 over old snow), and a NaN brightness
+    temperature from the inverse Planck. The interpolant is now clamped in
+    `SEcategory_Emissivity`, and the visible-path direct-reflectivity limiter
+    clamps below zero as well as above one. The defect is present in v3.1.4
+    (reproduced end to end there), so this fixes an inherited problem rather
+    than a 3.2.0 regression. Results change only where the clamp engages;
+    in-range channels are untouched.
+
+19. **`CRTM_VISsnowCoeff_Load` returns FAILURE for an unrecognised
+    classification prefix.** The classification is parsed from the filename
+    text before the first dot (`NPOESS` or `SNICAR`); any other prefix, or a
+    filename with no dot at all, used to print a FAILURE message and return
+    SUCCESS, so `CRTM_Init` succeeded with no visible snow table loaded and
+    the snow surface optics quietly returned whatever the SfcOptics structure
+    already held. Both arms now return FAILURE, and
+    `Compute_VIS_Snow_SfcOptics` reports FAILURE if it is ever reached with
+    neither table loaded.
+
 ## Known issues and limitations
 
 - **Sub-mm thin frozen cloud (≈ 325 GHz):** optically thin frozen-cloud
@@ -566,6 +613,15 @@ standing adversarial audit — is in
   its authors validated; the table labels that band
   `extrapolated-experimental` in its `confidence_label` variable, and callers
   should read that label rather than assume the table is uniform.
+- **SNICAR visible snow LUT (opt-in): two known limitations,** detailed with
+  the feature under Highlights: the table's angle dimension is labelled
+  "Solar Zenith Angle" in the file but is interpolated at the RT
+  view/quadrature angles (the solar zenith angle never reaches the table),
+  and the forward path applies no LUT bounds guard while the tangent-linear
+  and adjoint return exactly zero out of bounds. Both are deferred beyond
+  v3.2.0; the angle question is pending confirmation with the table's
+  author before either the file metadata or the surface-optics dispatch is
+  changed.
 - **ODSSU netCDF supports the ODPS sub-algorithm only** (the shipped SSU
   files are ODPS-based; ODAS-based SSU coefficient files remain binary-only).
 - **Options binary I/O does not persist the new fields** (`n_Stokes` and the

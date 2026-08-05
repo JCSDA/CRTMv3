@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-CRTM (Community Radiative Transfer Model) v3.1.2 is a Fortran radiative transfer model for satellite data assimilation. It computes top-of-atmosphere radiances and brightness temperatures from atmospheric/surface states, and provides Jacobians (sensitivities) for data assimilation systems.
+CRTM (Community Radiative Transfer Model) v3.2.0 is a Fortran radiative transfer model for satellite data assimilation. It computes top-of-atmosphere radiances and brightness temperatures from atmospheric/surface states, and provides Jacobians (sensitivities) for data assimilation systems.
 
 ## Build Commands
 
