@@ -238,9 +238,15 @@ CONTAINS
     IF( RTV%Visible_Flag_true ) THEN
       DO i = 1, nZ
 ! incorrect        SfcOptics%Direct_Reflectivity(i,1) = SfcOptics%Direct_Reflectivity(i,1) * PI
-        ! ...Apply the UW limiter
+        ! ...Apply the UW limiter, both sides: a direct reflectivity above one
+        !    is unphysical gain, below zero it is an unphysical sink that turns
+        !    the solar term into a negative radiance (surface modules can
+        !    deliver either; interpolation overshoot and out-of-table
+        !    extrapolation are the known suppliers).
         IF (SfcOptics%Direct_Reflectivity(i,1) > ONE) THEN
           SfcOptics%Direct_Reflectivity(i,1) = ONE
+        ELSE IF (SfcOptics%Direct_Reflectivity(i,1) < ZERO) THEN
+          SfcOptics%Direct_Reflectivity(i,1) = ZERO
         END IF
       END DO
     END IF
