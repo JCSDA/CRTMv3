@@ -23,6 +23,7 @@ MODULE CRTM_Forward_Module
                                         MAX_N_STOKES        , &
                                         MAX_N_ANGLES        , &
                                         MAX_N_AZIMUTH_FOURIER, &
+                                        MIN_CHANNELS_PER_CHANNEL_THREAD, &
                                         MAX_SOURCE_ZENITH_ANGLE, &
                                         MAX_N_STREAMS, &
                                         AIRCRAFT_PRESSURE_THRESHOLD, &
@@ -363,6 +364,13 @@ CONTAINS
     ELSE
        n_profile_threads = n_Profiles
        n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
+
+       ! Do not split channels so finely that a thread costs more to set up than
+       ! the channels it owns are worth. See MIN_CHANNELS_PER_CHANNEL_THREAD in
+       ! CRTM_Parameters for the measurements behind this. Leftover threads are
+       ! deliberately left idle: below break-even, using them is slower than not.
+       n_channel_threads = MIN( n_channel_threads, &
+                                MAX(1, n_Channels / MIN_CHANNELS_PER_CHANNEL_THREAD) )
 
        IF(n_channel_threads > 1) THEN
           CALL OMP_SET_MAX_ACTIVE_LEVELS(2)

@@ -29,6 +29,7 @@ MODULE CRTM_K_Matrix_Module
                                         MAX_N_STOKES           , &
                                         MAX_N_ANGLES           , &
                                         MAX_N_AZIMUTH_FOURIER  , &
+                                        MIN_CHANNELS_PER_CHANNEL_THREAD, &
                                         MAX_SOURCE_ZENITH_ANGLE, &
                                         MAX_N_STREAMS          , &
                                         MIN_COVERAGE_THRESHOLD , &
@@ -455,6 +456,15 @@ CONTAINS
 #  else
       n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
 #  endif
+
+      ! Do not split channels so finely that a thread costs more to set up than
+      ! the channels it owns are worth. See MIN_CHANNELS_PER_CHANNEL_THREAD in
+      ! CRTM_Parameters for the measurements behind this. Leftover threads are
+      ! deliberately left idle: below break-even, using them is slower than not.
+      ! Applied after the legacy-ifort bypass above, so it can only lower the
+      ! count that branch already chose.
+      n_channel_threads = MIN( n_channel_threads, &
+                               MAX(1, n_Channels / MIN_CHANNELS_PER_CHANNEL_THREAD) )
       IF(n_channel_threads > 1) THEN
         CALL OMP_SET_MAX_ACTIVE_LEVELS(2)
       ELSE

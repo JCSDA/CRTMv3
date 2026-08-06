@@ -24,6 +24,7 @@ MODULE CRTM_Tangent_Linear_Module
                                         MAX_N_STOKES        , &
                                         MAX_N_ANGLES        , &
                                         MAX_N_AZIMUTH_FOURIER, &
+                                        MIN_CHANNELS_PER_CHANNEL_THREAD, &
                                         MAX_SOURCE_ZENITH_ANGLE, &
                                         MAX_N_STREAMS, &
                                         AIRCRAFT_PRESSURE_THRESHOLD, &
@@ -404,11 +405,18 @@ CONTAINS
     ELSE
       n_profile_threads = n_Profiles
       n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
-!   There may have bug for MW and IR cases by using openMP over channels
-!    IF(SpcCoeff_IsInfraredSensor(SC(1)) .OR. &
-!                SpcCoeff_IsMicrowaveSensor(SC(1)) ) THEN
-!      n_channel_threads = 1
-!    END IF
+
+      ! Do not split channels so finely that a thread costs more to set up than
+      ! the channels it owns are worth. See MIN_CHANNELS_PER_CHANNEL_THREAD in
+      ! CRTM_Parameters for the measurements behind this. Leftover threads are
+      ! deliberately left idle: below break-even, using them is slower than not.
+      !
+      ! This replaces the disabled sensor-type test below, which was reaching for
+      ! the same effect. Channel count is the better discriminator: the loss is
+      ! driven by how little work a thread gets, and small IR sensors suffer it
+      ! too, while large IR sounders are exactly where channel threading pays.
+      n_channel_threads = MIN( n_channel_threads, &
+                               MAX(1, n_Channels / MIN_CHANNELS_PER_CHANNEL_THREAD) )
       IF(n_channel_threads > 1) THEN
         CALL OMP_SET_MAX_ACTIVE_LEVELS(2)
       ELSE
