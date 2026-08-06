@@ -63,19 +63,23 @@ old coefficients.** The `v.abi_*` visible halves were not part of this pass.
 | | |
 |---|---|
 | file | `fix_REL-3.2.0.0.tgz` |
-| size | 3,377,517,263 bytes |
-| md5 | `2170582827633c83946e6b4b97ee7c7d` |
-| published | 2026-08-05, `https://bin.ssec.wisc.edu/pub/s4/CRTM/` |
+| size | 3,377,422,223 bytes |
+| md5 | `88995873986cf2b077808a75d1c56f83` |
+| published | 2026-08-06, `https://bin.ssec.wisc.edu/pub/s4/CRTM/` |
 
 It is smaller than the June 2026 tarball because the July campaign retired and
 replaced coefficient files and the tree is now uniformly netCDF.
 
-**A default build works.** The checksum above is what `test/CMakeLists.txt` and
-`Get_CRTM_Binary_Files.sh` pin, and it is what the server serves, so `cmake ..`
-downloads and verifies the correct tree with no extra arguments. Confirmed
-against the server on 2026-08-05: `Content-Length: 3377517263`, which is the
-re-rolled archive and distinguishable by size from the superseded one
-(3,377,514,134). Building against an unpacked tree remains supported:
+**A default build works.** The checksum above is what `test/CMakeLists.txt`
+and `Get_CRTM_Binary_Files.sh` pin, and it is what the server serves, so
+`cmake ..` downloads and verifies the correct tree with no extra arguments.
+The 2026-08-06 archive was verified locally before promotion: all 1440 members
+byte-identical to the staging tree (which itself is hash-verified against the
+validated coefficient sources in the campaign ledger). Upload confirmed
+against the server on 2026-08-06: `Content-Length: 3377422223`, with the first
+and last MiB byte-compared clean against the local roll. The size alone
+(3,377,422,223 vs 3,377,517,263) distinguishes it from the superseded
+2026-08-05 copy. Building against an unpacked tree remains supported:
 
 ```
 cmake .. -DFIX_FILE_PATH=<path-to>/fix_REL-3.2.0.0/fix

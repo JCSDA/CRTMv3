@@ -568,16 +568,19 @@ bdc7fb9  fix(SfcOptics): drop Distance_Ratio scaling in CONST_MIXED_POLARIZATION
 > staged on 08-03 and did make the 11:45 roll, so the published ABI family is
 > internally inconsistent, one platform regenerated and five not.
 >
-> **Current state: rolled again on 2026-08-04 at 22:52 and uploaded.**
-> Size 3,377,517,263 bytes, md5 `2170582827633c83946e6b4b97ee7c7d`, verified
-> before replacing the previous archive: 1440 files matching the staging tree,
-> same top-level layout, and every extracted ABI file md5-identical to staged.
-> The pins in `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt` carry the new
-> value. Upload confirmed 2026-08-05 against `bin.ssec.wisc.edu`:
-> `Content-Length: 3377517263`, `Last-Modified: Wed, 05 Aug 2026 03:15:19 GMT`.
-> The size alone distinguishes the new archive from the superseded one
-> (3,377,514,134), so the served file is definitively the re-roll. A default
-> build downloads and checksum-verifies the correct tree.
+> **Current state: rolled again on 2026-08-06 after the coefficient
+> regeneration campaign staging (24 files: 9 regen SpcCoeff+TauCoeff pairs,
+> 6 OPTRAN-refresh TauCoeffs incl. the re-merged Group-8 NO2 VIS products).**
+> Size 3,377,422,223 bytes, md5 `88995873986cf2b077808a75d1c56f83`, verified
+> before replacing the previous archive: 1440 members (membership unchanged),
+> every member byte-identical to the staging tree, tree hash-verified against
+> the validated sources in the campaign ledger, and a zero-solar sweep of all
+> 416 solar-type SpcCoeffs clean. The pins in `Get_CRTM_Binary_Files.sh` and
+> `test/CMakeLists.txt` carry the new value. UPLOADED 2026-08-06: the server
+> serves the new archive (`Content-Length: 3377422223`, confirmed 2026-08-06
+> with the first and last MiB byte-compared against the local roll); a default
+> build downloads and md5-verifies it. The prior rolls (2026-08-04 22:52,
+> superseded 08-05 morning copy) are retired.
 >
 > *Note for anyone reading older revisions of this file:* an intermediate roll
 > on 2026-08-01 had size 3,377,500,279 and md5

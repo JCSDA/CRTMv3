@@ -112,17 +112,17 @@ risk can now be quantified rather than merely flagged.
 3. The 2.4 Big_Endian/Little_Endian binary split disappears; netCDF is
    portable. ~~Blocker note: the 3.2.0 tarball itself must be re-rolled first
    (staging tree is 143 files ahead; tracked in the release docs).~~
-   **Updated 2026-08-05: rolled and published.** The archive
-   was rolled and published in the morning, then superseded that evening when the
-   ABI ODPS family regeneration was staged after the roll, leaving ten ABI files
-   out of the published copy. It was rolled again at 22:52: size 3,377,517,263
-   bytes, md5 `2170582827633c83946e6b4b97ee7c7d`, verified against the staging
-   tree at 1440 files, all netCDF, zero differences. Both pins
-   (`Get_CRTM_Binary_Files.sh`, `test/CMakeLists.txt`) carry the new value.
+   **Updated 2026-08-06: final campaign roll, published.** The archive
+   was re-rolled 2026-08-06 after the coefficient regeneration campaign staged
+   its 24-file replacement set (this supersedes the 2026-08-04/05 rolls). Size
+   3,377,422,223 bytes, md5 `88995873986cf2b077808a75d1c56f83`, verified
+   against the staging tree at 1440 members, all netCDF, zero differences.
+   Both pins (`Get_CRTM_Binary_Files.sh`, `test/CMakeLists.txt`) carry the new
+   value.
 
-   For GSI: the upload landed on 2026-08-05 (`Content-Length: 3377517263`
-   confirmed against the server), so GSI can pull the coefficient set the normal
-   way rather than needing a hand-staged tree.
+   For GSI: the 2026-08-06 upload is live (server `Content-Length:
+   3377422223`, confirmed 2026-08-06); GSI can pull the coefficient set the
+   normal way and the md5 pin will verify it.
 
 ## 3. Code changes in GSI (small; compile-driven)
 

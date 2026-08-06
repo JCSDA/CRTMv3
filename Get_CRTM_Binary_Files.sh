@@ -4,7 +4,7 @@
 # The same files also download automatically during the cmake step, so you don't have to actually run this manually. 
 
 foldername="fix_REL-3.2.0.0"
-checksum=2170582827633c83946e6b4b97ee7c7d #md5sum
+checksum=88995873986cf2b077808a75d1c56f83 #md5sum
 filename="${foldername}.tgz"
 download_url=https://bin.ssec.wisc.edu/pub/s4/CRTM/$filename
 
