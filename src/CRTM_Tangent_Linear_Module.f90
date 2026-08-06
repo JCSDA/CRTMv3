@@ -389,11 +389,25 @@ CONTAINS
     ! into thread-spawning. Every exit path below restores this value.
     max_levels_on_entry = OMP_GET_MAX_ACTIVE_LEVELS()
 
+    ! How many threads are actually available to us here?
+    !
+    ! From serial code the cheap query is exact, and avoids spawning a whole
+    ! team on every call purely to count it. It is NOT equivalent in general:
+    ! inside a host's parallel region with nesting disallowed, a nested PARALLEL
+    ! yields a team of one while OMP_GET_MAX_THREADS still reports nthreads-var
+    ! (measured 1 vs 8). Trusting 8 there would size per-thread scratch for 8
+    ! channel threads and chunk the channels 8 ways, then run them serially.
+    ! Dynamic adjustment can likewise hand back fewer threads than nthreads-var,
+    ! so fall back to spawning-and-counting in both of those cases.
+    IF ( OMP_IN_PARALLEL() .OR. OMP_GET_DYNAMIC() ) THEN
 !$OMP PARALLEL
 !$OMP SINGLE
-    n_omp_threads = OMP_GET_NUM_THREADS()
+      n_omp_threads = OMP_GET_NUM_THREADS()
 !$OMP END SINGLE
 !$OMP END PARALLEL
+    ELSE
+      n_omp_threads = OMP_GET_MAX_THREADS()
+    END IF
 
     ! Determine how many threads to use for profiles and channels
     ! After profiles get what they need, we use the left-over threads
