@@ -351,6 +351,9 @@ CONTAINS
     INTEGER :: n_omp_threads
     INTEGER :: n_profile_threads
     INTEGER :: n_channel_threads
+#ifdef _OPENMP
+    INTEGER :: max_levels_on_entry
+#endif
 
     ! ------
     ! SET UP
@@ -417,6 +420,14 @@ CONTAINS
     ! OpenMP
     ! -------
 #ifdef _OPENMP
+    ! Record the caller's nesting policy before we change it. CRTM raises
+    ! max-active-levels to enable the nested channel loop, but that setting is
+    ! global to the OpenMP runtime and outlives this call. A host that does its
+    ! own threading would otherwise find its nesting policy silently replaced by
+    ! a CRTM compute call, which can turn its own nested regions from serialised
+    ! into thread-spawning. Every exit path below restores this value.
+    max_levels_on_entry = OMP_GET_MAX_ACTIVE_LEVELS()
+
 !$OMP PARALLEL
 !$OMP SINGLE
     n_omp_threads = OMP_GET_NUM_THREADS()
@@ -499,6 +510,9 @@ CONTAINS
 !$OMP END PARALLEL DO
 
     IF (Error_Status == FAILURE) THEN
+#ifdef _OPENMP
+       CALL OMP_SET_MAX_ACTIVE_LEVELS(max_levels_on_entry)
+#endif
        RETURN
     END IF
 
@@ -521,6 +535,9 @@ CONTAINS
       Error_Status = FAILURE
       WRITE(Message,'(i0," profiles failed")') nfailure
       CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+#ifdef _OPENMP
+      CALL OMP_SET_MAX_ACTIVE_LEVELS(max_levels_on_entry)
+#endif
       RETURN
     END IF
 
@@ -542,6 +559,9 @@ CONTAINS
       WRITE(6,*)'CRTM_K_Matrix inspecting Surface_K...'
       CALL CRTM_Surface_Inspect (Surface_K(:,:))
     END IF
+#ifdef _OPENMP
+    CALL OMP_SET_MAX_ACTIVE_LEVELS(max_levels_on_entry)
+#endif
     RETURN
 
 
