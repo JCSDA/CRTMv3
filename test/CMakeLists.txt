@@ -429,6 +429,17 @@ target_link_libraries(Unit_Long_Path_Init PRIVATE crtm)
 add_test(NAME test_Unit_Long_Path_Init
          COMMAND $<TARGET_FILE:Unit_Long_Path_Init>)
 
+# OpenMP thread policy on a single-profile call, which is what GSI issues.
+# Checks (A) that CRTM restores the caller's max-active-levels, and (B) that
+# threading a small sensor is not dramatically slower than not threading it
+# (a 22-channel sensor on 16 threads once ran ~30x slower than on one).
+# RUN_SERIAL because (B) times the model and must not share the machine.
+add_executable(Unit_OMP_Thread_Policy mains/unit/Unit_Test/test_OMP_Thread_Policy.f90)
+target_link_libraries(Unit_OMP_Thread_Policy PRIVATE crtm)
+add_test(NAME test_Unit_OMP_Thread_Policy
+         COMMAND $<TARGET_FILE:Unit_OMP_Thread_Policy>)
+set_tests_properties(test_Unit_OMP_Thread_Policy PROPERTIES RUN_SERIAL TRUE)
+
 # General TL-vs-FD and AD consistency check across sensor types (from #280).
 # Parameterized by sensor id and mode: "fd" checks the tangent-linear against a
 # central finite difference of the forward (per channel), "ad" checks the TL-AD
