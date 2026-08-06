@@ -596,6 +596,50 @@ standing adversarial audit — is in
     `Compute_VIS_Snow_SfcOptics` reports FAILURE if it is ever reached with
     neither table loaded.
 
+20. **CRTM restores the caller's OpenMP nesting policy.** `CRTM_Forward`,
+    `CRTM_Tangent_Linear` and `CRTM_K_Matrix` raise `max-active-levels` to run
+    their nested channel loop. That setting is global to the OpenMP runtime and
+    was never put back, so a host doing its own threading found its nesting
+    policy silently replaced by a CRTM compute call, which can turn the host's
+    own nested regions from serialised into thread-spawning.  `CRTM_Adjoint`
+    never sets the level, so it inherited whatever the previous forward or
+    K-matrix call left behind. Each routine now saves and restores the value on
+    every exit path. No computational code is touched and no result changes.
+    The defect is present in v3.1.4, so this fixes an inherited problem rather
+    than a 3.2.0 regression.
+
+21. **Channels are no longer split across threads when the split cannot pay for
+    itself.** Channel-level threading gives every thread its own optical-depth,
+    surface-optics and RT scratch structures, sized by the layer count and
+    stream maxima rather than by how many channels the thread receives. When
+    threads outnumbered profiles, CRTM divided the channels among all spare
+    threads regardless of how few each would get, and for small sensors that
+    cost far more than it saved: a single 22-channel microwave profile on 16
+    threads ran about 30 times slower than the same build on one thread. The
+    thread count is now capped so each channel-thread owns at least
+    `MIN_CHANNELS_PER_CHANNEL_THREAD` channels, and CRTM no longer spawns a
+    thread team merely to count the available threads. Spare threads below the
+    threshold are left idle deliberately.
+
+    This only ever lowers the chosen thread count, so it cannot create nesting
+    where there was none, and it is a no-op wherever profiles already absorb
+    every thread. Results are unchanged; only the thread decomposition differs.
+    The defect is present in v3.1.4 and is not a 3.2.0 regression.
+
+    Who was affected: hosts that call CRTM with **one profile at a time while
+    also setting `OMP_NUM_THREADS` greater than 1**. GSI does pass a single
+    profile per call, so a hybrid MPI/OpenMP GSI configuration was exposed; a
+    pure-MPI configuration with `OMP_NUM_THREADS=1` never entered the path.
+    JEDI and UFO were never exposed, because they pass the whole observation
+    batch as profiles.
+
+    Measured effect on the single-profile case (forward, wall clock, against
+    the same build on one thread): 22-channel microwave sensor on 16 threads
+    0.03x to 1.00x and on 8 threads 0.10x to 1.00x; 399-channel infrared
+    sounder on 8 threads 0.92x to 2.12x; 2211-channel infrared sounder on 8
+    threads 1.96x to 2.79x. Cases where profiles already met or exceeded the
+    thread count are unchanged at 4.4x to 5.4x.
+
 ## Known issues and limitations
 
 - **Sub-mm thin frozen cloud (≈ 325 GHz):** optically thin frozen-cloud

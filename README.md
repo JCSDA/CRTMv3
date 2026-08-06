@@ -266,10 +266,33 @@ string*, CRTM coerces it to **1 thread** (i.e. CRTM runs serially) -- this is do
 `OMP_NUM_THREADS=N` to run with N threads.
 
 **Where the parallelism is.** Each call to a CRTM forward operator parallelizes internally:
-`CRTM_Forward`, `CRTM_Tangent_Linear`, and `CRTM_K_Matrix` parallelize over channels (and,
-when multiple profiles are passed and there are enough threads, also over profiles);
-`CRTM_Adjoint` parallelizes over profiles. You do not (and should not) wrap CRTM calls in
-your own OpenMP region -- see the thread-safety rules below.
+`CRTM_Forward`, `CRTM_Tangent_Linear`, and `CRTM_K_Matrix` parallelize over profiles first
+and then, only if threads remain, over channels; `CRTM_Adjoint` parallelizes over profiles
+only. You do not (and should not) wrap CRTM calls in your own OpenMP region -- see the
+thread-safety rules below.
+
+**Batch your profiles if you can.** Profile-level parallelism scales far better than
+channel-level, so the single most effective thing a host can do is pass many profiles per
+call rather than one. Passing at least as many profiles as there are threads keeps CRTM
+entirely on the profile path, which is where the good scaling is. Hosts that pass the whole
+observation batch (JEDI/UFO) already do this; hosts that call CRTM once per profile (GSI)
+get less benefit from threads no matter what CRTM does, simply because a single profile is
+the smallest unit CRTM can divide well.
+
+**Channel threading is applied only where it pays.** Giving a thread its own channels also
+gives it its own optical-depth, surface-optics and RT scratch structures, whose cost is set
+by the layer count and stream maxima rather than by the number of channels the thread
+receives. Splitting a small sensor across many threads therefore costs more than it saves,
+so CRTM requires a minimum number of channels per channel-thread before splitting at all
+(`MIN_CHANNELS_PER_CHANNEL_THREAD` in `CRTM_Parameters`). Below that it leaves the extra
+threads idle deliberately, because using them would be slower than not using them. In
+practice this means microwave sounders and small imagers run channel-serial, while
+hyperspectral infrared sounders still thread over channels.
+
+**CRTM leaves your OpenMP settings as it found them.** CRTM temporarily raises
+`max-active-levels` when it needs nested parallelism, and restores the caller's value on
+every exit path, so a host's own nesting policy is never silently changed by a CRTM compute
+call.
 
 **Thread-safety rules for host applications:**
 

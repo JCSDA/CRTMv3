@@ -166,9 +166,33 @@ risk can now be quantified rather than merely flagged.
       penalty, and bias-correction spin-up per sensor against the 2.4 control.
    d. Full-resolution parallel before any operational or quasi-operational use.
 4. **Performance check:** wall-clock and memory of setuprad with v3 (netCDF
-   coefficient load at init, larger RTSolution). CRTM-internal channel OpenMP
-   is inert under GSI's per-profile call pattern; confirm no thread
+   coefficient load at init, larger RTSolution). Confirm no thread
    oversubscription.
+
+   **Correction (measured 2026-08-06).** An earlier revision of this item
+   claimed CRTM-internal channel OpenMP was "inert under GSI's per-profile call
+   pattern". That was wrong, and backwards. GSI passes one profile per call
+   (`crtm_interface.f90`, `atmosphere` is `dimension(1)`), and CRTM only reached
+   its channel-threading path when threads outnumbered profiles, so a single
+   profile with `OMP_NUM_THREADS` greater than 1 was the *worst* case rather
+   than an inert one: every spare thread took a slice of the channels along with
+   a full set of per-thread scratch structures. Measured on a 22-channel
+   microwave sensor, one profile on 16 threads ran about 30 times slower than
+   the same build on one thread.
+
+   This is fixed in CRTM (see behavior-change entries 20 and 21 in the release
+   notes): channels are no longer split below a minimum work threshold, and the
+   single-profile case is now at worst break-even and usually a modest gain.
+   Two things still follow for GSI:
+
+   - A hybrid MPI/OpenMP GSI on **v3.1.4 or earlier** is exposed to the old
+     behavior. If such a configuration is in use, `OMP_NUM_THREADS=1` for the
+     CRTM portion recovers the loss with no code change.
+   - Threads give GSI little either way, because one profile is the smallest
+     unit CRTM can divide well. The scaling lives in profile-level parallelism,
+     which GSI's call pattern does not expose. If CRTM throughput inside
+     setuprad ever becomes a bottleneck, batching profiles per call is the
+     change that would matter, and it is a GSI-side change, not a CRTM one.
 
 ## 5. Rollout sequencing
 

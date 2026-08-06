@@ -129,6 +129,12 @@ These are on the branch but produce **no TB difference** in the common `ctest` c
 * **OpenMP thread-safety / race fixes** — `6ae8c1c`, `07e91d7`, `ec1cbb1`, `8311ba3`, `fc0a49a`, `01edea6`, `288fbdb`, `53a266d`, `b94b23f`: removed unsafe `SAVE` / implicit-`SAVE` coeff scratch (NESDIS-emissivity, ODCAPS); fixed channel-thread `!$OMP` races in `CRTM_Forward/Tangent_Linear/K_Matrix` (`Error_Status` write → `REDUCTION(MAX:...)`; unindexed `RTV%`/`RTV_Clear%` → `RTV(nt)%`; an OOB chunk-bucket write and an `end_ch` OOB read; `AAvar` privatization; per-channel NLTE/Zeeman predictor reset); hardened `CRTM_ChannelInfo_Subset`.
   - *No numerical difference, by construction:* the removed `SAVE`s are on local scratch arrays that are unconditionally re-assigned from literal `data` / array-constructor values at the top of every call (vestigial `SAVE`); the race fixes only change anything with >1 OpenMP thread, and the regression suite runs single-threaded (`CRTM_Init` coerces unset/empty `OMP_NUM_THREADS` to 1). The ctest pass/fail set was verified byte-identical before/after this work.
   - New self-consistency tests added: `test_OMP_Consistency`, `test_OMP_Speedup`, `test_ChannelSubset_OMP`, `test_OMPoverChannels` (no shared reference files). README gained an "OpenMP and thread safety" section. (`JCSDA/CRTMv3#111`, `#164`.)
+* **OpenMP thread-policy fixes (2026-08-06)** — `e54e7cb`, `7af53cb`, `90f75c1`, `4c7be67`: three defects in *how CRTM decides to use threads*, distinct from the race fixes above. All three are inherited from v3.1.4 (the split logic there is byte-identical), so none is a 3.2.0 regression.
+  - *Nesting policy leaked to the caller (`e54e7cb`):* `CRTM_Forward/Tangent_Linear/K_Matrix` raise `max-active-levels` for the nested channel loop and never restored it, so a host doing its own threading had its nesting policy silently replaced by a CRTM compute call; `CRTM_Adjoint`, which never sets the level, inherited whatever the last such call left. Now saved on entry and restored on every exit path.
+  - *Channels split below break-even (`7af53cb`, `90f75c1`):* each channel-thread carries its own AtmOptics/SfcOptics/RTV/scatter scratch, sized by layers and stream maxima rather than by the channels it receives, so dividing a small sensor among many threads cost more than it saved. Capped at `MIN_CHANNELS_PER_CHANNEL_THREAD` channels per thread (`CRTM_Parameters`), and the thread count is no longer discovered by spawning a team purely to count it. Exposure was hosts passing **one profile per call with `OMP_NUM_THREADS` > 1** — GSI's call shape (`crtm_interface.f90`, `dimension(1)`); JEDI/UFO pass the whole obs batch (`n_Profiles = geovals%nlocs`) and were never affected.
+  - *No numerical difference, by construction:* only the thread decomposition changes. The cap can only lower the chosen thread count, never raise it, so it cannot introduce nesting; it is a no-op wherever profiles already absorb every thread. Suite verified 236/236 on gfortran 13.3 and ifx 2025.3.3.
+  - *Measured (forward, wall clock, one profile, vs the same build on one thread):* 22-channel MW 16 threads 0.03x → 1.00x, 8 threads 0.10x → 1.00x; 399-channel IR 8 threads 0.92x → 2.12x; 2211-channel IR 8 threads 1.96x → 2.79x. Profiles ≥ threads unchanged at 4.4–5.4x.
+  - New test `test_Unit_OMP_Thread_Policy` (`4c7be67`) guards both properties on the single-profile call; confirmed to fail against the pre-fix library and pass after.
 * **PARMIO microwave ocean-emissivity backend (a default-path change for channels ≥ 200 GHz)** — `2c2f8d4`, `28fd40f`, `9fdf70a`, `11b9bfb`, `629b6a5`, `9cebd68`, `34fbbeb`, `7689efe`, `776aa56`, `9e8702f`, `0c6ff86`, `13c7d23`, `6df91a7`, plus `src/SfcOptics/MW_Water/PARMIO_MWSSEM/*`, `src/Coefficients/.../PARMIOCoeff/*`, `src/Coefficients/CRTM_PARMIOCoeff.f90`, `test/.../parmio_tlad/*`: a LUT-driven MW ocean SSEM. **Correction to earlier drafts of this issue: PARMIO is no longer opt-in.** The `Use_PARMIO_Model` flag (both `Options%` and `SfcOptics%`) was removed (`0c6ff86`); the backend is now auto-loaded at init and auto-dispatched by channel frequency.
   - *Auto-load (`13c7d23`):* `CRTM_Init` resolves `<File_Path>/PARMIO.MWwater.EmisCoeff.nc` and loads it whenever the loaded SpcCoeff set contains at least one microwave sensor (`CRTM_LifeCycle.f90` ~1073, ~1101–1137). The caller may override the filename via the optional `PARMIOCoeff_File` argument. Missing-LUT behavior: with no explicit file, an absent LUT is non-fatal and CRTM silently continues on the FASTEM path (drop-in); an explicitly-supplied-but-absent `PARMIOCoeff_File` is a hard `FAILURE`. The LUT *is* shipped in `fix_REL-3.2.0.0.tgz` (`fix/EmisCoeff/MW_Water/netCDF/PARMIO.MWwater.EmisCoeff.nc`), so in the default deployment the LUT loads and the routing below is active.
   - *Dispatch (`7689efe`):* `CRTM_MW_Water_SfcOptics` routes a channel to PARMIO iff `CRTM_PARMIOCoeff_IsLoaded() .AND. Frequency >= PARMIO_FREQ_THRESHOLD` (= 200 GHz) — forward `:240`, TL `:471`, AD `:692`. Below 200 GHz, or with the LUT not loaded, the code is byte-identical to the original FASTEM path. So for MW-water channels ≥ 200 GHz the default ocean emissivity — and thus `Radiance` / `Brightness_Temperature` and the MW-water Jacobians — now comes from PARMIO rather than FASTEM. This is a genuine default-behavior change, not an inert opt-in.
@@ -410,6 +416,19 @@ build.
   `release_wrap_2026-08/tools_CRTMv3/coeff_delta/`.
 
 ## 13. Post-wrap coefficient replacement: the ABI ODPS family (2026-08-03/04)
+
+**2026-08-05 addendum.** All six ABI TauCoeff files were refreshed to
+Version 3 with the OPTRAN effective-target fix (OPTRAN previously fit the
+raw isolated water-line target while ODPS components are trained on the
+effective decomposition; the mismatch was found and proven on cris-fsr_n21,
+where it cost up to 1.15 K on strong-overlap channels). ABI impact is
+small (ch16-class self-fit improves ~0.05 K, other channels unchanged to
+1e-4 K) but the fix is principled and the tarball had not yet been
+re-rolled. Version 2 files archived at staged_backup_20260805_optranfix/.
+SpcCoeffs unchanged. Also 2026-08-05: cris-fsr_n21.NLTECoeff.nc replaced
+with the post-fix regeneration (Version 2; pre-fix Version 1 archived at
+staged_backup_20260805_cris_nlte/). The tarball re-roll requirement from
+this section stands and now covers these files too.
 
 After the 2026-08-01 release-candidate wrap and tarball roll, the ABI
 assumption audit (LBL/work/abi_audit/AUDIT_LOG.md; JCSDA/CRTMv3 issue #347)
