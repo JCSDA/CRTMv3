@@ -80,6 +80,8 @@ MODULE ODPS_Predictor
   PUBLIC :: GROUP_3
   PUBLIC :: GROUP_MW_O3
   PUBLIC :: GROUP_UV_NO2
+  PUBLIC :: GROUP_IR_QDRY2
+  PUBLIC :: GROUP_IR_QDRY1
   PUBLIC :: RESERVED_ZSSMIS_GROUP
   PUBLIC :: RESERVED_ZAMSUA_GROUP
   PUBLIC :: ODPS_INVALID_ID
@@ -95,8 +97,10 @@ MODULE ODPS_Predictor
   ! the component and absorber ID constants it references.
   ! Group 7 is the MW+ozone variant of group 3 (indexes 4 - 6 are Zeeman);
   ! group 8 is the UV/VIS variant of group 2 with an added scene-NO2
-  ! component.
-  INTEGER, PARAMETER  :: N_G = 8
+  ! component; groups 9 and 10 are the humidity-aware-dry (QDRY) variants
+  ! of groups 2 and 1, whose dry component carries the 13 water-vapor
+  ! predictor formulas in addition to the 7 heritage dry predictors.
+  INTEGER, PARAMETER  :: N_G = 10
   INTEGER, PARAMETER  :: MAX_COMPONENTS_ANY_GROUP = 8
   INTEGER, PARAMETER  :: MAX_ABSORBERS_ANY_GROUP  = 6
   ! Predictor basis classes: which shared per-layer formulation a group uses
@@ -118,9 +122,12 @@ MODULE ODPS_Predictor
   INTEGER, PARAMETER :: RESERVED_ZAMSUA_GROUP = 5  ! Zeeman AMSU-A (ODZeeman only)
   INTEGER, PARAMETER :: GROUP_MW_O3 = 7   ! MW with a scene-ozone component
   INTEGER, PARAMETER :: GROUP_UV_NO2 = 8  ! UV/VIS with a scene-NO2 component
+  INTEGER, PARAMETER :: GROUP_IR_QDRY2 = 9   ! group 2 with the QDRY dry component
+  INTEGER, PARAMETER :: GROUP_IR_QDRY1 = 10  ! group 1 with the QDRY dry component
   ! The groups a standard ODPS TauCoeff file may legitimately carry
-  INTEGER, PARAMETER :: VALID_GROUPS(5) = &
-    (/ GROUP_1, GROUP_2, GROUP_3, GROUP_MW_O3, GROUP_UV_NO2 /)
+  INTEGER, PARAMETER :: VALID_GROUPS(7) = &
+    (/ GROUP_1, GROUP_2, GROUP_3, GROUP_MW_O3, GROUP_UV_NO2, &
+       GROUP_IR_QDRY2, GROUP_IR_QDRY1 /)
 
   ! Component IDs.
   !
@@ -138,11 +145,22 @@ MODULE ODPS_Predictor
   !   112-121 effective single-gas components (112 wet, 113 dry, 114 ozone,
   !           118 CH4, 119 CO, 120 N2O, 121 CO2)
   !   122     NO2 (CRTM extension, added with GROUP_UV_NO2)
+  !   123/124 QDRY dry components (CRTM extension, added with the QDRY
+  !           groups 9/10): the group-2/group-1 effective-dry TARGETS
+  !           unchanged, but fitted and applied with 20 predictors (the 7
+  !           heritage dry predictors plus water-vapor predictors 1 - 13
+  !           of the WLO formulation). The band-averaged effective-dry
+  !           transmittance carries the spectral-correlation term of the
+  !           in-band water vs dry-gas line overlap, which responds to
+  !           humidity; a temperature-only dry basis cannot represent
+  !           that response (P3 investigation, 2026-08).
   ! New component IDs must be coordinated with the coefficient generation
   ! package (crtm-coeffgen) and recorded here.
   INTEGER,  PARAMETER :: TOT_ComID = 10    ! total tau
   INTEGER,  PARAMETER :: DRY_ComID_G1 =  7   ! dry gas for Group-1 sensors
   INTEGER,  PARAMETER :: DRY_ComID_G2 = 20   ! dry gas, for Gorup-2 sensors
+  INTEGER,  PARAMETER :: DRY_ComID_Q2 = 123  ! QDRY dry, group-9 (group-2 target)
+  INTEGER,  PARAMETER :: DRY_ComID_Q1 = 124  ! QDRY dry, group-10 (group-1 target)
   INTEGER,  PARAMETER :: WLO_ComID = 101  ! water vapor line only, no continua
   INTEGER,  PARAMETER :: WCO_ComID = 15   ! water vapor continua only, no line absorption
   INTEGER,  PARAMETER :: OZO_ComID = 114  ! ozone
@@ -256,7 +274,15 @@ MODULE ODPS_Predictor
     ODPS_Group_Spec_type( 'UV_NO2      ', BASIS_IR, 6, 4, 15, &
       (/ DRY_ComID_G2, WLO_ComID, WCO_ComID, OZO_ComID, CO2_ComID, NO2_ComID, 0, 0 /), &
       (/ H2O_ID, O3_ID, CO2_ID, NO2_ID, 0, 0 /), &
-      (/ 7, 15, 7, 11, 10, 3, 0, 0 /) ) /)
+      (/ 7, 15, 7, 11, 10, 3, 0, 0 /) ), &
+    ODPS_Group_Spec_type( 'IR_BROAD_QD ', BASIS_IR, 5, 3, 20, &
+      (/ DRY_ComID_Q2, WLO_ComID, WCO_ComID, OZO_ComID, CO2_ComID, 0, 0, 0 /), &
+      (/ H2O_ID, O3_ID, CO2_ID, 0, 0, 0 /), &
+      (/ 20, 15, 7, 11, 10, 0, 0, 0 /) ), &
+    ODPS_Group_Spec_type( 'IR_HIRES_QD ', BASIS_IR, 8, 6, 20, &
+      (/ DRY_ComID_Q1, WLO_ComID, WCO_ComID, OZO_ComID, CO2_ComID, N2O_ComID, CO_ComID, CH4_ComID /), &
+      (/ H2O_ID, O3_ID, CO2_ID, N2O_ID, CO_ID, CH4_ID /), &
+      (/ 20, 18, 7, 11, 11, 14, 10, 11 /) ) /)
 
   ! Literal constants
   REAL(fp), PARAMETER :: ZERO      = 0.0_fp
@@ -930,8 +956,8 @@ CONTAINS
         IR_Component_Loop : DO ic = 1, SIZE(Component_ID)
           np = Predictor%n_CP(ic)
           SELECT CASE ( Component_ID(ic) )
-            CASE ( DRY_ComID_G1, DRY_ComID_G2 )
-              CALL FWD_Kernel_DRY(k, ic)
+            CASE ( DRY_ComID_G1, DRY_ComID_G2, DRY_ComID_Q1, DRY_ComID_Q2 )
+              CALL FWD_Kernel_DRY(k, ic, np)
             CASE ( WLO_ComID )
               CALL FWD_Kernel_WLO(k, ic, np)
             CASE ( WCO_ComID )
@@ -989,7 +1015,7 @@ CONTAINS
           np = Predictor%n_CP(ic)
           SELECT CASE ( Component_ID(ic) )
             CASE ( EDRY_ComID )
-              CALL FWD_Kernel_DRY(k, ic)
+              CALL FWD_Kernel_DRY(k, ic, np)
             CASE ( WET_ComID )
               CALL FWD_Kernel_WET_MW(k, ic)
             CASE ( OZO_ComID )
@@ -1020,8 +1046,8 @@ CONTAINS
     !  ----------------------
     !   Fixed (Dry) predictors (IR and MW use the same formulation)
     !  ----------------------
-    SUBROUTINE FWD_Kernel_DRY( k, ic )
-      INTEGER, INTENT(IN) :: k, ic
+    SUBROUTINE FWD_Kernel_DRY( k, ic, np )
+      INTEGER, INTENT(IN) :: k, ic, np
       Predictor%X(k, 1, ic)  = SECANG(k)
       Predictor%X(k, 2, ic)  = SECANG(k) * T
       Predictor%X(k, 3, ic)  = SECANG(k) * T2
@@ -1029,6 +1055,25 @@ CONTAINS
       Predictor%X(k, 5, ic)  = SECANG(k) * SECANG(k)
       Predictor%X(k, 6, ic)  = T2
       Predictor%X(k, 7, ic)  = Tz(k)
+      ! QDRY dry components (123/124) carry water-vapor predictors 1 - 13
+      ! of the WLO formulation in slots 8 - 20: the band-averaged
+      ! effective-dry target responds to humidity through the in-band
+      ! water/dry-gas line-overlap correlation term
+      IF ( np >= 20 ) THEN
+        Predictor%X(k, 8, ic)  = H2O_A
+        Predictor%X(k, 9, ic)  = H2O_A*DT
+        Predictor%X(k,10, ic)  = H2O_S
+        Predictor%X(k,11, ic)  = H2O_A*DT2
+        Predictor%X(k,12, ic)  = H2O_R4
+        Predictor%X(k,13, ic)  = H2O_S*H2O_A
+        Predictor%X(k,14, ic)  = H2O_R
+        Predictor%X(k,15, ic)  = H2O_R*DT
+        Predictor%X(k,16, ic)  = H2O_S*H2O_S
+        Predictor%X(k,17, ic)  = H2OdH2OTzp
+        Predictor%X(k,18, ic)  = H2O_R*H2OdH2OTzp
+        Predictor%X(k,19, ic)  = (SECANG(k)*GAzp(k,ja_h2o))**2
+        Predictor%X(k,20, ic)  = SECANG(k)*GAzp(k,ja_h2o)
+      END IF
     END SUBROUTINE FWD_Kernel_DRY
 
     !  --------------------------
@@ -1549,8 +1594,8 @@ CONTAINS
         IR_Component_Loop : DO ic = 1, SIZE(Component_ID)
           np = Predictor_TL%n_CP(ic)
           SELECT CASE ( Component_ID(ic) )
-            CASE ( DRY_ComID_G1, DRY_ComID_G2 )
-              CALL TL_Kernel_DRY(k, ic)
+            CASE ( DRY_ComID_G1, DRY_ComID_G2, DRY_ComID_Q1, DRY_ComID_Q2 )
+              CALL TL_Kernel_DRY(k, ic, np)
             CASE ( WLO_ComID )
               CALL TL_Kernel_WLO(k, ic, np)
             CASE ( WCO_ComID )
@@ -1632,7 +1677,7 @@ CONTAINS
           np = Predictor_TL%n_CP(ic)
           SELECT CASE ( Component_ID(ic) )
             CASE ( EDRY_ComID )
-              CALL TL_Kernel_DRY(k, ic)
+              CALL TL_Kernel_DRY(k, ic, np)
               Predictor_TL%X(:, 8:, ic) = ZERO
             CASE ( WET_ComID )
               CALL TL_Kernel_WET_MW(k, ic)
@@ -1666,8 +1711,8 @@ CONTAINS
     !  ----------------------
     !   Fixed (Dry) predictors (IR and MW use the same formulation)
     !  ----------------------
-    SUBROUTINE TL_Kernel_DRY( k, ic )
-      INTEGER, INTENT(IN) :: k, ic
+    SUBROUTINE TL_Kernel_DRY( k, ic, np )
+      INTEGER, INTENT(IN) :: k, ic, np
       Predictor_TL%X(k, 1, ic)  = ZERO
       Predictor_TL%X(k, 2, ic)  = SECANG(k) * T_TL
       Predictor_TL%X(k, 3, ic)  = SECANG(k) * T2_TL
@@ -1675,6 +1720,22 @@ CONTAINS
       Predictor_TL%X(k, 5, ic)  = ZERO
       Predictor_TL%X(k, 6, ic)  = T2_TL
       Predictor_TL%X(k, 7, ic)  = Tz_TL(k)
+      ! QDRY water predictors 8 - 20: TL of the WLO formulas 1 - 13
+      IF ( np >= 20 ) THEN
+        Predictor_TL%X(k, 8, ic)  = H2O_A_TL
+        Predictor_TL%X(k, 9, ic)  = H2O_A_TL*DT + H2O_A*DT_TL
+        Predictor_TL%X(k,10, ic)  = H2O_S_TL
+        Predictor_TL%X(k,11, ic)  = H2O_A_TL*DT2 + H2O_A*DT2_TL
+        Predictor_TL%X(k,12, ic)  = H2O_R4_TL
+        Predictor_TL%X(k,13, ic)  = H2O_S_TL*H2O_A + H2O_S*H2O_A_TL
+        Predictor_TL%X(k,14, ic)  = H2O_R_TL
+        Predictor_TL%X(k,15, ic)  = H2O_R_TL*DT + H2O_R*DT_TL
+        Predictor_TL%X(k,16, ic)  = TWO*H2O_S*H2O_S_TL
+        Predictor_TL%X(k,17, ic)  = H2OdH2OTzp_TL
+        Predictor_TL%X(k,18, ic)  = H2O_R_TL*H2OdH2OTzp + H2O_R*H2OdH2OTzp_TL
+        Predictor_TL%X(k,19, ic)  = TWO*SECANG(k)**2 * PAFV%GAzp(k,ja_h2o)*GAzp_TL(k,ja_h2o)
+        Predictor_TL%X(k,20, ic)  = SECANG(k)*GAzp_TL(k,ja_h2o)
+      END IF
     END SUBROUTINE TL_Kernel_DRY
 
     !  --------------------------
@@ -2069,6 +2130,8 @@ CONTAINS
     ! Resolve each component's position in this group's roster
     ic_dry = Component_Position(DRY_ComID_G1)
     IF ( ic_dry == 0 ) ic_dry = Component_Position(DRY_ComID_G2)
+    IF ( ic_dry == 0 ) ic_dry = Component_Position(DRY_ComID_Q1)
+    IF ( ic_dry == 0 ) ic_dry = Component_Position(DRY_ComID_Q2)
     IF ( ic_dry == 0 ) ic_dry = Component_Position(EDRY_ComID)
     ic_wlo = Component_Position(WLO_ComID)
     ic_wco = Component_Position(WCO_ComID)
@@ -2166,7 +2229,8 @@ CONTAINS
         END IF
 
         ! Adjoint kernels in the heritage monolith order (see note above)
-        IF ( ic_dry > 0 ) CALL AD_Kernel_DRY(k, ic_dry)
+        IF ( ic_dry > 0 ) CALL AD_Kernel_DRY(k, ic_dry, ODPS_Kernel_n_Predictors( &
+          GROUP_REGISTRY(Group_ID)%Basis, Component_ID(ic_dry), has_trace ))
         IF ( ic_wco > 0 ) CALL AD_Kernel_WCO(k, ic_wco)
         IF ( ic_no2 > 0 ) CALL AD_Kernel_NO2(k, ic_no2)
         IF ( ic_ozo > 0 ) CALL AD_Kernel_OZO_IR(k, ic_ozo)
@@ -2319,7 +2383,8 @@ CONTAINS
         END IF
 
         ! Adjoint kernels in the heritage monolith order (see note above)
-        IF ( ic_dry > 0 ) CALL AD_Kernel_DRY(k, ic_dry)
+        IF ( ic_dry > 0 ) CALL AD_Kernel_DRY(k, ic_dry, ODPS_Kernel_n_Predictors( &
+          GROUP_REGISTRY(Group_ID)%Basis, Component_ID(ic_dry), has_trace ))
         IF ( ic_wet > 0 ) CALL AD_Kernel_WET_MW(k, ic_wet)
         IF ( ic_ozo > 0 ) CALL AD_Kernel_OZO_MW(k, ic_ozo)
 
@@ -2432,8 +2497,8 @@ CONTAINS
     !  ----------------------
     !   Fixed (Dry) predictors (IR and MW use the same formulation)
     !  ----------------------
-    SUBROUTINE AD_Kernel_DRY( k, ic )
-      INTEGER, INTENT(IN) :: k, ic
+    SUBROUTINE AD_Kernel_DRY( k, ic, np )
+      INTEGER, INTENT(IN) :: k, ic, np
       T_AD     = T_AD                                    &
                  + Predictor_AD%X(k, 2, ic) * SECANG(k)  &
                  + Predictor_AD%X(k, 4, ic)
@@ -2449,6 +2514,46 @@ CONTAINS
       Predictor_AD%X(k, 5, ic)  = ZERO
       Predictor_AD%X(k, 6, ic)  = ZERO
       Predictor_AD%X(k, 7, ic)  = ZERO
+
+      ! QDRY water predictors 8 - 20: adjoint of the WLO formulas 1 - 13.
+      ! Accumulates into the same water adjoint variables the WLO/WCO
+      ! kernels use; the common variable chains at the end of the layer
+      ! iteration convert them to Absorber_AD / Temperature_AD.
+      IF ( np >= 20 ) THEN
+        H2O_A_AD = H2O_A_AD                                &
+                   + Predictor_AD%X(k, 8, ic)              &
+                   + Predictor_AD%X(k, 9, ic)*DT           &
+                   + Predictor_AD%X(k,11, ic)*DT2          &
+                   + Predictor_AD%X(k,13, ic)*H2O_S
+
+        DT_AD    = DT_AD                                   &
+                   + Predictor_AD%X(k, 9, ic)*H2O_A        &
+                   + Predictor_AD%X(k,15, ic)*H2O_R
+
+        H2O_S_AD = H2O_S_AD                                &
+                   + Predictor_AD%X(k,10, ic)              &
+                   + Predictor_AD%X(k,13, ic)*H2O_A        &
+                   + Predictor_AD%X(k,16, ic)*TWO*H2O_S
+
+        DT2_AD   = DT2_AD + Predictor_AD%X(k,11, ic)*H2O_A
+
+        H2O_R4_AD= H2O_R4_AD + Predictor_AD%X(k,12, ic)
+
+        H2O_R_AD = H2O_R_AD                                &
+                   + Predictor_AD%X(k,14, ic)              &
+                   + Predictor_AD%X(k,15, ic)*DT           &
+                   + Predictor_AD%X(k,18, ic)*H2OdH2OTzp
+
+        H2OdH2OTzp_AD = H2OdH2OTzp_AD                      &
+                   + Predictor_AD%X(k,17, ic)              &
+                   + Predictor_AD%X(k,18, ic)*H2O_R
+
+        GAzp_AD(k,ja_h2o) = GAzp_AD(k,ja_h2o)                                       &
+                   + Predictor_AD%X(k,19, ic)*TWO*SECANG(k)**2*PAFV%GAzp(k,ja_h2o)  &
+                   + Predictor_AD%X(k,20, ic)*SECANG(k)
+
+        Predictor_AD%X(k, 8:20, ic) = ZERO
+      END IF
     END SUBROUTINE AD_Kernel_DRY
 
     !  --------------------------
@@ -3666,7 +3771,7 @@ CONTAINS
       WRITE( Message, '("Group_Index ",i0," is reserved for the Zeeman ", &
         &"sub-algorithms. Zeeman companion coefficients (z*.TauCoeff) are ", &
         &"loaded via the ODZeeman path for SSMIS/AMSU-A sensors only; a ", &
-        &"standard ODPS TauCoeff must use group 1, 2, 3, 7, or 8.")' ) &
+        &"standard ODPS TauCoeff must use group 1, 2, 3, 7, 8, 9, or 10.")' ) &
         Group_Index
       RETURN
     END IF
@@ -3674,7 +3779,7 @@ CONTAINS
     ! Unknown group index
     IF ( .NOT. ANY( VALID_GROUPS == Group_Index ) ) THEN
       WRITE( Message, '("Group_Index ",i0," is not a supported ODPS group ", &
-        &"(supported: 1, 2, 3, 7, 8).")' ) Group_Index
+        &"(supported: 1, 2, 3, 7, 8, 9, 10).")' ) Group_Index
       RETURN
     END IF
 
@@ -3743,7 +3848,7 @@ CONTAINS
                                      Component_ID(i), Has_Trace ) == 0 ) THEN
         WRITE( Message, '("Component_ID ",i0," has no predictor kernel for ", &
           &"the ",a," basis (supported IR: 7, 20, 101, 15, 114, 121, 120, ", &
-          &"119, 118, 122; MW: 113, 12, 114).")' ) Component_ID(i), &
+          &"119, 118, 122, 123, 124; MW: 113, 12, 114).")' ) Component_ID(i), &
           TRIM(Basis_Name(GROUP_REGISTRY(Group_Index)%Basis))
         RETURN
       END IF
@@ -3790,7 +3895,9 @@ CONTAINS
           Present = ANY(Gases == CH4_ID)
         CASE ( NO2_ComID )
           Present = ANY(Gases == NO2_ID)
-        CASE DEFAULT   ! dry components consume no variable gas
+        CASE ( DRY_ComID_Q1, DRY_ComID_Q2 )   ! QDRY dry carries water predictors
+          Present = ANY(Gases == H2O_ID)
+        CASE DEFAULT   ! heritage dry components consume no variable gas
           Present = .TRUE.
       END SELECT
     END FUNCTION Required_Gases_Present
@@ -3815,6 +3922,7 @@ CONTAINS
       CASE ( BASIS_IR )
         SELECT CASE ( Component_ID )
           CASE ( DRY_ComID_G1, DRY_ComID_G2 ); n_Predictors = 7
+          CASE ( DRY_ComID_Q1, DRY_ComID_Q2 ); n_Predictors = 20
           CASE ( WLO_ComID );  n_Predictors = MERGE( 18, 15, Has_Trace )
           CASE ( WCO_ComID );  n_Predictors = 7
           CASE ( OZO_ComID );  n_Predictors = 11
