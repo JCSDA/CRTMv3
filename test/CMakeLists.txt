@@ -82,11 +82,10 @@ else() # Download CRTM coefficients
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
   set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz)
   set(checksum "0e5888cae80aa674b2e67ecd4490317d") # MD5SUM of fix_REL-3.1.2.0.tgz
-  
-  # The tarball is used to populate ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH}, so skip
-  # acquiring/verifying it (hashing takes 10s of seconds) when that directory already exists.
+
+  # Check if the CRTM binary tarball is already present otherwise download it.
+  message(STATUS "Checking if ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH} already exists...")
   if(NOT EXISTS ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH}/)
-    # Check if the CRTM binary tarball is already present otherwise download it.
     if (DEFINED ENV{CRTM_BINARY_FILES_TARBALL})
       file(MD5 "$ENV{CRTM_BINARY_FILES_TARBALL}" computed_checksum )
       if (NOT "${computed_checksum}" STREQUAL "${checksum}")
@@ -102,14 +101,7 @@ else() # Download CRTM coefficients
         EXPECTED_MD5 ${checksum}
         SHOW_PROGRESS)
     endif()
-  endif()
 
-  # -- UNTAR -- 
-  
-  # Define the directory to untar into
-  message(STATUS "Checking if ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH} already exists...")
-  # Only untar if the CHECK_PATH does not exist
-  if(NOT EXISTS ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH}/)
     message(STATUS "Untarring the downloaded file (~2 minutes) to ${CRTM_COEFFS_PATH}")
     # Use the built-in tar feature to work around an issue on Orion with the
     # system tar command. See: https://github.com/JCSDA/spack-stack/issues/1355
