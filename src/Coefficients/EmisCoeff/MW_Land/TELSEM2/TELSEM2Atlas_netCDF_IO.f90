@@ -179,8 +179,14 @@ CONTAINS
 
     IF (.NOT. check(NF90_CREATE(Filename, IOR(NF90_NETCDF4,NF90_CLOBBER), ncid),'create '//TRIM(Filename))) RETURN
 
-    ! Global attributes
-    IF (.NOT. check(NF90_PUT_ATT(ncid,NF90_GLOBAL,RELEASE_GATTNAME,Atlas%Release),'put Release')) GOTO 900
+    ! Global attributes. The file's Release describes the file's content: a
+    ! structure without uncertainty content writes a Release-1 file (the
+    ! reader requires the uncertainty variables for Release >= 2).
+    IF ( Atlas%Has_Uncertainty ) THEN
+      IF (.NOT. check(NF90_PUT_ATT(ncid,NF90_GLOBAL,RELEASE_GATTNAME,Atlas%Release),'put Release')) GOTO 900
+    ELSE
+      IF (.NOT. check(NF90_PUT_ATT(ncid,NF90_GLOBAL,RELEASE_GATTNAME,MIN(Atlas%Release,1_Long)),'put Release')) GOTO 900
+    END IF
     IF (.NOT. check(NF90_PUT_ATT(ncid,NF90_GLOBAL,VERSION_GATTNAME,Atlas%Version),'put Version')) GOTO 900
     IF (.NOT. check(NF90_PUT_ATT(ncid,NF90_GLOBAL,RESOLUTION_GATTNAME,Atlas%Resolution),'put Resolution')) GOTO 900
     IF (.NOT. check(NF90_PUT_ATT(ncid,NF90_GLOBAL,NCELLS_GATTNAME,Atlas%n_Cells),'put n_Cells')) GOTO 900
