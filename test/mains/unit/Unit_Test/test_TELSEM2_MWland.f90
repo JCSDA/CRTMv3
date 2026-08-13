@@ -6,12 +6,22 @@
 ! For pure-land MW scenes (amsua_n19) it checks:
 !
 !   1. The atlas is actually used when loaded: surface emissivity differs from
-!      the NESDIS_LandEM fallback (run with the atlas absent) and stays physical.
+!      the NESDIS_LandEM fallback (run with the atlas absent) and stays
+!      physical, and the Release-2 atlas populates a positive
+!      RTSolution%Surface_Emissivity_Std over land (zero on the NESDIS run).
 !
-!   2. The atlas path is independent of the surface state: the K-matrix and
-!      tangent-linear sensitivities of Tb to LAI, Vegetation_Fraction and
-!      Soil_Moisture_Content are exactly zero (in contrast to test_Land_Jacobian,
-!      where the NESDIS path gives non-zero values).
+!   2. The class-gated hybrid state Jacobians (TELSEM2 forward + NESDIS_LandEM
+!      sensitivities):
+!        - over a vegetated cell (class2 1..5) the K-matrix LAI/vegetation/
+!          soil-moisture/soil-temperature Jacobians are non-zero below the
+!          80 GHz LandEM cutoff, zero at 89 GHz, and the tangent-linear
+!          matches the K-matrix (TL == K, Option-A hybrid contract: TL/AD/K
+!          are mutually exact; a finite difference of the state-independent
+!          forward would be zero by design);
+!        - over a snow/ice-classed cell (Greenland, class2 17..22) the state
+!          Jacobians are exactly zero while the forward stays atlas-driven;
+!        - d(Tb)/d(emissivity) in RTSolution_K%Surface_Emissivity is non-zero
+!          on the atlas path at every channel (the emissivity-space handle).
 !
 !   3. The geometry inputs drive the lookup:
 !        - a second land cell gives a different emissivity (spatial dependence);
@@ -37,6 +47,7 @@
 PROGRAM test_TELSEM2_MWland
 
   USE CRTM_Module
+  USE CRTM_SpcCoeff, ONLY: SC   ! channel frequencies for the cutoff split
   IMPLICIT NONE
 
   CHARACTER(*), PARAMETER :: PROGRAM_NAME      = 'test_TELSEM2_MWland'
@@ -62,12 +73,19 @@ PROGRAM test_TELSEM2_MWland
   REAL(fp), PARAMETER :: LAT_O =   0.0_fp, LON_O = 200.0_fp
   INTEGER,  PARAMETER :: MON_SEP = 9, MON_JAN = 1
 
+  ! Greenland continental-ice cell (TELSEM2 class2 = 20/21 -> state-Jacobian
+  ! harvest suppressed by the class gate while the forward stays atlas-driven)
+  REAL(fp), PARAMETER :: LAT_G =  72.0_fp, LON_G = 320.0_fp
   ! Base land state
   REAL(fp), PARAMETER :: LAI0 = 2.0_fp, VEG0 = 0.5_fp, SMC0 = 0.2_fp
+  ! LandEM frequency cutoff: channels at or above carry no state Jacobian
+  REAL(fp), PARAMETER :: FREQ_CUTOFF = 80.0_fp
   ! Tolerances
-  REAL(fp), PARAMETER :: TOL_ZERO = 1.0e-10_fp  ! "exact zero" for atlas-path Jacobians / fallback equality
+  REAL(fp), PARAMETER :: TOL_ZERO = 1.0e-10_fp  ! "exact zero" for gated-off Jacobians / fallback equality
+  REAL(fp), PARAMETER :: TOL_TLK  = 1.0e-12_fp  ! TL == K parity (recorded hybrid contract ~1e-14)
   REAL(fp), PARAMETER :: MIN_DIFF = 1.0e-3_fp   ! atlas-vs-NESDIS and spatial difference
   REAL(fp), PARAMETER :: MIN_SEAS = 1.0e-4_fp   ! seasonal (month) difference
+  REAL(fp), PARAMETER :: MIN_JAC  = 1.0e-1_fp   ! hybrid state Jacobians must be substantial
 
   CHARACTER(256) :: Message, Version
   INTEGER :: Error_Status, Alloc_Status, n_Channels, l, m
@@ -84,6 +102,7 @@ PROGRAM test_TELSEM2_MWland
   ! Surface emissivity (profile 1) for each scenario
   REAL(fp), ALLOCATABLE :: emis_A(:), emis_B(:), emis_A_jan(:), emis_O_atlas(:)
   REAL(fp), ALLOCATABLE :: emis_nesdis_A(:), emis_nesdis_O(:), emis_A_optin(:)
+  REAL(fp), ALLOCATABLE :: emis_G(:), emis_nesdis_G(:)
 
   CALL CRTM_Version( Version )
   CALL Program_Message( PROGRAM_NAME, &
@@ -107,7 +126,7 @@ PROGRAM test_TELSEM2_MWland
             Surface_K(n_Channels,N_PROFILES), &
             emis_A(n_Channels), emis_B(n_Channels), emis_A_jan(n_Channels), &
             emis_O_atlas(n_Channels), emis_nesdis_A(n_Channels), emis_nesdis_O(n_Channels), &
-            emis_A_optin(n_Channels), &
+            emis_A_optin(n_Channels), emis_G(n_Channels), emis_nesdis_G(n_Channels), &
             STAT = Alloc_Status )
   IF ( Alloc_Status /= 0 ) THEN
     CALL Display_Message( PROGRAM_NAME, 'Error allocating arrays', FAILURE ); STOP 1
@@ -134,39 +153,75 @@ PROGRAM test_TELSEM2_MWland
     END IF
   END DO
 
-  ! 1b. K-matrix at cell A -> surface Jacobians must be zero on the atlas path
-  CALL CRTM_Atmosphere_Zero( Atmosphere_K )
-  CALL CRTM_Surface_Zero( Surface_K )
-  RTSolution_K%Radiance               = ZERO
-  RTSolution_K%Brightness_Temperature = ONE
-  Error_Status = CRTM_K_Matrix( Atm, Sfc, RTSolution_K, Geometry, ChannelInfo, &
-                                Atmosphere_K, Surface_K, RTSolution )
-  IF ( Error_Status /= SUCCESS ) THEN
-    CALL Display_Message( PROGRAM_NAME, 'Error in CRTM K_Matrix (atlas)', FAILURE ); STOP 1
-  END IF
+  ! 1b. K-matrix at cell A (vegetated, class2 in 1..5): the class-gated hybrid
+  !     must deliver non-zero LAI/VEG/SMC/soil-T Jacobians below the LandEM
+  !     cutoff, exactly zero at 89 GHz, and a non-zero d(Tb)/d(emissivity) at
+  !     every channel.
+  CALL Run_K_At( LAT_A, LON_A, MON_SEP, 'A/Sep (hybrid K)' )
   maxjac = ZERO
-  DO m = 1, N_PROFILES
-    DO l = 1, n_Channels
-      maxjac = MAX( maxjac, ABS(Surface_K(l,m)%Lai), &
-                            ABS(Surface_K(l,m)%Vegetation_Fraction), &
-                            ABS(Surface_K(l,m)%Soil_Moisture_Content) )
-    END DO
+  DO l = 1, n_Channels
+    IF ( Channel_Frequency(l) < FREQ_CUTOFF ) THEN
+      maxjac = MAX( maxjac, ABS(Surface_K(l,1)%Lai), &
+                            ABS(Surface_K(l,1)%Vegetation_Fraction), &
+                            ABS(Surface_K(l,1)%Soil_Moisture_Content), &
+                            ABS(Surface_K(l,1)%Soil_Temperature) )
+    ELSE
+      IF ( MAX( ABS(Surface_K(l,1)%Lai), &
+                ABS(Surface_K(l,1)%Vegetation_Fraction), &
+                ABS(Surface_K(l,1)%Soil_Moisture_Content), &
+                ABS(Surface_K(l,1)%Soil_Temperature) ) > TOL_ZERO ) THEN
+        WRITE(Message,'("State Jacobian non-zero above the LandEM cutoff, channel ",i0)') l
+        CALL Display_Message( PROGRAM_NAME, TRIM(Message), FAILURE ); failed = .TRUE.
+      END IF
+    END IF
+    IF ( ABS(RTSolution_K(l,1)%Surface_Emissivity) <= TOL_ZERO ) THEN
+      WRITE(Message,'("d(Tb)/d(emissivity) is zero on the atlas path, channel ",i0)') l
+      CALL Display_Message( PROGRAM_NAME, TRIM(Message), FAILURE ); failed = .TRUE.
+    END IF
   END DO
-  WRITE(*,'(5x,"Max |K-matrix surface Jacobian| on atlas path = ",es12.4)') maxjac
-  IF ( maxjac > TOL_ZERO ) THEN
-    CALL Display_Message( PROGRAM_NAME, 'K-matrix surface Jacobian non-zero on atlas path', FAILURE )
+  WRITE(*,'(5x,"Max |hybrid K state Jacobian| (cell A, <80 GHz) = ",es12.4)') maxjac
+  IF ( maxjac < MIN_JAC ) THEN
+    CALL Display_Message( PROGRAM_NAME, 'Hybrid state Jacobians unexpectedly small', FAILURE )
     failed = .TRUE.
   END IF
 
-  ! 1c. Tangent-linear at cell A -> Tb sensitivity must be zero for each direction
+  ! 1c. Tangent-linear at cell A must match the K-matrix (TL == K) for each
+  !     state direction: the Option-A hybrid contract.
   maxjac = ZERO
-  CALL TL_Direction( 'LAI' )
-  CALL TL_Direction( 'VEG' )
-  CALL TL_Direction( 'SMC' )
-  WRITE(*,'(5x,"Max |tangent-linear dTb| on atlas path        = ",es12.4)') maxjac
-  IF ( maxjac > TOL_ZERO ) THEN
-    CALL Display_Message( PROGRAM_NAME, 'Tangent-linear Tb non-zero on atlas path', FAILURE )
+  CALL TLK_Direction( 'LAI' )
+  CALL TLK_Direction( 'VEG' )
+  CALL TLK_Direction( 'SMC' )
+  WRITE(*,'(5x,"Max |TL - K| over state directions              = ",es12.4)') maxjac
+  IF ( maxjac > TOL_TLK ) THEN
+    CALL Display_Message( PROGRAM_NAME, 'Tangent-linear does not match K-matrix', FAILURE )
     failed = .TRUE.
+  END IF
+
+  ! 1c2. Greenland (class2 17..22): forward stays atlas-driven (checked against
+  !      NESDIS in 2c below) but the class gate suppresses the state Jacobians.
+  CALL Run_K_At( LAT_G, LON_G, MON_JAN, 'Greenland/Jan (gated K)' )
+  CALL Run_Forward_At( LAT_G, LON_G, MON_JAN, emis_G, 'Greenland/Jan' )
+  maxjac = ZERO
+  DO l = 1, n_Channels
+    maxjac = MAX( maxjac, ABS(Surface_K(l,1)%Lai), &
+                          ABS(Surface_K(l,1)%Vegetation_Fraction), &
+                          ABS(Surface_K(l,1)%Soil_Moisture_Content), &
+                          ABS(Surface_K(l,1)%Soil_Temperature) )
+  END DO
+  WRITE(*,'(5x,"Max |K state Jacobian| (Greenland, class-gated) = ",es12.4)') maxjac
+  IF ( maxjac > TOL_ZERO ) THEN
+    CALL Display_Message( PROGRAM_NAME, 'State Jacobian not suppressed over snow/ice classes', FAILURE )
+    failed = .TRUE.
+  END IF
+
+  ! 1d0. Release-2 atlas: positive per-channel emissivity std over land
+  CALL Run_Forward_At( LAT_A, LON_A, MON_SEP, emis_A, 'A/Sep (std check)' )
+  IF ( ANY( RTSolution(:,1)%Surface_Emissivity_Std <= ZERO ) ) THEN
+    CALL Display_Message( PROGRAM_NAME, 'Surface_Emissivity_Std not positive on atlas path', FAILURE )
+    failed = .TRUE.
+  ELSE
+    WRITE(*,'(5x,"Surface_Emissivity_Std range (cell A)           = ",2es12.4)') &
+      MINVAL(RTSolution(:,1)%Surface_Emissivity_Std), MAXVAL(RTSolution(:,1)%Surface_Emissivity_Std)
   END IF
 
   ! 1d. Spatial dependence: a different land cell must give a different emissivity
@@ -210,6 +265,12 @@ PROGRAM test_TELSEM2_MWland
     CALL Display_Message( PROGRAM_NAME, 'Error initializing CRTM (NESDIS)', FAILURE ); STOP 1
   END IF
   CALL Run_Forward_At( LAT_A, LON_A, MON_SEP, emis_nesdis_A, 'A/Sep (NESDIS)' )
+  ! Std must be zero without the atlas
+  IF ( ANY( ABS(RTSolution(:,1)%Surface_Emissivity_Std) > ZERO ) ) THEN
+    CALL Display_Message( PROGRAM_NAME, 'Surface_Emissivity_Std non-zero on NESDIS path', FAILURE )
+    failed = .TRUE.
+  END IF
+  CALL Run_Forward_At( LAT_G, LON_G, MON_JAN, emis_nesdis_G, 'Greenland/Jan (NESDIS)' )
   CALL Run_Forward_At( LAT_O, LON_O, MON_SEP, emis_nesdis_O, 'ocean (NESDIS)' )
   Error_Status = CRTM_Destroy( ChannelInfo )
 
@@ -219,6 +280,10 @@ PROGRAM test_TELSEM2_MWland
 
   ! 2b. Ocean fallback: atlas-loaded run must equal the NESDIS-only run (bit-identical)
   CALL Require_Same( emis_O_atlas, emis_nesdis_O, TOL_ZERO, 'ocean fallback (atlas run == NESDIS run)' )
+
+  ! 2c. Greenland forward is atlas-driven (class gate suppresses only the
+  !     Jacobians, never the forward)
+  CALL Require_Different( emis_G, emis_nesdis_G, MIN_DIFF, 'atlas active (Greenland: TELSEM2 vs NESDIS)' )
 
   ! ------------------------------------------------------------------
   ! 3. Report and clean up
@@ -234,14 +299,16 @@ PROGRAM test_TELSEM2_MWland
   CALL CRTM_Atmosphere_Destroy( Atmosphere_K )
   DEALLOCATE( RTSolution, RTSolution_TL, RTSolution_K, Atmosphere_K, Surface_K, &
               emis_A, emis_B, emis_A_jan, emis_O_atlas, emis_nesdis_A, emis_nesdis_O, &
-              emis_A_optin )
+              emis_A_optin, emis_G, emis_nesdis_G )
 
   IF ( failed ) THEN
     CALL Display_Message( PROGRAM_NAME, 'FAILED', FAILURE ); STOP 1
   ELSE
     CALL Display_Message( PROGRAM_NAME, &
       'PASSED: atlas active; spatial/seasonal dependence; ocean fallback; '// &
-      'zero surface Jacobians; opt-in gate (present-but-off)', &
+      'class-gated hybrid state Jacobians (TL==K, cutoff and snow/ice '// &
+      'suppression); d(Tb)/d(emissivity) non-zero; emissivity std populated; '// &
+      'opt-in gate (present-but-off)', &
       INFORMATION ); STOP 0
   END IF
 
@@ -266,11 +333,43 @@ CONTAINS
     emis = RTSolution(:,1)%Surface_Emissivity
   END SUBROUTINE Run_Forward_At
 
-  ! Tangent-linear with a unit perturbation in one surface variable; accumulate
-  ! the largest |dTb| (must be zero on the atlas path). Uses the current Geometry.
-  SUBROUTINE TL_Direction( which )
-    CHARACTER(*), INTENT(IN) :: which
+  ! K-matrix run at (lat,lon,month) with a unit brightness-temperature seed.
+  ! Leaves the Jacobians in Surface_K / RTSolution_K.
+  SUBROUTINE Run_K_At( lat, lon, mon, label )
+    REAL(fp),     INTENT(IN) :: lat, lon
+    INTEGER,      INTENT(IN) :: mon
+    CHARACTER(*), INTENT(IN) :: label
     INTEGER :: stat
+    CALL CRTM_Geometry_SetValue( Geometry, &
+                                 Sensor_Zenith_Angle = ZENITH_ANGLE, &
+                                 Sensor_Scan_Angle   = SCAN_ANGLE, &
+                                 Latitude  = lat, Longitude = lon, Month = mon )
+    CALL CRTM_Atmosphere_Zero( Atmosphere_K )
+    CALL CRTM_Surface_Zero( Surface_K )
+    RTSolution_K%Radiance               = ZERO
+    RTSolution_K%Brightness_Temperature = ONE
+    stat = CRTM_K_Matrix( Atm, Sfc, RTSolution_K, Geometry, ChannelInfo, &
+                          Atmosphere_K, Surface_K, RTSolution )
+    IF ( stat /= SUCCESS ) THEN
+      CALL Display_Message( PROGRAM_NAME, 'Error in CRTM K_Matrix ('//label//')', FAILURE ); STOP 1
+    END IF
+  END SUBROUTINE Run_K_At
+
+  ! Channel centre frequency (GHz) for the cutoff split
+  FUNCTION Channel_Frequency( l ) RESULT( freq )
+    INTEGER, INTENT(IN) :: l
+    REAL(fp) :: freq
+    freq = SC(1)%Frequency(l)
+  END FUNCTION Channel_Frequency
+
+  ! Tangent-linear with a unit perturbation in one surface variable must equal
+  ! the corresponding K-matrix element per channel (TL == K: both are exact
+  ! linear operators of the class-gated hybrid). Uses the current Geometry and
+  ! the Surface_K left by the preceding Run_K_At for the same scene.
+  SUBROUTINE TLK_Direction( which )
+    CHARACTER(*), INTENT(IN) :: which
+    INTEGER :: stat, lc
+    REAL(fp) :: kval
     CALL CRTM_Atmosphere_Zero( Atm_TL )
     CALL CRTM_Surface_Zero( Sfc_TL )
     SELECT CASE ( which )
@@ -283,8 +382,15 @@ CONTAINS
     IF ( stat /= SUCCESS ) THEN
       CALL Display_Message( PROGRAM_NAME, 'Error in CRTM Tangent_Linear ('//which//')', FAILURE ); STOP 1
     END IF
-    maxjac = MAX( maxjac, MAXVAL(ABS(RTSolution_TL%Brightness_Temperature)) )
-  END SUBROUTINE TL_Direction
+    DO lc = 1, n_Channels
+      SELECT CASE ( which )
+        CASE ('LAI'); kval = Surface_K(lc,1)%Lai
+        CASE ('VEG'); kval = Surface_K(lc,1)%Vegetation_Fraction
+        CASE ('SMC'); kval = Surface_K(lc,1)%Soil_Moisture_Content
+      END SELECT
+      maxjac = MAX( maxjac, ABS(RTSolution_TL(lc,1)%Brightness_Temperature - kval) )
+    END DO
+  END SUBROUTINE TLK_Direction
 
   ! Require that two emissivity spectra differ by at least 'tol' on some channel.
   SUBROUTINE Require_Different( a, b, tol, label )
