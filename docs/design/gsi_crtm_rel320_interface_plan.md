@@ -49,6 +49,16 @@ risk can now be quantified rather than merely flagged.
     `surface_emissivity`, `layer_optical_depth`, `total_cloud_cover`,
     `upwelling_overcast_radiance`. `Options` field set:
     `use_antenna_correction`. All still exist in 3.2.0.
+  - **v3.3.0 note (TELSEM2 DA program, `feature/btj_telsem2_da`):**
+    `RTSolution_K%Surface_Emissivity` now reports the *total* derivative
+    d(Tb)/d(emissivity) (the reflected-downwelling term is folded in;
+    values change vs 3.2.0), and a new forward field
+    `RTSolution%Surface_Emissivity_Std` carries the TELSEM2 Release-2
+    per-channel emissivity error std (zero = unavailable) — relevant to
+    the pending UFO '#4219 per-channel surface_emissivity' work and any
+    GSI emissivity-sink/error-inflation use. The full inter-channel
+    emissivity covariance is available post-Init via
+    `CRTM_TELSEM2_Emissivity_Uncertainty` (exported from `CRTM_Module`).
 - **Good news:** GSI never touches `Options%Obs_4_downward_P` (removed in
   3.2.0), never reads RTSolution fields that changed, and the v2.4.1
   aerosol-model init arguments GSI wants are present in 3.2.0

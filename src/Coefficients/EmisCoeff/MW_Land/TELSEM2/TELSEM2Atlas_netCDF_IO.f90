@@ -3,8 +3,11 @@
 !
 ! Module for reading and writing the CRTM-native netCDF TELSEM2 atlas coefficient
 ! file. The file holds all twelve monthly atlases stacked along the data
-! dimension with per-month offsets. Only the emissivity-bearing data are stored;
-! the equal-area grid geometry and reverse lookup are reconstructed on load.
+! dimension with per-month offsets. The equal-area grid geometry and reverse
+! lookup are reconstructed on load. Release 2 files additionally carry the
+! atlas uncertainty content (per-cell emissivity error std and per-class1
+! inter-channel correlations); Release 1 files are accepted with the
+! uncertainty flagged unavailable.
 !
 
 MODULE TELSEM2Atlas_netCDF_IO
@@ -15,10 +18,13 @@ MODULE TELSEM2Atlas_netCDF_IO
   USE Type_Kinds         , ONLY: fp, Double, Long
   USE Message_Handler    , ONLY: SUCCESS, FAILURE, INFORMATION, Display_Message
   USE File_Utility       , ONLY: File_Exists
-  USE TELSEM2Atlas_Define, ONLY: TELSEM2Atlas_type     , &
-                                 TELSEM2Atlas_Associated, &
-                                 TELSEM2Atlas_Create    , &
-                                 TELSEM2Atlas_Destroy
+  USE TELSEM2Atlas_Define, ONLY: TELSEM2Atlas_type              , &
+                                 TELSEM2Atlas_Associated        , &
+                                 TELSEM2Atlas_Create            , &
+                                 TELSEM2Atlas_Create_Uncertainty, &
+                                 TELSEM2Atlas_ValidRelease      , &
+                                 TELSEM2Atlas_Destroy           , &
+                                 N_CLASS1
   USE netcdf
   ! Disable implicit typing
   IMPLICIT NONE
@@ -38,14 +44,12 @@ MODULE TELSEM2Atlas_netCDF_IO
   ! -----------------
   INTEGER, PARAMETER :: ML = 256
   CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'TELSEM2Atlas_netCDF_IO'
-  ! Number of angular-correction classes (second dim of the emis_interp
-  ! regression tables in TELSEM2_Atlas_Module); the valid Class1 range is 1..N.
-  INTEGER, PARAMETER :: N_CLASS1 = 10
   ! Dimension names
   CHARACTER(*), PARAMETER :: CHANNEL_DIMNAME = 'n_channels'
   CHARACTER(*), PARAMETER :: BAND_DIMNAME    = 'n_latitude_bands'
   CHARACTER(*), PARAMETER :: MONTH_DIMNAME   = 'n_months'
   CHARACTER(*), PARAMETER :: DATA_DIMNAME    = 'n_data'
+  CHARACTER(*), PARAMETER :: CLASS1_DIMNAME  = 'n_class1'          ! Release >= 2
   ! Variable names
   CHARACTER(*), PARAMETER :: MONTHCOUNT_VARNAME = 'month_data_count'
   CHARACTER(*), PARAMETER :: MONTHOFF_VARNAME   = 'month_offset'
@@ -53,6 +57,8 @@ MODULE TELSEM2Atlas_netCDF_IO
   CHARACTER(*), PARAMETER :: CLASS1_VARNAME     = 'class1'
   CHARACTER(*), PARAMETER :: CLASS2_VARNAME     = 'class2'
   CHARACTER(*), PARAMETER :: EMIS_VARNAME       = 'emissivity'
+  CHARACTER(*), PARAMETER :: EMISERR_VARNAME    = 'emissivity_error' ! Release >= 2
+  CHARACTER(*), PARAMETER :: CORREL_VARNAME     = 'correlation'      ! Release >= 2
   ! Global attribute names
   CHARACTER(*), PARAMETER :: RELEASE_GATTNAME    = 'Release'
   CHARACTER(*), PARAMETER :: VERSION_GATTNAME    = 'Version'
@@ -162,8 +168,9 @@ CONTAINS
     INTEGER :: err_stat
     ! Local variables
     INTEGER :: ncid
-    INTEGER :: dimid_chan, dimid_band, dimid_month, dimid_data
+    INTEGER :: dimid_chan, dimid_band, dimid_month, dimid_data, dimid_class1
     INTEGER :: vid_mcount, vid_moff, vid_cell, vid_c1, vid_c2, vid_emis
+    INTEGER :: vid_err, vid_correl
 
     err_stat = FAILURE
     IF ( .NOT. TELSEM2Atlas_Associated(Atlas) ) THEN
@@ -172,8 +179,14 @@ CONTAINS
 
     IF (.NOT. check(NF90_CREATE(Filename, IOR(NF90_NETCDF4,NF90_CLOBBER), ncid),'create '//TRIM(Filename))) RETURN
 
-    ! Global attributes
-    IF (.NOT. check(NF90_PUT_ATT(ncid,NF90_GLOBAL,RELEASE_GATTNAME,Atlas%Release),'put Release')) GOTO 900
+    ! Global attributes. The file's Release describes the file's content: a
+    ! structure without uncertainty content writes a Release-1 file (the
+    ! reader requires the uncertainty variables for Release >= 2).
+    IF ( Atlas%Has_Uncertainty ) THEN
+      IF (.NOT. check(NF90_PUT_ATT(ncid,NF90_GLOBAL,RELEASE_GATTNAME,Atlas%Release),'put Release')) GOTO 900
+    ELSE
+      IF (.NOT. check(NF90_PUT_ATT(ncid,NF90_GLOBAL,RELEASE_GATTNAME,MIN(Atlas%Release,1_Long)),'put Release')) GOTO 900
+    END IF
     IF (.NOT. check(NF90_PUT_ATT(ncid,NF90_GLOBAL,VERSION_GATTNAME,Atlas%Version),'put Version')) GOTO 900
     IF (.NOT. check(NF90_PUT_ATT(ncid,NF90_GLOBAL,RESOLUTION_GATTNAME,Atlas%Resolution),'put Resolution')) GOTO 900
     IF (.NOT. check(NF90_PUT_ATT(ncid,NF90_GLOBAL,NCELLS_GATTNAME,Atlas%n_Cells),'put n_Cells')) GOTO 900
@@ -183,6 +196,9 @@ CONTAINS
     IF (.NOT. check(NF90_DEF_DIM(ncid,BAND_DIMNAME,INT(Atlas%n_Latitude_Bands),dimid_band),'def band')) GOTO 900
     IF (.NOT. check(NF90_DEF_DIM(ncid,MONTH_DIMNAME,INT(Atlas%n_Months),dimid_month),'def month')) GOTO 900
     IF (.NOT. check(NF90_DEF_DIM(ncid,DATA_DIMNAME,INT(Atlas%n_Data),dimid_data),'def data')) GOTO 900
+    IF ( Atlas%Has_Uncertainty ) THEN
+      IF (.NOT. check(NF90_DEF_DIM(ncid,CLASS1_DIMNAME,INT(N_CLASS1),dimid_class1),'def class1')) GOTO 900
+    END IF
 
     ! Variable definitions
     IF (.NOT. check(NF90_DEF_VAR(ncid,MONTHCOUNT_VARNAME,NF90_INT,dimid_month,vid_mcount),'def mcount')) GOTO 900
@@ -191,6 +207,11 @@ CONTAINS
     IF (.NOT. check(NF90_DEF_VAR(ncid,CLASS1_VARNAME,NF90_INT,dimid_data,vid_c1),'def c1')) GOTO 900
     IF (.NOT. check(NF90_DEF_VAR(ncid,CLASS2_VARNAME,NF90_INT,dimid_data,vid_c2),'def c2')) GOTO 900
     IF (.NOT. check(NF90_DEF_VAR(ncid,EMIS_VARNAME,NF90_DOUBLE,[dimid_data,dimid_chan],vid_emis),'def emis')) GOTO 900
+    IF ( Atlas%Has_Uncertainty ) THEN
+      IF (.NOT. check(NF90_DEF_VAR(ncid,EMISERR_VARNAME,NF90_DOUBLE,[dimid_data,dimid_chan],vid_err),'def emis_err')) GOTO 900
+      IF (.NOT. check(NF90_DEF_VAR(ncid,CORREL_VARNAME,NF90_DOUBLE,[dimid_class1,dimid_chan,dimid_chan],vid_correl), &
+                      'def correl')) GOTO 900
+    END IF
 
     IF (.NOT. check(NF90_ENDDEF(ncid),'enddef')) GOTO 900
 
@@ -201,6 +222,10 @@ CONTAINS
     IF (.NOT. check(NF90_PUT_VAR(ncid,vid_c1,INT(Atlas%Class1)),'put c1')) GOTO 900
     IF (.NOT. check(NF90_PUT_VAR(ncid,vid_c2,INT(Atlas%Class2)),'put c2')) GOTO 900
     IF (.NOT. check(NF90_PUT_VAR(ncid,vid_emis,Atlas%Emissivity),'put emis')) GOTO 900
+    IF ( Atlas%Has_Uncertainty ) THEN
+      IF (.NOT. check(NF90_PUT_VAR(ncid,vid_err,Atlas%Emis_Err),'put emis_err')) GOTO 900
+      IF (.NOT. check(NF90_PUT_VAR(ncid,vid_correl,Atlas%Correlation),'put correl')) GOTO 900
+    END IF
 
     IF (.NOT. check(NF90_CLOSE(ncid),'close')) RETURN
     err_stat = SUCCESS
@@ -217,6 +242,11 @@ CONTAINS
 ! Reads the primary atlas data into a created TELSEM2Atlas object. The derived
 ! grid geometry / reverse lookup are NOT filled here; the caller must call
 ! TELSEM2_Setup_Grid after a successful read.
+!
+! Release handling: Release 2 files must carry the uncertainty variables
+! (emissivity_error, correlation), which are read and validated. Release 1
+! files are accepted with Has_Uncertainty left .FALSE.. Anything outside the
+! supported release range fails.
 !--------------------------------------------------------------------------------
   FUNCTION TELSEM2Atlas_netCDF_ReadFile( Filename, Atlas ) RESULT( err_stat )
     ! Arguments
@@ -225,7 +255,12 @@ CONTAINS
     ! Function result
     INTEGER :: err_stat
     ! Local variables
+    ! Tolerance for correlation-matrix validation: the source data are written
+    ! with F5.2 precision, so 1e-3 comfortably covers representation error
+    ! while still rejecting a structurally wrong file.
+    REAL(Double), PARAMETER :: CORREL_TOL = 1.0E-3_Double
     INTEGER :: ncid, vid
+    INTEGER :: j
     INTEGER(Long) :: n_Channels, n_Bands, n_Cells, n_Months, n_Data, rel, ver
     REAL(Double)  :: resolution
 
@@ -249,6 +284,13 @@ CONTAINS
     Atlas%Release    = rel
     Atlas%Version    = ver
     Atlas%Resolution = resolution
+
+    ! Reject unsupported releases before reading any data
+    IF ( .NOT. TELSEM2Atlas_ValidRelease(Atlas) ) THEN
+      CALL Display_Message( ROUTINE_NAME, &
+        'Unsupported Release in '//TRIM(Filename), FAILURE )
+      CALL TELSEM2Atlas_Destroy(Atlas); RETURN
+    END IF
 
     IF (.NOT. check(NF90_OPEN(Filename, NF90_NOWRITE, ncid),'open')) THEN
       CALL TELSEM2Atlas_Destroy(Atlas); RETURN
@@ -292,6 +334,40 @@ CONTAINS
     END IF
     ! Emissivity
     IF (.NOT. read_emis(ncid,EMIS_VARNAME,Atlas%Emissivity)) GOTO 900
+
+    ! Uncertainty content (Release >= 2 files must carry it)
+    IF ( rel >= 2 ) THEN
+      CALL TELSEM2Atlas_Create_Uncertainty( Atlas )
+      IF ( .NOT. Atlas%Has_Uncertainty ) THEN
+        CALL Display_Message( ROUTINE_NAME, 'Uncertainty allocation failed', FAILURE )
+        GOTO 900
+      END IF
+      IF (.NOT. read_emis(ncid,EMISERR_VARNAME,Atlas%Emis_Err)) GOTO 900
+      ! The correlation array is small (N_CLASS1 x n_Channels x n_Channels =
+      ! 490 doubles) -- a single read is safe.
+      IF (.NOT. check(NF90_INQ_VARID(ncid,CORREL_VARNAME,vid),'inq '//CORREL_VARNAME)) GOTO 900
+      IF (.NOT. check(NF90_GET_VAR(ncid,vid,Atlas%Correlation),'get '//CORREL_VARNAME)) GOTO 900
+      ! Validate: stds must be non-negative, correlations bounded with a unit
+      ! diagonal. Reject a corrupt/wrong file here rather than compute a
+      ! non-positive-definite covariance at query time.
+      IF ( ANY( Atlas%Emis_Err < 0.0_Double ) ) THEN
+        CALL Display_Message( ROUTINE_NAME, &
+          'negative emissivity_error values in '//TRIM(Filename), FAILURE )
+        GOTO 900
+      END IF
+      IF ( ANY( ABS(Atlas%Correlation) > 1.0_Double + CORREL_TOL ) ) THEN
+        CALL Display_Message( ROUTINE_NAME, &
+          'correlation values outside [-1,1] in '//TRIM(Filename), FAILURE )
+        GOTO 900
+      END IF
+      DO j = 1, INT(n_Channels)
+        IF ( ANY( ABS(Atlas%Correlation(:,j,j) - 1.0_Double) > CORREL_TOL ) ) THEN
+          CALL Display_Message( ROUTINE_NAME, &
+            'correlation diagonal is not unity in '//TRIM(Filename), FAILURE )
+          GOTO 900
+        END IF
+      END DO
+    END IF
 
     IF (.NOT. check(NF90_CLOSE(ncid),'close')) THEN
       CALL TELSEM2Atlas_Destroy(Atlas); RETURN

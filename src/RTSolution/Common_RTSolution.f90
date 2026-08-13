@@ -447,6 +447,15 @@ CONTAINS
     ! ---------------------------
     RTSolution%Surface_Emissivity   = SfcOptics%Emissivity( SfcOptics%Index_Sat_Ang, 1 )
     RTSolution%Surface_Reflectivity = SfcOptics%Reflectivity( SfcOptics%Index_Sat_Ang, 1, SfcOptics%Index_Sat_Ang, 1 )
+    ! The emissivity error std is only defined when CRTM computed the
+    ! emissivity (the MW-land atlas fills it; CRTM_Compute_SfcOptics zeroes
+    ! it per channel). On the user-emissivity path that zeroing never runs,
+    ! so assign explicitly rather than inherit the previous channel's value.
+    IF ( SfcOptics%Compute ) THEN
+      RTSolution%Surface_Emissivity_Std = SfcOptics%Surface_Emissivity_Std
+    ELSE
+      RTSolution%Surface_Emissivity_Std = ZERO
+    END IF
 
     ! ------------------------
     ! Compute Planck radiances
@@ -1764,6 +1773,7 @@ CONTAINS
     CHARACTER(256) :: Message
     INTEGER :: no, na, nt
     INTEGER :: k, i
+    REAL(fp) :: Reflectivity_AD_Term
 
     Error_Status = SUCCESS
 
@@ -1827,7 +1837,35 @@ CONTAINS
     ! on FORWARD model SfcOptics Compute_Switch
     ! -----------------------------------------
     IF ( SfcOptics%Compute ) THEN
-        RTSolution_AD%Surface_Emissivity = SfcOptics_AD%Emissivity(SfcOptics_AD%Index_Sat_Ang,1)
+        ! Report the total derivative d(radiance)/d(emissivity) under the
+        ! surface model's reflectivity closure r = 1 - e (specular) or
+        ! r_ij = (1-e_i)*w_i (Lambertian): the emission term plus, via the
+        ! chain rule through r, MINUS the reflected-downwelling term. The
+        ! capture must happen BEFORE CRTM_Compute_SfcOptics_AD below, which
+        ! consumes the adjoint arrays and zeroes them during the polarization
+        ! de-projection. This is a pure read: the arrays reach
+        ! CRTM_Compute_SfcOptics_AD bit-identical, so the surface-state
+        ! Jacobians are unaffected.
+        ! Note: for surface models whose reflectivity is not tied to the
+        ! emissivity (e.g. the FastemX Rv_Mod reflection correction), the
+        ! value reported here is the specular-closure total derivative.
+        IF ( RTV%mth_Azi == 0 ) THEN
+          Reflectivity_AD_Term = ZERO
+          IF ( RTV%Scattering_RT .AND. RTV%Diffuse_Surface ) THEN
+            ! Lambertian surface (mirrors the user-emissivity branch below)
+            DO i = SfcOptics%n_Angles, 1, -1
+              Reflectivity_AD_Term = Reflectivity_AD_Term + &
+                (SUM(SfcOptics_AD%Reflectivity(1:SfcOptics%n_Angles,1,i,1))*SfcOptics%Weight(i))
+            END DO
+          ELSE
+            ! Specular surface
+            DO i = nZ, 1, -1
+              Reflectivity_AD_Term = Reflectivity_AD_Term + SfcOptics_AD%Reflectivity(i,1,i,1)
+            END DO
+          END IF
+          RTSolution_AD%Surface_Emissivity = SUM(SfcOptics_AD%Emissivity(1:nZ,1)) - &
+                                             Reflectivity_AD_Term
+        END IF
         Error_Status = CRTM_Compute_SfcOptics_AD( &
                        Surface     , & ! Input
                        SfcOptics   , & ! Input
@@ -1849,8 +1887,12 @@ CONTAINS
     ELSE
 
       IF( RTV%Scattering_RT ) THEN
-        ! User_Emissivity_AD = SUM(SfcOptics_AD%Emissivity(1:nZ,1)) ! V3.0 implementation
-        User_Emissivity_AD = ZERO ! V2.4 implementation
+        ! Emission term of the total derivative. This was hardcoded to zero
+        ! ("V2.4 implementation") from commit 2ff3a87 until the G1 fix: only
+        ! the reflection term below survived, so the user-emissivity Jacobian
+        ! under scattering was missing the emitted-radiance half. Verified
+        ! against central finite differences (see test_Emissivity_Jacobian).
+        User_Emissivity_AD = SUM(SfcOptics_AD%Emissivity(1:nZ,1))
         IF( RTV%Diffuse_Surface) THEN
           IF( RTV%mth_Azi == 0 ) THEN
             ! Assuming Lambertian surface isn't polarized!
@@ -1873,7 +1915,11 @@ CONTAINS
 !                                              (Direct_Reflectivity_AD/PI)
         RTSolution_AD%Surface_Emissivity = User_Emissivity_AD
       ELSE
-!! need to check !!
+        ! Non-scattering user-emissivity path: the forward writes
+        ! Emissivity(1,1) and Reflectivity(1,1,1,1) = 1 - e (see
+        ! Assign_Common_Input), so the total derivative is the emission term
+        ! minus the reflection term. Verified against central finite
+        ! differences (see test_Emissivity_Jacobian).
         RTSolution_AD%Surface_Emissivity = SfcOptics_AD%Emissivity(SfcOptics_AD%Index_Sat_Ang,1) - &
                                          SfcOptics_AD%Reflectivity(1,1,1,1)
       END IF

@@ -236,6 +236,75 @@ CONTAINS
 !--------------------------------------------------------------------------------
 !
 ! NAME:
+!       MW_Polarization_Weights
+!
+! PURPOSE:
+!       The (wV, wH) weights with which the decoupled-polarization mixing in
+!       CRTM_Compute_SfcOptics combines the V- and H-pol surface emissivities
+!       into the channel emissivity, evaluated at one view angle. Kept in
+!       exact correspondence with the Polarization_Type SELECT CASE of the
+!       forward emissivity path; used to propagate the MW-land emissivity
+!       error stds to the channel polarization:
+!         var = wV^2 sV^2 + wH^2 sH^2 + 2 wV wH cov(V,H).
+!       Channels with no V/H content (third/fourth Stokes components, or an
+!       unrecognised polarization flag) return zero weights.
+!
+!--------------------------------------------------------------------------------
+
+  SUBROUTINE MW_Polarization_Weights( &
+    Polarization, &  ! Input, channel polarization flag
+    GeometryInfo, &  ! Input
+    SensorIndex , &  ! Input
+    ChannelIndex, &  ! Input
+    Angle       , &  ! Input, view angle (deg) at which to evaluate
+    wv          , &  ! Output, V-pol weight
+    wh          )    ! Output, H-pol weight
+    ! Arguments
+    INTEGER,                      INTENT(IN)  :: Polarization
+    TYPE(CRTM_GeometryInfo_type), INTENT(IN)  :: GeometryInfo
+    INTEGER,                      INTENT(IN)  :: SensorIndex
+    INTEGER,                      INTENT(IN)  :: ChannelIndex
+    REAL(fp),                     INTENT(IN)  :: Angle
+    REAL(fp),                     INTENT(OUT) :: wv
+    REAL(fp),                     INTENT(OUT) :: wh
+    ! Local variables
+    REAL(fp) :: SIN2_Angle, phi, theta_f
+
+    SELECT CASE( Polarization )
+      CASE( INTENSITY )
+        wv = POINT_5; wh = POINT_5
+      CASE( SECOND_STOKES_COMPONENT )
+        wv = POINT_5; wh = -POINT_5
+      CASE( THIRD_STOKES_COMPONENT, FOURTH_STOKES_COMPONENT )
+        wv = ZERO; wh = ZERO
+      CASE( VL_POLARIZATION, plus45L_POLARIZATION, minus45L_POLARIZATION, &
+            RC_POLARIZATION, LC_POLARIZATION )
+        wv = ONE; wh = ZERO
+      CASE( HL_POLARIZATION )
+        wv = ZERO; wh = ONE
+      CASE( VL_MIXED_POLARIZATION )
+        SIN2_Angle = (GeometryInfo%Distance_Ratio*SIN(DEGREES_TO_RADIANS*Angle))**2
+        wv = ONE - SIN2_Angle; wh = SIN2_Angle
+      CASE( HL_MIXED_POLARIZATION )
+        SIN2_Angle = (GeometryInfo%Distance_Ratio*SIN(DEGREES_TO_RADIANS*Angle))**2
+        wv = SIN2_Angle; wh = ONE - SIN2_Angle
+      CASE( CONST_MIXED_POLARIZATION )
+        SIN2_Angle = SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex))**2
+        wv = SIN2_Angle; wh = ONE - SIN2_Angle
+      CASE( PRA_POLARIZATION )
+        phi     = GeometryInfo%Sensor_Scan_Radian
+        theta_f = DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)
+        SIN2_Angle = PRA_Sin2_Angle( phi, theta_f )
+        wv = SIN2_Angle; wh = ONE - SIN2_Angle
+      CASE DEFAULT
+        wv = ZERO; wh = ZERO
+    END SELECT
+  END SUBROUTINE MW_Polarization_Weights
+
+
+!--------------------------------------------------------------------------------
+!
+! NAME:
 !       CRTM_Compute_SurfaceT
 !
 ! PURPOSE:
@@ -548,6 +617,7 @@ CONTAINS
     REAL(fp) :: phi
     REAL(fp) :: theta_f
     REAL(fp) :: rV, rH
+    REAL(fp) :: wv, wh
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES) :: Emissivity
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES, &
                         SfcOptics%n_Angles,MAX_N_STOKES) :: Reflectivity
@@ -572,6 +642,15 @@ CONTAINS
     Emissivity   = ZERO
     Reflectivity = ZERO
     Direct_Reflectivity = ZERO
+    ! The per-channel MW-land emissivity uncertainty carriers live on the
+    ! reused (per-thread) SfcOptics structure -- zero them here so a channel
+    ! or profile without atlas uncertainty (ocean, IR/VIS, Release-1 atlas,
+    ! NESDIS fallback) can never inherit the previous channel's values.
+    SfcOptics%Emissivity_Std_V        = ZERO
+    SfcOptics%Emissivity_Std_H        = ZERO
+    SfcOptics%Emissivity_Cov_VH       = ZERO
+    SfcOptics%Emissivity_Std_Coverage = ZERO
+    SfcOptics%Surface_Emissivity_Std  = ZERO
 
 
       !##########################################################################
@@ -872,6 +951,26 @@ CONTAINS
 
            END SELECT Polarization_Type
 
+           ! Atlas emissivity uncertainty: mix the V/H error stds to the
+           ! channel polarization at the satellite view angle, using the same
+           ! weights as the emissivity mixing above, and weight by the summed
+           ! coverage of the fractions whose driver used the atlas (land,
+           ! and class-consistent snow/ice; all read the same atlas cell, so
+           ! their identical contributions add linearly in coverage). The
+           ! carriers are non-zero only when the TELSEM2 atlas supplied them
+           ! for this channel.
+           IF ( SfcOptics%Emissivity_Std_V > ZERO .OR. &
+                SfcOptics%Emissivity_Std_H > ZERO ) THEN
+             CALL MW_Polarization_Weights( Polarization, GeometryInfo, &
+                                           SensorIndex, ChannelIndex, &
+                                           SfcOptics%Angle(SfcOptics%Index_Sat_Ang), &
+                                           wv, wh )
+             SfcOptics%Surface_Emissivity_Std = SfcOptics%Emissivity_Std_Coverage * &
+               SQRT( MAX( ZERO, (wv*wv*SfcOptics%Emissivity_Std_V*SfcOptics%Emissivity_Std_V) + &
+                                (wh*wh*SfcOptics%Emissivity_Std_H*SfcOptics%Emissivity_Std_H) + &
+                                (2.0_fp*wv*wh*SfcOptics%Emissivity_Cov_VH) ) )
+           END IF
+
         ELSE
 
 
@@ -907,6 +1006,17 @@ CONTAINS
               SfcOptics%Reflectivity(i,2,j,2) = POINT_5*(rV+rH)
             END DO
           END DO
+
+          ! Vector path: RTSolution reports the Stokes-I emissivity, so the
+          ! uncertainty is the I-component mix e_I = (eV+eH)/2.
+          IF ( SfcOptics%Emissivity_Std_V > ZERO .OR. &
+               SfcOptics%Emissivity_Std_H > ZERO ) THEN
+            SfcOptics%Surface_Emissivity_Std = SfcOptics%Emissivity_Std_Coverage * &
+              SQRT( MAX( ZERO, &
+                0.25_fp*(SfcOptics%Emissivity_Std_V*SfcOptics%Emissivity_Std_V + &
+                         SfcOptics%Emissivity_Std_H*SfcOptics%Emissivity_Std_H) + &
+                POINT_5*SfcOptics%Emissivity_Cov_VH ) )
+          END IF
 
         END IF Decoupled_Polarization
 

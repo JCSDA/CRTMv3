@@ -584,6 +584,13 @@ CONTAINS
       s_Trans_AD = ZERO
       Pff_AD = ZERO
       Pbb_AD = ZERO
+! The surface adjoint duals accumulate below (emissivity_AD at the iter==1
+! surface-emission block, reflectivity_AD in the surface-reflection loop) and
+! this solver owns them under the CRTM convention (CRTM_Emission_AD zeroes on
+! entry, CRTM_ADA_AD assigns). Without this, values left from the previous
+! channel of a K-matrix run leak into the next channel's surface adjoints.
+      emissivity_AD = ZERO
+      reflectivity_AD = ZERO
 
 
 !--------------------------------------------------------------------

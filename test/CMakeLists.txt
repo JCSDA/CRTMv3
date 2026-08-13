@@ -678,6 +678,19 @@ unset(_TMS_SPC)
 set(_TELSEM2_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/EmisCoeff/MW_Land/netCDF/TELSEM2.MWland.EmisCoeff.nc")
 add_executable(test_TELSEM2_MWland mains/unit/Unit_Test/test_TELSEM2_MWland.f90)
 target_link_libraries(test_TELSEM2_MWland PRIVATE crtm)
+# test_Emissivity_Jacobian: FD-vs-K validation of RTSolution_K%Surface_Emissivity
+# on the computed-emissivity (atlas) and user-emissivity branches. Needs the
+# staged atlas for the computed branch, so it shares the gate below.
+add_executable(test_Emissivity_Jacobian mains/unit/Unit_Test/test_Emissivity_Jacobian.f90)
+target_link_libraries(test_Emissivity_Jacobian PRIVATE crtm)
+# test_TELSEM2_Covariance: Release-2 uncertainty content and the emissivity
+# error covariance machinery vs the RTTOV reference goldens. Needs the staged
+# atlas to be the Release-2 file.
+add_executable(test_TELSEM2_Covariance mains/unit/Unit_Test/test_TELSEM2_Covariance.f90)
+target_link_libraries(test_TELSEM2_Covariance PRIVATE crtm)
+# test_TELSEM2_SnowIce: class-consistent atlas path in the MW snow/ice drivers.
+add_executable(test_TELSEM2_SnowIce mains/unit/Unit_Test/test_TELSEM2_SnowIce.f90)
+target_link_libraries(test_TELSEM2_SnowIce PRIVATE crtm)
 if(EXISTS "${_TELSEM2_FIX}")
   execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
                    "${_TELSEM2_FIX}"
@@ -687,8 +700,14 @@ if(EXISTS "${_TELSEM2_FIX}")
                    "${CMAKE_CURRENT_BINARY_DIR}/testinput/TELSEM2.MWland.EmisCoeff.nc" )
   add_test(NAME test_TELSEM2_MWland
            COMMAND $<TARGET_FILE:test_TELSEM2_MWland>)
+  add_test(NAME test_Emissivity_Jacobian
+           COMMAND $<TARGET_FILE:test_Emissivity_Jacobian>)
+  add_test(NAME test_TELSEM2_Covariance
+           COMMAND $<TARGET_FILE:test_TELSEM2_Covariance>)
+  add_test(NAME test_TELSEM2_SnowIce
+           COMMAND $<TARGET_FILE:test_TELSEM2_SnowIce>)
 else()
-  message(STATUS "TELSEM2 atlas not found at ${_TELSEM2_FIX}; test_TELSEM2_MWland will not be registered.")
+  message(STATUS "TELSEM2 atlas not found at ${_TELSEM2_FIX}; test_TELSEM2_MWland and test_Emissivity_Jacobian will not be registered.")
 endif()
 unset(_TELSEM2_FIX)
 

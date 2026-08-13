@@ -145,6 +145,7 @@ MODULE CRTM_RTSolution_Define
   CHARACTER(*), PARAMETER :: SSAMAX_VARNAME     = 'SSA_Max'
   CHARACTER(*), PARAMETER :: SOD_VARNAME        = 'SOD'
   CHARACTER(*), PARAMETER :: SEMIS_VARNAME      = 'Surface_Emissivity'
+  CHARACTER(*), PARAMETER :: SEMISSTD_VARNAME   = 'Surface_Emissivity_Std'
   CHARACTER(*), PARAMETER :: SREFL_VARNAME      = 'Surface_Reflectivity'
   CHARACTER(*), PARAMETER :: UPR_VARNAME        = 'Up_Radiance'
   CHARACTER(*), PARAMETER :: DWNR_VARNAME       = 'Down_Radiance'
@@ -235,6 +236,11 @@ MODULE CRTM_RTSolution_Define
     REAL(fp) :: SSA_Max                 = ZERO  ! Max Single Scattering Albedo in the profile
     REAL(fp) :: SOD                     = ZERO  ! Scattering Optical Depth
     REAL(fp) :: Surface_Emissivity      = ZERO
+    ! Emissivity error std of Surface_Emissivity (MW land atlas uncertainty
+    ! mixed to the channel polarization, weighted by the land fraction).
+    ! Zero means unavailable: no atlas / Release-1 atlas file / non-land
+    ! surface / user-supplied emissivity / non-MW sensor.
+    REAL(fp) :: Surface_Emissivity_Std  = ZERO
 !  For UV/Visible, Surface_Reflectivity,Up_Radiance,Down_Radiance are used, but their meanings are changed.
     REAL(fp) :: Surface_Reflectivity    = ZERO
     REAL(fp) :: Up_Radiance             = ZERO
@@ -449,6 +455,7 @@ CONTAINS
     RTSolution%SSA_Max                 = ZERO
     RTSolution%SOD                     = ZERO
     RTSolution%Surface_Emissivity      = ZERO
+    RTSolution%Surface_Emissivity_Std  = ZERO
     RTSolution%Surface_Reflectivity    = ZERO
     RTSolution%Up_Radiance             = ZERO
     RTSolution%Down_Radiance           = ZERO
@@ -537,6 +544,7 @@ CONTAINS
     WRITE(fid,'(3x,"RT Algorithm Name             : ",a )') RTSolution%RT_Algorithm_Name
     WRITE(fid,fmt) "Scattering Optical Depth      : ", RTSolution%SOD
     WRITE(fid,fmt) "Surface Emissivity            : ", RTSolution%Surface_Emissivity
+    WRITE(fid,fmt) "Surface Emissivity Std        : ", RTSolution%Surface_Emissivity_Std
     WRITE(fid,fmt) "Surface Reflectivity          : ", RTSolution%Surface_Reflectivity
     WRITE(fid,fmt) "Up Radiance                   : ", RTSolution%Up_Radiance
     WRITE(fid,fmt) "Down Radiance                 : ", RTSolution%Down_Radiance
@@ -696,6 +704,7 @@ CONTAINS
     ! Check the scalar components
     IF ( .NOT. Compares_Within_Tolerance(x%SOD                    , y%SOD                    , n) .OR. &
          .NOT. Compares_Within_Tolerance(x%Surface_Emissivity     , y%Surface_Emissivity     , n) .OR. &
+         .NOT. Compares_Within_Tolerance(x%Surface_Emissivity_Std , y%Surface_Emissivity_Std , n) .OR. &
          .NOT. Compares_Within_Tolerance(x%Surface_Reflectivity   , y%Surface_Reflectivity   , n) .OR. &
          .NOT. Compares_Within_Tolerance(x%Up_Radiance            , y%Up_Radiance            , n) .OR. &
          .NOT. Compares_Within_Tolerance(x%Down_Radiance          , y%Down_Radiance          , n) .OR. &
@@ -1636,6 +1645,7 @@ CONTAINS
     REAL(fp), ALLOCATABLE :: SSA_Max(:,:)
     REAL(fp), ALLOCATABLE :: SOD(:,:)
     REAL(fp), ALLOCATABLE :: Surface_Emissivity(:,:)
+    REAL(fp), ALLOCATABLE :: Surface_Emissivity_Std(:,:)
     REAL(fp), ALLOCATABLE :: Surface_Reflectivity(:,:)
     REAL(fp), ALLOCATABLE :: Up_Radiance(:,:)
     REAL(fp), ALLOCATABLE :: Down_Radiance(:,:)
@@ -1688,6 +1698,7 @@ CONTAINS
               SSA_Max( n_Channels, n_Profiles ), &
               SOD( n_Channels, n_Profiles ), &
               Surface_Emissivity( n_Channels, n_Profiles ), &
+              Surface_Emissivity_Std( n_Channels, n_Profiles ), &
               Surface_Reflectivity( n_Channels, n_Profiles ), &
               Up_Radiance( n_Channels, n_Profiles ), &
               Down_Radiance( n_Channels, n_Profiles ), &
@@ -1828,6 +1839,19 @@ CONTAINS
       msg = 'Error reading '//SEMIS_VARNAME//' from '//TRIM(Filename)//&
             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Read_Cleanup(); RETURN
+    END IF
+    ! ...Surface_Emissivity_Std variable. Absent from files written before the
+    ! field existed -- treat a missing variable as fill (zero = unavailable)
+    ! so older baselines stay readable.
+    Surface_Emissivity_Std = ZERO
+    NF90_Status = NF90_INQ_VARID( FileId,SEMISSTD_VARNAME,VarId )
+    IF ( NF90_Status == NF90_NOERR ) THEN
+      NF90_Status = NF90_GET_VAR( FileId,VarId,Surface_Emissivity_Std)
+      IF ( NF90_Status /= NF90_NOERR ) THEN
+        msg = 'Error reading '//SEMISSTD_VARNAME//' from '//TRIM(Filename)//&
+              ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+        CALL Read_Cleanup(); RETURN
+      END IF
     END IF
     ! ...Surface_Reflectivity variable
     NF90_Status = NF90_INQ_VARID( FileId,SREFL_VARNAME,VarId )
@@ -2158,6 +2182,7 @@ CONTAINS
         RTSolution(l,m)%SSA_Max                  = SSA_Max(l,m)
         RTSolution(l,m)%SOD                      = SOD(l,m)
         RTSolution(l,m)%Surface_Emissivity       = Surface_Emissivity(l,m)
+        RTSolution(l,m)%Surface_Emissivity_Std   = Surface_Emissivity_Std(l,m)
         RTSolution(l,m)%Surface_Reflectivity     = Surface_Reflectivity(l,m)
         RTSolution(l,m)%Up_Radiance              = Up_Radiance(l,m)
         RTSolution(l,m)%Down_Radiance            = Down_Radiance(l,m)
@@ -2562,6 +2587,7 @@ CONTAINS
     REAL(fp), ALLOCATABLE :: SSA_Max(:,:)
     REAL(fp), ALLOCATABLE :: SOD(:,:)
     REAL(fp), ALLOCATABLE :: Surface_Emissivity(:,:)
+    REAL(fp), ALLOCATABLE :: Surface_Emissivity_Std(:,:)
     REAL(fp), ALLOCATABLE :: Surface_Reflectivity(:,:)
     REAL(fp), ALLOCATABLE :: Up_Radiance(:,:)
     REAL(fp), ALLOCATABLE :: Down_Radiance(:,:)
@@ -2610,6 +2636,7 @@ CONTAINS
               SSA_Max( n_Channels, n_Profiles ), &
               SOD( n_Channels, n_Profiles ), &
               Surface_Emissivity( n_Channels, n_Profiles ), &
+              Surface_Emissivity_Std( n_Channels, n_Profiles ), &
               Surface_Reflectivity( n_Channels, n_Profiles ), &
               Up_Radiance( n_Channels, n_Profiles ), &
               Down_Radiance( n_Channels, n_Profiles ), &
@@ -2665,6 +2692,7 @@ CONTAINS
           SSA_Max(l,m)                 = RTSolution(l,m)%SSA_Max
           SOD(l,m)                     = RTSolution(l,m)%SOD
           Surface_Emissivity(l,m)      = RTSolution(l,m)%Surface_Emissivity
+          Surface_Emissivity_Std(l,m)  = RTSolution(l,m)%Surface_Emissivity_Std
           Surface_Reflectivity(l,m)    = RTSolution(l,m)%Surface_Reflectivity
           Up_Radiance(l,m)             = RTSolution(l,m)%Up_Radiance
           Down_Radiance(l,m)           = RTSolution(l,m)%Down_Radiance
@@ -2792,6 +2820,19 @@ CONTAINS
      NF90_Status = NF90_PUT_VAR( FileId,VarID, Surface_Emissivity)
      IF ( NF90_Status /= NF90_NOERR ) THEN
        msg = 'Error writing '//SOD_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ...Surface_Emissivity_Std variable
+     NF90_Status = NF90_INQ_VARID( FileId,SEMISSTD_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//SEMISSTD_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Surface_Emissivity_Std)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//SEMISSTD_VARNAME//' to '//TRIM(Filename)//&
              ' - '//TRIM(NF90_STRERROR( NF90_Status ))
        CALL Write_Cleanup(); RETURN
      END IF
@@ -3104,6 +3145,7 @@ CONTAINS
                  SSA_Max, &
                  SOD, &
                  Surface_Emissivity, &
+                 Surface_Emissivity_Std, &
                  Surface_Reflectivity, &
                  Up_Radiance, &
                  Down_Radiance, &
@@ -3209,6 +3251,7 @@ CONTAINS
          (x%RT_Algorithm_Name == y%RT_Algorithm_Name) .AND. &
          (x%SOD                     .EqualTo. y%SOD                    ) .AND. &
          (x%Surface_Emissivity      .EqualTo. y%Surface_Emissivity     ) .AND. &
+         (x%Surface_Emissivity_Std  .EqualTo. y%Surface_Emissivity_Std ) .AND. &
          (x%Surface_Reflectivity    .EqualTo. y%Surface_Reflectivity   ) .AND. &
          (x%Up_Radiance             .EqualTo. y%Up_Radiance            ) .AND. &
          (x%Down_Radiance           .EqualTo. y%Down_Radiance          ) .AND. &
@@ -3297,6 +3340,7 @@ CONTAINS
     ! ...The scalar values
     rtssum%SOD                     = rtssum%SOD                     + rts2%SOD
     rtssum%Surface_Emissivity      = rtssum%Surface_Emissivity      + rts2%Surface_Emissivity
+    rtssum%Surface_Emissivity_Std  = rtssum%Surface_Emissivity_Std  + rts2%Surface_Emissivity_Std
     rtssum%Surface_Reflectivity    = rtssum%Surface_Reflectivity    + rts2%Surface_Reflectivity
     rtssum%Up_Radiance             = rtssum%Up_Radiance             + rts2%Up_Radiance
     rtssum%Down_Radiance           = rtssum%Down_Radiance           + rts2%Down_Radiance
@@ -3392,6 +3436,7 @@ CONTAINS
     ! ...The scalar values
     rtsdiff%SOD                     = rtsdiff%SOD                     - rts2%SOD
     rtsdiff%Surface_Emissivity      = rtsdiff%Surface_Emissivity      - rts2%Surface_Emissivity
+    rtsdiff%Surface_Emissivity_Std  = rtsdiff%Surface_Emissivity_Std  - rts2%Surface_Emissivity_Std
     rtsdiff%Surface_Reflectivity    = rtsdiff%Surface_Reflectivity    - rts2%Surface_Reflectivity
     rtsdiff%Up_Radiance             = rtsdiff%Up_Radiance             - rts2%Up_Radiance
     rtsdiff%Down_Radiance           = rtsdiff%Down_Radiance           - rts2%Down_Radiance
@@ -3483,6 +3528,7 @@ CONTAINS
     ! ...The scalar values
     rts_power%SOD                     = (rts_power%SOD                    )**power
     rts_power%Surface_Emissivity      = (rts_power%Surface_Emissivity     )**power
+    rts_power%Surface_Emissivity_Std  = (rts_power%Surface_Emissivity_Std )**power
     rts_power%Surface_Reflectivity    = (rts_power%Surface_Reflectivity   )**power
     rts_power%Up_Radiance             = (rts_power%Up_Radiance            )**power
     rts_power%Down_Radiance           = (rts_power%Down_Radiance          )**power
@@ -3564,6 +3610,7 @@ CONTAINS
     ! ...The scalar values
     rts_normal%SOD                     = rts_normal%SOD                    /factor
     rts_normal%Surface_Emissivity      = rts_normal%Surface_Emissivity     /factor
+    rts_normal%Surface_Emissivity_Std  = rts_normal%Surface_Emissivity_Std /factor
     rts_normal%Surface_Reflectivity    = rts_normal%Surface_Reflectivity   /factor
     rts_normal%Up_Radiance             = rts_normal%Up_Radiance            /factor
     rts_normal%Down_Radiance           = rts_normal%Down_Radiance          /factor
@@ -3637,6 +3684,7 @@ CONTAINS
     ! ...The scalar values
     rts_sqrt%SOD                     = SQRT(rts_sqrt%SOD                    )
     rts_sqrt%Surface_Emissivity      = SQRT(rts_sqrt%Surface_Emissivity     )
+    rts_sqrt%Surface_Emissivity_Std  = SQRT(rts_sqrt%Surface_Emissivity_Std )
     rts_sqrt%Surface_Reflectivity    = SQRT(rts_sqrt%Surface_Reflectivity   )
     rts_sqrt%Up_Radiance             = SQRT(rts_sqrt%Up_Radiance            )
     rts_sqrt%Down_Radiance           = SQRT(rts_sqrt%Down_Radiance          )
@@ -3732,7 +3780,11 @@ CONTAINS
     END IF
 
 
-    ! Read the forward radiative transfer intermediate results
+    ! Read the forward radiative transfer intermediate results.
+    ! Surface_Emissivity_Std is the last item of the record; files written
+    ! before the field existed have a shorter record, so on a read failure
+    ! re-read the record with the old item list and default the std to
+    ! fill (zero = unavailable).
     READ( fid,IOSTAT=io_stat,IOMSG=io_msg ) &
       rts%SOD                    , &
       rts%Surface_Emissivity     , &
@@ -3744,7 +3796,28 @@ CONTAINS
       rts%Total_Cloud_Cover      , &
       rts%R_clear                , &
       rts%Tb_clear               , &
-      rts%Reflectance_clear
+      rts%Reflectance_clear      , &
+      rts%Surface_Emissivity_Std
+    IF ( io_stat /= 0 ) THEN
+      BACKSPACE( fid,IOSTAT=io_stat,IOMSG=io_msg )
+      IF ( io_stat /= 0 ) THEN
+        msg = 'Error repositioning to re-read scalar intermediate results - '//TRIM(io_msg)
+        CALL Read_Record_Cleanup(); RETURN
+      END IF
+      READ( fid,IOSTAT=io_stat,IOMSG=io_msg ) &
+        rts%SOD                    , &
+        rts%Surface_Emissivity     , &
+        rts%Surface_Reflectivity   , &
+        rts%Up_Radiance            , &
+        rts%Down_Radiance          , &
+        rts%Down_Solar_Radiance    , &
+        rts%Surface_Planck_Radiance, &
+        rts%Total_Cloud_Cover      , &
+        rts%R_clear                , &
+        rts%Tb_clear               , &
+        rts%Reflectance_clear
+      rts%Surface_Emissivity_Std = ZERO
+    END IF
     IF ( io_stat /= 0 ) THEN
       msg = 'Error reading scalar intermediate results - '//TRIM(io_msg)
       CALL Read_Record_Cleanup(); RETURN
@@ -3848,7 +3921,10 @@ CONTAINS
     END IF
 
 
-    ! Write the forward radiative transfer intermediate results
+    ! Write the forward radiative transfer intermediate results.
+    ! Surface_Emissivity_Std is appended as the last item of the record:
+    ! sequential readers built before the field existed read their shorter
+    ! item list from the same record unaffected.
     WRITE( fid,IOSTAT=io_stat,IOMSG=io_msg ) &
       rts%SOD                    , &
       rts%Surface_Emissivity     , &
@@ -3860,7 +3936,8 @@ CONTAINS
       rts%Total_Cloud_Cover      , &
       rts%R_clear                , &
       rts%Tb_clear               , &
-      rts%Reflectance_clear
+      rts%Reflectance_clear      , &
+      rts%Surface_Emissivity_Std
     IF ( io_stat /= 0 ) THEN
       msg = 'Error writing scalar intermediate results - '//TRIM(io_msg)
       CALL Write_Record_Cleanup(); RETURN
@@ -4128,6 +4205,24 @@ CONTAINS
     Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT  )
     IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
       msg = 'Error writing '//SEMIS_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ...Surface_Emissivity_Std variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      SEMISSTD_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Profiles_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//SEMISSTD_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,SEMIS_UNITS )
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT  )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//SEMISSTD_VARNAME//' variable attributes to '//TRIM(Filename)
       CALL Create_Cleanup(); RETURN
     END IF
 

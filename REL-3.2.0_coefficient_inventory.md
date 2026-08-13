@@ -11,6 +11,17 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 > 2026-07 crtm-coeffgen additions (MetOp-SG, MTG-S, EarthCARE, PACE, GeoXO,
 > TEMPO/GEMS, AMSR3, the VIIRS VIS correction) are **not in that tarball**. The
 > tarball must be re-rolled and both md5 references updated before release.
+>
+> **Release action item (v3.3.0, added 2026-08-13):** the staged
+> `fix/EmisCoeff/MW_Land/netCDF/TELSEM2.MWland.EmisCoeff.nc` is now the
+> **Release-2** file (344 MB, was 188 MB): same emissivity/class payload
+> bit-for-bit, plus the uncertainty content (`emissivity_error`,
+> `correlation`) required by the TELSEM2 DA program on
+> `feature/btj_telsem2_da`. Regenerated with the registered
+> `Convert_TELSEM2_Atlas` from the RTTOV ASCII distribution + `correlations`
+> file. Older CRTM builds read R2 files (unknown variables are ignored and
+> Release was never checked); the v3.3.0 tarball roll must include it, and
+> the covariance ctests (`test_TELSEM2_Covariance`) require it.
 
 ## Summary
 

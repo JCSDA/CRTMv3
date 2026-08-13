@@ -31,7 +31,8 @@ MODULE CRTM_MW_Land_SfcOptics
   USE CRTM_SfcOptics_Define,    ONLY: CRTM_SfcOptics_type
   USE NESDIS_LandEM_Module,     ONLY: NESDIS_LandEM
   USE CRTM_MWlandCoeff,         ONLY: MWlandC, CRTM_MWlandCoeff_IsLoaded
-  USE TELSEM2_Atlas_Module,     ONLY: TELSEM2_Emissivity
+  USE TELSEM2_Atlas_Module,     ONLY: TELSEM2_Emissivity, TELSEM2_Emissivity_Std, &
+                                      TELSEM2_Class
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -226,7 +227,9 @@ CONTAINS
     INTEGER :: i
     INTEGER  :: month
     REAL(fp) :: lat, lon, ev, eh
-    LOGICAL  :: atlas_valid, valid
+    REAL(fp) :: scratch_ev, scratch_eh
+    INTEGER  :: class1, class2
+    LOGICAL  :: atlas_valid, valid, cvalid
 
 
     ! Set up
@@ -235,10 +238,21 @@ CONTAINS
     ! ----------------------------------------------------------------------
     ! TELSEM2 atlas path. When the microwave land emissivity atlas is loaded
     ! and has land climatology at this location/month, use it for all angles.
-    ! The atlas depends only on lat/lon/month/frequency/angle (no CRTM control
-    ! variable), so iVar%Compute is left .FALSE. and the TL/AD results are zero.
-    ! A no-data cell (e.g. open water / permanent ice) falls through to the
-    ! NESDIS_LandEM model below.
+    ! A no-data cell (e.g. open water) falls through to the NESDIS_LandEM
+    ! model below.
+    !
+    ! State Jacobians on the atlas path (additive-anomaly hybrid): the atlas
+    ! value, which depends only on lat/lon/month/frequency/angle, remains the
+    ! forward emissivity, and NESDIS_LandEM is called into scratch purely to
+    ! harvest d(emissivity)/d(state) -- used unscaled -- where its
+    ! soil/canopy physics is valid: TELSEM2 vegetation/desert cells
+    ! (class2 1..5), below the LandEM frequency cutoff, with valid soil and
+    ! vegetation type indices. Everywhere else (water 10, sea ice 11..16,
+    ! snow/continental ice 17..22, high frequency) iVar%Compute stays
+    ! .FALSE. and the state Jacobians are honestly zero. Accepted trade
+    ! (Option A, 2026-07-19 decision record): the forward is
+    ! state-independent, so TL/AD/K are mutually exact but differ from a
+    ! finite difference of the forward with respect to surface state.
     ! ----------------------------------------------------------------------
     IF ( CRTM_MWlandCoeff_IsLoaded() ) THEN
       CALL CRTM_GeometryInfo_GetValue( GeometryInfo, &
@@ -260,7 +274,62 @@ CONTAINS
         SfcOptics%Reflectivity(i,1,i,1) = ONE - ev
         SfcOptics%Reflectivity(i,2,i,2) = ONE - eh
       END DO
-      IF ( atlas_valid ) RETURN  ! err_stat=SUCCESS; iVar%Compute stays .FALSE.
+      IF ( atlas_valid ) THEN
+        ! Atlas emissivity error stds for this channel frequency (Release-2
+        ! atlas only; a Release-1 atlas leaves the carriers zero, which the
+        ! central zeroing in CRTM_Compute_SfcOptics established). The
+        ! uncertainties are angle-independent; the polarization mixing to the
+        ! reported scalar happens back in CRTM_Compute_SfcOptics.
+        CALL TELSEM2_Emissivity_Std( MWlandC, lat, lon, month, &
+                                     SC(SensorIndex)%Frequency(ChannelIndex), &
+                                     SfcOptics%Emissivity_Std_V, &
+                                     SfcOptics%Emissivity_Std_H, &
+                                     SfcOptics%Emissivity_Cov_VH, valid )
+        IF ( valid ) SfcOptics%Emissivity_Std_Coverage = &
+                       SfcOptics%Emissivity_Std_Coverage + Surface%Land_Coverage
+        ! Class-gated LandEM sensitivity harvest (see header comment above).
+        ! An invalid soil/vegetation type simply suppresses the harvest here
+        ! -- the atlas forward does not need LandEM -- while the fall-through
+        ! LandEM path below retains its hard failure.
+        CALL TELSEM2_Class( MWlandC, lat, lon, month, class1, class2, cvalid )
+        IF ( cvalid .AND. class2 >= 1 .AND. class2 <= 5 .AND. &
+             SC(SensorIndex)%Frequency(ChannelIndex) < FREQUENCY_CUTOFF .AND. &
+             Surface%Soil_Type       >= 1 .AND. &
+             Surface%Soil_Type       <= N_VALID_SOIL_TYPES .AND. &
+             Surface%Vegetation_Type >= 1 .AND. &
+             Surface%Vegetation_Type <= N_VALID_VEGETATION_TYPES ) THEN
+          iVar%Compute     = .TRUE.
+          iVar%Lai         = Surface%Lai
+          iVar%Veg_Frac    = MAX(MIN(Surface%Vegetation_Fraction,ONE),ZERO)
+          iVar%Veg_Clipped = (Surface%Vegetation_Fraction < ZERO) .OR. &
+                             (Surface%Vegetation_Fraction > ONE)
+          iVar%Smc_Clipped = (Surface%Soil_Moisture_Content < ZERO) .OR. &
+                             (Surface%Soil_Moisture_Content > ONE)
+          DO i = 1, SfcOptics%n_Angles
+            CALL NESDIS_LandEM(SfcOptics%Angle(i),                        & ! Input, Degree
+                               SC(SensorIndex)%Frequency(ChannelIndex),   & ! Input, GHz
+                               Surface%Soil_Moisture_Content, & ! Input, g.cm^-3
+                               Surface%Vegetation_Fraction,   & ! Input
+                               Surface%Soil_Temperature,      & ! Input, K
+                               Surface%Land_Temperature,      & ! Input, K
+                               Surface%Lai,                   & ! Input, Leaf Area Index
+                               Surface%Soil_Type,             & ! Input, Soil Type (1 -  9)
+                               Surface%Vegetation_Type,       & ! Input, Vegetation Type (1 - 13)
+                               ZERO,                          & ! Input, Snow depth, mm
+                               scratch_eh,                    & ! Output DISCARDED, H component
+                               scratch_ev,                    & ! Output DISCARDED, V component
+                               dEV_dvlai  = iVar%dEV_dvlai(i),  & ! Optional output, V
+                               dEH_dvlai  = iVar%dEH_dvlai(i),  & ! Optional output, H
+                               dEV_dmv    = iVar%dEV_dmv(i),    & ! Optional output, V
+                               dEH_dmv    = iVar%dEH_dmv(i),    & ! Optional output, H
+                               dEV_dtsoil = iVar%dEV_dtsoil(i), & ! Optional output, V
+                               dEH_dtsoil = iVar%dEH_dtsoil(i), & ! Optional output, H
+                               dEV_dtland = iVar%dEV_dtland(i), & ! Optional output, V
+                               dEH_dtland = iVar%dEH_dtland(i)  ) ! Optional output, H
+          END DO
+        END IF
+        RETURN  ! err_stat=SUCCESS; forward emissivity is the atlas value
+      END IF
     END IF
 
     ! ...Check the soil type...
@@ -344,8 +413,12 @@ CONTAINS
 !
 !       This function is a wrapper for third party code.
 !
-!       NB: CURRENTLY THIS IS A STUB FUNCTION AS THERE ARE NO TL
-!           COMPONENTS IN THE MW LAND SFCOPTICS COMPUTATIONS.
+!       Propagates the NESDIS_LandEM analytic emissivity derivatives cached
+!       in iVar (LAI, vegetation fraction, soil moisture, soil/land
+!       temperature) -- on both the LandEM path and, class-gated, the
+!       TELSEM2 atlas path. Zero when iVar%Compute is .FALSE. (atlas cell
+!       outside the vegetation/desert classes, high frequency, or the
+!       high-frequency constant-emissivity fallback).
 !
 ! CALLING SEQUENCE:
 !       Error_Status = Compute_MW_Land_SfcOptics_TL( SfcOptics_TL )
@@ -450,8 +523,10 @@ CONTAINS
 !
 !       This function is a wrapper for third party code.
 !
-!       NB: CURRENTLY THIS IS A STUB FUNCTION AS THERE ARE NO AD
-!           COMPONENTS IN THE MW LAND SFCOPTICS COMPUTATIONS.
+!       Adjoint of the NESDIS_LandEM analytic emissivity derivatives cached
+!       in iVar (LAI, vegetation fraction, soil moisture, soil/land
+!       temperature) -- on both the LandEM path and, class-gated, the
+!       TELSEM2 atlas path. Zero when iVar%Compute is .FALSE..
 !
 ! CALLING SEQUENCE:
 !       Error_Status = Compute_MW_Land_SfcOptics_AD( SfcOptics_AD )

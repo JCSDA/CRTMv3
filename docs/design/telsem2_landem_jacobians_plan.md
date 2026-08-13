@@ -38,7 +38,69 @@ unmerged and is a 3.2.x/3.3 program. Of the punch-list bug fixes, only item 1
 (Fastem1 SST) was ever realistically 3.2.0-eligible; see the verified
 punch-list, which downgrades the other two.
 
-> ## ✅ DECISION RECORD (BTJ, 2026-07-19)
+> ## ✅ DECISION RECORD (BTJ, 2026-08-13) — SUPERSEDES 2026-07-19
+>
+> **Arch 2 REOPENED; full composition delivered on `feature/btj_telsem2_da`
+> (target release v3.3.0 — numerical changes).** Prompted by the DA question
+> "how do we use TELSEM2's variability/correlation content?", BTJ reopened the
+> emissivity-space architecture and chose Layers 1+2 together:
+>
+> - **Layer 0** (all frequencies): skin-T Jacobian via the Planck term —
+>   unchanged, works with the atlas.
+> - **Layer 1** (<80 GHz): the additive-anomaly hybrid re-implemented (the
+>   2026-07-19 commits `6c8f420`/`58c7179` were lost in a rebase), now
+>   **class2-gated**: LandEM state Jacobians only over TELSEM2
+>   vegetation/desert cells (class2 1–5); water/sea-ice/snow-ice cells give
+>   honestly-zero state Jacobians — closing the old "STILL not done"
+>   snow/ice fall-through item. Option-A trade unchanged. Verified to the
+>   recorded targets (|K|=44.844 K/unit SMC, TL≡K to 1.4e-14).
+> - **Layer 2** (all frequencies): emissivity-space DA delivered:
+>   - The TELSEM2 coefficient file is **Release 2**: per-cell `Emis_Err`
+>     (7-channel std) and per-class1 7×7 `Correlation` reinstated (the
+>     "stays dropped" decision below is reversed). R1 files remain readable.
+>   - RTTOV's covariance machinery ported bit-for-bit
+>     (`TELSEM2_Emissivity_Cov/_Std`; goldens exact after reproducing
+>     RTTOV's single-precision 19.35 GHz literal); DA query API
+>     `CRTM_TELSEM2_Emissivity_Uncertainty` exported from `CRTM_Module`.
+>   - `RTSolution_K%Surface_Emissivity` — discovered to be ALREADY populated
+>     (commit `2ff3a87`, contradicting the "never populated" claim below) —
+>     fixed to report the **total** derivative: the computed-emissivity
+>     branch now folds in the reflected-downwelling term (G2), the
+>     scattering user-emissivity branch regains its emission term (G1), the
+>     "need to check" branch is FD-validated (G3), and SOI's AD zeroes its
+>     surface duals on entry (G6). All FD-validated to ~2e-9
+>     (`test_Emissivity_Jacobian`). Remaining limitation: fractional-cloud
+>     ∂Tb/∂ε is cloudy-column-only (G4, documented).
+>   - New `RTSolution%Surface_Emissivity_Std`: per-channel,
+>     polarization-mixed, land-fraction-weighted atlas emissivity std for
+>     QC/error inflation (zero = unavailable).
+>
+> Distribution note: the staged fix tree carries the Release-2
+> `TELSEM2.MWland.EmisCoeff.nc` (~344 MB, emissivity payload bit-identical
+> to R1); the coefficient tarball re-roll + md5 pin is a release-time step
+> for v3.3.0 (precedent `5659f9d`).
+>
+> **Phase G addendum (BTJ, 2026-08-13): full surface-type dispatch.** The MW
+> SNOW and ICE drivers now consult the atlas first, **class-consistently**:
+> a declared snow fraction uses TELSEM2 when the cell's class2 is 17–22
+> (climatology agrees snow/continental ice is present), a declared ice
+> fraction when class2 is 11–16 (inside the climatological sea-ice edge);
+> anywhere the declaration contradicts the climatology the NESDIS snow/ice
+> models run bit-identically to before. `Surface_Emissivity_Std` now weights
+> by the summed coverage of atlas-contributing fractions
+> (`Emissivity_Std_Coverage` accumulator; identical per-cell contributions
+> add linearly). No state Jacobians are lost on the atlas snow/ice paths —
+> the NESDIS snow/ice TL/AD are zero-stubs regardless (#281 audit).
+> Verified by `test_TELSEM2_SnowIce`: consistent declarations switch to the
+> atlas with positive std; inconsistent ones fall back bit-for-bit;
+> land-declared and snow-declared Greenland produce identical emissivity
+> (one atlas cell serves every fraction); fractional coverages combine
+> linearly.
+>
+> The 2026-07-19 record below is retained for history; its Arch-2/uncertainty
+> renunciations no longer apply.
+
+> ## ~~✅ DECISION RECORD (BTJ, 2026-07-19)~~ — superseded, see above
 >
 > **Architecture 1 only — physical state as the control vector.** Emissivity-space
 > (Arch 2) is not being pursued.

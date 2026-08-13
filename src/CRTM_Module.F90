@@ -22,6 +22,8 @@ MODULE CRTM_Module
   USE CRTM_Options_Define
   USE CRTM_AncillaryInput_Define
   USE CRTM_IRlandCoeff          , ONLY: CRTM_IRlandCoeff_Classification
+  USE CRTM_MWlandCoeff          , ONLY: CRTM_MWlandCoeff_IsLoaded, &
+                                        CRTM_TELSEM2_Emissivity_Uncertainty
 
   ! Parameter definition module
   USE CRTM_Parameters
