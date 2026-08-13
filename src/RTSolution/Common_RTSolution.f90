@@ -447,6 +447,15 @@ CONTAINS
     ! ---------------------------
     RTSolution%Surface_Emissivity   = SfcOptics%Emissivity( SfcOptics%Index_Sat_Ang, 1 )
     RTSolution%Surface_Reflectivity = SfcOptics%Reflectivity( SfcOptics%Index_Sat_Ang, 1, SfcOptics%Index_Sat_Ang, 1 )
+    ! The emissivity error std is only defined when CRTM computed the
+    ! emissivity (the MW-land atlas fills it; CRTM_Compute_SfcOptics zeroes
+    ! it per channel). On the user-emissivity path that zeroing never runs,
+    ! so assign explicitly rather than inherit the previous channel's value.
+    IF ( SfcOptics%Compute ) THEN
+      RTSolution%Surface_Emissivity_Std = SfcOptics%Surface_Emissivity_Std
+    ELSE
+      RTSolution%Surface_Emissivity_Std = ZERO
+    END IF
 
     ! ------------------------
     ! Compute Planck radiances

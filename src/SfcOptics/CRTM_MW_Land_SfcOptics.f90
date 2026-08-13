@@ -31,7 +31,7 @@ MODULE CRTM_MW_Land_SfcOptics
   USE CRTM_SfcOptics_Define,    ONLY: CRTM_SfcOptics_type
   USE NESDIS_LandEM_Module,     ONLY: NESDIS_LandEM
   USE CRTM_MWlandCoeff,         ONLY: MWlandC, CRTM_MWlandCoeff_IsLoaded
-  USE TELSEM2_Atlas_Module,     ONLY: TELSEM2_Emissivity
+  USE TELSEM2_Atlas_Module,     ONLY: TELSEM2_Emissivity, TELSEM2_Emissivity_Std
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -260,7 +260,19 @@ CONTAINS
         SfcOptics%Reflectivity(i,1,i,1) = ONE - ev
         SfcOptics%Reflectivity(i,2,i,2) = ONE - eh
       END DO
-      IF ( atlas_valid ) RETURN  ! err_stat=SUCCESS; iVar%Compute stays .FALSE.
+      IF ( atlas_valid ) THEN
+        ! Atlas emissivity error stds for this channel frequency (Release-2
+        ! atlas only; a Release-1 atlas leaves the carriers zero, which the
+        ! central zeroing in CRTM_Compute_SfcOptics established). The
+        ! uncertainties are angle-independent; the polarization mixing to the
+        ! reported scalar happens back in CRTM_Compute_SfcOptics.
+        CALL TELSEM2_Emissivity_Std( MWlandC, lat, lon, month, &
+                                     SC(SensorIndex)%Frequency(ChannelIndex), &
+                                     SfcOptics%Emissivity_Std_V, &
+                                     SfcOptics%Emissivity_Std_H, &
+                                     SfcOptics%Emissivity_Cov_VH, valid )
+        RETURN  ! err_stat=SUCCESS; iVar%Compute stays .FALSE.
+      END IF
     END IF
 
     ! ...Check the soil type...

@@ -102,6 +102,17 @@ MODULE CRTM_SfcOptics_Define
     ! The weighted mean surface temperature
     REAL(fp) :: Surface_Temperature = ZERO
 
+    ! MW land atlas emissivity uncertainty carrier (all zero when no
+    ! uncertainty is available: no atlas, Release-1 atlas file, non-land
+    ! surface, or user-supplied emissivity). Filled by the MW land driver in
+    ! V/H polarization; the channel-polarization-mixed scalar is computed at
+    ! the polarization-mapping site in CRTM_Compute_SfcOptics and copied to
+    ! RTSolution%Surface_Emissivity_Std.
+    REAL(fp) :: Emissivity_Std_V       = ZERO  ! V-pol emissivity error std
+    REAL(fp) :: Emissivity_Std_H       = ZERO  ! H-pol emissivity error std
+    REAL(fp) :: Emissivity_Cov_VH      = ZERO  ! V/H emissivity error covariance
+    REAL(fp) :: Surface_Emissivity_Std = ZERO  ! polarization-mixed scalar
+
     ! The stream angles and weights
     REAL(fp), ALLOCATABLE :: Angle(:)                 ! I
     REAL(fp), ALLOCATABLE :: Weight(:)                ! I
@@ -353,6 +364,10 @@ CONTAINS
     self%Azimuth_Angle       = 999.9_fp
     self%Transmittance       = ZERO
     self%Surface_Temperature = ZERO
+    self%Emissivity_Std_V       = ZERO
+    self%Emissivity_Std_H       = ZERO
+    self%Emissivity_Cov_VH      = ZERO
+    self%Surface_Emissivity_Std = ZERO
     IF ( .NOT. CRTM_SfcOptics_Associated( self ) ) RETURN
     self%Emissivity          = ZERO
     self%Reflectivity        = ZERO
@@ -402,6 +417,10 @@ CONTAINS
     WRITE(*, '(3x,"Satellite view angle index:",1x,i0)') self%Index_Sat_Ang
     WRITE(*, '(3x,"Azimuth Fourier component :",1x,i0)') self%mth_Azi
     WRITE(*, '(3x,"Weighted mean Tsfc        :",1x,es22.15)') self%Surface_Temperature
+    WRITE(*, '(3x,"Emissivity std V/H        :",1x,2(es22.15,1x))') &
+      self%Emissivity_Std_V, self%Emissivity_Std_H
+    WRITE(*, '(3x,"Emissivity cov VH / mixed :",1x,2(es22.15,1x))') &
+      self%Emissivity_Cov_VH, self%Surface_Emissivity_Std
     IF ( .NOT. CRTM_SfcOptics_Associated(self) ) RETURN
     WRITE(*, '(3x,"Angle :")')
     WRITE(*, '(5(1x,es22.15,:))') self%Angle
@@ -516,7 +535,11 @@ CONTAINS
          (.NOT. Compares_Within_Tolerance(x%Transmittance,y%Transmittance,n)) .OR. &
          (x%Index_Sat_Ang /= y%Index_Sat_Ang) .OR. &
          (x%mth_Azi       /= y%mth_Azi      ) .OR. &
-         (.NOT. Compares_Within_Tolerance(x%Surface_Temperature,y%Surface_Temperature,n)) ) RETURN
+         (.NOT. Compares_Within_Tolerance(x%Surface_Temperature,y%Surface_Temperature,n)) .OR. &
+         (.NOT. Compares_Within_Tolerance(x%Emissivity_Std_V,y%Emissivity_Std_V,n)) .OR. &
+         (.NOT. Compares_Within_Tolerance(x%Emissivity_Std_H,y%Emissivity_Std_H,n)) .OR. &
+         (.NOT. Compares_Within_Tolerance(x%Emissivity_Cov_VH,y%Emissivity_Cov_VH,n)) .OR. &
+         (.NOT. Compares_Within_Tolerance(x%Surface_Emissivity_Std,y%Surface_Emissivity_Std,n)) ) RETURN
     
     ! Check arrays
     IF ( (.NOT. ALL(Compares_Within_Tolerance(x%Angle              ,y%Angle              ,n))) .OR. &
@@ -593,7 +616,11 @@ CONTAINS
                 (x%Transmittance       .EqualTo. y%Transmittance      ) .AND. &
                 (x%Index_Sat_Ang          ==     y%Index_Sat_Ang      ) .AND. &
                 (x%mth_Azi                ==     y%mth_Azi            ) .AND. &
-                (x%Surface_Temperature .EqualTo. y%Surface_Temperature)) ) RETURN
+                (x%Surface_Temperature .EqualTo. y%Surface_Temperature) .AND. &
+                (x%Emissivity_Std_V       .EqualTo. y%Emissivity_Std_V      ) .AND. &
+                (x%Emissivity_Std_H       .EqualTo. y%Emissivity_Std_H      ) .AND. &
+                (x%Emissivity_Cov_VH      .EqualTo. y%Emissivity_Cov_VH     ) .AND. &
+                (x%Surface_Emissivity_Std .EqualTo. y%Surface_Emissivity_Std)) ) RETURN
     ! ...Arrays
     IF ( CRTM_SfcOptics_Associated(x) .AND. CRTM_SfcOptics_Associated(y) ) THEN
       IF ( .NOT. (ALL(x%Angle               .EqualTo. y%Angle              ) .AND. &
@@ -661,10 +688,14 @@ CONTAINS
     ! ...The scalar values
     sosum%Transmittance       = sosum%Transmittance       + so2%Transmittance
     sosum%Surface_Temperature = sosum%Surface_Temperature + so2%Surface_Temperature
+    sosum%Emissivity_Std_V       = sosum%Emissivity_Std_V       + so2%Emissivity_Std_V
+    sosum%Emissivity_Std_H       = sosum%Emissivity_Std_H       + so2%Emissivity_Std_H
+    sosum%Emissivity_Cov_VH      = sosum%Emissivity_Cov_VH      + so2%Emissivity_Cov_VH
+    sosum%Surface_Emissivity_Std = sosum%Surface_Emissivity_Std + so2%Surface_Emissivity_Std
     ! ...The arrays
     sosum%Reflectivity        = sosum%Reflectivity        + so2%Reflectivity
     sosum%Direct_Reflectivity = sosum%Direct_Reflectivity + so2%Direct_Reflectivity
-    sosum%Emissivity          = sosum%Emissivity          + so2%Emissivity    
+    sosum%Emissivity          = sosum%Emissivity          + so2%Emissivity
 
   END FUNCTION CRTM_SfcOptics_Add
 
@@ -721,10 +752,14 @@ CONTAINS
     ! ...The scalar values
     sodiff%Transmittance       = sodiff%Transmittance       - so2%Transmittance
     sodiff%Surface_Temperature = sodiff%Surface_Temperature - so2%Surface_Temperature
+    sodiff%Emissivity_Std_V       = sodiff%Emissivity_Std_V       - so2%Emissivity_Std_V
+    sodiff%Emissivity_Std_H       = sodiff%Emissivity_Std_H       - so2%Emissivity_Std_H
+    sodiff%Emissivity_Cov_VH      = sodiff%Emissivity_Cov_VH      - so2%Emissivity_Cov_VH
+    sodiff%Surface_Emissivity_Std = sodiff%Surface_Emissivity_Std - so2%Surface_Emissivity_Std
     ! ...The arrays
     sodiff%Reflectivity        = sodiff%Reflectivity        - so2%Reflectivity
     sodiff%Direct_Reflectivity = sodiff%Direct_Reflectivity - so2%Direct_Reflectivity
-    sodiff%Emissivity          = sodiff%Emissivity          - so2%Emissivity    
+    sodiff%Emissivity          = sodiff%Emissivity          - so2%Emissivity
 
   END FUNCTION CRTM_SfcOptics_Subtract
 
