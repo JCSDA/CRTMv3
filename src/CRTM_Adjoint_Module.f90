@@ -1409,6 +1409,16 @@ CONTAINS
                 RETURN
               END IF
 
+              ! The emissivity Jacobian under fractional cloud: sum the
+              ! coverage-weighted clear- and cloudy-column captures (see the
+              ! matching block in CRTM_K_Matrix_Module).
+              IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) .AND. &
+                   RTV%mth_Azi == 0 ) THEN
+                RTSolution_AD(ln,m)%Surface_Emissivity = &
+                    RTSolution_AD(ln,m)%Surface_Emissivity + &
+                    RTSolution_Clear_AD%Surface_Emissivity
+              END IF
+
               ! Compute the adjoint for active sensors
               ! It is prefered to keep the adjoint for active sensors here, thoguh it
               ! may not be in the reverse order for TL code

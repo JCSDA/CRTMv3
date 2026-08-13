@@ -69,8 +69,10 @@ punch-list, which downgrades the other two.
 >     scattering user-emissivity branch regains its emission term (G1), the
 >     "need to check" branch is FD-validated (G3), and SOI's AD zeroes its
 >     surface duals on entry (G6). All FD-validated to ~2e-9
->     (`test_Emissivity_Jacobian`). Remaining limitation: fractional-cloud
->     ∂Tb/∂ε is cloudy-column-only (G4, documented).
+>     (`test_Emissivity_Jacobian`). G4 (fractional-cloud ∂Tb/∂ε was
+>     cloudy-column-only) was subsequently fixed 2026-08-13: the
+>     coverage-weighted clear/cloudy captures are summed in the K/AD driver
+>     modules, FD-validated at cc=0.5 to 2e-8.
 >   - New `RTSolution%Surface_Emissivity_Std`: per-channel,
 >     polarization-mixed, land-fraction-weighted atlas emissivity std for
 >     QC/error inflation (zero = unavailable).

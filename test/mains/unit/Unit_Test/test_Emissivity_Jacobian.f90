@@ -24,9 +24,11 @@
 !      seed leaks into channel n+1's Jacobian (the user-emissivity specular
 !      branch reads but never zeroes the reflectivity adjoint diagonals).
 !
-! Only profile 1 is asserted: profile 2 carries Cloud_Fraction = 0.5 and the
-! fractional-cloud emissivity Jacobian is cloudy-column-only by construction
-! (known limitation G4) -- it would not match a total-column FD.
+!   5. Fractional cloud (profile 2, Cloud_Fraction = 0.5): the G4 fix sums
+!      the coverage-weighted clear- and cloudy-column captures, so the
+!      reported d(Tb)/d(emissivity) is the total-column derivative and must
+!      match the finite difference of the (1-cc)/cc-combined forward.
+!      Before the fix the value was cloudy-column-only and fails this test.
 !
 PROGRAM test_Emissivity_Jacobian
 
@@ -77,6 +79,7 @@ PROGRAM test_Emissivity_Jacobian
 
   REAL(fp), ALLOCATABLE :: emis_b(:), tb0(:), tbchk(:), tbp(:), tbm(:)
   REAL(fp), ALLOCATABLE :: fd(:), k_atlas(:), k_user(:), eps(:)
+  REAL(fp), ALLOCATABLE :: tbp2(:), tbm2(:), fd2(:), k_user2(:)
 
   CALL CRTM_Version( Version )
   CALL Program_Message( PROGRAM_NAME, &
@@ -98,6 +101,8 @@ PROGRAM test_Emissivity_Jacobian
             emis_b(n_Channels), tb0(n_Channels), tbchk(n_Channels), &
             tbp(n_Channels), tbm(n_Channels), fd(n_Channels), &
             k_atlas(n_Channels), k_user(n_Channels), eps(n_Channels), &
+            tbp2(n_Channels), tbm2(n_Channels), fd2(n_Channels), &
+            k_user2(n_Channels), &
             STAT = Alloc_Status )
   IF ( Alloc_Status /= 0 ) THEN
     CALL Display_Message( PROGRAM_NAME, 'Error allocating arrays', FAILURE ); STOP 1
@@ -170,6 +175,16 @@ PROGRAM test_Emissivity_Jacobian
   Opt(:)%RT_Algorithm_ID = RT_ADA
 
   ! ------------------------------------------------------------------
+  ! 5. Fractional cloud (profile 2, Cloud_Fraction = 0.5) -- G4: the
+  !    reported d(Tb)/d(emissivity) must be the total-column derivative
+  ! ------------------------------------------------------------------
+  CALL Run_Forward( tbp, use_emis=.TRUE., emis=eps+DELTA, tb2=tbp2 )
+  CALL Run_Forward( tbm, use_emis=.TRUE., emis=eps-DELTA, tb2=tbm2 )
+  fd2 = ( tbp2 - tbm2 ) / ( 2.0_fp*DELTA )
+  CALL Run_K( k_user, use_emis=.TRUE., emis=eps, k2=k_user2 )
+  CALL Assert_Close( k_user2, fd2, TOL_SCAT, 'G4: user-emissivity K vs FD, fractional cloud (cc=0.5)' )
+
+  ! ------------------------------------------------------------------
   ! Report and clean up
   ! ------------------------------------------------------------------
   Error_Status = CRTM_Destroy( ChannelInfo )
@@ -177,25 +192,29 @@ PROGRAM test_Emissivity_Jacobian
   CALL CRTM_Atmosphere_Destroy( Atmosphere_K )
   CALL CRTM_Options_Destroy( Opt )
   DEALLOCATE( RTSolution, RTSolution_K, Atmosphere_K, Surface_K, &
-              emis_b, tb0, tbchk, tbp, tbm, fd, k_atlas, k_user, eps )
+              emis_b, tb0, tbchk, tbp, tbm, fd, k_atlas, k_user, eps, &
+              tbp2, tbm2, fd2, k_user2 )
 
   IF ( failed ) THEN
     CALL Display_Message( PROGRAM_NAME, 'FAILED', FAILURE ); STOP 1
   ELSE
     CALL Display_Message( PROGRAM_NAME, &
       'PASSED: d(Tb)/d(emissivity) matches finite differences on the '//&
-      'computed (atlas) and user-emissivity branches, clear and scattering, ADA and SOI', &
+      'computed (atlas) and user-emissivity branches, clear and scattering, '//&
+      'ADA and SOI, overcast and fractional cloud', &
       INFORMATION ); STOP 0
   END IF
 
 CONTAINS
 
   ! Forward run; optionally with user-specified emissivity (same value vector
-  ! for every profile). Returns profile 1's brightness temperatures.
-  SUBROUTINE Run_Forward( tb, use_emis, emis )
+  ! for every profile). Returns profile 1's brightness temperatures, and
+  ! optionally profile 2's (the fractional-cloud profile).
+  SUBROUTINE Run_Forward( tb, use_emis, emis, tb2 )
     REAL(fp),           INTENT(OUT) :: tb(:)
     LOGICAL,            INTENT(IN)  :: use_emis
     REAL(fp), OPTIONAL, INTENT(IN)  :: emis(:)
+    REAL(fp), OPTIONAL, INTENT(OUT) :: tb2(:)
     INTEGER :: stat, m
     DO m = 1, N_PROFILES
       Opt(m)%Use_Emissivity = use_emis
@@ -206,14 +225,17 @@ CONTAINS
       CALL Display_Message( PROGRAM_NAME, 'Error in CRTM Forward', FAILURE ); STOP 1
     END IF
     tb = RTSolution(:,1)%Brightness_Temperature
+    IF ( PRESENT(tb2) ) tb2 = RTSolution(:,2)%Brightness_Temperature
   END SUBROUTINE Run_Forward
 
   ! K-matrix run with a unit brightness-temperature seed; returns profile 1's
-  ! d(Tb)/d(emissivity) from RTSolution_K%Surface_Emissivity.
-  SUBROUTINE Run_K( k, use_emis, emis )
+  ! d(Tb)/d(emissivity) from RTSolution_K%Surface_Emissivity, and optionally
+  ! profile 2's.
+  SUBROUTINE Run_K( k, use_emis, emis, k2 )
     REAL(fp),           INTENT(OUT) :: k(:)
     LOGICAL,            INTENT(IN)  :: use_emis
     REAL(fp), OPTIONAL, INTENT(IN)  :: emis(:)
+    REAL(fp), OPTIONAL, INTENT(OUT) :: k2(:)
     INTEGER :: stat, m
     DO m = 1, N_PROFILES
       Opt(m)%Use_Emissivity = use_emis
@@ -229,6 +251,7 @@ CONTAINS
       CALL Display_Message( PROGRAM_NAME, 'Error in CRTM K_Matrix', FAILURE ); STOP 1
     END IF
     k = RTSolution_K(:,1)%Surface_Emissivity
+    IF ( PRESENT(k2) ) k2 = RTSolution_K(:,2)%Surface_Emissivity
   END SUBROUTINE Run_K
 
   ! Assert per-channel closeness, relative by default (denominator floored at

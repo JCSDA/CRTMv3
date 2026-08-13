@@ -1676,6 +1676,21 @@ CONTAINS
                 thread_error = MAX(thread_error, Err_Thread)
                 CYCLE Thread_Loop
               END IF
+
+              ! The emissivity Jacobian under fractional cloud: each column's
+              ! RT adjoint captured its own coverage-weighted contribution to
+              ! d(Tb)/d(emissivity) -- the clear column into
+              ! RTSolution_Clear_K (its radiance seed carries 1-cc), the
+              ! cloudy column into RTSolution_K (seed carries cc; assignment,
+              ! not accumulation). The reported total derivative is their
+              ! sum; without this the value is cloudy-column-only.
+              IF ( CRTM_Atmosphere_IsFractional(cloud_coverage_flag) .AND. &
+                   RTV(nt)%mth_Azi == 0 ) THEN
+                RTSolution_K(ln,m)%Surface_Emissivity = &
+                    RTSolution_K(ln,m)%Surface_Emissivity + &
+                    RTSolution_Clear_K(nt)%Surface_Emissivity
+              END IF
+
               ! Calculate the adjoint for the active sensor reflectivity
               IF ( SC(SensorIndex)%Is_Active_Sensor .AND. AtmOptics(nt)%Include_Scattering ) THEN
                 CALL CRTM_Compute_Reflectivity_AD(Atm             , &  ! Input
