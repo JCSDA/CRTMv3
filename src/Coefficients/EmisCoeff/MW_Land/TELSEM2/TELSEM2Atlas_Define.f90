@@ -9,9 +9,13 @@
 ! populated grid cell and month it stores the mean emissivity at the seven SSM/I
 ! channels (19V, 19H, 22V, 37V, 37H, 85V, 85H) together with two surface-class
 ! indices: class1 drives the angular-correction regression and class2 drives the
-! frequency interpolation above 85 GHz. Only the data required to reconstruct the
-! emissivity are stored; the atlas uncertainty (std/covariance) used by RTTOV's
-! optional outputs is not retained because the CRTM surface optics do not use it.
+! frequency interpolation above 85 GHz. From Release 2 the atlas uncertainty
+! content is also stored: the per-cell emissivity error standard deviations
+! (Emis_Err) and the per-class1 inter-channel correlation matrices (Correlation),
+! which together provide the emissivity error covariance needed by
+! data-assimilation applications (emissivity background error, observation-error
+! inflation). Release 1 files carry no uncertainty content and remain readable;
+! Has_Uncertainty records which flavour was loaded.
 !
 ! All twelve monthly atlases are stored in a single object (stacked along n_Data
 ! with per-month offsets) because CRTM loads coefficients once at initialisation
@@ -42,6 +46,7 @@ MODULE TELSEM2Atlas_Define
   PRIVATE
   ! Parameters
   PUBLIC :: TELSEM2ATLAS_DATATYPE
+  PUBLIC :: N_CLASS1
   ! Datatypes
   PUBLIC :: TELSEM2Atlas_type
   ! Operators
@@ -50,6 +55,7 @@ MODULE TELSEM2Atlas_Define
   PUBLIC :: TELSEM2Atlas_Associated
   PUBLIC :: TELSEM2Atlas_Destroy
   PUBLIC :: TELSEM2Atlas_Create
+  PUBLIC :: TELSEM2Atlas_Create_Uncertainty
   PUBLIC :: TELSEM2Atlas_Inspect
   PUBLIC :: TELSEM2Atlas_ValidRelease
   PUBLIC :: TELSEM2Atlas_Info
@@ -69,8 +75,15 @@ MODULE TELSEM2Atlas_Define
   ! -----------------
   CHARACTER(*), PARAMETER :: TELSEM2ATLAS_DATATYPE = 'TELSEM2Atlas'
   ! Current valid release and version
-  INTEGER(Long), PARAMETER :: TELSEM2ATLAS_RELEASE = 1  ! Structure/file format
-  INTEGER(Long), PARAMETER :: TELSEM2ATLAS_VERSION = 1  ! Default data version
+  ! Release 1: emissivity + classes only. Release 2: adds the uncertainty
+  ! content (Emis_Err, Correlation). Release 1 files remain readable.
+  INTEGER(Long), PARAMETER :: TELSEM2ATLAS_RELEASE     = 2  ! Structure/file format
+  INTEGER(Long), PARAMETER :: TELSEM2ATLAS_RELEASE_MIN = 1  ! Oldest readable release
+  INTEGER(Long), PARAMETER :: TELSEM2ATLAS_VERSION     = 1  ! Default data version
+  ! Number of angular-correction (class1) classes: the class dimension of the
+  ! Correlation array, the emis_interp regression tables, and the valid Class1
+  ! range 1..N_CLASS1.
+  INTEGER(Long), PARAMETER :: N_CLASS1 = 10
   ! Literal constants
   REAL(Double), PARAMETER :: ZERO = 0.0_Double
   ! String lengths
@@ -108,6 +121,10 @@ MODULE TELSEM2Atlas_Define
     INTEGER(Long), ALLOCATABLE :: Class1(:)       ! (n_Data) angular-correction class
     INTEGER(Long), ALLOCATABLE :: Class2(:)       ! (n_Data) frequency-interpolation class
     REAL(Double),  ALLOCATABLE :: Emissivity(:,:) ! (n_Data x n_Channels) mean emissivity
+    ! Uncertainty content (Release >= 2; absent from Release 1 files)
+    LOGICAL :: Has_Uncertainty = .FALSE.
+    REAL(Double),  ALLOCATABLE :: Emis_Err(:,:)      ! (n_Data x n_Channels) emissivity error std
+    REAL(Double),  ALLOCATABLE :: Correlation(:,:,:) ! (N_CLASS1 x n_Channels x n_Channels)
     ! Derived equal-area grid geometry and reverse lookup (rebuilt on read)
     INTEGER(Long), ALLOCATABLE :: Cells_Per_Band(:) ! (n_Latitude_Bands)
     INTEGER(Long), ALLOCATABLE :: First_Cell(:)     ! (n_Latitude_Bands) first cell number of band
@@ -149,7 +166,8 @@ CONTAINS
 !--------------------------------------------------------------------------------
   ELEMENTAL SUBROUTINE TELSEM2Atlas_Destroy( self )
     TYPE(TELSEM2Atlas_type), INTENT(OUT) :: self
-    self%Is_Allocated = .FALSE.
+    self%Is_Allocated    = .FALSE.
+    self%Has_Uncertainty = .FALSE.
     self%n_Channels       = 0
     self%n_Latitude_Bands = 0
     self%n_Cells          = 0
@@ -235,6 +253,46 @@ CONTAINS
 !--------------------------------------------------------------------------------
 !:sdoc+:
 ! NAME:
+!       TELSEM2Atlas_Create_Uncertainty
+! PURPOSE:
+!       Elemental subroutine to allocate the Release-2 uncertainty components
+!       (Emis_Err, Correlation) of an already-created TELSEM2Atlas object.
+!       Kept separate from TELSEM2Atlas_Create so that Release-1 loads retain
+!       their original memory footprint; Emis_Err alone adds ~155 MB for the
+!       full atlas.
+!
+! CALLING SEQUENCE:
+!       CALL TELSEM2Atlas_Create_Uncertainty( self )
+!:sdoc-:
+!--------------------------------------------------------------------------------
+  ELEMENTAL SUBROUTINE TELSEM2Atlas_Create_Uncertainty( self )
+    TYPE(TELSEM2Atlas_type), INTENT(IN OUT) :: self
+    ! Local variables
+    INTEGER :: alloc_stat
+
+    ! The primary structure must exist first
+    IF ( .NOT. self%Is_Allocated ) RETURN
+
+    ! Perform the allocation
+    IF ( ALLOCATED(self%Emis_Err)    ) DEALLOCATE(self%Emis_Err)
+    IF ( ALLOCATED(self%Correlation) ) DEALLOCATE(self%Correlation)
+    ALLOCATE( self%Emis_Err( self%n_Data, self%n_Channels ), &
+              self%Correlation( N_CLASS1, self%n_Channels, self%n_Channels ), &
+              STAT = alloc_stat )
+    IF ( alloc_stat /= 0 ) RETURN
+
+    ! Initialise
+    self%Emis_Err    = ZERO
+    self%Correlation = ZERO
+
+    ! Set uncertainty indicator
+    self%Has_Uncertainty = .TRUE.
+  END SUBROUTINE TELSEM2Atlas_Create_Uncertainty
+
+
+!--------------------------------------------------------------------------------
+!:sdoc+:
+! NAME:
 !       TELSEM2Atlas_Inspect
 ! PURPOSE:
 !       Subroutine to print the contents of a TELSEM2Atlas object to stdout.
@@ -254,7 +312,12 @@ CONTAINS
     WRITE(*,'(3x,"n_Cells           :",1x,i0)') self%n_Cells
     WRITE(*,'(3x,"n_Months          :",1x,i0)') self%n_Months
     WRITE(*,'(3x,"n_Data            :",1x,i0)') self%n_Data
+    WRITE(*,'(3x,"Has_Uncertainty   :",1x,l1)') self%Has_Uncertainty
     IF ( .NOT. TELSEM2Atlas_Associated(self) ) RETURN
+    IF ( self%Has_Uncertainty ) THEN
+      WRITE(*,'(3x,"Emis_Err min/max  :",1x,es13.6,1x,es13.6)') &
+        MINVAL(self%Emis_Err), MAXVAL(self%Emis_Err)
+    END IF
     WRITE(*,'(3x,"Populated cells per month:")')
     DO m = 1, self%n_Months
       WRITE(*,'(5x,"Month ",i2.2," :",1x,i0)') m, self%Month_Data_Count(m)
@@ -281,17 +344,24 @@ CONTAINS
     IF ( self%Release > TELSEM2ATLAS_RELEASE ) THEN
       IsValid = .FALSE.
       WRITE( msg,'("A newer release is needed to read this data. ", &
-                  &"Data Release=",i0,", valid release=",i0,"." )' ) &
-                  self%Release, TELSEM2ATLAS_RELEASE
+                  &"Data Release=",i0,", valid releases=",i0,"..",i0,"." )' ) &
+                  self%Release, TELSEM2ATLAS_RELEASE_MIN, TELSEM2ATLAS_RELEASE
       CALL Display_Message( ROUTINE_NAME, msg, INFORMATION ); RETURN
     END IF
     ! Release too old?
-    IF ( self%Release < TELSEM2ATLAS_RELEASE ) THEN
+    IF ( self%Release < TELSEM2ATLAS_RELEASE_MIN ) THEN
       IsValid = .FALSE.
-      WRITE( msg,'("This data is for an old release. ", &
-                  &"Data Release=",i0,", valid release=",i0,"." )' ) &
-                  self%Release, TELSEM2ATLAS_RELEASE
+      WRITE( msg,'("This data is for an unsupported old release. ", &
+                  &"Data Release=",i0,", valid releases=",i0,"..",i0,"." )' ) &
+                  self%Release, TELSEM2ATLAS_RELEASE_MIN, TELSEM2ATLAS_RELEASE
       CALL Display_Message( ROUTINE_NAME, msg, INFORMATION ); RETURN
+    END IF
+    ! Older, but supported, release?
+    IF ( self%Release < TELSEM2ATLAS_RELEASE ) THEN
+      WRITE( msg,'("Data Release=",i0," predates the uncertainty content ", &
+                  &"(Release=",i0,"); emissivity error covariance will be ", &
+                  &"unavailable." )' ) self%Release, TELSEM2ATLAS_RELEASE
+      CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
     END IF
   END FUNCTION TELSEM2Atlas_ValidRelease
 
@@ -311,10 +381,12 @@ CONTAINS
     CHARACTER(2000) :: long_string
     WRITE( long_string, &
            '(a,1x,"TELSEM2Atlas RELEASE.VERSION: ",i2,".",i2.2,2x, &
-           &"N_CHANNELS=",i0,2x,"N_MONTHS=",i0,2x,"N_DATA=",i0 )' ) &
+           &"N_CHANNELS=",i0,2x,"N_MONTHS=",i0,2x,"N_DATA=",i0,2x, &
+           &"UNCERTAINTY=",l1 )' ) &
            ACHAR(13)//ACHAR(10), &
            self%Release, self%Version, &
-           self%n_Channels, self%n_Months, self%n_Data
+           self%n_Channels, self%n_Months, self%n_Data, &
+           self%Has_Uncertainty
     Info = long_string(1:MIN(LEN(Info), LEN_TRIM(long_string)))
   END SUBROUTINE TELSEM2Atlas_Info
 
@@ -355,12 +427,18 @@ CONTAINS
          (x%n_Cells          /= y%n_Cells         ) .OR. &
          (x%n_Months         /= y%n_Months        ) .OR. &
          (x%n_Data           /= y%n_Data          ) ) RETURN
+    ! Check uncertainty status
+    IF ( (x%Has_Uncertainty .NEQV. y%Has_Uncertainty) ) RETURN
     ! Check the data (both unallocated counts as equal here)
     IF ( TELSEM2Atlas_Associated(x) .AND. TELSEM2Atlas_Associated(y) ) THEN
       IF ( ALL(x%Cell_Number == y%Cell_Number) .AND. &
            ALL(x%Class1      == y%Class1     ) .AND. &
            ALL(x%Class2      == y%Class2     ) .AND. &
            ALL(x%Emissivity .EqualTo. y%Emissivity) ) is_equal = .TRUE.
+      IF ( is_equal .AND. x%Has_Uncertainty ) THEN
+        is_equal = ALL(x%Emis_Err    .EqualTo. y%Emis_Err   ) .AND. &
+                   ALL(x%Correlation .EqualTo. y%Correlation)
+      END IF
     ELSE
       is_equal = .TRUE.
     END IF
