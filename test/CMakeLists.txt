@@ -683,6 +683,11 @@ target_link_libraries(test_TELSEM2_MWland PRIVATE crtm)
 # staged atlas for the computed branch, so it shares the gate below.
 add_executable(test_Emissivity_Jacobian mains/unit/Unit_Test/test_Emissivity_Jacobian.f90)
 target_link_libraries(test_Emissivity_Jacobian PRIVATE crtm)
+# test_TELSEM2_Covariance: Release-2 uncertainty content and the emissivity
+# error covariance machinery vs the RTTOV reference goldens. Needs the staged
+# atlas to be the Release-2 file.
+add_executable(test_TELSEM2_Covariance mains/unit/Unit_Test/test_TELSEM2_Covariance.f90)
+target_link_libraries(test_TELSEM2_Covariance PRIVATE crtm)
 if(EXISTS "${_TELSEM2_FIX}")
   execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
                    "${_TELSEM2_FIX}"
@@ -694,6 +699,8 @@ if(EXISTS "${_TELSEM2_FIX}")
            COMMAND $<TARGET_FILE:test_TELSEM2_MWland>)
   add_test(NAME test_Emissivity_Jacobian
            COMMAND $<TARGET_FILE:test_Emissivity_Jacobian>)
+  add_test(NAME test_TELSEM2_Covariance
+           COMMAND $<TARGET_FILE:test_TELSEM2_Covariance>)
 else()
   message(STATUS "TELSEM2 atlas not found at ${_TELSEM2_FIX}; test_TELSEM2_MWland and test_Emissivity_Jacobian will not be registered.")
 endif()

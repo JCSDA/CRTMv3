@@ -7,9 +7,12 @@
 ! Copyright 2016 EUMETSAT/NWP SAF) to operate on the CRTM TELSEM2Atlas_type. The
 ! grid geometry (equal-area cell numbering), the multi-linear angular-correction
 ! regression and the inter-frequency interpolation reproduce the reference code
-! so that results match RTTOV. Only the emissivity is computed here; the atlas
-! uncertainty (std/covariance) returned by the reference optional arguments is
-! not needed by the CRTM surface optics and is omitted.
+! so that results match RTTOV. When the atlas carries the Release-2 uncertainty
+! content (Emis_Err, Correlation), the emissivity error covariance machinery of
+! the reference (frequency-interpolation-matrix propagation of the per-cell
+! covariance) is available through TELSEM2_Emissivity_Cov / _Std for
+! data-assimilation use. As in RTTOV, the covariance uses the frequency
+! interpolation only -- no angular correction is applied to the uncertainties.
 !
 ! Reference:
 !   D. Wang, C. Prigent, L. Kilic, S. Fox, R. C. Harlow, C. Jimenez, F. Aires,
@@ -23,7 +26,7 @@ MODULE TELSEM2_Atlas_Module
   ! -----------------
   ! Environment setup
   ! -----------------
-  USE Type_Kinds         , ONLY: fp, Long, Double
+  USE Type_Kinds         , ONLY: fp, Long, Double, Single
   USE TELSEM2Atlas_Define, ONLY: TELSEM2Atlas_type, TELSEM2Atlas_Associated
   ! Disable implicit typing
   IMPLICIT NONE
@@ -35,6 +38,9 @@ MODULE TELSEM2_Atlas_Module
   PRIVATE
   PUBLIC :: TELSEM2_Setup_Grid
   PUBLIC :: TELSEM2_Emissivity
+  PUBLIC :: TELSEM2_Emissivity_Cov
+  PUBLIC :: TELSEM2_Emissivity_Std
+  PUBLIC :: TELSEM2_Class
   ! Lower-level routines exposed for unit testing
   PUBLIC :: TELSEM2_CalcCellnum
   PUBLIC :: TELSEM2_GetCoordinates
@@ -54,6 +60,23 @@ MODULE TELSEM2_Atlas_Module
   ! (class2 = 10..13). Indexed by class2-9.
   REAL(fp), PARAMETER :: RAPPORT43_32(4) = [ 0.62_fp, 0.37_fp, 0.46_fp, 0.63_fp ]
   REAL(fp), PARAMETER :: RAPPORT54_43(4) = [ 0.30_fp, 0.60_fp, 0.47_fp, 0.35_fp ]
+
+  ! The 6 atlas channels used by the interpolator (19V 19H 37V 37H 85V 85H),
+  ! as indices into the 7-channel atlas arrays -- channel 3 (22V) is excluded,
+  ! matching the reference (i2 = i for i <= 2, i+1 for i > 2).
+  INTEGER, PARAMETER :: N_USED_CHANNELS = 6
+  INTEGER, PARAMETER :: CHAN_MAP(N_USED_CHANNELS) = [ 1, 2, 4, 5, 6, 7 ]
+
+  ! The 19.35 GHz anchor frequency, and the 37-19.35 span, EXACTLY as the
+  ! reference computes them. RTTOV's interp_freq2 writes these as
+  ! default-real (single-precision) literals, and 19.35 is not representable
+  ! in binary -- the reference therefore interpolates against
+  ! 19.35000038146... Reproducing that mixed-precision arithmetic is required
+  ! for bit-for-bit agreement with RTTOV; using clean double literals changes
+  ! interpolated emissivities at the 1e-10 level. (37, 85.5, 150 and 190 are
+  ! exactly representable, so only the 19.35 terms are affected.)
+  REAL(fp), PARAMETER :: F1935     = REAL( 19.35_Single, fp )
+  REAL(fp), PARAMETER :: SPAN_3719 = REAL( 37.0_Single - 19.35_Single, fp )
 
   ! Angular-correction regression coefficients (3 anchor frequencies x 10 classes).
   ! Transcribed verbatim from the RTTOV TELSEM2 reference (column-major order).
@@ -276,6 +299,244 @@ CONTAINS
 
 
 !--------------------------------------------------------------------------------
+! TELSEM2_Emissivity_Cov
+!
+! Multi-channel emissivity and (optionally) the full inter-channel emissivity
+! error covariance at a location and month. The covariance is the RTTOV
+! machinery (emis_interp_ind_mult / emis_interp_int_mult): the per-cell 6x6
+! covariance built from the class1 correlation matrix and the per-cell error
+! stds, propagated through the frequency-interpolation matrix FIM to the
+! requested frequencies. Row/column ordering of Covariance: 1..n V-pol, then
+! n+1..2n H-pol. As in RTTOV the covariance uses frequency interpolation only
+! (no angular correction; above 85.5 GHz the 85-GHz variance carries flat).
+! With the optional Resolution the emissivities AND the covariance are averaged
+! over the contributing cells (variance divided by the cell count).
+!
+! Valid is .FALSE. when the atlas has no climatology at the cell, when the
+! loaded atlas carries no uncertainty content (Release-1 file) while Covariance
+! is requested, or on an output-size mismatch.
+!
+! Thread safety: stateless over the INTENT(IN) atlas; safe to call from within
+! OpenMP regions on the shared loaded atlas.
+!--------------------------------------------------------------------------------
+  SUBROUTINE TELSEM2_Emissivity_Cov( &
+    atlas        , &  ! Input,  loaded atlas
+    Latitude     , &  ! Input,  degrees, -90..90
+    Longitude    , &  ! Input,  degrees (any range; reduced modulo 360)
+    Month        , &  ! Input,  1..12
+    Zenith_Angle , &  ! Input,  degrees (emissivity outputs only)
+    Frequency    , &  ! Input,  GHz (n_chan)
+    Emissivity_V , &  ! Output, V-pol emissivity (n_chan)
+    Emissivity_H , &  ! Output, H-pol emissivity (n_chan)
+    Valid        , &  ! Output, .TRUE. if atlas data found
+    Covariance   , &  ! Optional output, (2*n_chan x 2*n_chan) V block then H block
+    Resolution     )  ! Optional input, spatial-averaging resolution (deg)
+    ! Arguments
+    TYPE(TELSEM2Atlas_type), INTENT(IN)  :: atlas
+    REAL(fp),                INTENT(IN)  :: Latitude
+    REAL(fp),                INTENT(IN)  :: Longitude
+    INTEGER,                 INTENT(IN)  :: Month
+    REAL(fp),                INTENT(IN)  :: Zenith_Angle
+    REAL(fp),                INTENT(IN)  :: Frequency(:)
+    REAL(fp),                INTENT(OUT) :: Emissivity_V(:)
+    REAL(fp),                INTENT(OUT) :: Emissivity_H(:)
+    LOGICAL,                 INTENT(OUT) :: Valid
+    REAL(fp),      OPTIONAL, INTENT(OUT) :: Covariance(:,:)
+    REAL(fp),      OPTIONAL, INTENT(IN)  :: Resolution
+    ! Local variables
+    INTEGER  :: n_chan
+    REAL(fp) :: lon, resol
+    REAL(fp) :: ev_a(3), eh_a(3), ev2, eh2, dummy, a, b, c
+    REAL(fp) :: cov(N_USED_CHANNELS,N_USED_CHANNELS)
+    REAL(fp) :: FIM(2*SIZE(Frequency),N_USED_CHANNELS)
+    REAL(fp) :: new_FIM(N_USED_CHANNELS,2*SIZE(Frequency))
+    REAL(fp) :: trans_std(N_USED_CHANNELS,2*SIZE(Frequency))
+    REAL(fp) :: std2(2*SIZE(Frequency),2*SIZE(Frequency))
+    REAL(fp) :: std_mean(2*SIZE(Frequency),2*SIZE(Frequency))
+    REAL(fp) :: ev_mean(SIZE(Frequency)), eh_mean(SIZE(Frequency))
+    INTEGER  :: cell(MAX_BOX_CELLS), nb_cell, ii, ipos, inumb, i, j
+
+    n_chan = SIZE(Frequency)
+    Emissivity_V(:) = ZERO
+    Emissivity_H(:) = ZERO
+    Valid           = .FALSE.
+    IF ( PRESENT(Covariance) ) Covariance(:,:) = ZERO
+
+    ! Guards
+    IF ( .NOT. TELSEM2Atlas_Associated(atlas) ) RETURN
+    IF ( Month < 1 .OR. Month > atlas%n_Months ) RETURN
+    IF ( SIZE(Emissivity_V) < n_chan .OR. SIZE(Emissivity_H) < n_chan ) RETURN
+    IF ( PRESENT(Covariance) ) THEN
+      IF ( .NOT. atlas%Has_Uncertainty ) RETURN
+      IF ( SIZE(Covariance,1) /= 2*n_chan .OR. SIZE(Covariance,2) /= 2*n_chan ) RETURN
+    END IF
+
+    resol = atlas%Resolution
+    IF ( PRESENT(Resolution) ) resol = Resolution
+    lon = MODULO( Longitude, 360.0_fp )
+    IF ( lon >= 360.0_fp ) lon = ZERO
+
+    CALL calc_cellnum_mult( atlas, Latitude, lon, resol, cell, nb_cell )
+
+    ev_mean(:)    = ZERO
+    eh_mean(:)    = ZERO
+    std_mean(:,:) = ZERO
+    inumb = 0
+    DO ii = 1, nb_cell
+      ipos = atlas%Correspondence( cell(ii), Month )
+      IF ( ipos > 0 ) THEN
+        inumb = inumb + 1
+        ev_a(1) = REAL(atlas%Emissivity(ipos,1), fp)
+        eh_a(1) = REAL(atlas%Emissivity(ipos,2), fp)
+        ev_a(2) = REAL(atlas%Emissivity(ipos,4), fp)
+        eh_a(2) = REAL(atlas%Emissivity(ipos,5), fp)
+        ev_a(3) = REAL(atlas%Emissivity(ipos,6), fp)
+        eh_a(3) = REAL(atlas%Emissivity(ipos,7), fp)
+        DO i = 1, n_chan
+          CALL emis_interp( Zenith_Angle, Frequency(i), &
+                            atlas%Class1(ipos), atlas%Class2(ipos), &
+                            ev_a, eh_a, ev2, eh2 )
+          ev_mean(i) = ev_mean(i) + ev2
+          eh_mean(i) = eh_mean(i) + eh2
+        END DO
+
+        IF ( PRESENT(Covariance) ) THEN
+          ! Per-cell covariance on the 6 used atlas channels
+          DO i = 1, N_USED_CHANNELS
+            DO j = 1, N_USED_CHANNELS
+              cov(i,j) = REAL(atlas%Correlation(atlas%Class1(ipos),CHAN_MAP(i),CHAN_MAP(j)), fp) * &
+                         ( REAL(atlas%Emis_Err(ipos,CHAN_MAP(i)), fp) * &
+                           REAL(atlas%Emis_Err(ipos,CHAN_MAP(j)), fp) )
+            END DO
+          END DO
+          ! Frequency-interpolation matrix: the a,b,c coefficients depend only
+          ! on frequency and class2 (the emissivity arguments are dummies).
+          DO i = 1, n_chan
+            CALL interp_freq2( ZERO, ZERO, ZERO, Frequency(i), atlas%Class2(ipos), &
+                               dummy, a, b, c )
+            FIM(i,1) = a
+            FIM(i,2) = b
+            FIM(i,3) = c
+          END DO
+          DO i = 1, n_chan
+            DO j = 1, 3
+              FIM(i,3+j)        = ZERO
+              FIM(n_chan+i,j)   = ZERO
+              FIM(n_chan+i,j+3) = FIM(i,j)
+            END DO
+          END DO
+          ! std2 = FIM * cov * FIM^T, in the reference's two-step order
+          new_FIM   = TRANSPOSE(FIM)
+          trans_std = MATMUL(cov, new_FIM)
+          std2      = MATMUL(FIM, trans_std)
+          std_mean(:,:) = std_mean(:,:) + std2(:,:)
+        END IF
+      END IF
+    END DO
+
+    IF ( inumb > 0 ) THEN
+      DO i = 1, n_chan
+        Emissivity_V(i) = ev_mean(i) / REAL(inumb, fp)
+        Emissivity_H(i) = eh_mean(i) / REAL(inumb, fp)
+      END DO
+      IF ( PRESENT(Covariance) ) Covariance(1:2*n_chan,1:2*n_chan) = std_mean / REAL(inumb, fp)
+      Valid = .TRUE.
+    END IF
+  END SUBROUTINE TELSEM2_Emissivity_Cov
+
+
+!--------------------------------------------------------------------------------
+! TELSEM2_Emissivity_Std
+!
+! Single-frequency emissivity error standard deviations and V/H covariance
+! (RTTOV emis_interp_ind_sing / emis_interp_int_sing std outputs). The
+! uncertainties are independent of zenith angle. Valid is .FALSE. for no-data
+! cells or when the loaded atlas carries no uncertainty content.
+!--------------------------------------------------------------------------------
+  SUBROUTINE TELSEM2_Emissivity_Std( &
+    atlas     , &  ! Input,  loaded atlas
+    Latitude  , &  ! Input,  degrees, -90..90
+    Longitude , &  ! Input,  degrees (any range; reduced modulo 360)
+    Month     , &  ! Input,  1..12
+    Frequency , &  ! Input,  GHz
+    Std_V     , &  ! Output, V-pol emissivity error std
+    Std_H     , &  ! Output, H-pol emissivity error std
+    Cov_VH    , &  ! Output, V/H emissivity error covariance
+    Valid     , &  ! Output, .TRUE. if atlas data found
+    Resolution  )  ! Optional input, spatial-averaging resolution (deg)
+    ! Arguments
+    TYPE(TELSEM2Atlas_type), INTENT(IN)  :: atlas
+    REAL(fp),                INTENT(IN)  :: Latitude
+    REAL(fp),                INTENT(IN)  :: Longitude
+    INTEGER,                 INTENT(IN)  :: Month
+    REAL(fp),                INTENT(IN)  :: Frequency
+    REAL(fp),                INTENT(OUT) :: Std_V
+    REAL(fp),                INTENT(OUT) :: Std_H
+    REAL(fp),                INTENT(OUT) :: Cov_VH
+    LOGICAL,                 INTENT(OUT) :: Valid
+    REAL(fp),      OPTIONAL, INTENT(IN)  :: Resolution
+    ! Local variables
+    REAL(fp) :: ev1(1), eh1(1), cov2(2,2)
+
+    Std_V  = ZERO
+    Std_H  = ZERO
+    Cov_VH = ZERO
+    IF ( PRESENT(Resolution) ) THEN
+      CALL TELSEM2_Emissivity_Cov( atlas, Latitude, Longitude, Month, ZERO, &
+                                   [Frequency], ev1, eh1, Valid, &
+                                   Covariance=cov2, Resolution=Resolution )
+    ELSE
+      CALL TELSEM2_Emissivity_Cov( atlas, Latitude, Longitude, Month, ZERO, &
+                                   [Frequency], ev1, eh1, Valid, Covariance=cov2 )
+    END IF
+    IF ( Valid ) THEN
+      Std_V  = SQRT( cov2(1,1) )
+      Std_H  = SQRT( cov2(2,2) )
+      Cov_VH = cov2(1,2)
+    END IF
+  END SUBROUTINE TELSEM2_Emissivity_Std
+
+
+!--------------------------------------------------------------------------------
+! TELSEM2_Class
+!
+! Surface-class indices of the native atlas cell containing a location for the
+! given month. Class1 (1..10) selects the angular-correction regression and the
+! correlation matrix; Class2 (1..22) encodes the surface type: 1-5 the TELSEM
+! vegetation/desert classes, 10 surface water, 11-16 sea ice, 17-22 snow and
+! continental ice. Both are 0, with Valid = .FALSE., for no-data cells.
+!--------------------------------------------------------------------------------
+  SUBROUTINE TELSEM2_Class( atlas, Latitude, Longitude, Month, Class1, Class2, Valid )
+    TYPE(TELSEM2Atlas_type), INTENT(IN)  :: atlas
+    REAL(fp),                INTENT(IN)  :: Latitude
+    REAL(fp),                INTENT(IN)  :: Longitude
+    INTEGER,                 INTENT(IN)  :: Month
+    INTEGER,                 INTENT(OUT) :: Class1
+    INTEGER,                 INTENT(OUT) :: Class2
+    LOGICAL,                 INTENT(OUT) :: Valid
+    ! Local variables
+    REAL(fp) :: lon
+    INTEGER  :: cellnum, ipos
+
+    Class1 = 0
+    Class2 = 0
+    Valid  = .FALSE.
+    IF ( .NOT. TELSEM2Atlas_Associated(atlas) ) RETURN
+    IF ( Month < 1 .OR. Month > atlas%n_Months ) RETURN
+
+    lon = MODULO( Longitude, 360.0_fp )
+    IF ( lon >= 360.0_fp ) lon = ZERO
+    cellnum = calc_cellnum( atlas, Latitude, lon )
+    ipos = atlas%Correspondence( cellnum, Month )
+    IF ( ipos > 0 ) THEN
+      Class1 = INT(atlas%Class1(ipos))
+      Class2 = INT(atlas%Class2(ipos))
+      Valid  = .TRUE.
+    END IF
+  END SUBROUTINE TELSEM2_Class
+
+
+!--------------------------------------------------------------------------------
 ! TELSEM2_CalcCellnum (public wrapper for testing)
 !--------------------------------------------------------------------------------
   FUNCTION TELSEM2_CalcCellnum( atlas, lat, lon ) RESULT( cellnum )
@@ -448,12 +709,12 @@ CONTAINS
     REAL(fp), OPTIONAL, INTENT(OUT) :: an, bn, cn
     REAL(fp) :: a, b, c
 
-    IF ( f <= 19.35_fp ) THEN
+    IF ( f <= F1935 ) THEN
       a = ONE; b = ZERO; c = ZERO
       emiss = emiss19
     ELSE IF ( f <= 37._fp ) THEN
-      a = (37._fp-f)/(37._fp-19.35_fp)
-      b = (f-19.35_fp)/(37._fp-19.35_fp)
+      a = (37._fp-f)/SPAN_3719
+      b = (f-F1935)/SPAN_3719
       c = ZERO
       emiss = a*emiss19 + b*emiss37
     ELSE IF ( f < 85.5_fp ) THEN
