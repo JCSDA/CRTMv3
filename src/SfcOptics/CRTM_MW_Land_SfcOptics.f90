@@ -285,6 +285,8 @@ CONTAINS
                                      SfcOptics%Emissivity_Std_V, &
                                      SfcOptics%Emissivity_Std_H, &
                                      SfcOptics%Emissivity_Cov_VH, valid )
+        IF ( valid ) SfcOptics%Emissivity_Std_Coverage = &
+                       SfcOptics%Emissivity_Std_Coverage + Surface%Land_Coverage
         ! Class-gated LandEM sensitivity harvest (see header comment above).
         ! An invalid soil/vegetation type simply suppresses the harvest here
         ! -- the atlas forward does not need LandEM -- while the fall-through

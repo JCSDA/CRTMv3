@@ -646,10 +646,11 @@ CONTAINS
     ! reused (per-thread) SfcOptics structure -- zero them here so a channel
     ! or profile without atlas uncertainty (ocean, IR/VIS, Release-1 atlas,
     ! NESDIS fallback) can never inherit the previous channel's values.
-    SfcOptics%Emissivity_Std_V       = ZERO
-    SfcOptics%Emissivity_Std_H       = ZERO
-    SfcOptics%Emissivity_Cov_VH      = ZERO
-    SfcOptics%Surface_Emissivity_Std = ZERO
+    SfcOptics%Emissivity_Std_V        = ZERO
+    SfcOptics%Emissivity_Std_H        = ZERO
+    SfcOptics%Emissivity_Cov_VH       = ZERO
+    SfcOptics%Emissivity_Std_Coverage = ZERO
+    SfcOptics%Surface_Emissivity_Std  = ZERO
 
 
       !##########################################################################
@@ -950,19 +951,21 @@ CONTAINS
 
            END SELECT Polarization_Type
 
-           ! MW-land atlas emissivity uncertainty: mix the V/H error stds to
-           ! the channel polarization at the satellite view angle, using the
-           ! same weights as the emissivity mixing above, and weight by the
-           ! land fraction (only the land fraction has known uncertainty).
-           ! The carriers are non-zero only when the TELSEM2 atlas supplied
-           ! them for this channel.
+           ! Atlas emissivity uncertainty: mix the V/H error stds to the
+           ! channel polarization at the satellite view angle, using the same
+           ! weights as the emissivity mixing above, and weight by the summed
+           ! coverage of the fractions whose driver used the atlas (land,
+           ! and class-consistent snow/ice; all read the same atlas cell, so
+           ! their identical contributions add linearly in coverage). The
+           ! carriers are non-zero only when the TELSEM2 atlas supplied them
+           ! for this channel.
            IF ( SfcOptics%Emissivity_Std_V > ZERO .OR. &
                 SfcOptics%Emissivity_Std_H > ZERO ) THEN
              CALL MW_Polarization_Weights( Polarization, GeometryInfo, &
                                            SensorIndex, ChannelIndex, &
                                            SfcOptics%Angle(SfcOptics%Index_Sat_Ang), &
                                            wv, wh )
-             SfcOptics%Surface_Emissivity_Std = Surface%Land_Coverage * &
+             SfcOptics%Surface_Emissivity_Std = SfcOptics%Emissivity_Std_Coverage * &
                SQRT( MAX( ZERO, (wv*wv*SfcOptics%Emissivity_Std_V*SfcOptics%Emissivity_Std_V) + &
                                 (wh*wh*SfcOptics%Emissivity_Std_H*SfcOptics%Emissivity_Std_H) + &
                                 (2.0_fp*wv*wh*SfcOptics%Emissivity_Cov_VH) ) )
@@ -1008,7 +1011,7 @@ CONTAINS
           ! uncertainty is the I-component mix e_I = (eV+eH)/2.
           IF ( SfcOptics%Emissivity_Std_V > ZERO .OR. &
                SfcOptics%Emissivity_Std_H > ZERO ) THEN
-            SfcOptics%Surface_Emissivity_Std = Surface%Land_Coverage * &
+            SfcOptics%Surface_Emissivity_Std = SfcOptics%Emissivity_Std_Coverage * &
               SQRT( MAX( ZERO, &
                 0.25_fp*(SfcOptics%Emissivity_Std_V*SfcOptics%Emissivity_Std_V + &
                          SfcOptics%Emissivity_Std_H*SfcOptics%Emissivity_Std_H) + &

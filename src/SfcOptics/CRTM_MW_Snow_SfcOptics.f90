@@ -42,6 +42,10 @@ MODULE CRTM_MW_Snow_SfcOptics
        WMO_MHS  , &
        WMO_SSMIS, &
        WMO_ATMS
+  USE CRTM_MWlandCoeff,           ONLY: MWlandC, CRTM_MWlandCoeff_IsLoaded
+  USE TELSEM2_Atlas_Module,       ONLY: TELSEM2_Emissivity, &
+                                        TELSEM2_Emissivity_Std, &
+                                        TELSEM2_Class
   USE NESDIS_LandEM_Module,       ONLY: NESDIS_LandEM
   USE NESDIS_AMSU_SNOWEM_Module,  ONLY: NESDIS_AMSU_SNOWEM
   USE NESDIS_SSMI_SNOWEM_Module,  ONLY: NESDIS_SSMI_SnowEM
@@ -199,6 +203,9 @@ CONTAINS
     REAL(fp) :: TBs_In(MaxChan)
     REAL(fp) :: TBs_In_V(MaxChan)
     REAL(fp) :: TBs_In_H(MaxChan)
+    INTEGER  :: month, class1, class2
+    REAL(fp) :: lat, lon, ev, eh
+    LOGICAL  :: atlas_valid, valid, cvalid
 
 
     ! Set up
@@ -206,6 +213,53 @@ CONTAINS
     badTBflag = .FALSE.
     CALL CRTM_GeometryInfo_GetValue( GeometryInfo, Sensor_Zenith_Angle = Sensor_Zenith_Angle )
 
+    ! ----------------------------------------------------------------------
+    ! TELSEM2 atlas path, class-consistent: when the MW land emissivity atlas
+    ! is loaded AND classifies this cell as snow / continental ice
+    ! (class2 17..22) for the requested month, the declared snow surface
+    ! agrees with the climatology, so the atlas monthly mean represents the
+    ! actual snow surface and is used for all angles (with its Release-2
+    ! uncertainty). Where the climatology says the cell is snow-free -- or no
+    ! atlas is loaded -- fall through to the NESDIS snow emissivity models,
+    ! which respond to the declared snow state instead.
+    ! ----------------------------------------------------------------------
+    IF ( CRTM_MWlandCoeff_IsLoaded() ) THEN
+      CALL CRTM_GeometryInfo_GetValue( GeometryInfo, &
+                                       Latitude  = lat, &
+                                       Longitude = lon, &
+                                       Month     = month )
+      CALL TELSEM2_Class( MWlandC, lat, lon, month, class1, class2, cvalid )
+      IF ( cvalid .AND. class2 >= 17 .AND. class2 <= 22 ) THEN
+        atlas_valid = .TRUE.
+        DO i = 1, SfcOptics%n_Angles
+          CALL TELSEM2_Emissivity( MWlandC, lat, lon, month, &
+                                   SC(SensorIndex)%Frequency(ChannelIndex), &
+                                   SfcOptics%Angle(i), ev, eh, valid )
+          IF ( .NOT. valid ) THEN
+            atlas_valid = .FALSE.
+            EXIT
+          END IF
+          SfcOptics%Emissivity(i,1) = ev
+          SfcOptics%Emissivity(i,2) = eh
+        END DO
+        IF ( atlas_valid ) THEN
+          ! Assume specular surface (matches the NESDIS path below)
+          SfcOptics%Reflectivity = ZERO
+          DO i = 1, SfcOptics%n_Angles
+            SfcOptics%Reflectivity(i,1,i,1) = ONE - SfcOptics%Emissivity(i,1)
+            SfcOptics%Reflectivity(i,2,i,2) = ONE - SfcOptics%Emissivity(i,2)
+          END DO
+          CALL TELSEM2_Emissivity_Std( MWlandC, lat, lon, month, &
+                                       SC(SensorIndex)%Frequency(ChannelIndex), &
+                                       SfcOptics%Emissivity_Std_V, &
+                                       SfcOptics%Emissivity_Std_H, &
+                                       SfcOptics%Emissivity_Cov_VH, valid )
+          IF ( valid ) SfcOptics%Emissivity_Std_Coverage = &
+                         SfcOptics%Emissivity_Std_Coverage + Surface%Snow_Coverage
+          RETURN
+        END IF
+      END IF
+    END IF
 
     ! Compute the surface emissivities
     Sensor_Type: SELECT CASE( Surface%SensorData%WMO_Sensor_ID )

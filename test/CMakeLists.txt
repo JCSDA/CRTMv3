@@ -688,6 +688,9 @@ target_link_libraries(test_Emissivity_Jacobian PRIVATE crtm)
 # atlas to be the Release-2 file.
 add_executable(test_TELSEM2_Covariance mains/unit/Unit_Test/test_TELSEM2_Covariance.f90)
 target_link_libraries(test_TELSEM2_Covariance PRIVATE crtm)
+# test_TELSEM2_SnowIce: class-consistent atlas path in the MW snow/ice drivers.
+add_executable(test_TELSEM2_SnowIce mains/unit/Unit_Test/test_TELSEM2_SnowIce.f90)
+target_link_libraries(test_TELSEM2_SnowIce PRIVATE crtm)
 if(EXISTS "${_TELSEM2_FIX}")
   execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
                    "${_TELSEM2_FIX}"
@@ -701,6 +704,8 @@ if(EXISTS "${_TELSEM2_FIX}")
            COMMAND $<TARGET_FILE:test_Emissivity_Jacobian>)
   add_test(NAME test_TELSEM2_Covariance
            COMMAND $<TARGET_FILE:test_TELSEM2_Covariance>)
+  add_test(NAME test_TELSEM2_SnowIce
+           COMMAND $<TARGET_FILE:test_TELSEM2_SnowIce>)
 else()
   message(STATUS "TELSEM2 atlas not found at ${_TELSEM2_FIX}; test_TELSEM2_MWland and test_Emissivity_Jacobian will not be registered.")
 endif()

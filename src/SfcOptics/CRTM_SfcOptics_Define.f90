@@ -111,6 +111,11 @@ MODULE CRTM_SfcOptics_Define
     REAL(fp) :: Emissivity_Std_V       = ZERO  ! V-pol emissivity error std
     REAL(fp) :: Emissivity_Std_H       = ZERO  ! H-pol emissivity error std
     REAL(fp) :: Emissivity_Cov_VH      = ZERO  ! V/H emissivity error covariance
+    ! Sum of the surface-coverage fractions whose driver filled the carriers
+    ! from the atlas (land, and -- class-consistent -- snow and ice). All
+    ! fractions at one location read the same atlas cell, so their identical
+    ! contributions add linearly in coverage.
+    REAL(fp) :: Emissivity_Std_Coverage = ZERO
     REAL(fp) :: Surface_Emissivity_Std = ZERO  ! polarization-mixed scalar
 
     ! The stream angles and weights
@@ -364,10 +369,11 @@ CONTAINS
     self%Azimuth_Angle       = 999.9_fp
     self%Transmittance       = ZERO
     self%Surface_Temperature = ZERO
-    self%Emissivity_Std_V       = ZERO
-    self%Emissivity_Std_H       = ZERO
-    self%Emissivity_Cov_VH      = ZERO
-    self%Surface_Emissivity_Std = ZERO
+    self%Emissivity_Std_V        = ZERO
+    self%Emissivity_Std_H        = ZERO
+    self%Emissivity_Cov_VH       = ZERO
+    self%Emissivity_Std_Coverage = ZERO
+    self%Surface_Emissivity_Std  = ZERO
     IF ( .NOT. CRTM_SfcOptics_Associated( self ) ) RETURN
     self%Emissivity          = ZERO
     self%Reflectivity        = ZERO
@@ -539,6 +545,7 @@ CONTAINS
          (.NOT. Compares_Within_Tolerance(x%Emissivity_Std_V,y%Emissivity_Std_V,n)) .OR. &
          (.NOT. Compares_Within_Tolerance(x%Emissivity_Std_H,y%Emissivity_Std_H,n)) .OR. &
          (.NOT. Compares_Within_Tolerance(x%Emissivity_Cov_VH,y%Emissivity_Cov_VH,n)) .OR. &
+         (.NOT. Compares_Within_Tolerance(x%Emissivity_Std_Coverage,y%Emissivity_Std_Coverage,n)) .OR. &
          (.NOT. Compares_Within_Tolerance(x%Surface_Emissivity_Std,y%Surface_Emissivity_Std,n)) ) RETURN
     
     ! Check arrays
@@ -620,6 +627,7 @@ CONTAINS
                 (x%Emissivity_Std_V       .EqualTo. y%Emissivity_Std_V      ) .AND. &
                 (x%Emissivity_Std_H       .EqualTo. y%Emissivity_Std_H      ) .AND. &
                 (x%Emissivity_Cov_VH      .EqualTo. y%Emissivity_Cov_VH     ) .AND. &
+                (x%Emissivity_Std_Coverage .EqualTo. y%Emissivity_Std_Coverage) .AND. &
                 (x%Surface_Emissivity_Std .EqualTo. y%Surface_Emissivity_Std)) ) RETURN
     ! ...Arrays
     IF ( CRTM_SfcOptics_Associated(x) .AND. CRTM_SfcOptics_Associated(y) ) THEN
@@ -691,6 +699,7 @@ CONTAINS
     sosum%Emissivity_Std_V       = sosum%Emissivity_Std_V       + so2%Emissivity_Std_V
     sosum%Emissivity_Std_H       = sosum%Emissivity_Std_H       + so2%Emissivity_Std_H
     sosum%Emissivity_Cov_VH      = sosum%Emissivity_Cov_VH      + so2%Emissivity_Cov_VH
+    sosum%Emissivity_Std_Coverage = sosum%Emissivity_Std_Coverage + so2%Emissivity_Std_Coverage
     sosum%Surface_Emissivity_Std = sosum%Surface_Emissivity_Std + so2%Surface_Emissivity_Std
     ! ...The arrays
     sosum%Reflectivity        = sosum%Reflectivity        + so2%Reflectivity
@@ -755,6 +764,7 @@ CONTAINS
     sodiff%Emissivity_Std_V       = sodiff%Emissivity_Std_V       - so2%Emissivity_Std_V
     sodiff%Emissivity_Std_H       = sodiff%Emissivity_Std_H       - so2%Emissivity_Std_H
     sodiff%Emissivity_Cov_VH      = sodiff%Emissivity_Cov_VH      - so2%Emissivity_Cov_VH
+    sodiff%Emissivity_Std_Coverage = sodiff%Emissivity_Std_Coverage - so2%Emissivity_Std_Coverage
     sodiff%Surface_Emissivity_Std = sodiff%Surface_Emissivity_Std - so2%Surface_Emissivity_Std
     ! ...The arrays
     sodiff%Reflectivity        = sodiff%Reflectivity        - so2%Reflectivity
