@@ -110,6 +110,13 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
   passing an explicit `MWlandCoeff_File`. Without the opt-in, MW land
   emissivity uses NESDIS_LandEM exactly as before, even if the atlas file is
   present in the coefficient directory.
+  *(Post-3.2.0 note, targeted at v3.3.0: the atlas path gains the TELSEM2
+  Release-2 uncertainty content and DA machinery — emissivity error
+  covariance query, per-channel `RTSolution%Surface_Emissivity_Std`,
+  total-derivative `RTSolution_K%Surface_Emissivity`, and class-gated
+  TELSEM2+LandEM hybrid state Jacobians. In 3.2.0 the atlas-path surface
+  Jacobians are identically zero as documented. See
+  `docs/design/telsem2_landem_jacobians_plan.md`, 2026-08-13 record.)*
 - **Level-resolved downwelling/upwelling radiance profiles (new outputs).**
   Opt-in via `Options%Compute_Down_Radiance_Profile` /
   `Compute_Up_Radiance_Profile`; fully differentiated (FWD/TL/AD/K) and
