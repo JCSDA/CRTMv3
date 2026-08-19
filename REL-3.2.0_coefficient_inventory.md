@@ -6,7 +6,7 @@ TauCoeff, ACCoeff, and NLTECoeff presence is by sensor-id sibling match.
 
 > **Release action item:** this inventory reflects the local staging tree in
 > `test-data-release/fix_REL-3.2.0.0/`, which contains 143 coefficient files
-> newer than the on-disk `fix_REL-3.2.0.0.tgz` of 2026-06-05 (md5 `3dcef94c...`,
+> newer than the initial 2026-06-05 tarball (superseded by the 2026-08-06 re-roll, md5 `8899...`,
 > the one `Get_CRTM_Binary_Files.sh` and `test/CMakeLists.txt` verify). The
 > 2026-07 crtm-coeffgen additions (MetOp-SG, MTG-S, EarthCARE, PACE, GeoXO,
 > TEMPO/GEMS, AMSR3, the VIIRS VIS correction) are **not in that tarball**. The
