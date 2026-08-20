@@ -31,7 +31,6 @@ MODULE CRTM_Active_Sensor
   USE ODPS_CoordinateMapping,     ONLY: Geopotential_Height
   USE CRTM_GeometryInfo_Define, ONLY: CRTM_GeometryInfo_type
   USE Message_Handler         , ONLY: Display_Message
-  USE ms_const_structs        , ONLY: inst_info
   ! Disable all implicit typing
   IMPLICIT NONE
 
