@@ -384,6 +384,7 @@ END FUNCTION Water_Permittivity_Turner_2016
 
     ! This avoids some outliers when transmittance is low
     ! don't multiple OD by dS
+    Optical_Depth = AtmOptics%optical_depth / dS_m
     DO k = 1, n_layers
        temp_sum = SUM(Optical_Depth(1:k))
        Transmittance(k) = EXP(-TWO * temp_sum)
