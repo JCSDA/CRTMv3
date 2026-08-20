@@ -3710,7 +3710,7 @@ CONTAINS
         rts%Reflectivity, &
         rts%Reflectivity_Attenuated, &
         rts%ReflectivityLinear, &
-        rts%Reflectivity_AttenuatedLinear
+        rts%Reflectivity_AttenuatedLinear, &
         rts%Backscat_Coefficient
       IF ( io_stat /= 0 ) THEN
         msg = 'Error reading array intermediate results - '//TRIM(io_msg)
