@@ -2067,6 +2067,9 @@ CONTAINS
     NF90_Status = NF90_GET_VAR( FileId,VarID, Reflectivity_AttenuatedLinear)
     IF ( NF90_Status /= NF90_NOERR ) THEN
       msg = 'Error writing '//ACRATTL_VARNAME//' to '//TRIM(Filename)//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
     ! ... Backscat_Coefficient variable
     NF90_Status = NF90_INQ_VARID( FileId,BS_VARNAME,VarId )
     IF ( NF90_Status /= NF90_NOERR ) THEN
