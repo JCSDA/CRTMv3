@@ -1,7 +1,12 @@
 # CRTM v3.2.0 Release Notes
 
 **Status:** release candidate. The library code is frozen and the coefficient
-tarball is **rolled, verified and published**.
+tarball is **rolled, verified and published**; it remains subject to re-rolls
+until the evaluation period closes (the pinned md5 in
+`Get_CRTM_Binary_Files.sh` / `test/CMakeLists.txt` is authoritative). Note:
+the build now skips the tarball download and hash when an extracted
+`fix_REL-3.2.0.0/` tree already exists, so after any re-roll, delete the
+extracted tree to pick up the new tarball.
 
 **Coefficient data.** Three efforts landed: the IASI-NG regeneration (SpcCoeff
 and ODPS TauCoeff, regenerated 2026-08-01 by `crtm-coeffgen` on the LBLRTM
