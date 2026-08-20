@@ -32,9 +32,6 @@ MODULE CRTM_Active_Sensor
   USE CRTM_GeometryInfo_Define, ONLY: CRTM_GeometryInfo_type
   USE Message_Handler         , ONLY: Display_Message
   USE ms_const_structs        , ONLY: inst_info
-  USE ms_multiscatter        , ONLY: multiscatter    ! forward model
-  USE ms_multiscatter_TL     , ONLY: multiscatter_TL ! tangent linear model
-  USE ms_multiscatter_AD     , ONLY: multiscatter_AD ! adjoint model
   ! Disable all implicit typing
   IMPLICIT NONE
 
@@ -352,8 +349,6 @@ END FUNCTION Water_Permittivity_Turner_2016
     COMPLEX :: perm(AtmOptics%n_Layers), kw(AtmOptics%n_Layers)
     INTEGER :: k, n_Layers
     REAL(fp) :: temp_sum
-    TYPE(inst_info) :: instrument ! instrument information - will hard code this for now
-    REAL(fp) :: bscat_ms(AtmOptics%n_Layers)  ! ms contribution to the backscatter - no units
     REAL(fp) :: ext_coef(AtmOptics%n_Layers) ! extinction coefficient  
     character(len=16) :: ms_env_val
 
