@@ -332,11 +332,11 @@ PROGRAM test_active_sensor
 
 
   OPEN(500,FILE='reflectivity.txt',STATUS='UNKNOWN')
-  write(500,'(4A40)')  'Layer', 'Water Content', 'Reflectivity', 'Attenuated Reflectivity'
-  write(*,'(4A40)')  'Layer', 'Water Content', 'Reflectivity', 'Attenuated Reflectivity'
+  write(500,'(4A40)')  'Layer', 'Water Content', 'Reflectivity', 'Attenuated Reflectivity', 'ReflectivityLinear', 'Reflectivity_AttenuatedLinear'
+  write(*,'(4A40)')  'Layer', 'Water Content', 'Reflectivity', 'Attenuated Reflectivity', 'ReflectivityLinear', 'Reflectivity_AttenuatedLinear'
   DO ii=1,n_layers
-     write(500,'(i40,f40.5,f40.5,f40.5)')  ii, Atm(1)%Cloud(1)%Water_Content(ii), RTSolution(ichan,iprof)%Reflectivity(ii), RTSolution(ichan,iprof)%Reflectivity_Attenuated(ii)
-     write(*,'(i40,f40.5,f40.5,f40.5)')  ii, Atm(1)%Cloud(1)%Water_Content(ii), RTSolution(ichan,iprof)%Reflectivity(ii), RTSolution(ichan,iprof)%Reflectivity_Attenuated(ii)
+     write(500,'(i40,f40.5,f40.5,f40.5)')  ii, Atm(1)%Cloud(1)%Water_Content(ii), RTSolution(ichan,iprof)%Reflectivity(ii), RTSolution(ichan,iprof)%Reflectivity_Attenuated(ii), RTSolution(ichan,iprof)%ReflectivityLinear(ii), RTSolution(ichan,iprof)%Reflectivity_AttenuatedLinear(ii)
+     write(*,'(i40,f40.5,f40.5,f40.5)')  ii, Atm(1)%Cloud(1)%Water_Content(ii), RTSolution(ichan,iprof)%Reflectivity(ii), RTSolution(ichan,iprof)%Reflectivity_Attenuated(ii), RTSolution(ichan,iprof)%ReflectivityLinear(ii), RTSolution(ichan,iprof)%Reflectivity_AttenuatedLinear(ii)
   ENDDO
   CLOSE(500)
 
