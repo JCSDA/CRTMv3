@@ -4438,7 +4438,7 @@ CONTAINS
 
     ! ... Reflectivity_AttenuatedLinear variable
     NF90_Status = NF90_DEF_VAR( FileID, &
-      ACRATT_VARNAME, &
+      ACRATTL_VARNAME, &
       FLOAT_TYPE, &
       dimIDs=(/n_Channels_DimID, n_Layers_DimID, n_Profiles_DimID/), &
       varID=VarID )
