@@ -168,10 +168,10 @@ MODULE CRTM_RTSolution_Define
   ! ...Emissivity/Reflectivity
   CHARACTER(*), PARAMETER :: SEMIS_UNITS   = 'fraction (0->1)'
   CHARACTER(*), PARAMETER :: SREFL_UNITS   = 'fraction (0->1)'
-  CHARACTER(*), PARAMETER :: ACREFL_UNITS  = 'Reflectivity'             ! Active sensor
-  CHARACTER(*), PARAMETER :: ACRATT_UNITS  = 'Reflectivity_Attenuated'  ! Active sensor
-  CHARACTER(*), PARAMETER :: ACREFLL_UNITS  = 'ReflectivityLinear'             ! Active sensor
-  CHARACTER(*), PARAMETER :: ACRATTL_UNITS  = 'Reflectivity_AttenuatedLinear'  ! Active sensor
+  CHARACTER(*), PARAMETER :: ACREFL_UNITS  = 'dBZ'             ! Active sensor
+  CHARACTER(*), PARAMETER :: ACRATT_UNITS  = 'dBZ'             ! Active sensor
+  CHARACTER(*), PARAMETER :: ACREFLL_UNITS  = 'cm^6/m^3'       ! Active sensor
+  CHARACTER(*), PARAMETER :: ACRATTL_UNITS  = 'cm^6/m^3'       ! Active sensor
   ! ...Cloud
   CHARACTER(*), PARAMETER :: TCC_UNITS     = 'fraction (0->1)'
   CHARACTER(*), PARAMETER :: RCLEAR_UNITS  = 'fraction (0->1)'
