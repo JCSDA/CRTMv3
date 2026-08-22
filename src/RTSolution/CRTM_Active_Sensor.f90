@@ -382,8 +382,7 @@ END FUNCTION Water_Permittivity_Turner_2016
     Kw_2 = ABS(kw)**TWO      
     P1 = (M6_MM6 * Wavelength_m**4.0_fp) / (PI**5.0_fp * Kw_2)
 
-    ! This avoids some outliers when transmittance is low
-    ! don't multiple OD by dS
+    ! Calculate transmittance 
     Optical_Depth = AtmOptics%optical_depth / dS_m
     DO k = 1, n_layers
        temp_sum = SUM(Optical_Depth(1:k))
