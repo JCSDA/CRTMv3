@@ -8,7 +8,7 @@ Preamble
 
 CRTM v3.1.5 release (`REL-3.1.5`)
 
-v3.1.5 (in development): loads netCDF NLTECoeff/ACCoeff sibling files (previously silently skipped)
+v3.1.5 released August 23, 2026: loads netCDF NLTECoeff/ACCoeff sibling files (previously silently skipped)
 v3.1.4 released June 8, 2026 
 v3.1.3 released February 10, 2025 
 v3.1.2 released July 11, 2025
