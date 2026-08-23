@@ -4,7 +4,7 @@
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
 
 cmake_minimum_required (VERSION 3.12)
-project("CRTM_Tests" VERSION 3.1.4 LANGUAGES Fortran C)
+project("CRTM_Tests" VERSION 3.1.5 LANGUAGES Fortran C)
 
 enable_testing ()
 
