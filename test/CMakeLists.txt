@@ -450,6 +450,12 @@ foreach(io_test_index RANGE 0 ${io_tests_max} 2)
   ADD_CRTM_UNIT_TEST(${io_test_name} ${io_test_source})
 endforeach()
 
+# NLTE/AC sibling verification: the netCDF SpcCoeff load must pick up
+# co-located .NLTECoeff.nc/.ACCoeff.nc files and degrade gracefully without
+# them, and the forward model must apply the NLTE correction by day only.
+# Compares testinput/ (siblings staged) against testinput_no_siblings/.
+ADD_CRTM_UNIT_TEST(NLTE_Verification mains/unit/input_output/test_NLTE_Verification/test_nlte_verification.f90)
+
 #(PS) Hypsometric Equation test
 add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
 target_link_libraries(hypsometric_eq PRIVATE crtm)
@@ -678,6 +684,11 @@ SpcCoeff/Little_Endian/ssu_n08.SpcCoeff.bin
 SpcCoeff/Little_Endian/ssu_n09.SpcCoeff.bin
 SpcCoeff/Little_Endian/ssu_n11.SpcCoeff.bin
 SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
+SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
+SpcCoeff/netCDF/iasi616_metop-b.NLTECoeff.nc
+TauCoeff/ODPS/Little_Endian/iasi616_metop-b.TauCoeff.bin
+SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
+SpcCoeff/netCDF/amsua_n19.ACCoeff.nc
 )
 
 # Symlink all CRTM files
@@ -685,3 +696,27 @@ SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
 CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
                          ${CMAKE_CURRENT_BINARY_DIR}/testinput
                          ${crtm_test_input} )
+
+# Staging area for test_NLTE_Verification: the same coefficient set the test
+# uses from testinput/, minus the .NLTECoeff.nc/.ACCoeff.nc sibling files, so
+# netCDF SpcCoeff loads can be compared with and without siblings present.
+list( APPEND crtm_no_sibling_input
+AerosolCoeff/Little_Endian/AerosolCoeff.bin
+CloudCoeff/Little_Endian/CloudCoeff.bin
+EmisCoeff/MW_Water/Little_Endian/FASTEM6.MWwater.EmisCoeff.bin
+EmisCoeff/IR_Ice/SEcategory/Little_Endian/NPOESS.IRice.EmisCoeff.bin
+EmisCoeff/IR_Land/SEcategory/Little_Endian/NPOESS.IRland.EmisCoeff.bin
+EmisCoeff/IR_Snow/SEcategory/Little_Endian/NPOESS.IRsnow.EmisCoeff.bin
+EmisCoeff/VIS_Ice/SEcategory/Little_Endian/NPOESS.VISice.EmisCoeff.bin
+EmisCoeff/VIS_Land/SEcategory/Little_Endian/NPOESS.VISland.EmisCoeff.bin
+EmisCoeff/VIS_Snow/SEcategory/Little_Endian/NPOESS.VISsnow.EmisCoeff.bin
+EmisCoeff/VIS_Water/SEcategory/Little_Endian/NPOESS.VISwater.EmisCoeff.bin
+EmisCoeff/IR_Water/Little_Endian/Nalli.IRwater.EmisCoeff.bin
+SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
+TauCoeff/ODPS/Little_Endian/iasi616_metop-b.TauCoeff.bin
+SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
+)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings)
+CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
+                         ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings
+                         ${crtm_no_sibling_input} )
