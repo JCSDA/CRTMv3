@@ -1,10 +1,10 @@
-#https://bin.ssec.wisc.edu/pub/s4/CRTM/fix_REL-3.2.0.0.tgz  (use this for jedi and stand-alone, some files have changed).
+#https://bin.ssec.wisc.edu/pub/s4/CRTM/fix_REL-3.2.0.1.tgz  (use this for jedi and stand-alone, some files have changed).
 
 # This script is used to manually download the tarball of binary and netcdf coefficient files.
 # The same files also download automatically during the cmake step, so you don't have to actually run this manually. 
 
-foldername="fix_REL-3.2.0.0"
-checksum=88995873986cf2b077808a75d1c56f83 #md5sum
+foldername="fix_REL-3.2.0.1"
+checksum=4f7d143764e1bcf263301bfe895ca1a1 #md5sum
 filename="${foldername}.tgz"
 download_url=https://bin.ssec.wisc.edu/pub/s4/CRTM/$filename
 

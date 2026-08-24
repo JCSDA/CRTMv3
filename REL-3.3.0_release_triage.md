@@ -35,6 +35,22 @@ patch-eligible.
 
 ---
 
+## Coefficient tree for the 3.3.0 line (2026-08-24)
+
+`feature/btj_REL-3.3.0` builds and tests against **`fix_REL-3.2.0.1`**
+(the immutable `fix_REL-3.2.0.0` content plus the 18-file 3.2.0.1 delta:
+iasi_metop-b/c, airs_aqua, iasi-ng_metop-sg-a1, seviri_m08/m09/m10/m11,
+fci_mtg-i1 SpcCoeff+TauCoeff pairs), pinned in `test/CMakeLists.txt`,
+`Get_CRTM_Binary_Files.sh` and `README.md` as `fix_REL-3.2.0.1.tgz`,
+md5 `4f7d143764e1bcf263301bfe895ca1a1` (3,378,248,145 bytes). The tarball
+was rolled locally on 2026-08-24 and still has to be uploaded to
+`https://bin.ssec.wisc.edu/pub/s4/CRTM/`. The 3.3.0-only QDRY payload
+(`fix_REL-3.3.0.0` overlay, 11 files) is NOT part of this tree yet; it
+rides the eventual v3.3.0 tarball roll together with the TELSEM2
+Release-2 atlas (item 6 below).
+
+---
+
 ## Already in 3.3.0 (context)
 
 The TELSEM2 DA program (merge `067c111`): Release-2 uncertainty content,
