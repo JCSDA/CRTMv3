@@ -64,7 +64,7 @@ PROGRAM test_TELSEM2_Covariance
 
   CHARACTER(256) :: Message, Version
   INTEGER  :: err, i, j, c1, c2
-  LOGICAL  :: failed, valid, ok
+  LOGICAL  :: failed, valid, ok, had_uncertainty
   REAL(fp) :: ev3(3), eh3(3), cov6(6,6)
   REAL(fp) :: ev4(4), eh4(4), cov8(8,8)
   REAL(fp) :: ev, eh, stdv, stdh, covvh
@@ -193,12 +193,15 @@ PROGRAM test_TELSEM2_Covariance
   err = CRTM_TELSEM2_Emissivity_Uncertainty( LAT_ARG, LON_ARG, 9, FREQS_A, &
                                              ev3, eh3, bad_cov, valid )
   CALL Expect( err == FAILURE, 'dimension mismatch returns FAILURE' )
-  ! Simulate a Release-1 (no-uncertainty) load
+  ! Simulate a Release-1 (no-uncertainty) load. Save and restore the real
+  ! flag: forcing .TRUE. on an actual Release-1 atlas would defeat the
+  ! library guard and dereference the unallocated uncertainty arrays.
+  had_uncertainty = MWlandC%Has_Uncertainty
   MWlandC%Has_Uncertainty = .FALSE.
   err = CRTM_TELSEM2_Emissivity_Uncertainty( LAT_ARG, LON_ARG, 9, FREQS_A, &
                                              ev3, eh3, cov6, valid )
   CALL Expect( err == FAILURE, 'no-uncertainty atlas returns FAILURE' )
-  MWlandC%Has_Uncertainty = .TRUE.
+  MWlandC%Has_Uncertainty = had_uncertainty
 
   ! ------------------------------------------------------------------
   ! 8. Thread safety: concurrent queries reproduce the serial result
