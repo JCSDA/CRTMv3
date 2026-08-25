@@ -610,6 +610,12 @@ foreach(io_test_index RANGE 0 ${io_tests_max} 2)
   ADD_CRTM_UNIT_TEST(${io_test_name} ${io_test_source})
 endforeach()
 
+# NLTE/AC sibling verification: the netCDF SpcCoeff load must pick up
+# co-located .NLTECoeff.nc/.ACCoeff.nc files and degrade gracefully without
+# them, and the forward model must apply the NLTE correction by day only.
+# Compares testinput/ (siblings staged) against testinput_no_siblings/.
+ADD_CRTM_UNIT_TEST(NLTE_Verification mains/unit/input_output/test_NLTE_Verification/test_nlte_verification.f90)
+
 #(PS) Hypsometric Equation test
 add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
 target_link_libraries(hypsometric_eq PRIVATE crtm)
@@ -1465,6 +1471,11 @@ SpcCoeff/netCDF/ssu_n08.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n09.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n11.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n14.SpcCoeff.nc
+# test_NLTE_Verification (merged from develop / v3.1.5): iasi616_metop-b with
+# its NLTECoeff sibling. amsua_n19.SpcCoeff/TauCoeff/ACCoeff are staged above.
+SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
+NLTECoeff/netCDF/iasi616_metop-b.NLTECoeff.nc
+TauCoeff/ODPS/netCDF/iasi616_metop-b.TauCoeff.nc
 )
 
 # Locally-staged coefficients (PARMIO LUT, AWS) live in test_data/.../fix/
@@ -1511,3 +1522,28 @@ CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM
 # in the last bits, so a green suite is not by itself proof of bit-identity.
 add_executable(dump_scalar_fullprec mains/unit/Unit_Test/dump_scalar_fullprec.f90)
 target_link_libraries(dump_scalar_fullprec PRIVATE crtm)
+
+# Staging area for test_NLTE_Verification: the same coefficient set the test
+# uses from testinput/, minus the .NLTECoeff.nc/.ACCoeff.nc sibling files, so
+# netCDF SpcCoeff loads can be compared with and without siblings present.
+# (netCDF paths: the fix_REL-3.2.0.0 tarball ships no .bin coefficients.)
+list( APPEND crtm_no_sibling_input
+AerosolCoeff/netCDF/AerosolCoeff.nc
+CloudCoeff/netCDF/CloudCoeff.nc
+EmisCoeff/MW_Water/netCDF/FASTEM6.MWwater.EmisCoeff.nc
+EmisCoeff/IR_Ice/SEcategory/netCDF/NPOESS.IRice.EmisCoeff.nc
+EmisCoeff/IR_Land/SEcategory/netCDF/NPOESS.IRland.EmisCoeff.nc
+EmisCoeff/IR_Snow/SEcategory/netCDF/NPOESS.IRsnow.EmisCoeff.nc
+EmisCoeff/VIS_Ice/SEcategory/netCDF/NPOESS.VISice.EmisCoeff.nc
+EmisCoeff/VIS_Land/SEcategory/netCDF/NPOESS.VISland.EmisCoeff.nc
+EmisCoeff/VIS_Snow/SEcategory/netCDF/NPOESS.VISsnow.EmisCoeff.nc
+EmisCoeff/VIS_Water/SEcategory/netCDF/NPOESS.VISwater.EmisCoeff.nc
+EmisCoeff/IR_Water/netCDF/Nalli.IRwater.EmisCoeff.nc
+SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/iasi616_metop-b.TauCoeff.nc
+SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
+)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings)
+CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
+                         ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings
+                         ${crtm_no_sibling_input} )
