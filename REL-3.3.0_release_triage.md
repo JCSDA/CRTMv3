@@ -35,19 +35,43 @@ patch-eligible.
 
 ---
 
-## Coefficient tree for the 3.3.0 line (2026-08-24)
+## Coefficient tree for the 3.3.0 line (2026-08-25)
 
-`feature/btj_REL-3.3.0` builds and tests against **`fix_REL-3.2.0.1`**
-(the immutable `fix_REL-3.2.0.0` content plus the 18-file 3.2.0.1 delta:
-iasi_metop-b/c, airs_aqua, iasi-ng_metop-sg-a1, seviri_m08/m09/m10/m11,
-fci_mtg-i1 SpcCoeff+TauCoeff pairs), pinned in `test/CMakeLists.txt`,
-`Get_CRTM_Binary_Files.sh` and `README.md` as `fix_REL-3.2.0.1.tgz`,
-md5 `4f7d143764e1bcf263301bfe895ca1a1` (3,378,248,145 bytes). The tarball
-was rolled locally on 2026-08-24 and still has to be uploaded to
-`https://bin.ssec.wisc.edu/pub/s4/CRTM/`. The 3.3.0-only QDRY payload
-(`fix_REL-3.3.0.0` overlay, 11 files) is NOT part of this tree yet; it
-rides the eventual v3.3.0 tarball roll together with the TELSEM2
-Release-2 atlas (item 6 below).
+`feature/btj_REL-3.3.0` builds and tests against **`fix_REL-3.3.0.0`**:
+the immutable `fix_REL-3.2.0.0` content, plus the 18-file 3.2.0.1 delta
+(iasi_metop-b/c, airs_aqua, iasi-ng_metop-sg-a1, seviri_m08/m09/m10/m11,
+fci_mtg-i1 SpcCoeff+TauCoeff pairs), plus the 11-file QDRY overlay
+(ODPS groups 9/10, component IDs 123/124: seviri_m08/m09/m10, ahi_himawari8/9,
+iasi_metop-c, airs_aqua and cris-fsr_n21 TauCoeffs with the AHI and CrIS
+SpcCoeffs). The QDRY files require this branch's runtime; a 3.2.0 build
+rejects them at `CRTM_Init` by design. Pinned in `test/CMakeLists.txt`,
+`Get_CRTM_Binary_Files.sh` and `README.md` as `fix_REL-3.3.0.0.tgz`, md5
+`7f32c963782c267d9931114a18b70d85` (3,409,373,835 bytes, 1440 files),
+rolled locally 2026-08-25. The tarball is PROVISIONAL: it still carries
+the Release-1 TELSEM2 atlas (item 6 below) and is re-rolled and repinned
+once the Release-2 atlas is regenerated; it has not been uploaded to
+`https://bin.ssec.wisc.edu/pub/s4/CRTM/`. The 3.2.x line keeps
+`fix_REL-3.2.0.1.tgz` (md5 `4f7d143764e1bcf263301bfe895ca1a1`).
+
+Measured effect of the QDRY overlay on the suite (3.3.0 code held fixed,
+references generated with `fix_REL-3.2.0.1`): only `cris-fsr_n21` moves
+(19 forward/TL/AD/K registrations); `airs_aqua` appears only in the AOD
+tests, which do not touch TauCoeff. Top-of-atmosphere BT changes are the
+expected heritage-to-QDRY flip signature: max 1.7 to 2.2 K (channel 116
+and the 1735 to 1753 water-band block, profile 2), mean 0.2 to 0.3 K,
+no channel above 5 K. Two larger deltas are understood and accepted:
+`test_User_Emissivity` (emissivity 0.5) shows 30 K and 18 K at channels
+543 and 751, which are isolated single-channel spikes in the heritage
+file (271 K between 241 K neighbours) that the flip removes; and
+`test_Aircraft` (observer at 320 hPa) shows up to 34 K in the 650 to 680
+cm-1 CO2 band, where the channel is opaque above the aircraft so the
+TOA-to-level transmittance the ODPS fit targets is ~0 at every level
+below it; the per-layer optical depths there are unconstrained by the
+fit and differ arbitrarily between any two coefficient sets. Both files
+give unphysical values in those channels (the heritage reference already
+reported 284 K, a mid-troposphere temperature, for opaque channels). This
+is a limitation of level-resolved outputs (aircraft radiance and the
+Upwelling_Radiance profile) in saturated channels, not a QDRY defect.
 
 ---
 
@@ -72,7 +96,7 @@ snow/ice dispatch. See `docs/design/telsem2_landem_jacobians_plan.md`
 | 3 | **Cloud `Water_Density` adjoint** — commented-out two-argument call has no implementation; the MW cloudy `Water_Content` Jacobian is missing its density-indexing term, plus a height leg via `dZ_m` | Changes default-path MW cloudy Jacobians | `CRTM_K_Matrix_Module.f90` ~:1131, `CRTM_Adjoint_Module.f90` ~:633 (commented), forward `CRTM_Active_Sensor.f90:127-160`, consumption `CRTM_CloudScatter.f90` :343/:614/:941 | Medium: adjoint must be written, not uncommented |
 | 4 | **Snow/ice physical state Jacobians** — TL/AD are zero-stubs whose signatures do not accept `Surface_TL/AD`; the physical sea-ice model `NESDIS_SIce_Phy_EM` is commented out at its call site | Signature changes; enabling the physical ice model changes the ice forward | `CRTM_MW_Snow_SfcOptics.f90`, `CRTM_MW_Ice_SfcOptics.f90` (iVar is `INTEGER :: Dummy`) | High. Composes with Phase G: physical Jacobians where NESDIS runs, atlas+uncertainty where TELSEM2 runs |
 | 5 | **PARMIO activation-policy consistency** — PARMIO is presence-activated while TELSEM2 is opt-in; the same foot-gun the TELSEM2 gate closed | Making PARMIO opt-in changes MW-water defaults >= 200 GHz for anyone with the file staged | `CRTM_LifeCycle.f90` (PARMIO load block); policy note at `RELEASE_NOTES_v3.2.0.md` §"PARMIO is presence-activated; TELSEM2 is opt-in" | Low code / high communication. Decide before 3.3.0 ships a second precedent |
-| 6 | **Release-2 coefficient tarball roll** — ship the staged `TELSEM2.MWland.EmisCoeff.nc` (R2, 344 MB; emissivity payload bit-identical to R1) and update both md5 pins | New default coefficient file (gate clause 3) | `Get_CRTM_Binary_Files.sh`, `test/CMakeLists.txt` (precedent commit `5659f9d`); inventory action item in `REL-3.2.0_coefficient_inventory.md` | Deferred by BTJ until REL-3.3.0 matures. Until rolled, the TELSEM2 covariance/snow-ice ctests require a locally staged R2 file |
+| 6 | **Release-2 TELSEM2 atlas: regenerate, stage, roll** (corrected 2026-08-25). The R2 `TELSEM2.MWland.EmisCoeff.nc` (expected 343.6 MB from the R1 layout: `emissivity_error` doubles the 188 MB R1 file) is NOT staged anywhere: absent from both machines, and the RTTOV ASCII source atlas is absent too. Regenerate with `Convert_TELSEM2_Atlas` from the NWP SAF TELSEM2 ASCII atlas (12 monthly files plus `correlations`), verify the emissivity payload bit-identical to R1, stage into the 3.3.0.0 tree, re-roll and repin | New default coefficient file (gate clause 3) | `src/Coefficients/EmisCoeff/MW_Land/TELSEM2/Convert_TELSEM2_Atlas/`; `Get_CRTM_Binary_Files.sh`, `test/CMakeLists.txt` (precedent commit `5659f9d`) | Blocked on obtaining the NWP SAF atlas. Until staged, `test_TELSEM2_MWland`, `test_TELSEM2_Covariance` and `test_TELSEM2_SnowIce` fail (3 of 239) |
 | 7 | **New high-frequency surface physics** — canopy water content, MW snow grain size/density, ice density/roughness as differentiable state | New forward physics changes forward wherever added | Adjudicated "structurally impossible without new physics" in `docs/design/surface_jacobians_281.md`; the closure proposal in `docs/design/issue-281-comment.md` was never posted to #281 | Program-scale (3.3+/3.4). First step is administrative: post the adjudication |
 | 8 | **Vector-RT (`n_Stokes > 1`) energy-consistency completion** — the (V,H)→Stokes reflectivity conversion covers the intensity block; U/V and off-diagonal consistency remain | Opt-in path only, so technically patch-eligible under clause 1 — queued to 3.3.x by blast radius, not by the letter of the gate | `CRTM_SfcOptics.f90` coupled-polarization branch (in-code follow-up note) | Medium |
 

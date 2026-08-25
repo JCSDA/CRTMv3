@@ -77,10 +77,13 @@ punch-list, which downgrades the other two.
 >     polarization-mixed, land-fraction-weighted atlas emissivity std for
 >     QC/error inflation (zero = unavailable).
 >
-> Distribution note: the staged fix tree carries the Release-2
-> `TELSEM2.MWland.EmisCoeff.nc` (~344 MB, emissivity payload bit-identical
-> to R1); the coefficient tarball re-roll + md5 pin is a release-time step
-> for v3.3.0 (precedent `5659f9d`).
+> Distribution note (corrected 2026-08-25): the Release-2
+> `TELSEM2.MWland.EmisCoeff.nc` (expected ~344 MB, emissivity payload
+> bit-identical to R1) is NOT staged: no copy survives on any machine and
+> the RTTOV ASCII source atlas is not on hand, so it has to be regenerated
+> with `Convert_TELSEM2_Atlas` before the v3.3.0 coefficient tarball roll
+> and md5 pin (precedent `5659f9d`). Until then the staged tree carries the
+> Release-1 file and the three TELSEM2 R2 ctests fail.
 >
 > **Phase G addendum (BTJ, 2026-08-13): full surface-type dispatch.** The MW
 > SNOW and ICE drivers now consult the atlas first, **class-consistently**:

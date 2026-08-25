@@ -101,14 +101,14 @@ IF(EXISTS  ${FIX_FILE_PATH})
 
 else() # Download CRTM coefficients
   set( CRTM_COEFFS_BRANCH_PREFIX "" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
-  set( CRTM_COEFFS_BRANCH "fix_REL-3.2.0.1" )
+  set( CRTM_COEFFS_BRANCH "fix_REL-3.3.0.0" )
 
   set(CRTM_COEFFS_PATH ${CMAKE_SOURCE_DIR}/test-data-release)
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
 
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
   set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz)
-  set(checksum "4f7d143764e1bcf263301bfe895ca1a1") # MD5SUM of fix_REL-3.2.0.1.tgz
+  set(checksum "7f32c963782c267d9931114a18b70d85") # MD5SUM of fix_REL-3.3.0.0.tgz (provisional: re-rolled when the TELSEM2 Release-2 atlas is staged)
 
   # Check if the CRTM binary tarball is already present otherwise download it.
   message(STATUS "Checking if ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH} already exists...")
