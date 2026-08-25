@@ -45,9 +45,9 @@ endfunction()
 # macro to create a symlink from src to dst
 function(CREATE_SYMLINK src dst)
     foreach (FILENAME ${ARGN})
-        execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+        file( CREATE_LINK
             ${src}/${FILENAME}
-            ${dst}/${FILENAME} )
+            ${dst}/${FILENAME} SYMBOLIC )
         endforeach(FILENAME)
 endfunction(CREATE_SYMLINK)
 
@@ -55,9 +55,9 @@ endfunction(CREATE_SYMLINK)
 function(CREATE_SYMLINK_FILENAME src dst)
     foreach (FILENAME ${ARGN})
         get_filename_component(filename ${FILENAME} NAME )
-        execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+        file( CREATE_LINK
             ${src}/${FILENAME}
-            ${dst}/${filename} )
+            ${dst}/${filename} SYMBOLIC )
         endforeach(FILENAME)
 endfunction(CREATE_SYMLINK_FILENAME)
 
@@ -109,35 +109,30 @@ else() # Download CRTM coefficients
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
   set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz)
   set(checksum "88995873986cf2b077808a75d1c56f83") # MD5SUM of fix_REL-3.2.0.0.tgz
-  
-  # Check if the CRTM binary tarball is already present otherwise download it.
-  if (DEFINED ENV{CRTM_BINARY_FILES_TARBALL})
-    file(MD5 "$ENV{CRTM_BINARY_FILES_TARBALL}" computed_checksum )
-    if (NOT "${computed_checksum}" STREQUAL "${checksum}")
-      message(FATAL_ERROR "Environment provided CRTM_BINARY_FILES_TARBALL=$ENV{CRTM_BINARY_FILES_TARBALL} had checksum '${computed_checksum}' not matching expected '${checksum}'")
-    endif()
-    message(STATUS "Using CRTM coeffs tarball file CRTM_BINARY_FILES_TARBALL=$ENV{CRTM_BINARY_FILES_TARBALL}")
-    set(DOWNLOAD_DEST "$ENV{CRTM_BINARY_FILES_TARBALL}")
-  else()
-    set(DOWNLOAD_URL "${DOWNLOAD_BASE_URL}/${test_files_dirname}")
-    set(DOWNLOAD_DEST "${CRTM_COEFFS_PATH}/${test_files_dirname}")
-    message(STATUS "Downloading CRTM coeffs files from: ${DOWNLOAD_URL} to ${DOWNLOAD_DEST}")
-    file(DOWNLOAD ${DOWNLOAD_URL} ${DOWNLOAD_DEST}
-      EXPECTED_MD5 ${checksum}
-      SHOW_PROGRESS)
-  endif()
 
-  # -- UNTAR -- 
-  
-  # Define the directory to untar into
-  set(UNTAR_DEST "${CMAKE_SOURCE_DIR}/test-data-release")
-    message(STATUS "Checking if ${UNTAR_DEST}/${CRTM_COEFFS_BRANCH} already exists...")
-  # Only untar if the CHECK_PATH does not exist
-  if(NOT EXISTS ${UNTAR_DEST}/${CRTM_COEFFS_BRANCH}/)
-    message(STATUS "Untarring the downloaded file (~2 minutes) to ${UNTAR_DEST}")
+  # Check if the CRTM binary tarball is already present otherwise download it.
+  message(STATUS "Checking if ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH} already exists...")
+  if(NOT EXISTS ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH}/)
+    if (DEFINED ENV{CRTM_BINARY_FILES_TARBALL})
+      file(MD5 "$ENV{CRTM_BINARY_FILES_TARBALL}" computed_checksum )
+      if (NOT "${computed_checksum}" STREQUAL "${checksum}")
+        message(FATAL_ERROR "Environment provided CRTM_BINARY_FILES_TARBALL=$ENV{CRTM_BINARY_FILES_TARBALL} had checksum '${computed_checksum}' not matching expected '${checksum}'")
+      endif()
+      message(STATUS "Using CRTM coeffs tarball file CRTM_BINARY_FILES_TARBALL=$ENV{CRTM_BINARY_FILES_TARBALL}")
+      set(DOWNLOAD_DEST "$ENV{CRTM_BINARY_FILES_TARBALL}")
+    else()
+      set(DOWNLOAD_URL "${DOWNLOAD_BASE_URL}/${test_files_dirname}")
+      set(DOWNLOAD_DEST "${CRTM_COEFFS_PATH}/${test_files_dirname}")
+      message(STATUS "Downloading CRTM coeffs files from: ${DOWNLOAD_URL} to ${DOWNLOAD_DEST}")
+      file(DOWNLOAD ${DOWNLOAD_URL} ${DOWNLOAD_DEST}
+        EXPECTED_MD5 ${checksum}
+        SHOW_PROGRESS)
+    endif()
+
+    message(STATUS "Untarring the downloaded file (~2 minutes) to ${CRTM_COEFFS_PATH}")
     # Use the built-in tar feature to work around an issue on Orion with the
     # system tar command. See: https://github.com/JCSDA/spack-stack/issues/1355
-    execute_process(COMMAND ${CMAKE_COMMAND} -E chdir ${UNTAR_DEST}
+    execute_process(COMMAND ${CMAKE_COMMAND} -E chdir ${CRTM_COEFFS_PATH}
                     ${CMAKE_COMMAND} -E tar xzf ${DOWNLOAD_DEST}
                     RESULT_VARIABLE result
                     OUTPUT_QUIET ERROR_QUIET)
@@ -149,9 +144,9 @@ else() # Download CRTM coefficients
   endif()
 endif()
 
-  set (CRTM_TESTFILES_PATH ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH}/fix)
-  message(STATUS "Downloaded CRTM files are placed at ${CRTM_TESTFILES_PATH} ")
-  set_property (GLOBAL PROPERTY CRTM_TESTFILES_PATH ${CRTM_TESTFILES_PATH})
+set (CRTM_TESTFILES_PATH ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH}/fix)
+message(STATUS "Downloaded CRTM files are placed at ${CRTM_TESTFILES_PATH} ")
+set_property (GLOBAL PROPERTY CRTM_TESTFILES_PATH ${CRTM_TESTFILES_PATH})
 
 # Create list of sensor ids for testing
 list( APPEND Simple_Sensor_Ids
@@ -614,6 +609,12 @@ foreach(io_test_index RANGE 0 ${io_tests_max} 2)
   list(GET io_tests ${io_test_source_index} io_test_source)
   ADD_CRTM_UNIT_TEST(${io_test_name} ${io_test_source})
 endforeach()
+
+# NLTE/AC sibling verification: the netCDF SpcCoeff load must pick up
+# co-located .NLTECoeff.nc/.ACCoeff.nc files and degrade gracefully without
+# them, and the forward model must apply the NLTE correction by day only.
+# Compares testinput/ (siblings staged) against testinput_no_siblings/.
+ADD_CRTM_UNIT_TEST(NLTE_Verification mains/unit/input_output/test_NLTE_Verification/test_nlte_verification.f90)
 
 #(PS) Hypsometric Equation test
 add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
@@ -1470,6 +1471,11 @@ SpcCoeff/netCDF/ssu_n08.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n09.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n11.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n14.SpcCoeff.nc
+# test_NLTE_Verification (merged from develop / v3.1.5): iasi616_metop-b with
+# its NLTECoeff sibling. amsua_n19.SpcCoeff/TauCoeff/ACCoeff are staged above.
+SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
+NLTECoeff/netCDF/iasi616_metop-b.NLTECoeff.nc
+TauCoeff/ODPS/netCDF/iasi616_metop-b.TauCoeff.nc
 )
 
 # Locally-staged coefficients (PARMIO LUT, AWS) live in test_data/.../fix/
@@ -1516,3 +1522,28 @@ CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM
 # in the last bits, so a green suite is not by itself proof of bit-identity.
 add_executable(dump_scalar_fullprec mains/unit/Unit_Test/dump_scalar_fullprec.f90)
 target_link_libraries(dump_scalar_fullprec PRIVATE crtm)
+
+# Staging area for test_NLTE_Verification: the same coefficient set the test
+# uses from testinput/, minus the .NLTECoeff.nc/.ACCoeff.nc sibling files, so
+# netCDF SpcCoeff loads can be compared with and without siblings present.
+# (netCDF paths: the fix_REL-3.2.0.0 tarball ships no .bin coefficients.)
+list( APPEND crtm_no_sibling_input
+AerosolCoeff/netCDF/AerosolCoeff.nc
+CloudCoeff/netCDF/CloudCoeff.nc
+EmisCoeff/MW_Water/netCDF/FASTEM6.MWwater.EmisCoeff.nc
+EmisCoeff/IR_Ice/SEcategory/netCDF/NPOESS.IRice.EmisCoeff.nc
+EmisCoeff/IR_Land/SEcategory/netCDF/NPOESS.IRland.EmisCoeff.nc
+EmisCoeff/IR_Snow/SEcategory/netCDF/NPOESS.IRsnow.EmisCoeff.nc
+EmisCoeff/VIS_Ice/SEcategory/netCDF/NPOESS.VISice.EmisCoeff.nc
+EmisCoeff/VIS_Land/SEcategory/netCDF/NPOESS.VISland.EmisCoeff.nc
+EmisCoeff/VIS_Snow/SEcategory/netCDF/NPOESS.VISsnow.EmisCoeff.nc
+EmisCoeff/VIS_Water/SEcategory/netCDF/NPOESS.VISwater.EmisCoeff.nc
+EmisCoeff/IR_Water/netCDF/Nalli.IRwater.EmisCoeff.nc
+SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/iasi616_metop-b.TauCoeff.nc
+SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
+)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings)
+CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
+                         ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings
+                         ${crtm_no_sibling_input} )
