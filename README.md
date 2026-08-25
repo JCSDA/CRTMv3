@@ -1,4 +1,4 @@
-CRTM REL-3.1.4
+CRTM REL-3.1.5
 ====================
 
 [![Build Status](https://app.travis-ci.com/JCSDA/CRTMv3.svg?branch=develop)](https://app.travis-ci.com/JCSDA/CRTMv3)
@@ -6,8 +6,9 @@ CRTM REL-3.1.4
 Preamble
 --------
 
-CRTM v3.1.4 release (`REL-3.1.4`)
+CRTM v3.1.5 release (`REL-3.1.5`)
 
+v3.1.5 (in development): loads netCDF NLTECoeff/ACCoeff sibling files (previously silently skipped)
 v3.1.4 released June 8, 2026 
 v3.1.3 released February 10, 2025 
 v3.1.2 released July 11, 2025
@@ -59,7 +60,7 @@ Contents
 
 Configuration, building, and testing the library
 ================================================  
-JCSDA CRTM v3.1.4 Build Instructions
+JCSDA CRTM v3.1.5 Build Instructions
 
 The CRTM repository directory structure looks (something) like:
 
