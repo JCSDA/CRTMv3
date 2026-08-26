@@ -468,7 +468,7 @@ SUBROUTINE CRTM_Compute_Reflectivity_TL(Atm, &
   perm = Water_Permittivity_Turner_2016(Frequency * 1.0d9, Atm%Temperature)
   perm_re = REAL(perm)
   perm_im = AIMAG(perm)
-  Kw_2 = ABS((perm_re - ONE) / (perm_re + ONE)) ** TWO
+  Kw_2 = ABS((perm - ONE) / (perm + ONE)) ** TWO
   P1 = (M6_MM6 * Wavelength_m**4.0_fp) / (PI**5.0_fp * Kw_2)
 
   ! Forward (base state) calculations
@@ -670,7 +670,7 @@ SUBROUTINE CRTM_Compute_Reflectivity_AD(Atm, &
   perm = Water_Permittivity_Turner_2016(Frequency * 1.0d9, Atm%Temperature)
   perm_re = REAL(perm)
   perm_im = AIMAG(perm)
-  Kw_2 = ABS((perm_re - ONE) / (perm_re + ONE))**TWO
+  Kw_2 = ABS((perm - ONE) / (perm + ONE))**TWO
 
   Optical_Depth = AtmOptics%optical_depth / dS_m
 
