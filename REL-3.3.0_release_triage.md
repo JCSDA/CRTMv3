@@ -5,7 +5,10 @@ rule for deciding whether work lands in a 3.2.x patch release or queues for
 3.3.x, and triages the known backlog against it. It formalizes the gate that
 `REL-3.2.0_changes_vs_develop.md` applied informally ("none of the additions
 changes any common-suite TB"). The 3.3.x queue is tracked as epic
-[JCSDA/CRTMv3#357](https://github.com/JCSDA/CRTMv3/issues/357).
+[JCSDA/CRTMv3#357](https://github.com/JCSDA/CRTMv3/issues/357); the v3.3.0
+release as a whole (coefficient tree, release mechanics, everything that
+does not move default numbers) is tracked in
+[JCSDA/CRTMv3#365](https://github.com/JCSDA/CRTMv3/issues/365).
 
 ## The patch gate
 
