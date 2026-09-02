@@ -49,7 +49,7 @@ MODULE CRTM_Active_Sensor
   ! Parameters
   ! ----------
   REAL(fp), PARAMETER :: POINT_01 = 0.01_fp
-  REAL(fp), PARAMETER :: Kw_2_fixed = 0.93_fp
+  REAL(fp), PARAMETER :: _2_fixed = 0.93_fp
   ! 1.0d818 converts from m^3 to mm^6/m^3 (standard radar reflectivity units)
   REAL(fp), PARAMETER :: M6_MM6 = 1.0d18
   REAL(fp), PARAMETER :: REFLECTIVITY_THRESHOLD = TINY(REAL(fp))
@@ -344,8 +344,8 @@ END FUNCTION Water_Permittivity_Turner_2016
     REAL(fp) :: dZ_m(AtmOptics%n_Layers)
     REAL(fp) :: dS_m(AtmOptics%n_Layers)
     REAL(fp) :: Temp_K(AtmOptics%n_Layers)
-    REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Kw_2, perm_re, perm_im
-    COMPLEX :: perm(AtmOptics%n_Layers), kw(AtmOptics%n_Layers)
+    REAL(fp), DIMENSION(AtmOptics%n_Layers) :: _2, perm_re, perm_im
+    COMPLEX :: perm(AtmOptics%n_Layers), (AtmOptics%n_Layers)
     INTEGER :: k, n_Layers
     REAL(fp) :: temp_sum
     REAL(fp) :: ext_coef(AtmOptics%n_Layers) ! extinction coefficient  
@@ -376,9 +376,7 @@ END FUNCTION Water_Permittivity_Turner_2016
 
     perm_re = REAL(REAL(perm))  ! Double REAL is required to avoud issues with GNU Fortran
     perm_im = REAL(AIMAG(perm))
-    ! perm = cmplx(perm_re, perm_im, FP)
-    !kw = (perm**2 - ONE )/(perm**2 + TWO)
-    kw = (perm - ONE )/(perm + ONE)
+    kw = (perm - ONE )/(perm + TWO)
     Kw_2 = ABS(kw)**TWO      
     P1 = (M6_MM6 * Wavelength_m**4.0_fp) / (PI**5.0_fp * Kw_2)
 
@@ -468,7 +466,7 @@ SUBROUTINE CRTM_Compute_Reflectivity_TL(Atm, &
   perm = Water_Permittivity_Turner_2016(Frequency * 1.0d9, Atm%Temperature)
   perm_re = REAL(perm)
   perm_im = AIMAG(perm)
-  Kw_2 = ABS((perm - ONE) / (perm + ONE)) ** TWO
+  Kw_2 = ABS((perm - ONE) / (perm + TWO)) ** TWO
   P1 = (M6_MM6 * Wavelength_m**4.0_fp) / (PI**5.0_fp * Kw_2)
 
   ! Forward (base state) calculations
@@ -670,7 +668,7 @@ SUBROUTINE CRTM_Compute_Reflectivity_AD(Atm, &
   perm = Water_Permittivity_Turner_2016(Frequency * 1.0d9, Atm%Temperature)
   perm_re = REAL(perm)
   perm_im = AIMAG(perm)
-  Kw_2 = ABS((perm - ONE) / (perm + ONE))**TWO
+  Kw_2 = ABS((perm - ONE) / (perm + TWO))**TWO
 
   Optical_Depth = AtmOptics%optical_depth / dS_m
 
