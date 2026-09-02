@@ -49,7 +49,7 @@ MODULE CRTM_Active_Sensor
   ! Parameters
   ! ----------
   REAL(fp), PARAMETER :: POINT_01 = 0.01_fp
-  REAL(fp), PARAMETER :: _2_fixed = 0.93_fp
+  REAL(fp), PARAMETER :: Kw_2_fixed = 0.93_fp
   ! 1.0d818 converts from m^3 to mm^6/m^3 (standard radar reflectivity units)
   REAL(fp), PARAMETER :: M6_MM6 = 1.0d18
   REAL(fp), PARAMETER :: REFLECTIVITY_THRESHOLD = TINY(REAL(fp))
@@ -344,8 +344,8 @@ END FUNCTION Water_Permittivity_Turner_2016
     REAL(fp) :: dZ_m(AtmOptics%n_Layers)
     REAL(fp) :: dS_m(AtmOptics%n_Layers)
     REAL(fp) :: Temp_K(AtmOptics%n_Layers)
-    REAL(fp), DIMENSION(AtmOptics%n_Layers) :: _2, perm_re, perm_im
-    COMPLEX :: perm(AtmOptics%n_Layers), (AtmOptics%n_Layers)
+    REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Kw_2, perm_re, perm_im
+    COMPLEX :: perm(AtmOptics%n_Layers), kw(AtmOptics%n_Layers)
     INTEGER :: k, n_Layers
     REAL(fp) :: temp_sum
     REAL(fp) :: ext_coef(AtmOptics%n_Layers) ! extinction coefficient  
