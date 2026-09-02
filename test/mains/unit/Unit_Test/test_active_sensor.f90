@@ -330,16 +330,28 @@ PROGRAM test_active_sensor
   iprof = 1
   ichan = 16
 
+  WRITE(Message,'(A30,A30,A30,A30,A30,A30)') &
+       'Layer', &
+       'Water Content', &
+       'Reflectivity', &
+       'Attenuated Reflectivity', &
+       'ReflectivityLinear', &
+       'Reflectivity_AttenuatedLinear'
 
-  OPEN(500,FILE='reflectivity.txt',STATUS='UNKNOWN')
-  write(500,'(4A40)')  'Layer', 'Water Content', 'Reflectivity', 'Attenuated Reflectivity'
-  write(*,'(4A40)')  'Layer', 'Water Content', 'Reflectivity', 'Attenuated Reflectivity'
+  CALL Display_Message(PROGRAM_NAME, Message, INFORMATION)
+
   DO ii=1,n_layers
-     write(500,'(i40,f40.5,f40.5,f40.5)')  ii, Atm(1)%Cloud(1)%Water_Content(ii), RTSolution(ichan,iprof)%Reflectivity(ii), RTSolution(ichan,iprof)%Reflectivity_Attenuated(ii)
-     write(*,'(i40,f40.5,f40.5,f40.5)')  ii, Atm(1)%Cloud(1)%Water_Content(ii), RTSolution(ichan,iprof)%Reflectivity(ii), RTSolution(ichan,iprof)%Reflectivity_Attenuated(ii)
-  ENDDO
-  CLOSE(500)
 
+     WRITE(Message,'(I30,F30.5,F30.5,F30.5,F30.5,F30.5)')  ii, &
+          Atm(1)%Cloud(1)%Water_Content(ii), &
+          RTSolution(ichan,iprof)%Reflectivity(ii), &
+          RTSolution(ichan,iprof)%Reflectivity_Attenuated(ii), &
+          RTSolution(ichan,iprof)%ReflectivityLinear(ii), &
+          RTSolution(ichan,iprof)%Reflectivity_AttenuatedLinear(ii)
+
+     CALL Display_Message(PROGRAM_NAME, Message, INFORMATION)
+
+  ENDDO
 
   ! ============================================================================
   ! 8. **** DESTROY THE CRTM ****

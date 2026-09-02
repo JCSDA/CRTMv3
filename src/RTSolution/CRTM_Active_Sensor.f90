@@ -23,7 +23,7 @@ MODULE CRTM_Active_Sensor
                                       SpcCoeff_IsVisibleSensor   , &
                                       SpcCoeff_IsUltravioletSensor
   USE CRTM_Atmosphere_Define,   ONLY: CRTM_Atmosphere_type, &
-                                      H2O_ID, MASS_MIXING_RATIO_UNITS
+                                      H2O_ID
   USE CRTM_AtmOptics_Define,     ONLY: CRTM_AtmOptics_type
   USE CRTM_RTSolution_Define,    ONLY: CRTM_RTSolution_type
   USE Spectral_Units_Conversion, ONLY: GHz_to_inverse_cm
@@ -31,7 +31,6 @@ MODULE CRTM_Active_Sensor
   USE ODPS_CoordinateMapping,     ONLY: Geopotential_Height
   USE CRTM_GeometryInfo_Define, ONLY: CRTM_GeometryInfo_type
   USE Message_Handler         , ONLY: Display_Message
-
   ! Disable all implicit typing
   IMPLICIT NONE
 
@@ -54,6 +53,7 @@ MODULE CRTM_Active_Sensor
   ! 1.0d818 converts from m^3 to mm^6/m^3 (standard radar reflectivity units)
   REAL(fp), PARAMETER :: M6_MM6 = 1.0d18
   REAL(fp), PARAMETER :: REFLECTIVITY_THRESHOLD = TINY(REAL(fp))
+  REAL(fp), PARAMETER :: MM6_TO_CM6 = 1.0e-6_fp
 CONTAINS
 
 !--------------------------------------------------------------------------------
@@ -100,6 +100,8 @@ Function Calculate_Height(Atm) RESULT (Height)
                             Atm%Absorber(:, H2O_idx), & ! Input
                             ZERO                    , & ! Input - surface height
                             Height                ) ! Output in km
+   
+   Height = Height * ONE_THOUSAND ! convert to meters
 
 END FUNCTION Calculate_Height
 
@@ -122,20 +124,21 @@ END FUNCTION Calculate_Height
 !                       DIMENSION:  Scalar
 !                       ATTRIBUTES: INTENT(IN/OUT)
 !
+!       GeometryInfo:   Structure containing the view geometry data.
+!                       UNITS:      N/A
+!                       TYPE:       CRTM_GeometryInfo_type
+!                       DIMENSION:  Scalar
+!                       ATTRIBUTES: INTENT(IN)
+!
 !--------------------------------------------------------------------------------
 
-SUBROUTINE Calculate_Cloud_Water_Density(Atm)
+SUBROUTINE Calculate_Cloud_Water_Density(Atm, &
+                                         GeometryInfo)
    TYPE(CRTM_Atmosphere_type), INTENT(IN OUT)     :: Atm
+   TYPE(CRTM_GeometryInfo_type), OPTIONAL, INTENT(IN)     :: GeometryInfo
    INTEGER :: n_Layers
    REAL(fp) :: Height(0:Atm%n_Layers), dZ_m(Atm%n_Layers)
    Integer :: n
-
-    ! Function result
-    INTEGER :: Error_Status
-    ! Local parameters
-    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Calculate_Cloud_Water_Density'
-    ! Local variables
-    CHARACTER(256) :: Message
 
    n_Layers = Atm%n_Layers
 
@@ -144,14 +147,7 @@ SUBROUTINE Calculate_Cloud_Water_Density(Atm)
        Atm%Height = Calculate_Height(Atm)
    END IF
 
-   dZ_m = (Atm%Height(0:n_Layers-1) - Atm%Height(1:n_Layers)) * ONE_THOUSAND
-
-   IF (ANY(dZ_m <= 0)) THEN
-      Message = 'Error in calculating cloud water density - layer thickness needs to be greater than zero!'
-      CALL Display_Message( ROUTINE_NAME, TRIM(Message), Error_Status )
-      RETURN
-    END IF
-
+   dZ_m = (Atm%Height(0:n_Layers-1) - Atm%Height(1:n_Layers)) 
 
    DO n = 1, Atm%n_Clouds
       Atm%Cloud(n)%Water_Density = Atm%Cloud(n)%Water_Content / dZ_m
@@ -335,18 +331,27 @@ END FUNCTION Water_Permittivity_Turner_2016
     TYPE(CRTM_GeometryInfo_type), INTENT(IN)     :: GeometryInfo
     INTEGER                   , INTENT(IN)     :: SensorIndex
     INTEGER                   , INTENT(IN)     :: ChannelIndex
-    TYPE(CRTM_AtmOptics_type) , INTENT(IN)     :: AtmOptics
+    TYPE(CRTM_AtmOptics_type) , INTENT(IN OUT)     :: AtmOptics
     TYPE(CRTM_RTSolution_type), INTENT(IN OUT) :: RTSolution
 
     REAL(fp) :: Frequency, Wavenumber, Wavelength_m
     REAL(fp) :: Reflectivity(AtmOptics%n_Layers)
     REAL(fp) :: Reflectivity_Attenuated(AtmOptics%n_Layers)
     REAL(fp) :: Transmittance(AtmOptics%n_Layers)
+    REAL(fp) :: Optical_Depth(AtmOptics%n_Layers)
     REAL(fp) :: P1(AtmOptics%n_Layers)
-    REAL(fp) :: Height(0:AtmOptics%n_Layers), dZ_m(AtmOptics%n_Layers) , Temp_K(AtmOptics%n_Layers)
+    REAL(fp) :: Height(0:AtmOptics%n_Layers)
+    REAL(fp) :: dZ_m(AtmOptics%n_Layers)
+    REAL(fp) :: dS_m(AtmOptics%n_Layers)
+    REAL(fp) :: Temp_K(AtmOptics%n_Layers)
     REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Kw_2, perm_re, perm_im
     COMPLEX :: perm(AtmOptics%n_Layers), kw(AtmOptics%n_Layers)
-    INTEGER :: k
+    INTEGER :: k, n_Layers
+    REAL(fp) :: temp_sum
+    REAL(fp) :: ext_coef(AtmOptics%n_Layers) ! extinction coefficient  
+    character(len=16) :: ms_env_val
+
+    n_Layers = Atm%n_Layers
 
     ! Calculate heights if hasn't been set already
     IF (ALL(Atm%Height .LT. EPSILON_FP)) THEN
@@ -354,8 +359,8 @@ END FUNCTION Water_Permittivity_Turner_2016
     ELSE
         Height = Atm%Height
     ENDIF
-    dZ_m = (Height(0:Atm%n_Layers-1) - Height(1:Atm%n_Layers)) * ONE_THOUSAND
-    dZ_m = dZ_m / GeometryInfo%Cosine_Sensor_Zenith
+    dZ_m = (Height(0:n_Layers-1) - Height(1:n_Layers))
+    dS_m = dZ_m / GeometryInfo%Cosine_Sensor_Zenith
 
     IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
        Frequency = SC(SensorIndex)%Frequency(ChannelIndex) ! GHz
@@ -371,202 +376,145 @@ END FUNCTION Water_Permittivity_Turner_2016
 
     perm_re = REAL(REAL(perm))  ! Double REAL is required to avoud issues with GNU Fortran
     perm_im = REAL(AIMAG(perm))
-    ! perm = cmplx(perm_re, perm_im, FP)
     kw = (perm - ONE )/(perm + TWO)
-    Kw_2 = ABS(kw)**TWO
-
+    Kw_2 = ABS(kw)**TWO      
     P1 = (M6_MM6 * Wavelength_m**4.0_fp) / (PI**5.0_fp * Kw_2)
-    P1 = P1 / dZ_m  ! dZ_m to convert BackScatter coefficient from unitless to 1/cm
-    ! Calculate transmittance from top to layer k
-    ! Optical depth is not scaled for zenith angle
-    DO k = 1, AtmOptics%n_layers
-       Transmittance(k) = EXP(-TWO * SUM(AtmOptics%optical_depth(1:k) / &
-                               GeometryInfo%Cosine_Sensor_Zenith))
+
+    ! Calculate transmittance 
+    Optical_Depth = AtmOptics%optical_depth / dS_m
+    DO k = 1, n_layers
+       temp_sum = SUM(Optical_Depth(1:k))
+       Transmittance(k) = EXP(-TWO * temp_sum)
     END DO
     
-    Reflectivity =  P1 * (AtmOptics%Backscat_Coefficient) ! mm^6 m^-3
-    Reflectivity_Attenuated = P1 * Transmittance * (AtmOptics%Backscat_Coefficient) ! mm^6 m^-3
-
+    ! Divide by dZ_m as water conntent calculations are based on
+    ! vertical thickness of layers
+    Reflectivity =  P1 * (AtmOptics%Backscat_Coefficient / dZ_m) ! mm^6 m^-3
+    Reflectivity_Attenuated = Transmittance * Reflectivity ! mm^6 m^-3
     ! Convert the unit to dBz
     WHERE (Reflectivity .GT.  REFLECTIVITY_THRESHOLD)
-        RTSolution%Reflectivity = TEN * LOG10(Reflectivity) ! [dBZ]
+        RTSolution%Reflectivity       = TEN * LOG10(Reflectivity) ! [dBZ]  
+        RTSolution%ReflectivityLinear = MM6_TO_CM6 * Reflectivity  ! cm^6m^-3  
     ELSE WHERE
-        RTSolution%Reflectivity = MISSING_REFL
+        RTSolution%Reflectivity       = MISSING_REFL
+        RTSolution%ReflectivityLinear = MISSING_REFL
     END WHERE
 
     ! Convert the unit to dBz
     ! Note that Reflectivity can be greater than zero but Reflectivity_Attenuated
     ! can be still zero if Transmittance is zero
     WHERE (Reflectivity_Attenuated .GT.  REFLECTIVITY_THRESHOLD)
-        RTSolution%Reflectivity_Attenuated = TEN * LOG10(Reflectivity_Attenuated)
+        RTSolution%Reflectivity_Attenuated = TEN * LOG10(Reflectivity_Attenuated)      ! dBZ
+        RTSolution%Reflectivity_AttenuatedLinear = MM6_TO_CM6 * Reflectivity_attenuated ! cm^6m^-3   
     ELSE WHERE
-        RTSolution%Reflectivity_Attenuated = MISSING_REFL
+        RTSolution%Reflectivity_Attenuated       = MISSING_REFL
+        RTSolution%Reflectivity_AttenuatedLinear = MISSING_REFL
     END WHERE
+    
   END SUBROUTINE CRTM_Compute_Reflectivity
 
+SUBROUTINE CRTM_Compute_Reflectivity_TL(Atm, &
+                                       AtmOptics, &
+                                       AtmOptics_TL, &
+                                       GeometryInfo, &
+                                       SensorIndex, &
+                                       ChannelIndex, &
+                                       RTSolution_TL)
+  TYPE(CRTM_Atmosphere_type),     INTENT(IN)     :: Atm
+  TYPE(CRTM_AtmOptics_type),      INTENT(IN)     :: AtmOptics, AtmOptics_TL
+  TYPE(CRTM_GeometryInfo_type),   INTENT(IN)     :: GeometryInfo
+  INTEGER,                        INTENT(IN)     :: SensorIndex, ChannelIndex
+  TYPE(CRTM_RTSolution_type),     INTENT(IN OUT) :: RTSolution_TL
 
-!--------------------------------------------------------------------------------
-!
-! NAME:
-!       CRTM_Compute_Reflectivity_TL
-!
-! PURPOSE:
-!       Subroutine to calculate the tangent-linear of reflectivity for active sensors.
-!
-! CALLING SEQUENCE:
-!       CALL CRTM_Compute_Reflectivity_TL(Atm, & ! Input
-!                                       AtmOptics   , &  ! Input
-!                                       AtmOptics_TL   , &  ! Input
-!                                       GeometryInfo   , & ! Input
-!                                       SensorIndex , &  ! Input
-!                                       ChannelIndex, &  ! Input
-!                                       RTSolution_TL )     ! Input/Output
-!
-! INPUT ARGUMENTS:
-! INPUT ARGUMENTS:
-!       Atm:            Structure containing the atmospheric state data.
-!                       UNITS:      N/A
-!                       TYPE:       CRTM_Atmosphere_type
-!                       DIMENSION:  Scalar
-!                       ATTRIBUTES: INTENT(IN)
-!
-!       AtmOptics:      Structure containing the combined atmospheric
-!                       optical properties for gaseous absorption, clouds,
-!                       and aerosols.
-!                       UNITS:      N/A
-!                       TYPE:       CRTM_AtmOptics_type
-!                       DIMENSION:  Scalar
-!                       ATTRIBUTES: INTENT(IN)
-!
-!       AtmOptics_TL:   Structure containing the tangent-linear atmospheric
-!                       optical properties.
-!                       UNITS:      N/A
-!                       TYPE:       CRTM_AtmOptics_type
-!                       DIMENSION:  Scalar
-!                       ATTRIBUTES: INTENT(IN)
-!
-!       GeometryInfo:   Structure containing the view geometry data.
-!                       UNITS:      N/A
-!                       TYPE:       CRTM_GeometryInfo_type
-!                       DIMENSION:  Scalar
-!                       ATTRIBUTES: INTENT(IN)
-!
-!       SensorIndex:    Sensor index id. This is a unique index associated
-!                       with a (supported) sensor used to access the
-!                       shared coefficient data for a particular sensor.
-!                       See the ChannelIndex argument.
-!                       UNITS:      N/A
-!                       TYPE:       INTEGER
-!                       DIMENSION:  Scalar
-!                       ATTRIBUTES: INTENT(IN)
-!
-!       ChannelIndex:   Channel index id. This is a unique index associated
-!                       with a (supported) sensor channel used to access the
-!                       shared coefficient data for a particular sensor's
-!                       channel.
-!                       See the SensorIndex argument.
-!                       UNITS:      N/A
-!                       TYPE:       INTEGER
-!                       DIMENSION:  Scalar
-!                       ATTRIBUTES: INTENT(IN)
-!
-! OUTPUT ARGUMENTS:
-!       RTSolution_TL:  Structure containing the solution to the tangent-linear
-!                       RT equation for the given inputs.
-!                       UNITS:      N/A
-!                       TYPE:       CRTM_RTSolution_type
-!                       DIMENSION:  Scalar
-!                       ATTRIBUTES: INTENT(IN OUT)
-!--------------------------------------------------------------------------------
+  ! Locals
+  REAL(fp) :: Frequency, Wavenumber, Wavelength_m
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Reflectivity, Reflectivity_Attenuated
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Reflectivity_TL, Reflectivity_Attenuated_TL
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: ReflectivityLinear, Reflectivity_AttenuatedLinear
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: ReflectivityLinear_TL, Reflectivity_AttenuatedLinear_TL
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Transmittance, Transmittance_TL
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Optical_Depth, Optical_Depth_TL
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: P1, Kw_2, perm_re, perm_im
+  REAL(fp), DIMENSION(0:AtmOptics%n_Layers) :: Height
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: dZ_m, dS_m
+  COMPLEX :: perm(AtmOptics%n_Layers)
+  INTEGER :: k, n_Layers
+  REAL(fp) :: temp_sum
 
-  SUBROUTINE CRTM_Compute_Reflectivity_TL(Atm, & ! Input
-                                       AtmOptics   , &  ! Input
-                                       AtmOptics_TL   , &  ! Input
-                                       GeometryInfo , &  ! Input
-                                       SensorIndex , &  ! Input
-                                       ChannelIndex, &  ! Input
-                                       RTSolution_TL )     ! Input/Output
-    ! Arguments
-    TYPE(CRTM_Atmosphere_type), INTENT(IN)     :: Atm
-    TYPE(CRTM_GeometryInfo_type), INTENT(IN)     :: GeometryInfo
-    INTEGER                   , INTENT(IN)     :: SensorIndex
-    INTEGER                   , INTENT(IN)     :: ChannelIndex
-    TYPE(CRTM_AtmOptics_type) , INTENT(IN)     :: AtmOptics, AtmOptics_TL
-    TYPE(CRTM_RTSolution_type), INTENT(IN OUT) :: RTSolution_TL
+  n_Layers = Atm%n_Layers
 
-    REAL(fp) :: Frequency, Wavenumber, Wavelength_m
-    REAL(fp) :: Reflectivity(AtmOptics%n_Layers)
-    REAL(fp) :: Reflectivity_Attenuated(AtmOptics%n_Layers)
-    REAL(fp) :: Reflectivity_TL(AtmOptics%n_Layers)
-    REAL(fp) :: Reflectivity_Attenuated_TL(AtmOptics%n_Layers)
-    REAL(fp) :: Transmittance(AtmOptics%n_Layers)
-    REAL(fp) :: Transmittance_TL(AtmOptics%n_Layers)
-    REAL(fp) :: P1(AtmOptics%n_Layers)
-    REAL(fp) :: Height(0:AtmOptics%n_Layers), dZ_m(AtmOptics%n_Layers)
-    COMPLEX :: perm(AtmOptics%n_Layers)
-    REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Kw_2, perm_re, perm_im
-    INTEGER :: k
+  ! Compute layer interface heights if missing
+  IF (ALL(Atm%Height .LT. EPSILON_FP)) THEN
+     Height = Calculate_Height(Atm)
+  ELSE
+     Height = Atm%Height
+  END IF
 
-    ! Calculate heights if hasn't been set already
-    IF (ALL(Atm%Height .LT. EPSILON_FP)) THEN
-        Height = Calculate_Height(Atm)
-    ELSE
-        Height = Atm%Height
-    ENDIF
-    dZ_m = (Height(0:Atm%n_Layers-1) - Height(1:Atm%n_Layers)) * ONE_THOUSAND
-    dZ_m = dZ_m / GeometryInfo%Cosine_Sensor_Zenith
+  dZ_m = Height(0:n_Layers-1) - Height(1:n_Layers)
+  dS_m = dZ_m / GeometryInfo%Cosine_Sensor_Zenith
 
-    IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
-       Frequency = SC(SensorIndex)%Frequency(ChannelIndex) ! GHz
-       Wavelength_m = POINT_01 / GHz_to_Inverse_cm( Frequency )
-    ELSE IF( SpcCoeff_IsInfraredSensor(SC(SensorIndex)) ) THEN
-       Wavenumber = SC(SensorIndex)%Wavenumber(ChannelIndex) ! 1/cm
-       Wavelength_m = POINT_01 / Wavenumber
-    END IF
+  ! Compute wavelength
+  IF (SpcCoeff_IsMicrowaveSensor(SC(SensorIndex))) THEN
+     Frequency = SC(SensorIndex)%Frequency(ChannelIndex)
+     Wavelength_m = POINT_01 / GHz_to_Inverse_cm(Frequency)
+  ELSE IF (SpcCoeff_IsInfraredSensor(SC(SensorIndex))) THEN
+     Wavenumber = SC(SensorIndex)%Wavenumber(ChannelIndex)
+     Wavelength_m = POINT_01 / Wavenumber
+  END IF
 
-    perm =  Water_Permittivity_Turner_2016(Frequency * 1.0d9, & ! Input
-                                        Atm%Temperature)  ! Input
-    perm_re = REAL(REAL(perm))   ! double REAL is required to avoid problems in GNU Fortran
-    perm_im = REAL(AIMAG(perm))
-    Kw_2 = ((perm_re - ONE )/(perm_re + TWO))**TWO
+  ! Compute permittivity and related factor
+  perm = Water_Permittivity_Turner_2016(Frequency * 1.0d9, Atm%Temperature)
+  perm_re = REAL(perm)
+  perm_im = AIMAG(perm)
+  Kw_2 = ABS((perm - ONE) / (perm + TWO)) ** TWO
+  P1 = (M6_MM6 * Wavelength_m**4.0_fp) / (PI**5.0_fp * Kw_2)
 
-    ! Calculate transmittance from top to layer k
-    !Transmittance(1) = ONE
-    DO k = 1, AtmOptics%n_layers
-       Transmittance(k) = EXP(-TWO * SUM(AtmOptics%optical_depth(1:k)))
-    END DO
+  ! Forward (base state) calculations
+  Optical_Depth = AtmOptics%optical_depth / dS_m
+  DO k = 1, n_Layers
+     temp_sum = SUM(Optical_Depth(1:k))
+     Transmittance(k) = EXP(-TWO * temp_sum)
+  END DO
 
-    P1 = (M6_MM6 * Wavelength_m**4.0_fp) / (PI**5.0_fp * Kw_2)
-    P1 = P1 / dZ_m  ! dZ_m to convert water_content to m/v or cloud water density
-    Reflectivity =  P1 * AtmOptics%Backscat_Coefficient
-    Reflectivity_Attenuated = Transmittance * Reflectivity
+  Reflectivity = P1 * (AtmOptics%Backscat_Coefficient / dZ_m)
+  Reflectivity_Attenuated = Transmittance * Reflectivity
 
-    ! Tanget linear calculations
-    !Transmittance_TL(1) = ZERO
-    DO k = 1, AtmOptics%n_layers
-       Transmittance_TL(k) = - TWO * Transmittance(k) * SUM(AtmOptics_TL%optical_depth(1:k))
-    END DO
+  ! Tangent-linear calculations
+  Optical_Depth_TL = AtmOptics_TL%optical_depth / dS_m
+  DO k = 1, n_Layers
+     temp_sum = SUM(Optical_Depth_TL(1:k))
+     Transmittance_TL(k) = -TWO * Transmittance(k) * temp_sum
+  END DO
 
-    Reflectivity_TL = P1 * AtmOptics_TL%Backscat_Coefficient
-    Reflectivity_Attenuated_TL = Transmittance * Reflectivity_TL + &
-                                 Reflectivity * Transmittance_TL
+  Reflectivity_TL = P1 * (AtmOptics_TL%Backscat_Coefficient / dZ_m)
+  Reflectivity_Attenuated_TL = Transmittance * Reflectivity_TL + Reflectivity * Transmittance_TL
 
-    ! Convert the unit to dBz
-    WHERE (Reflectivity .GT.  REFLECTIVITY_THRESHOLD)
-        RTSolution_TL%Reflectivity = TEN * Reflectivity_TL / (Reflectivity * LOG(TEN))
-    ELSE WHERE
-        RTSolution_TL%Reflectivity = ZERO
-    END WHERE
+  ! Linear reflectivity TL
+  ReflectivityLinear = MM6_TO_CM6 * Reflectivity
+  ReflectivityLinear_TL = MM6_TO_CM6 * Reflectivity_TL
+  Reflectivity_AttenuatedLinear = MM6_TO_CM6 * Reflectivity_Attenuated
+  Reflectivity_AttenuatedLinear_TL = MM6_TO_CM6 * Reflectivity_Attenuated_TL
 
-    ! Convert the unit to dBz
-    WHERE (Reflectivity_Attenuated .GT.  REFLECTIVITY_THRESHOLD)
-        RTSolution_TL%Reflectivity_Attenuated = TEN * Reflectivity_Attenuated_TL / &
-                                                (Reflectivity_Attenuated * LOG(TEN))
-    ELSE WHERE
-        RTSolution_TL%Reflectivity_Attenuated = ZERO
-    END WHERE
+  ! Convert to dBZ tangent linear if above threshold
+  WHERE (Reflectivity > REFLECTIVITY_THRESHOLD)
+     Reflectivity_TL = TEN * Reflectivity_TL / (Reflectivity * LOG(TEN))
+     RTSolution_TL%Reflectivity = Reflectivity_TL
+     RTSolution_TL%ReflectivityLinear = ReflectivityLinear_TL
+  ELSEWHERE
+     RTSolution_TL%Reflectivity = ZERO
+     RTSolution_TL%ReflectivityLinear = ZERO
+  END WHERE
 
-  END SUBROUTINE CRTM_Compute_Reflectivity_TL
+  WHERE (Reflectivity_Attenuated > REFLECTIVITY_THRESHOLD)
+     Reflectivity_Attenuated_TL = TEN * Reflectivity_Attenuated_TL / (Reflectivity_Attenuated * LOG(TEN))
+     RTSolution_TL%Reflectivity_Attenuated = Reflectivity_Attenuated_TL
+     RTSolution_TL%Reflectivity_AttenuatedLinear = Reflectivity_AttenuatedLinear_TL
+  ELSEWHERE
+     RTSolution_TL%Reflectivity_Attenuated = ZERO
+     RTSolution_TL%Reflectivity_AttenuatedLinear = ZERO
+  END WHERE
+
+END SUBROUTINE CRTM_Compute_Reflectivity_TL
 
 !--------------------------------------------------------------------------------
 !
@@ -575,197 +523,222 @@ END FUNCTION Water_Permittivity_Turner_2016
 !
 ! PURPOSE:
 !       Subroutine to calculate the adjoint reflectivity for active instruments.
+!       Includes both logarithmic (dBZ) and linear reflectivity adjoints:
+!       ReflectivityLinear_AD and Reflectivity_AttenuatedLinear_AD.
 !
 ! CALLING SEQUENCE:
 !        CALL CRTM_Compute_Reflectivity_AD(Atm, &
 !                                          AtmOptics     , &  ! Input
 !                                          RTSolution    , &  ! Input
-!                                          GeometryInfo , &  ! Input
+!                                          GeometryInfo  , &  ! Input
 !                                          SensorIndex   , &  ! Input
 !                                          ChannelIndex  , &  ! Input
 !                                          AtmOptics_AD  , &  ! Input/Output
 !                                          RTSolution_AD )    ! Input/Output
+!
 ! INPUT ARGUMENTS:
 !       Atm:            Structure containing the atmospheric state data.
-!                       UNITS:      N/A
 !                       TYPE:       CRTM_Atmosphere_type
-!                       DIMENSION:  Scalar
 !                       ATTRIBUTES: INTENT(IN)
 !
 !       AtmOptics:      Structure containing the combined atmospheric
 !                       optical properties for gaseous absorption, clouds,
 !                       and aerosols.
-!                       UNITS:      N/A
 !                       TYPE:       CRTM_AtmOptics_type
-!                       DIMENSION:  Scalar
 !                       ATTRIBUTES: INTENT(IN)
 !
 !       RTSolution:     Structure containing the solution to the RT equation
 !                       for the given inputs.
-!                       UNITS:      N/A
 !                       TYPE:       CRTM_RTSolution_type
-!                       DIMENSION:  Scalar
 !                       ATTRIBUTES: INTENT(IN)
 !
 !       GeometryInfo:   Structure containing the view geometry data.
-!                       UNITS:      N/A
 !                       TYPE:       CRTM_GeometryInfo_type
-!                       DIMENSION:  Scalar
 !                       ATTRIBUTES: INTENT(IN)
 !
-!       SensorIndex:    Sensor index id. This is a unique index associated
-!                       with a (supported) sensor used to access the
-!                       shared coefficient data for a particular sensor.
-!                       See the ChannelIndex argument.
-!                       UNITS:      N/A
+!       SensorIndex:    Sensor index id used to access shared coefficient data.
 !                       TYPE:       INTEGER
-!                       DIMENSION:  Scalar
 !                       ATTRIBUTES: INTENT(IN)
 !
-!       ChannelIndex:   Channel index id. This is a unique index associated
-!                       with a (supported) sensor channel used to access the
-!                       shared coefficient data for a particular sensor's
-!                       channel.
-!                       See the SensorIndex argument.
-!                       UNITS:      N/A
+!       ChannelIndex:   Channel index id used to access shared coefficient data.
 !                       TYPE:       INTEGER
-!                       DIMENSION:  Scalar
 !                       ATTRIBUTES: INTENT(IN)
 !
 ! OUTPUT ARGUMENTS:
-!
 !       RTSolution_AD:  Structure containing the RT solution adjoint inputs.
-!                       UNITS:      N/A
 !                       TYPE:       CRTM_RTSolution_type
-!                       DIMENSION:  Scalar
 !                       ATTRIBUTES: INTENT(IN OUT)
 !
 !       AtmOptics_AD:   Structure containing the adjoint combined atmospheric
 !                       optical properties for gaseous absorption, clouds,
-!                       and aerosols.
-!                       UNITS:      N/A
+!                       and aerosols, including:
+!                       - ReflectivityLinear_AD
+!                       - Reflectivity_AttenuatedLinear_AD
 !                       TYPE:       CRTM_AtmOptics_type
-!                       DIMENSION:  Scalar
 !                       ATTRIBUTES: INTENT(IN OUT)
 !
 !--------------------------------------------------------------------------------
+SUBROUTINE CRTM_Compute_Reflectivity_AD(Atm, &
+                                       AtmOptics, &
+                                       RTSolution, &
+                                       GeometryInfo, &
+                                       SensorIndex, &
+                                       ChannelIndex, &
+                                       AtmOptics_AD, &
+                                       RTSolution_AD)
+  !-----------------------------------------------------------------------
+  !  Compute adjoint sensitivities of reflectivity (linear or dBZ)
+  !  depending on which adjoint variable is set to one in RTSolution_AD.
+  !
+  !  Supported adjoint targets:
+  !    - RTSolution_AD%Reflectivity_Attenuated        (logarithmic dBZ)
+  !    - RTSolution_AD%Reflectivity_AttenuatedLinear  (linear cm^6/m^3)
+  !    - RTSolution_AD%Reflectivity                   (logarithmic dBZ)
+  !    - RTSolution_AD%ReflectivityLinear             (linear cm^6/m^3)
+  !
+  !-----------------------------------------------------------------------
 
-  SUBROUTINE CRTM_Compute_Reflectivity_AD(Atm, &
-                                          AtmOptics     , &  ! Input
-                                          RTSolution    , &  ! Input
-                                          GeometryInfo , &  ! Input
-                                          SensorIndex   , &  ! Input
-                                          ChannelIndex  , &  ! Input
-                                          AtmOptics_AD  , &  ! Input/Output
-                                          RTSolution_AD )    ! Input/Output
-    ! Arguments
-    TYPE(CRTM_Atmosphere_type), INTENT(IN)     :: Atm
-    TYPE(CRTM_GeometryInfo_type), INTENT(IN)     :: GeometryInfo
-    TYPE(CRTM_AtmOptics_type) , INTENT(IN)     :: AtmOptics
-    TYPE(CRTM_RTSolution_type), TARGET, INTENT(IN)     :: RTSolution
-    INTEGER                   , INTENT(IN)     :: SensorIndex
-    INTEGER                   , INTENT(IN)     :: ChannelIndex
-    TYPE(CRTM_AtmOptics_type) , INTENT(IN OUT) :: AtmOptics_AD
-    TYPE(CRTM_RTSolution_type), TARGET, INTENT(IN OUT) :: RTSolution_AD
-    !TYPE(CRTM_Atmosphere_type), INTENT(IN OUT) :: Atm_AD
+  ! Arguments
+  TYPE(CRTM_Atmosphere_type),      INTENT(IN)     :: Atm
+  TYPE(CRTM_GeometryInfo_type),    INTENT(IN)     :: GeometryInfo
+  INTEGER,                         INTENT(IN)     :: SensorIndex
+  INTEGER,                         INTENT(IN)     :: ChannelIndex
+  TYPE(CRTM_AtmOptics_type),       INTENT(IN)     :: AtmOptics
+  TYPE(CRTM_RTSolution_type),      TARGET, INTENT(IN) :: RTSolution
+  TYPE(CRTM_AtmOptics_type),       INTENT(IN OUT) :: AtmOptics_AD
+  TYPE(CRTM_RTSolution_type),      INTENT(IN OUT) :: RTSolution_AD
 
-    REAL(fp) :: Frequency, Wavenumber, Wavelength_m
-    REAL(fp) :: Transmittance(AtmOptics%n_Layers)
-    REAL(fp) :: Transmittance_AD(AtmOptics%n_Layers)
-    REAL(fp) :: P1(Atm%n_Layers)
-    REAL(fp) :: Height(0:AtmOptics%n_Layers), dZ_m(AtmOptics%n_Layers)
-    COMPLEX :: perm(Atm%n_Layers)
-    REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Kw_2, perm_re, perm_im
-    INTEGER :: k, j
+  ! Locals
+  INTEGER :: k, j, n_Layers
+  REAL(fp) :: Frequency, Wavenumber, Wavelength_m
+  REAL(fp) :: temp_sum
 
-    ! Note Re and Rea are in dBz and Ra is attenuated reflectivity
-    ! and R and R_AD needs to be calculated or initilized locally
-    REAL(fp), DIMENSION(AtmOptics%n_Layers) :: R, Ra, R_AD, Ra_AD
-    REAL(fp), POINTER, DIMENSION(:) :: Re_AD, Rea_AD
-    REAL(fp), POINTER, DIMENSION(:) :: Re, Rea
-    NULLIFY(Re, Rea, Re_AD, Rea_AD)
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Reflectivity, Reflectivity_Attenuated
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: ReflectivityLinear, Reflectivity_AttenuatedLinear
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Transmittance, Optical_Depth
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: P1, Kw_2, perm_re, perm_im
+  REAL(fp), DIMENSION(0:AtmOptics%n_Layers) :: Height
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: dZ_m, dS_m
+  COMPLEX :: perm(AtmOptics%n_Layers)
 
-    ! Calculate heights if hasn't been set already
-    IF (ALL(Atm%Height .LT. EPSILON_FP)) THEN
-        Height = Calculate_Height(Atm)
-    ELSE
-        Height = Atm%Height
-    ENDIF
-    dZ_m = (Height(0:Atm%n_Layers-1) - Height(1:Atm%n_Layers)) * ONE_THOUSAND
-    dZ_m = dZ_m / GeometryInfo%Cosine_Sensor_Zenith
+  ! Adjoint variables
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Transmittance_AD, Reflectivity_AD, Reflectivity_Attenuated_AD, Optical_Depth_AD
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: ReflectivityLinear_AD, Reflectivity_AttenuatedLinear_AD
 
-    IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
-       Frequency = SC(SensorIndex)%Frequency(ChannelIndex) ! GHz
-       Wavelength_m = POINT_01 / GHz_to_Inverse_cm( Frequency )
-    ELSE IF( SpcCoeff_IsInfraredSensor(SC(SensorIndex)) ) THEN
-       Wavenumber = SC(SensorIndex)%Wavenumber(ChannelIndex) ! 1/cm
-       Wavelength_m = POINT_01 / Wavenumber
-    END IF
+  !-----------------------------------------------------------------------
+  ! Initialization
+  !-----------------------------------------------------------------------
+  n_Layers = Atm%n_Layers
 
-    perm =  Water_Permittivity_Turner_2016(Frequency * 1.0d9, & ! Input
-                                        Atm%Temperature)  ! Input
+  Transmittance_AD           = ZERO
+  Reflectivity_AD            = ZERO
+  Reflectivity_Attenuated_AD = ZERO
+  ReflectivityLinear_AD            = ZERO
+  Reflectivity_AttenuatedLinear_AD = ZERO
+  Optical_Depth_AD           = ZERO
+  AtmOptics_AD%Backscat_Coefficient = ZERO
+  AtmOptics_AD%optical_depth       = ZERO
 
-    perm_re = REAL(REAL(perm))
-    perm_im = REAL(AIMAG(perm))
-    Kw_2 = ((perm_re - ONE )/(perm_re + TWO))**TWO
+  !-----------------------------------------------------------------------
+  ! Heights and geometry
+  !-----------------------------------------------------------------------
+  IF (ALL(Atm%Height .LT. EPSILON_FP)) THEN
+      Height = Calculate_Height(Atm)
+  ELSE
+      Height = Atm%Height
+  END IF
 
-    ! Calculate transmittance from top to layer k
-    DO k = 1, AtmOptics%n_layers
-       Transmittance(k) = EXP(-TWO * SUM(AtmOptics%optical_depth(1:k)))
-    END DO
+  dZ_m = Height(0:n_Layers-1) - Height(1:n_Layers)
+  dS_m = dZ_m / GeometryInfo%Cosine_Sensor_Zenith
 
-    P1 = (M6_MM6 * Wavelength_m**4.0_fp) / (PI**5.0_fp * Kw_2)
-    P1 = P1 / dZ_m  ! dZ_m to convert water_content to m/v or cloud water density
-    R =  P1 * AtmOptics%Backscat_Coefficient
-    Ra = Transmittance * R
+  !-----------------------------------------------------------------------
+  ! Frequency / wavelength
+  !-----------------------------------------------------------------------
+  IF (SpcCoeff_IsMicrowaveSensor(SC(SensorIndex))) THEN
+      Frequency = SC(SensorIndex)%Frequency(ChannelIndex)
+      Wavelength_m = POINT_01 / GHz_to_Inverse_cm(Frequency)
+  ELSE IF (SpcCoeff_IsInfraredSensor(SC(SensorIndex))) THEN
+      Wavenumber = SC(SensorIndex)%Wavenumber(ChannelIndex)
+      Wavelength_m = POINT_01 / Wavenumber
+  END IF
 
-    ! This is just to avoid recalculating the effective reflectivities
-    Re => RTSolution%Reflectivity ! dBz
-    Rea => RTSolution%Reflectivity_Attenuated ! dBz
+  !-----------------------------------------------------------------------
+  ! Permittivity and forward reflectivity computation
+  !-----------------------------------------------------------------------
+  perm = Water_Permittivity_Turner_2016(Frequency * 1.0d9, Atm%Temperature)
+  perm_re = REAL(perm)
+  perm_im = AIMAG(perm)
+  Kw_2 = ABS((perm - ONE) / (perm + TWO))**TWO
 
-    !============================================================================
-    ! Adjoint calcualtions
-    Re_AD => RTSolution_AD%Reflectivity    ! dBz
-    Rea_AD => RTSolution_AD%Reflectivity_Attenuated ! dBz
-    R_AD = ZERO   ! mm^6 m^-3
-    Ra_AD = ZERO  ! mm^6 m^-3
-    Transmittance_AD = ZERO
+  Optical_Depth = AtmOptics%optical_depth / dS_m
 
-    WHERE (R .GT.  REFLECTIVITY_THRESHOLD)
-        R_AD = R_AD + TEN * Re_AD / (R * LOG(TEN))
-    ELSE WHERE
-        R_AD = R_AD + ZERO
-    END WHERE
-    ! Note that if transmittance is zero then Ra will be zeroo but not R
-    WHERE (Ra .GT.  REFLECTIVITY_THRESHOLD)
-        Ra_AD = Ra_AD + TEN * Rea_AD / (Ra * LOG(TEN))
-    ELSE WHERE
-        Ra_AD = Ra_AD + ZERO
-    END WHERE
+  DO k = 1, n_Layers
+      temp_sum = SUM(Optical_Depth(1:k))
+      Transmittance(k) = EXP(-TWO * temp_sum)
+  END DO
 
-    Transmittance_AD = Transmittance_AD + R * Ra_AD
-    ! Note that the follwing two lines are mrged into one line
-    ! R_AD = R_AD +   Transmittance *  Ra_AD
-    ! AtmOptics_AD%Backscat_Coefficient = AtmOptics_AD%Backscat_Coefficient + P1 * R_AD
-    AtmOptics_AD%Backscat_Coefficient = AtmOptics_AD%Backscat_Coefficient + &
-                                        P1 * R_AD + &
-                                        P1 * Transmittance * Ra_AD
+  P1 = (M6_MM6 * Wavelength_m**4.0_fp) / (PI**5.0_fp * Kw_2)
+  Reflectivity = P1 * (AtmOptics%Backscat_Coefficient / dZ_m)
+  Reflectivity_Attenuated = Transmittance * Reflectivity
 
-    ! Calculate transmittance from top (satellite) to layer k
-    !AtmOptics_AD%optical_depth = ZERO
-    DO k = 1, AtmOptics%n_layers
-       Do j = 1, k
-          AtmOptics_AD%optical_depth(j)   = AtmOptics_AD%optical_depth(j) &
-                                            - TWO * Transmittance(k) * Transmittance_AD(k)
-       END DO
-    END DO
+  ! Linear reflectivities (cm^6/m^3)
+  ReflectivityLinear = MM6_TO_CM6 * Reflectivity
+  Reflectivity_AttenuatedLinear = MM6_TO_CM6 * Reflectivity_Attenuated
 
-    R_AD = ZERO
-    Ra_AD = ZERO
-    Re_AD = ZERO
-    Rea_AD = ZERO
-    !============================================================================
+  !-----------------------------------------------------------------------
+  ! ADJOINT PROPAGATION: determine which output adjoint is active
+  !-----------------------------------------------------------------------
 
-  END SUBROUTINE CRTM_Compute_Reflectivity_AD
+  ! === Case 1: Logarithmic attenuated reflectivity (dBZ)
+  IF (ANY(RTSolution_AD%Reflectivity_Attenuated /= ZERO)) THEN
+      WHERE (Reflectivity_Attenuated > REFLECTIVITY_THRESHOLD)
+        Reflectivity_Attenuated_AD = Reflectivity_Attenuated_AD + &
+             TEN * RTSolution_AD%Reflectivity_Attenuated / (Reflectivity_Attenuated * LOG(TEN))
+      END WHERE
+
+  ! === Case 2: Linear attenuated reflectivity (cm^6/m^3)
+  ELSEIF (ANY(RTSolution_AD%Reflectivity_AttenuatedLinear /= ZERO)) THEN
+      Reflectivity_AttenuatedLinear_AD = Reflectivity_AttenuatedLinear_AD + RTSolution_AD%Reflectivity_AttenuatedLinear
+      Reflectivity_Attenuated_AD = Reflectivity_Attenuated_AD + MM6_TO_CM6 * Reflectivity_AttenuatedLinear_AD
+  END IF
+
+
+  ! === Case 3: Logarithmic reflectivity (dBZ)
+  IF (ANY(RTSolution_AD%Reflectivity /= ZERO)) THEN
+      WHERE (Reflectivity > REFLECTIVITY_THRESHOLD)
+        Reflectivity_AD = Reflectivity_AD + &
+             TEN * RTSolution_AD%Reflectivity / (Reflectivity * LOG(TEN))
+      END WHERE
+
+  ! === Case 4: Linear reflectivity (cm^6/m^3)
+  ELSEIF (ANY(RTSolution_AD%ReflectivityLinear /= ZERO)) THEN
+      ReflectivityLinear_AD = ReflectivityLinear_AD + RTSolution_AD%ReflectivityLinear
+      Reflectivity_AD = Reflectivity_AD + MM6_TO_CM6 * ReflectivityLinear_AD
+  END IF
+
+  !-----------------------------------------------------------------------
+  ! Common adjoint propagation for reflectivity relationships
+  !-----------------------------------------------------------------------
+  Transmittance_AD = Transmittance_AD + Reflectivity * Reflectivity_Attenuated_AD
+  Reflectivity_AD  = Reflectivity_AD  + Transmittance * Reflectivity_Attenuated_AD
+
+  ! Backscatter coefficient adjoint
+  AtmOptics_AD%Backscat_Coefficient = AtmOptics_AD%Backscat_Coefficient + Reflectivity_AD * P1 / dZ_m  
+
+  !-----------------------------------------------------------------------
+  ! Adjoint of transmittance → optical depth
+  !-----------------------------------------------------------------------
+  DO k = n_Layers, 1, -1
+      DO j = 1, k
+          Optical_Depth_AD(j) = Optical_Depth_AD(j) - TWO * Transmittance(k) * Transmittance_AD(k)
+      END DO
+  END DO
+
+  !-----------------------------------------------------------------------
+  ! Adjoint of optical depth normalization
+  !-----------------------------------------------------------------------
+  AtmOptics_AD%optical_depth = AtmOptics_AD%optical_depth + Optical_Depth_AD / dS_m
+
+END SUBROUTINE CRTM_Compute_Reflectivity_AD
 
 END MODULE CRTM_Active_Sensor
