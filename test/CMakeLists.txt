@@ -1531,13 +1531,10 @@ SpcCoeff/Little_Endian/ssu_n09.SpcCoeff.bin
 SpcCoeff/Little_Endian/ssu_n11.SpcCoeff.bin
 SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
 SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
-SpcCoeff/netCDF/iasi616_metop-b.NLTECoeff.nc
+NLTECoeff/netCDF/iasi616_metop-b.NLTECoeff.nc
 TauCoeff/ODPS/Little_Endian/iasi616_metop-b.TauCoeff.bin
 SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
-SpcCoeff/netCDF/amsua_n19.ACCoeff.nc
->>>>>>> develop
-=======
->>>>>>> 0c74967f92f31039babf840e842f44fdf560e012
+ACCoeff/netCDF/amsua_n19.ACCoeff.nc
 )
 
 # Locally-staged coefficients (PARMIO LUT, AWS) live in test_data/.../fix/
