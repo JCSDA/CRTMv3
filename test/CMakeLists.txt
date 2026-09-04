@@ -610,6 +610,12 @@ foreach(io_test_index RANGE 0 ${io_tests_max} 2)
   ADD_CRTM_UNIT_TEST(${io_test_name} ${io_test_source})
 endforeach()
 
+# NLTE/AC sibling verification: the netCDF SpcCoeff load must pick up
+# co-located .NLTECoeff.nc/.ACCoeff.nc files and degrade gracefully without
+# them, and the forward model must apply the NLTE correction by day only.
+# Compares testinput/ (siblings staged) against testinput_no_siblings/.
+ADD_CRTM_UNIT_TEST(NLTE_Verification mains/unit/input_output/test_NLTE_Verification/test_nlte_verification.f90)
+
 #(PS) Hypsometric Equation test
 add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
 target_link_libraries(hypsometric_eq PRIVATE crtm)
@@ -1389,6 +1395,10 @@ SpcCoeff/netCDF/modis_aqua.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/modis_aqua.TauCoeff.nc
 SpcCoeff/netCDF/atms_n21.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/atms_n21.TauCoeff.nc
+# iasi616_metop-b: IR sensor exercised by test_NLTE_Verification (merged from
+# develop 3.1.5); its NLTECoeff sibling is staged below.
+SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/iasi616_metop-b.TauCoeff.nc
 # NLTECoeff / ACCoeff sibling files for sensors that need them.
 # SpcCoeff_netCDF_ReadFile loads <sensor>.{NLTE,AC}Coeff.nc from the same
 # directory as the SpcCoeff file when present; without these, NLTE-active
@@ -1397,6 +1407,7 @@ TauCoeff/ODPS/netCDF/atms_n21.TauCoeff.nc
 NLTECoeff/netCDF/cris399_npp.NLTECoeff.nc
 NLTECoeff/netCDF/iasi_metop-b.NLTECoeff.nc
 NLTECoeff/netCDF/airs_aqua.NLTECoeff.nc
+NLTECoeff/netCDF/iasi616_metop-b.NLTECoeff.nc
 # cris-fsr_n21 is exercised by many regression/OMP tests above; its NLTECoeff
 # lives only under the canonical NLTECoeff/netCDF/ tree (no SpcCoeff/netCDF/
 # copy). CREATE_SYMLINK_FILENAME stages by basename, so the testinput/ symlink
@@ -1492,3 +1503,28 @@ CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM
 # in the last bits, so a green suite is not by itself proof of bit-identity.
 add_executable(dump_scalar_fullprec mains/unit/Unit_Test/dump_scalar_fullprec.f90)
 target_link_libraries(dump_scalar_fullprec PRIVATE crtm)
+
+# Staging area for test_NLTE_Verification: the same coefficient set the test
+# uses from testinput/, minus the .NLTECoeff.nc/.ACCoeff.nc sibling files, so
+# netCDF SpcCoeff loads can be compared with and without siblings present.
+# (netCDF paths: the REL-3.2.0 fix tree ships no binary files.)
+list( APPEND crtm_no_sibling_input
+AerosolCoeff/netCDF/AerosolCoeff.nc
+CloudCoeff/netCDF/CloudCoeff.nc
+EmisCoeff/MW_Water/netCDF/FASTEM6.MWwater.EmisCoeff.nc
+EmisCoeff/IR_Ice/SEcategory/netCDF/NPOESS.IRice.EmisCoeff.nc
+EmisCoeff/IR_Land/SEcategory/netCDF/NPOESS.IRland.EmisCoeff.nc
+EmisCoeff/IR_Snow/SEcategory/netCDF/NPOESS.IRsnow.EmisCoeff.nc
+EmisCoeff/VIS_Ice/SEcategory/netCDF/NPOESS.VISice.EmisCoeff.nc
+EmisCoeff/VIS_Land/SEcategory/netCDF/NPOESS.VISland.EmisCoeff.nc
+EmisCoeff/VIS_Snow/SEcategory/netCDF/NPOESS.VISsnow.EmisCoeff.nc
+EmisCoeff/VIS_Water/SEcategory/netCDF/NPOESS.VISwater.EmisCoeff.nc
+EmisCoeff/IR_Water/netCDF/Nalli.IRwater.EmisCoeff.nc
+SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/iasi616_metop-b.TauCoeff.nc
+SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
+)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings)
+CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
+                         ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings
+                         ${crtm_no_sibling_input} )
