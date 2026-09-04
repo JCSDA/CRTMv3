@@ -1367,10 +1367,6 @@ SpcCoeff/netCDF/amsua_metop-a.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/amsua_metop-a.TauCoeff.nc
 SpcCoeff/netCDF/amsua_aqua.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/amsua_aqua.TauCoeff.nc
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 0c74967f92f31039babf840e842f44fdf560e012
 SpcCoeff/netCDF/gmi_gpm.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/gmi_gpm.TauCoeff.nc
 SpcCoeff/netCDF/seviri_m08.SpcCoeff.nc
@@ -1461,8 +1457,6 @@ SpcCoeff/netCDF/ssu_n08.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n09.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n11.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n14.SpcCoeff.nc
-<<<<<<< HEAD
-=======
 SpcCoeff/Little_Endian/gmi_gpm.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/gmi_gpm.TauCoeff.bin
 SpcCoeff/Little_Endian/seviri_m08.SpcCoeff.bin
@@ -1581,10 +1575,6 @@ CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM
                          ${CMAKE_CURRENT_BINARY_DIR}/testinput
                          ${crtm_test_input} )
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 0c74967f92f31039babf840e842f44fdf560e012
 # dump_scalar_fullprec: instrument, not a test. Prints scalar-path radiances and
 # brightness temperatures at full double precision so that "the default scalar
 # path is unchanged" can be measured rather than argued. Build it in two trees
@@ -1594,11 +1584,7 @@ CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM
 # in the last bits, so a green suite is not by itself proof of bit-identity.
 add_executable(dump_scalar_fullprec mains/unit/Unit_Test/dump_scalar_fullprec.f90)
 target_link_libraries(dump_scalar_fullprec PRIVATE crtm)
-<<<<<<< HEAD
-=======
-=======
 
->>>>>>> 0c74967f92f31039babf840e842f44fdf560e012
 # Staging area for test_NLTE_Verification: the same coefficient set the test
 # uses from testinput/, minus the .NLTECoeff.nc/.ACCoeff.nc sibling files, so
 # netCDF SpcCoeff loads can be compared with and without siblings present.
@@ -1623,7 +1609,3 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings)
 CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
                          ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings
                          ${crtm_no_sibling_input} )
-<<<<<<< HEAD
->>>>>>> develop
-=======
->>>>>>> 0c74967f92f31039babf840e842f44fdf560e012
