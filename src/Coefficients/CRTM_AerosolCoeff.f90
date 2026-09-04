@@ -31,6 +31,7 @@ MODULE CRTM_AerosolCoeff
   ! ----------------
   ! Module use
   USE Message_Handler       , ONLY: SUCCESS, FAILURE, Display_Message
+  USE File_Utility          , ONLY: Join_Path
   USE AerosolCoeff_Define   , ONLY: AerosolCoeff_type, &
                                     AerosolCoeff_Associated, &
                                     AerosolCoeff_Destroy
@@ -209,7 +210,7 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_AerosolCoeff_Load'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
-    CHARACTER(ML) :: AerosolCoeff_File
+    CHARACTER(:), ALLOCATABLE :: AerosolCoeff_File
     LOGICAL :: noisy
     ! Function variables
     LOGICAL :: Binary
@@ -217,9 +218,9 @@ CONTAINS
     ! Setup
     err_stat = SUCCESS
     ! ...Assign the filename to local variable
-    AerosolCoeff_File = ADJUSTL(Filename)
+    AerosolCoeff_File = TRIM(ADJUSTL(Filename))
     ! ...Add the file path
-    IF ( PRESENT(File_Path) ) AerosolCoeff_File = TRIM(ADJUSTL(File_Path))//TRIM(AerosolCoeff_File)
+    IF ( PRESENT(File_Path) ) AerosolCoeff_File = Join_Path(File_Path, AerosolCoeff_File)
     ! ...Check Quiet argument
     noisy = .TRUE.
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
@@ -246,8 +247,8 @@ CONTAINS
                  netCDF = .NOT. Binary, &
                  Quiet  = .NOT. noisy )
      IF ( err_stat /= SUCCESS ) THEN
-       WRITE( msg,'("Error reading AerosolCoeff file ",a)') TRIM(AerosolCoeff_File)
-       CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+       CALL Display_Message( ROUTINE_NAME, &
+         'Error reading AerosolCoeff file '//TRIM(AerosolCoeff_File)//TRIM(pid_msg), err_stat )
        RETURN
      END IF
 

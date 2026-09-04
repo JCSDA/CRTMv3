@@ -28,6 +28,7 @@ MODULE CRTM_BeCoeff
   ! ----------------
   ! Module use
   USE Message_Handler  , ONLY: SUCCESS, FAILURE, WARNING, Display_Message
+  USE File_Utility          , ONLY: Join_Path
   USE BeCoeff_Define, ONLY: BeCoeff_type, BeCoeff_Associated, BeCoeff_Destroy
   USE BeCoeff_IO    , ONLY: BeCoeff_ReadFile
   ! Disable all implicit typing
@@ -178,16 +179,16 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_BeCoeff_Load'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
-    CHARACTER(ML) :: BeCoeff_File
+    CHARACTER(:), ALLOCATABLE :: BeCoeff_File
     LOGICAL :: noisy
     LOGICAL :: Binary
 
     ! Setup 
     err_stat = SUCCESS
     ! ...Assign the filename to local variable
-    BeCoeff_File = ADJUSTL(Filename)
+    BeCoeff_File = TRIM(ADJUSTL(Filename))
     ! ...Add the file path
-    IF ( PRESENT(File_Path) ) BeCoeff_File = TRIM(ADJUSTL(File_Path))//TRIM(BeCoeff_File)
+    IF ( PRESENT(File_Path) ) BeCoeff_File = Join_Path(File_Path, BeCoeff_File)
     ! ...Check Quiet argument
     noisy = .TRUE.
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
@@ -212,8 +213,8 @@ CONTAINS
                  netCDF = .NOT. Binary, &
                  Quiet  = .NOT. noisy )
     IF ( err_stat /= SUCCESS ) THEN
-      WRITE( msg,'("Error reading BeCoeff file ",a)') TRIM(BeCoeff_File)
-      CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+      CALL Display_Message( ROUTINE_NAME, &
+        'Error reading BeCoeff file '//TRIM(BeCoeff_File)//TRIM(pid_msg), err_stat )
       RETURN
     END IF
 

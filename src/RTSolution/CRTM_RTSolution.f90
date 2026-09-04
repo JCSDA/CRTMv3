@@ -238,14 +238,32 @@ CONTAINS
     IF( RTV%Visible_Flag_true ) THEN
       DO i = 1, nZ
 ! incorrect        SfcOptics%Direct_Reflectivity(i,1) = SfcOptics%Direct_Reflectivity(i,1) * PI
-        ! ...Apply the UW limiter
+        ! ...Apply the UW limiter, both sides: a direct reflectivity above one
+        !    is unphysical gain, below zero it is an unphysical sink that turns
+        !    the solar term into a negative radiance (surface modules can
+        !    deliver either; interpolation overshoot and out-of-table
+        !    extrapolation are the known suppliers).
         IF (SfcOptics%Direct_Reflectivity(i,1) > ONE) THEN
           SfcOptics%Direct_Reflectivity(i,1) = ONE
+        ELSE IF (SfcOptics%Direct_Reflectivity(i,1) < ZERO) THEN
+          SfcOptics%Direct_Reflectivity(i,1) = ZERO
         END IF
       END DO
     END IF
 
     IF( RTV%n_Stokes > 1 ) THEN
+      ! The vector branch below precedes the RT_Algorithm_Id dispatch entirely,
+      ! so a caller asking for SOI with n_Stokes > 1 would be handed ADA and
+      ! never told. SOI has no vector solver. Refuse rather than substitute:
+      ! silently returning a different algorithm's answer is the failure mode
+      ! this whole path has been most damaged by.
+      IF( RTV%RT_Algorithm_Id == RT_SOI ) THEN
+        Error_Status = FAILURE
+        WRITE( Message,'("SOI has no vector solver; RT_Algorithm_Id=RT_SOI is not ",&
+                        &"supported with Options%n_Stokes = ",i0,". Use RT_ADA.")' ) RTV%n_Stokes
+        CALL Display_Message( ROUTINE_NAME, TRIM(Message), Error_Status )
+        RETURN
+      END IF
       CALL Reshape_Surf_Opt(RTV%n_Angles, RTV%n_Stokes, SfcOptics%Emissivity, SfcOptics%Direct_Reflectivity, &
         SfcOptics%Reflectivity, SfcOptics%S_Emissivity, SfcOptics%S_Direct_Ref, SfcOptics%S_Reflectivity)
     ! ------------------------------
@@ -289,7 +307,18 @@ CONTAINS
              RTV%Solar_Irradiance,                  & ! Input, Source irradiance at TOA
              RTV%Is_Solar_Channel,                  & ! Input, Source sensitive channel info.
              GeometryInfo%Source_Zenith_Radian,     & ! Input, Source zenith angle
-             RTV                                    ) ! Output, Internal variables     
+             RTV                                    ) ! Output, Internal variables
+        ! CRTM_Emission is a scalar solver and returns the total intensity only.
+        ! Complete the polarized components, which in the absence of scattering
+        ! are a surface boundary value transported upward with no source.
+        CALL CRTM_Emission_Stokes( &
+             Atmosphere%n_Layers,                   & ! Input, number of atmospheric layers
+             RTV%n_Angles,                          & ! Input, number of discrete zenith angles
+             RTV%n_Stokes,                          & ! Input, number of Stokes components
+             RTV%Planck_Surface,                    & ! Input, surface radiance
+             SfcOptics%S_Emissivity(:),             & ! Input, surface emissivity
+             SfcOptics%S_Reflectivity(:,:),         & ! Input, surface reflectivity
+             RTV                                    ) ! Output, Internal variables
         END IF
     
     ! ------------------------------
@@ -571,11 +600,17 @@ CONTAINS
                          Atmosphere%n_Layers ) :: Pbb_TL ! Backward scattering TL phase matrix
     REAL(fp), DIMENSION( RTV%n_Angles * RTV%n_Stokes ) :: Scattering_Radiance_TL
     REAL(fp) :: Radiance_TL
+    REAL(fp), DIMENSION( MAX_N_STOKES ) :: Stokes_TL  ! TL polarized components, non-scattering path
+    REAL(fp) :: Down_Radiance_TL
+    REAL(fp), DIMENSION( Atmosphere%n_Layers ) :: Down_Radiance_Prof_TL  ! TL downwelling profile (internal levels)
+    REAL(fp), DIMENSION( Atmosphere%n_Layers ) :: Up_Radiance_Prof_TL    ! TL upwelling profile (internal levels)
+    INTEGER :: no_d, na_d, nt_d
 
     ! ------
     ! Set up
     ! ------
     Error_Status = SUCCESS
+    Stokes_TL    = ZERO   ! only the non-scattering vector path fills this
 
     RTSolution_TL%RT_Algorithm_Name = RTSolution%RT_Algorithm_Name
 
@@ -607,6 +642,9 @@ CONTAINS
     END IF
 
     nZ = RTV%n_Angles * RTV%n_Stokes
+    Down_Radiance_TL = ZERO
+    Down_Radiance_Prof_TL = ZERO
+    Up_Radiance_Prof_TL = ZERO
     IF( RTV%n_Stokes > 1 ) THEN
        CALL Reshape_Surf_Opt(RTV%n_Angles, RTV%n_Stokes, SfcOptics_TL%Emissivity, SfcOptics_TL%Direct_Reflectivity, &
         SfcOptics_TL%Reflectivity, SfcOptics_TL%S_Emissivity, SfcOptics_TL%S_Direct_Ref, SfcOptics_TL%S_Reflectivity)
@@ -632,7 +670,11 @@ CONTAINS
                  SfcOptics_TL%S_Direct_Ref(1:nZ), & ! Input, TL surface direct reflectivity
                  Pff_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer forward phase matrix
                  Pbb_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer backward phase matrix
-                 Scattering_Radiance_TL(1:nZ)              ) ! Output, TL radiances
+                 Scattering_Radiance_TL(1:nZ),             & ! Output, TL radiances
+                 Index_Sat_Angle=SfcOptics%Index_Sat_Ang,  & ! Input, sensor zenith angle index
+                 down_rad_TL_out=Down_Radiance_TL,         & ! Output, TL surface downwelling radiance
+                 down_rad_prof_TL_out=Down_Radiance_Prof_TL, & ! Output, TL downwelling radiance profile
+                 up_rad_prof_TL_out=Up_Radiance_Prof_TL     ) ! Output, TL upwelling radiance profile
       ELSE
         CALL CRTM_Emission_TL( &
              Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
@@ -653,7 +695,28 @@ CONTAINS
              SfcOptics_TL%S_Emissivity(1:nZ),          & ! Input, TL surface emissivity
              SfcOptics_TL%S_Reflectivity(1:nZ,1:nZ), & ! Input, TL surface reflectivity
              SfcOptics_TL%S_Direct_Ref(1:nZ), & ! Input, TL surface reflectivity for a point source
-             Radiance_TL                               ) ! Output, TL radiances    
+             Radiance_TL,                              & ! Output, TL radiances
+             down_rad_TL_out=Down_Radiance_TL,         & ! Output, TL surface downwelling radiance
+             down_rad_prof_TL_out=Down_Radiance_Prof_TL, & ! Output, TL downwelling radiance profile
+             up_rad_prof_TL_out=Up_Radiance_Prof_TL    ) ! Output, TL upwelling radiance profile
+        ! Tangent linear of the polarized completion (see the forward model).
+        ! Down_Radiance_TL is the TL of the surface downwelling that the call
+        ! above just returned, which is the reflected term's dependence.
+        CALL CRTM_Emission_Stokes_TL( &
+             Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
+             RTV%n_Angles,                             & ! Input, number of discrete zenith angles
+             RTV%n_Stokes,                             & ! Input, number of Stokes components
+             GeometryInfo%Cosine_Sensor_Zenith,        & ! Input, cosine of sensor zenith angle
+             RTV%Planck_Surface,                       & ! Input, FWD surface radiance
+             SfcOptics%S_Emissivity(:),                & ! Input, FWD surface emissivity
+             SfcOptics%S_Reflectivity(:,:),            & ! Input, FWD surface reflectivity
+             RTV,                                      & ! Input, internal variables
+             AtmOptics_TL%Optical_Depth,               & ! Input, TL layer optical depth
+             Planck_Surface_TL,                        & ! Input, TL surface radiance
+             SfcOptics_TL%S_Emissivity(:),             & ! Input, TL surface emissivity
+             SfcOptics_TL%S_Reflectivity(:,:),         & ! Input, TL surface reflectivity
+             Down_Radiance_TL,                         & ! Input, TL surface downwelling radiance
+             Stokes_TL                                 ) ! Output, TL polarized components
       END IF
 
    ELSE IF( RTV%Scattering_RT ) THEN
@@ -678,7 +741,11 @@ CONTAINS
                  SfcOptics_TL%Direct_Reflectivity(1:nZ,1), & ! Input, TL surface direct reflectivity
                  Pff_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer forward phase matrix
                  Pbb_TL(1:nZ,1:(nZ+1),:),                  & ! Input, TL layer backward phase matrix
-                 Scattering_Radiance_TL(1:nZ)              ) ! Output, TL radiances
+                 Scattering_Radiance_TL(1:nZ),             & ! Output, TL radiances
+                 Index_Sat_Angle=SfcOptics%Index_Sat_Ang,  & ! Input, sensor zenith angle index
+                 down_rad_TL_out=Down_Radiance_TL,         & ! Output, TL surface downwelling radiance
+                 down_rad_prof_TL_out=Down_Radiance_Prof_TL, & ! Output, TL downwelling radiance profile
+                 up_rad_prof_TL_out=Up_Radiance_Prof_TL     ) ! Output, TL upwelling radiance profile
 
         CASE (RT_SOI)
           ! UW SOI RT solver
@@ -698,7 +765,10 @@ CONTAINS
                  SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1), & ! Input, TL surface reflectivity
                  Pff_TL(1:nZ,1:nZ,:),                      & ! Input, TL layer forward phase matrix
                  Pbb_TL(1:nZ,1:nZ,:),                      & ! Input, TL layer backward phase matrix
-                 Scattering_Radiance_TL(1:nZ)              ) ! Output, TL radiances
+                 Scattering_Radiance_TL(1:nZ),             & ! Output, TL radiances
+                 down_rad_TL_out=Down_Radiance_TL,         & ! Output, TL surface downwelling radiance
+                 down_rad_prof_TL_out=Down_Radiance_Prof_TL, & ! Output, TL downwelling radiance profile
+                 up_rad_prof_TL_out=Up_Radiance_Prof_TL    ) ! Output, TL upwelling radiance profile
         CASE DEFAULT
           Error_Status = FAILURE
           WRITE(Message,'("Incorrect TL RT_Algorithm_ID, ",i0,", do not fit model")') &
@@ -729,7 +799,10 @@ CONTAINS
              SfcOptics_TL%Emissivity(1:nZ,1),          & ! Input, TL surface emissivity
              SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1), & ! Input, TL surface reflectivity
              SfcOptics_TL%Direct_Reflectivity(1:nZ,1), & ! Input, TL surface reflectivity for a point source
-             Radiance_TL                               ) ! Output, TL radiances
+             Radiance_TL,                              & ! Output, TL radiances
+             down_rad_TL_out=Down_Radiance_TL,         & ! Output, TL surface downwelling radiance
+             down_rad_prof_TL_out=Down_Radiance_Prof_TL, & ! Output, TL downwelling radiance profile
+             up_rad_prof_TL_out=Up_Radiance_Prof_TL    ) ! Output, TL upwelling radiance profile
     END IF
 
     Error_Status = Assign_Common_Output_TL( SfcOptics             , &
@@ -740,11 +813,38 @@ CONTAINS
                                             SensorIndex           , &
                                             ChannelIndex          , &
                                             RTV                   , &
-                                            RTSolution_TL           )
+                                            RTSolution_TL         , &
+                                            Stokes_TL               )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error assigning output for TL RTSolution algorithms'
       CALL Display_Message( ROUTINE_NAME, TRIM(Message), Error_Status )
       RETURN
+    END IF
+
+    ! Surface downwelling radiance tangent-linear (always-on output). Nonzero on the
+    ! emission path; for scattering it is the opt-in Compute_Down_Radiance output.
+    RTSolution_TL%Down_Radiance = Down_Radiance_TL
+
+    ! Level-resolved downwelling radiance profile TL (opt-in). Map the solver's
+    ! internal-level output (1:nt) onto the user layering (1:no), mirroring the FWD
+    ! Common_RTSolution assignment Downwelling_Radiance(1:no)=...(na+1:nt).
+    IF ( RTV%Compute_Down_Radiance_Profile .AND. ALLOCATED(RTSolution_TL%Downwelling_Radiance) ) THEN
+      na_d = RTV%n_Added_Layers
+      nt_d = Atmosphere%n_Layers
+      ! Clamp to the conformant extent (user RTSolution_TL may be allocated
+      ! with a different n_Layers than the atmosphere)
+      no_d = MIN( RTSolution_TL%n_Layers, nt_d - na_d )
+      RTSolution_TL%Downwelling_Radiance(1:no_d) = Down_Radiance_Prof_TL(na_d+1:na_d+no_d)
+    END IF
+
+    ! Level-resolved upwelling radiance profile TL (opt-in). Same internal->user
+    ! level mapping as the downwelling profile. Gated so flag-off keeps the legacy
+    ! forward-only Upwelling_Radiance (zero TL), unchanged.
+    IF ( RTV%Compute_Up_Radiance_Profile .AND. ALLOCATED(RTSolution_TL%Upwelling_Radiance) ) THEN
+      na_d = RTV%n_Added_Layers
+      nt_d = Atmosphere%n_Layers
+      no_d = MIN( RTSolution_TL%n_Layers, nt_d - na_d )  ! conformant extent
+      RTSolution_TL%Upwelling_Radiance(1:no_d) = Up_Radiance_Prof_TL(na_d+1:na_d+no_d)
     END IF
 
   END FUNCTION CRTM_Compute_RTSolution_TL
@@ -944,6 +1044,17 @@ CONTAINS
                          Atmosphere%n_Layers ) :: Pbb_AD ! Backward scattering AD phase matrix
     REAL (fp),DIMENSION( RTV%n_Angles * RTV%n_Stokes ) :: Scattering_Radiance_AD
     REAL (fp) :: Radiance_AD(MAX_N_STOKES)
+    ! Polarized (non-scattering path) adjoint accumulators. Held separately
+    ! because CRTM_Emission_AD zeroes its own outputs on entry; see the call.
+    REAL (fp) :: T_OD_AD_S( Atmosphere%n_Layers )
+    REAL (fp) :: Planck_Surface_AD_S
+    REAL (fp) :: S_Emis_AD_S( MAX_N_STOKES )
+    REAL (fp) :: S_Refl_AD_S( MAX_N_STOKES, MAX_N_STOKES )
+    INTEGER   :: nS
+    REAL (fp) :: Down_Radiance_AD
+    REAL (fp), DIMENSION( Atmosphere%n_Layers ) :: Down_Radiance_Prof_AD  ! AD downwelling profile seed (internal levels)
+    REAL (fp), DIMENSION( Atmosphere%n_Layers ) :: Up_Radiance_Prof_AD    ! AD upwelling profile seed (internal levels)
+    INTEGER :: no_d, na_d, nt_d
 
 
     ! -----
@@ -973,6 +1084,35 @@ CONTAINS
       Message = 'Error assigning input for AD RTSolution algorithms'
       CALL Display_Message( ROUTINE_NAME, TRIM(Message), Error_Status )
       RETURN
+    END IF
+
+    ! Surface downwelling radiance adjoint seed (always-on output). Consumed by the
+    ! emission path below; for scattering it is the opt-in Compute_Down_Radiance seed.
+    Down_Radiance_AD = RTSolution_AD%Down_Radiance
+    RTSolution_AD%Down_Radiance = ZERO
+
+    ! Level-resolved downwelling radiance profile adjoint seed (opt-in). Map the user
+    ! layering (1:no) back onto the solver's internal levels (na+1:nt), mirroring the
+    ! FWD/TL profile assignment.
+    Down_Radiance_Prof_AD = ZERO
+    IF ( RTV%Compute_Down_Radiance_Profile .AND. ALLOCATED(RTSolution_AD%Downwelling_Radiance) ) THEN
+      na_d = RTV%n_Added_Layers
+      nt_d = Atmosphere%n_Layers
+      ! Clamp to the conformant extent (user RTSolution_AD may be allocated
+      ! with a different n_Layers than the atmosphere)
+      no_d = MIN( RTSolution_AD%n_Layers, nt_d - na_d )
+      Down_Radiance_Prof_AD(na_d+1:na_d+no_d) = RTSolution_AD%Downwelling_Radiance(1:no_d)
+      RTSolution_AD%Downwelling_Radiance(1:no_d) = ZERO
+    END IF
+
+    ! Level-resolved upwelling radiance profile adjoint seed (opt-in).
+    Up_Radiance_Prof_AD = ZERO
+    IF ( RTV%Compute_Up_Radiance_Profile .AND. ALLOCATED(RTSolution_AD%Upwelling_Radiance) ) THEN
+      na_d = RTV%n_Added_Layers
+      nt_d = Atmosphere%n_Layers
+      no_d = MIN( RTSolution_AD%n_Layers, nt_d - na_d )  ! conformant extent
+      Up_Radiance_Prof_AD(na_d+1:na_d+no_d) = RTSolution_AD%Upwelling_Radiance(1:no_d)
+      RTSolution_AD%Upwelling_Radiance(1:no_d) = ZERO
     END IF
 
     ! --------------------------------------
@@ -1009,8 +1149,40 @@ CONTAINS
              SfcOptics_AD%S_Reflectivity(1:nZ,1:nZ), & ! Output, AD surface reflectivity
              SfcOptics_AD%S_Direct_Ref(1:nZ), & ! Output, AD surface reflectivity for a point source
              Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
-             Pbb_AD(1:nZ,1:(nZ+1),:)                   ) ! Output, AD layer backward phase matrix      
+             Pbb_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer backward phase matrix
+             Index_Sat_Angle=SfcOptics%Index_Sat_Ang,  & ! Input, sensor zenith angle index
+             down_rad_AD_in=Down_Radiance_AD,          & ! Input, AD surface downwelling radiance
+             down_rad_prof_AD_in=Down_Radiance_Prof_AD, & ! Input, AD downwelling radiance profile
+             up_rad_prof_AD_in=Up_Radiance_Prof_AD ) ! Input, AD upwelling radiance profile
       ELSE
+        ! Adjoint of the polarized completion. It must run BEFORE
+        ! CRTM_Emission_AD, because only that routine can walk the surface
+        ! downwelling adjoint back down the downwelling chain, and it takes it
+        ! through down_rad_AD_in. But CRTM_Emission_AD also ZEROES T_OD_AD,
+        ! Planck_Surface_AD, emissivity_AD and reflectivity_AD on entry, so the
+        ! polarized contributions to those are accumulated into locals here and
+        ! added back after that call. Accumulating them directly would leave the
+        ! adjoint silently non-transpose: TL-vs-FD and K-vs-AD both still pass,
+        ! and only the adjoint dot-product catches it.
+        T_OD_AD_S           = ZERO
+        Planck_Surface_AD_S = ZERO
+        S_Emis_AD_S         = ZERO
+        S_Refl_AD_S         = ZERO
+        CALL CRTM_Emission_Stokes_AD( &
+             Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
+             RTV%n_Angles,                             & ! Input, number of discrete zenith angles
+             RTV%n_Stokes,                             & ! Input, number of Stokes components
+             GeometryInfo%Cosine_Sensor_Zenith,        & ! Input, cosine of sensor zenith angle
+             RTV%Planck_Surface,                       & ! Input, FWD surface radiance
+             SfcOptics%S_Emissivity(:),                & ! Input, FWD surface emissivity
+             SfcOptics%S_Reflectivity(:,:),            & ! Input, FWD surface reflectivity
+             RTV,                                      & ! Input, internal variables
+             Radiance_AD,                              & ! Input, AD polarized components
+             T_OD_AD_S,                                & ! In/Output, AD layer optical depth
+             Planck_Surface_AD_S,                      & ! In/Output, AD surface radiance
+             S_Emis_AD_S,                              & ! In/Output, AD surface emissivity
+             S_Refl_AD_S,                              & ! In/Output, AD surface reflectivity
+             Down_Radiance_AD                          ) ! In/Output, AD surface downwelling radiance
         CALL CRTM_Emission_AD( &
              Atmosphere%n_Layers,                      & ! Input, number of atmospheric layers
              RTV%n_Angles,                             & ! Input, number of discrete zenith angles
@@ -1030,7 +1202,18 @@ CONTAINS
              Planck_Surface_AD,                        & ! Output, AD surface radiance
              SfcOptics_AD%S_Emissivity(1:nZ),          & ! Output, AD surface emissivity
              SfcOptics_AD%S_Reflectivity(1:nZ,1:nZ), & ! Output, AD surface reflectivity
-             SfcOptics_AD%S_Direct_Ref(1:nZ)  ) ! Output, AD surface reflectivity for a point source      
+             SfcOptics_AD%S_Direct_Ref(1:nZ),  & ! Output, AD surface reflectivity for a point source
+             down_rad_AD_in=Down_Radiance_AD,  & ! Input, AD surface downwelling radiance
+             down_rad_prof_AD_in=Down_Radiance_Prof_AD, & ! Input, AD downwelling radiance profile
+             up_rad_prof_AD_in=Up_Radiance_Prof_AD ) ! Input, AD upwelling radiance profile
+        ! Add back the polarized contributions that CRTM_Emission_AD zeroed.
+        nS = RTV%n_Stokes
+        AtmOptics_AD%Optical_Depth(1:Atmosphere%n_Layers) = &
+          AtmOptics_AD%Optical_Depth(1:Atmosphere%n_Layers) + T_OD_AD_S(1:Atmosphere%n_Layers)
+        Planck_Surface_AD = Planck_Surface_AD + Planck_Surface_AD_S
+        SfcOptics_AD%S_Emissivity(1:nS) = SfcOptics_AD%S_Emissivity(1:nS) + S_Emis_AD_S(1:nS)
+        SfcOptics_AD%S_Reflectivity(1:nS,1:nS) = &
+          SfcOptics_AD%S_Reflectivity(1:nS,1:nS) + S_Refl_AD_S(1:nS,1:nS)
       END IF
       CALL Reshape_Surf_Opt_AD(RTV%n_Angles, RTV%n_Stokes, SfcOptics_AD%Emissivity, SfcOptics_AD%Direct_Reflectivity, &
         SfcOptics_AD%Reflectivity, SfcOptics_AD%S_Emissivity, SfcOptics_AD%S_Direct_Ref, SfcOptics_AD%S_Reflectivity)
@@ -1059,7 +1242,11 @@ CONTAINS
              SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1), & ! Output, AD surface reflectivity
              SfcOptics_AD%Direct_Reflectivity(1:nZ,1), & ! Output, AD surface reflectivity for a point source
              Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
-             Pbb_AD(1:nZ,1:(nZ+1),:)                   ) ! Output, AD layer backward phase matrix
+             Pbb_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer backward phase matrix
+             Index_Sat_Angle=SfcOptics%Index_Sat_Ang,  & ! Input, sensor zenith angle index
+             down_rad_AD_in=Down_Radiance_AD,          & ! Input, AD surface downwelling radiance
+             down_rad_prof_AD_in=Down_Radiance_Prof_AD, & ! Input, AD downwelling radiance profile
+             up_rad_prof_AD_in=Up_Radiance_Prof_AD ) ! Input, AD upwelling radiance profile
 
         CASE (RT_SOI)
         ! UW SOI RT solver
@@ -1079,7 +1266,10 @@ CONTAINS
              SfcOptics_AD%Emissivity(1:nZ,1),          & ! Output, AD surface emissivity
              SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1), & ! Output, AD surface reflectivity
              Pff_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer forward phase matrix
-             Pbb_AD(1:nZ,1:(nZ+1),:)                   ) ! Output, AD layer backward phase matrix
+             Pbb_AD(1:nZ,1:(nZ+1),:),                  & ! Output, AD layer backward phase matrix
+             down_rad_AD_in=Down_Radiance_AD,          & ! Input, AD surface downwelling radiance
+             down_rad_prof_AD_in=Down_Radiance_Prof_AD, & ! Input, AD downwelling radiance profile
+             up_rad_prof_AD_in=Up_Radiance_Prof_AD ) ! Input, AD upwelling radiance profile
       CASE DEFAULT
       Error_Status = FAILURE
       WRITE(Message,'("Incorrect AD RT_Algorithm_ID, ",i0,", do not fit model")') &
@@ -1112,7 +1302,10 @@ CONTAINS
              Planck_Surface_AD,                        & ! Output, AD surface radiance
              SfcOptics_AD%Emissivity(1:nZ,1),          & ! Output, AD surface emissivity
              SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1), & ! Output, AD surface reflectivity
-             SfcOptics_AD%Direct_Reflectivity(1:nZ,1)  ) ! Output, AD surface reflectivity for a point source
+             SfcOptics_AD%Direct_Reflectivity(1:nZ,1), & ! Output, AD surface reflectivity for a point source
+             down_rad_AD_in=Down_Radiance_AD,          & ! Input, AD surface downwelling radiance
+             down_rad_prof_AD_in=Down_Radiance_Prof_AD, & ! Input, AD downwelling radiance profile
+             up_rad_prof_AD_in=Up_Radiance_Prof_AD ) ! Input, AD upwelling radiance profile
     END IF
 
     Error_Status = Assign_Common_Output_AD( Atmosphere           , & ! Input

@@ -135,7 +135,11 @@ CONTAINS
                iVar%trig_coeff(i,m) )
       END DO
 
-      ! Compute the emissivities
+      ! Compute the emissivities. Cosine for V and H, sine for the third and
+      ! fourth Stokes components, so V and H are even in the relative azimuth
+      ! and U and the circular component are odd. The angle convention is
+      ! defined once in CRTM_MW_Water_SfcOptics.f90; see also
+      ! docs/design/polarimetric_conventions.md.
       e_Azimuth(1) = e_Azimuth(1) + iVar%trig_coeff(1,m)*iVar%cos_angle(m) ! Vertical
       e_Azimuth(2) = e_Azimuth(2) + iVar%trig_coeff(2,m)*iVar%cos_angle(m) ! Horizontal
       e_Azimuth(3) = e_Azimuth(3) + iVar%trig_coeff(3,m)*iVar%sin_angle(m) ! +/- 45deg.

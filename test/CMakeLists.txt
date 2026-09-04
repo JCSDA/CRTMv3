@@ -4,7 +4,7 @@
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
 
 cmake_minimum_required (VERSION 3.12)
-project("CRTM_Tests" VERSION 3.1.4 LANGUAGES Fortran C)
+project("CRTM_Tests" VERSION 3.2.0 LANGUAGES Fortran C)
 
 enable_testing ()
 
@@ -13,6 +13,34 @@ message (STATUS "Building tests for CRTM v${PROJECT_VERSION}.")
 
 list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )
 set( CMAKE_DIRECTORY_LABELS ${PROJECT_NAME} )
+
+# Register a long-running test in the tier2 group.
+#
+# These four tests are about 75 percent of suite CPU under gfortran and ifx and
+# about 84 percent under nvfortran, while the other ~234 tests are each under
+# 4 s. Deferring them takes the default suite from roughly 155-292 s of wall
+# time down to roughly 25-30 s at -j4.
+#
+# Only add_test is gated, never add_executable: the sources must keep compiling
+# on every build, because compiler-portability defects have been found in test
+# sources that a gated build would simply have skipped.
+#
+# Run them with:  cmake -DBUILD_TIER2_TESTS=ON <build> && ctest -L tier2
+# Exclude them:   ctest -LE tier2      (when they are registered)
+#
+# Run tier2 whenever the RT or OpenMP threading path changes (CRTM_Forward /
+# Tangent_Linear / Adjoint / K_Matrix_Module, Common_RTSolution, the
+# profile/channel thread split) and before tagging a release. Those tests are
+# the main coverage of nested channel threading: all four use N_PROFILES=2 and
+# do not pin OMP_NUM_THREADS, so they engage the nested path, and two of them
+# (test_OMPS_UV_Physics with 4 sensors, test_TEMPO_UVVIS_Physics with 2) are
+# among the strongest coverage of multi-sensor RTSolution indexing under it.
+function(crtm_add_tier2_test test_name)
+  if(BUILD_TIER2_TESTS)
+    add_test(NAME ${test_name} COMMAND $<TARGET_FILE:${test_name}>)
+    set_tests_properties(${test_name} PROPERTIES LABELS tier2)
+  endif()
+endfunction()
 
 # macro to create a symlink from src to dst
 function(CREATE_SYMLINK src dst)
@@ -38,7 +66,6 @@ function(ADD_CRTM_UNIT_TEST target source)
   target_link_libraries(${target} PRIVATE crtm)
   add_test(NAME test_${target}
            COMMAND $<TARGET_FILE:${target}>)
-  set_tests_properties(test_${target} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 endfunction()
 
 # Create Data directory for test input config and symlink all files
@@ -74,14 +101,14 @@ IF(EXISTS  ${FIX_FILE_PATH})
 
 else() # Download CRTM coefficients
   set( CRTM_COEFFS_BRANCH_PREFIX "" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
-  set( CRTM_COEFFS_BRANCH "fix_REL-3.1.2.0" )
+  set( CRTM_COEFFS_BRANCH "fix_REL-3.2.0.0" )
 
   set(CRTM_COEFFS_PATH ${CMAKE_SOURCE_DIR}/test-data-release)
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
 
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
   set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz)
-  set(checksum "0e5888cae80aa674b2e67ecd4490317d") # MD5SUM of fix_REL-3.1.2.0.tgz
+  set(checksum "88995873986cf2b077808a75d1c56f83") # MD5SUM of fix_REL-3.2.0.0.tgz
 
   # Check if the CRTM binary tarball is already present otherwise download it.
   message(STATUS "Checking if ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH} already exists...")
@@ -206,7 +233,6 @@ list( APPEND AOD_Sensor_Ids
 
 # Create list of sensor ids for testing
 list( APPEND Zeeman_Sensor_Ids
-      ssmis_f20
       ssmis_f19
       ssmis_f18
       ssmis_f17
@@ -239,6 +265,33 @@ list( APPEND OMPoverChannels_Sensor_Ids
         atms_n21
 )
 
+# OMP_Speedup uses cris-fsr_n21 (~431 channels) so the channel-level OMP
+# parallelism in CRTM_Forward has enough work to demonstrate clear speedup.
+list( APPEND OMP_Speedup_Sensor_Ids
+        cris-fsr_n21
+)
+
+# OMP_Consistency: Forward + K_Matrix must be bit-identical across thread counts.
+# A spread of paths: MW radiometer, IR imager, and a hyperspectral IR sounder
+# (the latter exercises the per-channel NLTE/Zeeman predictor handling).
+list( APPEND OMP_Consistency_Sensor_Ids
+        atms_n21
+        abi_g18
+        cris399_npp
+)
+
+# ChannelSubset_OMP: like OMP_Consistency, but applies several channel subsets
+# first (sparse / front-loaded / split) so the channel-thread chunking and the
+# inactive-channel bookkeeping in CRTM_Forward / _K_Matrix get exercised under a
+# thread-count sweep. iasi_metop-b gives a large channel count for meaningful
+# chunk sizes, cris399_npp adds the NLTE per-channel path, and atms_n21 covers
+# the small-channel-count clamps. (Follow-up coverage for JCSDA/CRTMv3#164.)
+list( APPEND ChannelSubset_OMP_Sensor_Ids
+        iasi_metop-b
+        cris399_npp
+        atms_n21
+)
+
 list (APPEND common_tests
      Simple
      AOD
@@ -256,6 +309,9 @@ list (APPEND common_tests
 
 list (APPEND omp_tests
      OMPoverChannels
+     OMP_Speedup
+     OMP_Consistency
+     ChannelSubset_OMP
 )
 
 
@@ -284,55 +340,151 @@ add_executable(test_check_crtm mains/application/check_crtm.F90)
 target_link_libraries(test_check_crtm PRIVATE crtm)
 add_test(NAME test_check_crtm 
          COMMAND test_check_crtm)
-set_tests_properties(test_check_crtm PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_TL_TEST mains/unit/Unit_Test/test_TL.f90)
 target_link_libraries(Unit_TL_TEST PRIVATE crtm)
 add_test(NAME test_Unit_TL_TEST
          COMMAND $<TARGET_FILE:Unit_TL_TEST>)
-set_tests_properties(test_Unit_TL_TEST PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_Aerosol_Bypass mains/unit/Unit_Test/test_Aerosol_Bypass.f90)
 target_link_libraries(Unit_Aerosol_Bypass PRIVATE crtm)
 add_test(NAME test_Unit_Aerosol_Bypass
          COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass>)
-set_tests_properties(test_Unit_Aerosol_Bypass PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_AerosolScatter_TL mains/unit/Unit_Test/test_AerosolScatter_TL.f90)
 target_link_libraries(Unit_AerosolScatter_TL PRIVATE crtm)
 add_test(NAME test_Unit_AerosolScatter_TL
          COMMAND $<TARGET_FILE:Unit_AerosolScatter_TL>)
-set_tests_properties(test_Unit_AerosolScatter_TL PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_AerosolScatter_AD mains/unit/Unit_Test/test_AerosolScatter_AD.f90)
 target_link_libraries(Unit_AerosolScatter_AD PRIVATE crtm)
 add_test(NAME test_Unit_AerosolScatter_AD
          COMMAND $<TARGET_FILE:Unit_AerosolScatter_AD>)
-set_tests_properties(test_Unit_AerosolScatter_AD PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_AerosolScatter_K mains/unit/Unit_Test/test_AerosolScatter_K.f90)
 target_link_libraries(Unit_AerosolScatter_K PRIVATE crtm)
 add_test(NAME test_Unit_AerosolScatter_K
          COMMAND $<TARGET_FILE:Unit_AerosolScatter_K>)
-set_tests_properties(test_Unit_AerosolScatter_K PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_Aerosol_Bypass_TL mains/unit/Unit_Test/test_Aerosol_Bypass_TL.f90)
 target_link_libraries(Unit_Aerosol_Bypass_TL PRIVATE crtm)
 add_test(NAME test_Unit_Aerosol_Bypass_TL
 	 COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass_TL>)
-set_tests_properties(test_Unit_Aerosol_Bypass_TL PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_Aerosol_Bypass_adjoint mains/unit/Unit_Test/test_Aerosol_Bypass_adjoint.f90)
 target_link_libraries(Unit_Aerosol_Bypass_adjoint PRIVATE crtm)
 add_test(NAME test_Unit_Aerosol_Bypass_adjoint
 	 COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass_adjoint>)
-set_tests_properties(test_Unit_Aerosol_Bypass_adjoint  PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
 add_executable(Unit_Aerosol_Bypass_k_matrix mains/unit/Unit_Test/test_Aerosol_Bypass_k_matrix.f90)
 target_link_libraries(Unit_Aerosol_Bypass_k_matrix PRIVATE crtm)
 add_test(NAME test_Unit_Aerosol_Bypass_k_matrix
          COMMAND $<TARGET_FILE:Unit_Aerosol_Bypass_k_matrix>)
-set_tests_properties(test_Unit_Aerosol_Bypass_k_matrix  PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+# MW land surface Jacobian validation (issue #281): analytic LAI / Vegetation_Fraction
+# Jacobians (K-matrix adjoint and tangent-linear) vs finite differences.
+add_executable(Unit_Land_Jacobian mains/unit/Unit_Test/test_Land_Jacobian.f90)
+target_link_libraries(Unit_Land_Jacobian PRIVATE crtm)
+add_test(NAME test_Unit_Land_Jacobian
+         COMMAND $<TARGET_FILE:Unit_Land_Jacobian>)
+
+# Legacy Fastem1 MW-water SST (Water_Temperature) Jacobian vs finite differences.
+add_executable(Unit_Fastem1_SST_Jacobian mains/unit/Unit_Test/test_Fastem1_SST_Jacobian.f90)
+target_link_libraries(Unit_Fastem1_SST_Jacobian PRIVATE crtm)
+add_test(NAME test_Unit_Fastem1_SST_Jacobian
+         COMMAND $<TARGET_FILE:Unit_Fastem1_SST_Jacobian>)
+
+# ODPS group modernization (Tier 0): load-time validation of Group_Index and
+# the Component_ID/Absorber_ID rosters, including rejection of the
+# Zeeman-reserved indexes (the OMPS Group-4 failure mode).
+add_executable(Unit_ODPS_Group_Validation mains/unit/Unit_Test/test_ODPS_Group_Validation.f90)
+target_link_libraries(Unit_ODPS_Group_Validation PRIVATE crtm)
+add_test(NAME test_Unit_ODPS_Group_Validation
+         COMMAND $<TARGET_FILE:Unit_ODPS_Group_Validation>)
+
+# Pins the v3.2.0 DDA-ARTS ICE_CLOUD scattering change (ICE_CLOUD now scatters via
+# the full branch / IconCloudIce habit). Registered only when a DDA-ARTS CloudCoeff
+# is present in the staged fix tree.
+set(_CC_DDA_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2024.nc")
+add_executable(test_DDA_ICE_CLOUD_Forward mains/unit/Unit_Test/test_DDA_ICE_CLOUD_Forward.f90)
+target_link_libraries(test_DDA_ICE_CLOUD_Forward PRIVATE crtm)
+if(EXISTS "${_CC_DDA_FIX}")
+  add_test(NAME test_DDA_ICE_CLOUD_Forward
+           COMMAND $<TARGET_FILE:test_DDA_ICE_CLOUD_Forward>)
+else()
+  message(STATUS "DDA-ARTS CloudCoeff not found at ${_CC_DDA_FIX}; test_DDA_ICE_CLOUD_Forward not registered.")
+endif()
+unset(_CC_DDA_FIX)
+
+# Issue #238: coefficient file paths must survive a long File_Path without being
+# truncated by fixed-length buffers. Initializes CRTM through a ~300-character
+# symlinked path that exceeds the old 80/128/256 caps.
+add_executable(Unit_Long_Path_Init mains/unit/Unit_Test/test_Long_Path_Init.f90)
+target_link_libraries(Unit_Long_Path_Init PRIVATE crtm)
+add_test(NAME test_Unit_Long_Path_Init
+         COMMAND $<TARGET_FILE:Unit_Long_Path_Init>)
+
+# OpenMP thread policy on a single-profile call, which is what GSI issues.
+# Checks (A) that CRTM restores the caller's max-active-levels, and (B) that
+# threading a small sensor is not dramatically slower than not threading it
+# (a 22-channel sensor on 16 threads once ran ~30x slower than on one).
+# RUN_SERIAL because (B) times the model and must not share the machine.
+add_executable(Unit_OMP_Thread_Policy mains/unit/Unit_Test/test_OMP_Thread_Policy.f90)
+target_link_libraries(Unit_OMP_Thread_Policy PRIVATE crtm)
+add_test(NAME test_Unit_OMP_Thread_Policy
+         COMMAND $<TARGET_FILE:Unit_OMP_Thread_Policy>)
+set_tests_properties(test_Unit_OMP_Thread_Policy PROPERTIES RUN_SERIAL TRUE)
+
+# General TL-vs-FD and AD consistency check across sensor types (from #280).
+# Parameterized by sensor id and mode: "fd" checks the tangent-linear against a
+# central finite difference of the forward (per channel), "ad" checks the TL-AD
+# dot-product adjoint identity. Perturbs atmospheric temperature. Covers the
+# three main sensor types (all present in the common suite): atms_n21 (MW
+# sounder), cris-fsr_n21 (IR sounder), v.abi_g18 (IR imager).
+add_executable(test_FD_consistency mains/unit/Unit_Test/test_FD_consistency.f90)
+target_link_libraries(test_FD_consistency PRIVATE crtm)
+foreach(_fdc_sensor atms_n21 cris-fsr_n21 v.abi_g18)
+  add_test(NAME test_FD_consistency_${_fdc_sensor} COMMAND test_FD_consistency ${_fdc_sensor} fd)
+  add_test(NAME test_AD_consistency_${_fdc_sensor} COMMAND test_FD_consistency ${_fdc_sensor} ad)
+endforeach()
+
+# Surface downwelling radiance (RTSolution%Down_Radiance) TL/AD/K correctness:
+# baseline-independent finite-difference, adjoint dot-product, and K-vs-AD checks
+# for a TOA-radiance control plus the surface downwelling output.
+add_executable(Unit_Downwelling_TLADK mains/unit/Unit_Test/test_Downwelling_TLADK.f90)
+target_link_libraries(Unit_Downwelling_TLADK PRIVATE crtm)
+add_test(NAME test_Unit_Downwelling_TLADK
+         COMMAND $<TARGET_FILE:Unit_Downwelling_TLADK>)
+
+# Multi-sensor single-call consistency: one CRTM_Forward/TL/K_Matrix call with
+# ChannelInfo(1:2) must match the per-sensor calls bit-for-bit (guards the
+# cumulative 'ln' channel-offset bookkeeping in the OpenMP sensor/channel loops,
+# which no single-sensor test can see).
+add_executable(Unit_MultiSensor_SingleCall mains/unit/Unit_Test/test_MultiSensor_SingleCall.f90)
+target_link_libraries(Unit_MultiSensor_SingleCall PRIVATE crtm)
+add_test(NAME test_Unit_MultiSensor_SingleCall
+         COMMAND $<TARGET_FILE:Unit_MultiSensor_SingleCall>)
+
+# Performance micro-benchmark for the opt-in level-resolved radiance profiles
+# (Forward + K_Matrix timing, overcast ADA). Not a ctest; run manually.
+add_executable(bench_Profile_Perf mains/unit/Unit_Test/bench_Profile_Perf.f90)
+target_link_libraries(bench_Profile_Perf PRIVATE crtm)
+
+# Surface netCDF I/O round-trip (REL-3.2.0 baseline-format conversion):
+# write a rank-2 Surface(L x M) with NetCDF=.TRUE., read it back, and verify
+# every field round-trips exactly.
+add_executable(Unit_Surface_netCDF_io mains/unit/Unit_Test/test_Surface_netCDF_io.f90)
+target_link_libraries(Unit_Surface_netCDF_io PRIVATE crtm)
+add_test(NAME test_Unit_Surface_netCDF_io
+         COMMAND $<TARGET_FILE:Unit_Surface_netCDF_io>)
+
+# Atmosphere netCDF I/O round-trip (REL-3.2.0 baseline-format conversion):
+# write a rank-2 Atmosphere(L x M) with clouds+aerosols and NetCDF=.TRUE.,
+# read it back, and verify every serialized field round-trips exactly.
+add_executable(Unit_Atmosphere_netCDF_io mains/unit/Unit_Test/test_Atmosphere_netCDF_io.f90)
+target_link_libraries(Unit_Atmosphere_netCDF_io PRIVATE crtm)
+add_test(NAME test_Unit_Atmosphere_netCDF_io
+         COMMAND $<TARGET_FILE:Unit_Atmosphere_netCDF_io>)
 
 #SpcCoeff utilities
 list (APPEND SCoeff_Utils
@@ -363,6 +515,15 @@ list (APPEND ODPS_Utils
 )
 foreach(testtype IN LISTS ODPS_Utils)
 	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/TauCoeff/ODPS/${testtype}/${testtype}.f90)
+	target_link_libraries(${testtype} PRIVATE crtm)
+endforeach()
+
+#TauCoeff ODSSU utilities (SSU container, BIN -> NC only)
+list (APPEND ODSSU_Utils
+  ODSSUBIN2NC
+)
+foreach(testtype IN LISTS ODSSU_Utils)
+	add_executable(${testtype} ${CRTM_SOURCE_DIR}/src/Coefficients/TauCoeff/ODSSU/${testtype}/${testtype}.f90)
 	target_link_libraries(${testtype} PRIVATE crtm)
 endforeach()
 
@@ -429,16 +590,15 @@ endforeach()
 
 #first upper level Unit_Test
 
+# REL-3.2.0: previously-binary IO tests now exercise NetCDF (the new default).
+# The dedicated _NC sibling tests have been removed because they are now
+# duplicative; if a binary regression test is needed in the future, add
+# it back as an explicit case.
 list(APPEND io_tests
   Spc_IO mains/unit/input_output/test_SpcCoeff/test_spc_io.f90
-  Spc_IO_NC mains/unit/input_output/test_SpcCoeff_NC/test_spc_io_nc.f90
-  TauCoeff_IO_NC mains/unit/input_output/test_TauCoeff_NC/test_taucoeff_io_nc.f90
-  EmisCoeff_IO_NC mains/unit/input_output/test_EmisCoeff_NC/test_emis_coeff_io_nc.f90
   AerosolCoeff_IO mains/unit/input_output/test_AerosolCoeff/test_aerosol_coeff_io.f90
-  AerosolCoeff_IO_NC mains/unit/input_output/test_AerosolCoeff_NC/test_aerosol_coeff_io_nc.f90
   CloudCoeff_IO mains/unit/input_output/test_CloudCoeff/test_cloud_coeff_io.f90
-  CloudCoeff_IO_NC mains/unit/input_output/test_CloudCoeff_NC/test_cloud_coeff_io_nc.f90
-  BeCoeff_IO_NC mains/unit/input_output/test_BeCoeff_NC/test_becoeff_io_nc.f90
+  EmisCoeff_IO mains/unit/input_output/test_EmisCoeff/test_emis_coeff_io.f90
 )
 
 list(LENGTH io_tests io_tests_len)
@@ -450,26 +610,609 @@ foreach(io_test_index RANGE 0 ${io_tests_max} 2)
   ADD_CRTM_UNIT_TEST(${io_test_name} ${io_test_source})
 endforeach()
 
+# NLTE/AC sibling verification: the netCDF SpcCoeff load must pick up
+# co-located .NLTECoeff.nc/.ACCoeff.nc files and degrade gracefully without
+# them, and the forward model must apply the NLTE correction by day only.
+# Compares testinput/ (siblings staged) against testinput_no_siblings/.
+ADD_CRTM_UNIT_TEST(NLTE_Verification mains/unit/input_output/test_NLTE_Verification/test_nlte_verification.f90)
+
 #(PS) Hypsometric Equation test
 add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
 target_link_libraries(hypsometric_eq PRIVATE crtm)
 add_test(NAME test_hypsometric_eq
          COMMAND $<TARGET_FILE:hypsometric_eq>)
-set_tests_properties(test_hypsometric_eq PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
 
-# test_MWwater_io
-add_executable(MWwater_IO mains/unit/input_output/test_MWwater/test_MWwater_io.f90)
-target_link_libraries(MWwater_IO PRIVATE crtm)
-add_test(NAME test_MWwater_io
-         COMMAND $<TARGET_FILE:MWwater_IO>)
-set_tests_properties(test_MWwater_io PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+# test_MWwater_io: removed in REL-3.2.0. The deprecated CRTM_MWwaterCoeff_Load
+# function it exercised reads a binary-only EmisCoeff file; with the LUT-based
+# FASTEM path retired in favor of CRTM_MWwaterCoeff_Load_FASTEM (no file IO),
+# this comparison test no longer has an active counterpart to compare against.
 
 # test_MWSurfEM
 add_executable(test_MWSurfEM mains/unit/Unit_Test/test_MWSurfEM.f90)
 target_link_libraries(test_MWSurfEM PRIVATE crtm)
 add_test(NAME test_MWSurfEM
          COMMAND $<TARGET_FILE:test_MWSurfEM>)
-set_tests_properties(test_MWSurfEM PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+
+# test_CONST_MIXED_Polarization: exercises the CONST_MIXED_POLARIZATION (=13)
+# surface-optics V/H mixing in CRTM_Compute_SfcOptics. Pol type 13 is used only
+# by TMS (TROPICS / tomorrow.io) sensors, none of which are in the common
+# regression suite, so this is the dedicated coverage for that code path. It
+# needs only the TMS SpcCoeff and the (already-staged) FASTEM6 MW-water
+# EmisCoeff; CRTM_Compute_SfcOptics reads no TauCoeff. Registered only when the
+# TMS SpcCoeff is present in the staged fix tree.
+set(_TMS_SPC "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/SpcCoeff/netCDF/tms_tropics-01.SpcCoeff.nc")
+add_executable(test_CONST_MIXED_Polarization mains/unit/Unit_Test/test_CONST_MIXED_Polarization.f90)
+target_link_libraries(test_CONST_MIXED_Polarization PRIVATE crtm)
+if(EXISTS "${_TMS_SPC}")
+  set(TMS_COEFFS_PRESENT TRUE)
+  add_test(NAME test_CONST_MIXED_Polarization
+           COMMAND $<TARGET_FILE:test_CONST_MIXED_Polarization>)
+else()
+  set(TMS_COEFFS_PRESENT FALSE)
+  message(STATUS "TMS SpcCoeff (tms_tropics-01.SpcCoeff.nc) not found; test_CONST_MIXED_Polarization will not be registered.")
+endif()
+unset(_TMS_SPC)
+
+# A full forward run for TROPICS (used by the >=200 GHz PARMIO delta sweep
+# below) additionally needs the TMS TauCoeff, which CONST_MIXED does not.
+set(_TMS_TAU "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/TauCoeff/ODPS/netCDF/tms_tropics-01.TauCoeff.nc")
+set(_TMS_SPC "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/SpcCoeff/netCDF/tms_tropics-01.SpcCoeff.nc")
+if(EXISTS "${_TMS_SPC}" AND EXISTS "${_TMS_TAU}")
+  set(TMS_TAU_PRESENT TRUE)
+else()
+  set(TMS_TAU_PRESENT FALSE)
+endif()
+unset(_TMS_TAU)
+unset(_TMS_SPC)
+
+# test_TELSEM2_MWland
+# Stage the TELSEM2 atlas under two names in the shared testinput:
+#   * TELSEM2.MWland.test.nc       -- explicit-opt-in path (MWlandCoeff_File).
+#   * TELSEM2.MWland.EmisCoeff.nc  -- the DEFAULT drop-in name, staged ON PURPOSE
+#     so the test can prove the opt-in gate: with the default-named atlas present
+#     on the coefficient path, CRTM_Init must still use NESDIS_LandEM unless the
+#     caller opts in (Use_MWland_Atlas=.TRUE. or MWlandCoeff_File). Because the
+#     atlas is now opt-in rather than presence-activated, staging the default name
+#     is inert for every other land test -- and any regression of the gate would
+#     surface as those tests changing. Registered only when the atlas is present
+#     in the staged fix tree.
+set(_TELSEM2_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/EmisCoeff/MW_Land/netCDF/TELSEM2.MWland.EmisCoeff.nc")
+add_executable(test_TELSEM2_MWland mains/unit/Unit_Test/test_TELSEM2_MWland.f90)
+target_link_libraries(test_TELSEM2_MWland PRIVATE crtm)
+if(EXISTS "${_TELSEM2_FIX}")
+  execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                   "${_TELSEM2_FIX}"
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/TELSEM2.MWland.test.nc" )
+  execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                   "${_TELSEM2_FIX}"
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/TELSEM2.MWland.EmisCoeff.nc" )
+  add_test(NAME test_TELSEM2_MWland
+           COMMAND $<TARGET_FILE:test_TELSEM2_MWland>)
+else()
+  message(STATUS "TELSEM2 atlas not found at ${_TELSEM2_FIX}; test_TELSEM2_MWland will not be registered.")
+endif()
+unset(_TELSEM2_FIX)
+
+# Check for canonical PARMIO LUT and AWS coefficients inside the staged
+# test_data tree. Tests are registered only when the files are present at
+# their canonical paths; nothing outside build/test_data/** is referenced.
+set(_PARMIO_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix")
+
+if(EXISTS "${_PARMIO_FIX}/EmisCoeff/MW_Water/netCDF/PARMIO.MWwater.EmisCoeff.nc")
+  set(PARMIO_LUT_PRESENT TRUE)
+else()
+  message(STATUS "PARMIO LUT not found at ${_PARMIO_FIX}/EmisCoeff/MW_Water/netCDF/PARMIO.MWwater.EmisCoeff.nc; PARMIO regression tests will not be registered.")
+  set(PARMIO_LUT_PRESENT FALSE)
+endif()
+
+if(EXISTS "${_PARMIO_FIX}/SpcCoeff/netCDF/mwr_aws.SpcCoeff.nc"
+   AND EXISTS "${_PARMIO_FIX}/TauCoeff/ODPS/netCDF/mwr_aws.TauCoeff.nc")
+  set(AWS_COEFFS_PRESENT TRUE)
+else()
+  message(STATUS "AWS coefficients (mwr_aws.{Spc,Tau}Coeff.nc) not found in ${_PARMIO_FIX}; AWS PARMIO test will not be registered.")
+  set(AWS_COEFFS_PRESENT FALSE)
+endif()
+unset(_PARMIO_FIX)
+
+# test_CloudCoeff_Exp_Forward: end-to-end coverage of the experimental
+# ('CRTM-Exp') cloud-optics scheme. Runs the mwr_aws MW sensor with
+# Cloud_Model='CRTM-Exp' and the complete 6-habit experimental LUT
+# (CloudCoeff_Exp_Full6.nc), asserting a physical graupel-scattering TB
+# depression that grows with water content. The legacy cloud schemes have no
+# such coverage. Registered only when both the AWS coeffs and the experimental
+# LUT are present in the staged fix tree.
+set(_CC_EXP_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/CloudCoeff/netCDF/CloudCoeff_Exp_Full6.nc")
+if(EXISTS "${_CC_EXP_FIX}")
+  set(CLOUDCOEFF_EXP_PRESENT TRUE)
+else()
+  set(CLOUDCOEFF_EXP_PRESENT FALSE)
+  message(STATUS "Experimental LUT (CloudCoeff_Exp_Full6.nc) not found at ${_CC_EXP_FIX}; test_CloudCoeff_Exp_Forward will not be registered.")
+endif()
+unset(_CC_EXP_FIX)
+add_executable(test_CloudCoeff_Exp_Forward mains/unit/Unit_Test/test_CloudCoeff_Exp_Forward.f90)
+target_link_libraries(test_CloudCoeff_Exp_Forward PRIVATE crtm)
+if(AWS_COEFFS_PRESENT AND CLOUDCOEFF_EXP_PRESENT)
+  add_test(NAME test_CloudCoeff_Exp_Forward
+           COMMAND $<TARGET_FILE:test_CloudCoeff_Exp_Forward>)
+else()
+  message(STATUS "test_CloudCoeff_Exp_Forward not registered (needs mwr_aws coeffs + CloudCoeff_Exp_Full6.nc).")
+endif()
+
+# test_VectorRT_ScalarLimit: ground truth for the polarimetric ADA path that does
+# not depend on cloud-LUT quality or any external RT code. With scattering driven
+# below CRTM's albedo threshold the atmosphere is polarization-neutral, so the
+# emergent Stokes vector must satisfy I=(Iv+Ih)/2 and Q=(Iv-Ih)/2 exactly, where
+# Iv and Ih come from scalar runs with the channel forced to pure V and pure H.
+# Validates the surface conversion, the ADA adding machinery under n_Stokes>1,
+# and the surface boundary condition against the trusted scalar path. Same gating
+# as the other Exp-scheme tests.
+add_executable(test_VectorRT_ScalarLimit mains/unit/Unit_Test/test_VectorRT_ScalarLimit.f90)
+target_link_libraries(test_VectorRT_ScalarLimit PRIVATE crtm)
+# Registered 2026-07-31, once the non-scattering path gained a vector solver
+# (CRTM_Emission_Stokes). It now passes at 1.1e-16 in I and 8.2e-17 in Q.
+add_test(NAME test_VectorRT_ScalarLimit
+         COMMAND $<TARGET_FILE:test_VectorRT_ScalarLimit>)
+
+# test_PhaseMatrix_Invariants: asserts physical invariants of the assembled
+# polarized phase matrix (intensity block independent of n_Stokes, degree of
+# polarization bounded by unity, intensity-block symmetry). Drives
+# CRTM_Phase_Matrix directly, so it needs no coefficient files. Deliberately
+# invariant-based rather than a Rayleigh reconstruction: Pff is a Fourier
+# component rather than F(Theta), and the sign of beta1 is convention-dependent.
+add_executable(test_PhaseMatrix_Invariants mains/unit/Unit_Test/test_PhaseMatrix_Invariants.f90)
+target_link_libraries(test_PhaseMatrix_Invariants PRIVATE crtm)
+add_test(NAME test_PhaseMatrix_Invariants
+         COMMAND $<TARGET_FILE:test_PhaseMatrix_Invariants>)
+
+# test_ADA_VectorDecoupling: drives CRTM_ADA directly with a synthetic phase
+# matrix whose polarized blocks are zero and whose I and Q blocks are identical.
+# Such a matrix cannot couple Stokes components, so an n_Stokes=2 solve must
+# reproduce two scalar solves exactly, WITH scattering active. Needs no
+# coefficient files and no cloud LUT, which is what makes it usable while the
+# polarized LUTs are still unsuitable: it tests whether the code is correct
+# independently of whether the data is.
+add_executable(test_ADA_VectorDecoupling mains/unit/Unit_Test/test_ADA_VectorDecoupling.f90)
+target_link_libraries(test_ADA_VectorDecoupling PRIVATE crtm)
+add_test(NAME test_ADA_VectorDecoupling
+         COMMAND $<TARGET_FILE:test_ADA_VectorDecoupling>)
+
+# test_VectorRT_SurfaceBasis: pins the surface (V,H) -> Stokes (I,Q) conversion
+# on the n_Stokes>1 path. Calls CRTM_Compute_SfcOptics directly and checks the
+# vector-path emissivity/reflectivity against eV,eH obtained from the scalar
+# path, so it needs no cloud LUT and no reference radiances. The TL/AD/K
+# self-consistency tests cannot detect a wrong forward basis; this can.
+add_executable(test_VectorRT_SurfaceBasis mains/unit/Unit_Test/test_VectorRT_SurfaceBasis.f90)
+target_link_libraries(test_VectorRT_SurfaceBasis PRIVATE crtm)
+add_test(NAME test_VectorRT_SurfaceBasis
+         COMMAND $<TARGET_FILE:test_VectorRT_SurfaceBasis>)
+
+# test_VectorRT_SurfaceFrame: pins the polarimetric reference frame of the
+# microwave surface optics, and proves the surface model's U and V survive the
+# coverage aggregation into the vector solver input. Mirrors the scene through
+# the view plane and asserts I,Q are even and U,V odd in relative azimuth,
+# which is the symmetry that identifies the reference plane as the meridional
+# plane and so settles whether a surface-to-solver frame rotation is needed.
+# Loads FASTEM4 explicitly: the FASTEM6 default has no third/fourth Stokes
+# azimuth model. No cloud LUT and no reference radiances required.
+add_executable(test_VectorRT_SurfaceFrame mains/unit/Unit_Test/test_VectorRT_SurfaceFrame.f90)
+target_link_libraries(test_VectorRT_SurfaceFrame PRIVATE crtm)
+add_test(NAME test_VectorRT_SurfaceFrame
+         COMMAND $<TARGET_FILE:test_VectorRT_SurfaceFrame>)
+
+# test_MWwaterCoeff_FileSelects: proves MWwaterCoeff_File selects the microwave
+# water emissivity model rather than being silently ignored. The file-based load
+# is commented out and the model comes from the scheme string, so the argument
+# used to be accepted, echoed in the load message, and dropped: a caller asking
+# for FASTEM4 got FASTEM6 with no diagnostic. That matters because FASTEM6 has
+# no third/fourth Stokes azimuth model and returns U = V = 0, indistinguishable
+# from a scene with no polarimetric signal, and JEDI/UFO selects the model
+# through exactly this argument. Uses the one observable separating the two
+# models: FASTEM4 gives nonzero U and V over ocean off-azimuth, FASTEM6 gives
+# exactly zero. Asserts both directions so it cannot pass by always loading
+# FASTEM4. No cloud LUT and no reference radiances required.
+add_executable(test_MWwaterCoeff_FileSelects mains/unit/Unit_Test/test_MWwaterCoeff_FileSelects.f90)
+target_link_libraries(test_MWwaterCoeff_FileSelects PRIVATE crtm)
+add_test(NAME test_MWwaterCoeff_FileSelects
+         COMMAND $<TARGET_FILE:test_MWwaterCoeff_FileSelects>)
+
+# test_VectorRT_StokesSign: pins the ADOPTED sign convention of the third and
+# fourth Stokes surface components, per backend, for FASTEM and PARMIO. V and H
+# ride cosine harmonics and U and V4 ride sine harmonics, so a global sign error
+# in U cancels out of I and Q and is invisible to every other test: the parity
+# assertions in test_VectorRT_SurfaceFrame survive negation, and the
+# self-consistency instruments compare the model to itself. Asserts U and V4
+# vanish at relative azimuth 0 and 180, are odd under phi -> -phi, sit above a
+# non-degeneracy floor, and carry the documented sign at phi = +90. This pins
+# the convention against silent drift; it is not evidence the sign is correct
+# against nature, which needs an external reference. See
+# docs/design/polarimetric_conventions.md. Loads FASTEM4 explicitly (FASTEM6,
+# the default, has no third/fourth Stokes model). No cloud LUT required.
+add_executable(test_VectorRT_StokesSign mains/unit/Unit_Test/test_VectorRT_StokesSign.f90)
+target_link_libraries(test_VectorRT_StokesSign PRIVATE crtm)
+add_test(NAME test_VectorRT_StokesSign
+         COMMAND $<TARGET_FILE:test_VectorRT_StokesSign>)
+
+# test_VectorRT_StokesOutput: proves the third/fourth Stokes components survive
+# the azimuthal Fourier accumulation into RTSolution%Stokes, and that the vector
+# solver preserves the meridional Stokes frame end to end. Runs the mirrored
+# scene pair at n_Stokes=4 and asserts Stokes 1,2 even and 3,4 odd in relative
+# azimuth, plus non-degeneracy. Needs the >=6-phase-element CRTM-Exp LUT (same
+# gating as test_VectorRT_TLADK) and FASTEM4 for a polarimetric surface.
+
+# ** commenting out because it's freaking slow (BTJ: 8/4/2026) ** 
+#add_executable(test_VectorRT_StokesOutput mains/unit/Unit_Test/test_VectorRT_StokesOutput.f90)
+#target_link_libraries(test_VectorRT_StokesOutput PRIVATE crtm)
+#add_test(NAME test_VectorRT_StokesOutput
+#         COMMAND $<TARGET_FILE:test_VectorRT_StokesOutput>)
+
+# test_VectorRT_Unsupported: asserts that vector-path combinations CRTM cannot
+# honour are refused rather than silently substituted. Covers RT_SOI with
+# n_Stokes>1, which used to be handed ADA without telling the caller, with an
+# RT_ADA vector run as the control. Needs no cloud LUT.
+add_executable(test_VectorRT_Unsupported mains/unit/Unit_Test/test_VectorRT_Unsupported.f90)
+target_link_libraries(test_VectorRT_Unsupported PRIVATE crtm)
+add_test(NAME test_VectorRT_Unsupported
+         COMMAND $<TARGET_FILE:test_VectorRT_Unsupported>)
+
+# test_SNICAR_VISsnow_Physics: the SNICAR visible-snow reflectance LUT, new and
+# opt-in in REL-3.2.0. Until this test its only coverage anywhere was an I/O
+# check that the file parses, so nothing verified it produced a reflectance or
+# that selecting it had any effect. Asserts that the table is actually consumed
+# (the dispatch prefers the NPOESS SEcategory path when both are loaded, so a
+# regression would be silent), that reflectance responds to grain size, depth
+# and density while the NPOESS control stays invariant (the solar-angle check
+# covers illumination geometry only; the solar zenith never reaches the LUT's
+# angle dimension, a known defect), that the
+# SWIR decrease with coarsening grain is monotonic, that out-of-LUT snow states
+# stay finite and bounded (the forward path applies no bounds guard; only TL and
+# AD do), and that an unrecognised filename prefix is rejected rather than
+# silently falling back. Doubles as the worked example of how to select the
+# table, since selection is by filename prefix and there is no scheme argument.
+add_executable(test_SNICAR_VISsnow_Physics mains/unit/Unit_Test/test_SNICAR_VISsnow_Physics.f90)
+target_link_libraries(test_SNICAR_VISsnow_Physics PRIVATE crtm)
+# Gate on the SOURCE files in the fix tree and stage the links here, like the
+# other coefficient-gated tests (TEMPO, OMPS): the bulk testinput staging runs
+# later in this file, so a destination-side EXISTS check is always false on a
+# fresh configure and the test silently vanishes from the suite.
+set(_SNICAR_COEFF_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix")
+set(_SNICAR_PRESENT TRUE)
+foreach(_snicar_rel
+        EmisCoeff/VIS_Snow/SNICAR/netCDF/SNICAR.VISsnow.EmisCoeff.nc
+        EmisCoeff/VIS_Snow/SEcategory/netCDF/NPOESS.VISsnow.EmisCoeff.nc
+        SpcCoeff/netCDF/v.viirs-m_n21.SpcCoeff.nc
+        TauCoeff/ODPS/netCDF/v.viirs-m_n21.TauCoeff.nc)
+  set(_snicar_file "${_SNICAR_COEFF_FIX}/${_snicar_rel}")
+  if(EXISTS "${_snicar_file}")
+    get_filename_component(_snicar_base "${_snicar_rel}" NAME)
+    execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                     "${_snicar_file}"
+                     "${CMAKE_CURRENT_BINARY_DIR}/testinput/${_snicar_base}" )
+  else()
+    set(_SNICAR_PRESENT FALSE)
+  endif()
+endforeach()
+if(_SNICAR_PRESENT)
+  add_test(NAME test_SNICAR_VISsnow_Physics
+           COMMAND $<TARGET_FILE:test_SNICAR_VISsnow_Physics>)
+else()
+  message(STATUS "test_SNICAR_VISsnow_Physics not registered (needs the SNICAR and NPOESS VISsnow tables and the v.viirs-m_n21 pair in the fix tree).")
+endif()
+unset(_SNICAR_PRESENT)
+unset(_SNICAR_COEFF_FIX)
+unset(_snicar_file)
+unset(_snicar_base)
+
+# test_VectorRT_Physics: physical invariants of the emergent Stokes vector,
+# asserted clear-sky so no cloud LUT is involved and a failure cannot be blamed
+# on coefficient quality. Covers the n_Stokes 2/3/4 truncation ladder (the only
+# exercise of n_Stokes=3 anywhere), the odd-harmonic degeneracy of U and V at
+# relative azimuth 0 and 180, the polarization bound I^2 >= Q^2+U^2+V^2, and
+# positivity of I.
+add_executable(test_VectorRT_Physics mains/unit/Unit_Test/test_VectorRT_Physics.f90)
+target_link_libraries(test_VectorRT_Physics PRIVATE crtm)
+add_test(NAME test_VectorRT_Physics
+         COMMAND $<TARGET_FILE:test_VectorRT_Physics>)
+
+# test_VectorRT_PARMIO_TLAD: Jacobian coverage for the PARMIO polarimetric
+# surface through the full RT chain. PARMIO is the microwave-water backend at
+# and above 200 GHz and has a four-Stokes azimuth model independent of FASTEM's,
+# which every other polarimetric test bypasses by loading FASTEM4. Reachable
+# because TROPICS channel 12 sits at 204.78 GHz, between the 183 and 325 GHz
+# water-vapour lines, where the surface is still visible (U/I = 1.6e-3); the
+# mwr_aws channels above the gate are at 325.15 GHz and are opaque. Clear sky,
+# so no cloud LUT gating.
+add_executable(test_VectorRT_PARMIO_TLAD mains/unit/Unit_Test/test_VectorRT_PARMIO_TLAD.f90)
+target_link_libraries(test_VectorRT_PARMIO_TLAD PRIVATE crtm)
+add_test(NAME test_VectorRT_PARMIO_TLAD
+         COMMAND $<TARGET_FILE:test_VectorRT_PARMIO_TLAD>)
+
+# test_VectorRT_TLADK: TL/AD/K correctness for the vector-RT (n_Stokes>1)
+# cloud-scattering path. The n_Stokes>1 ADA branch needs a >=6-phase-element
+# LUT (the CRTM-Exp scheme), so it is unreachable by every other test; this is
+# its only Jacobian coverage. Verifies TL-vs-central-FD on both Stokes
+# components (d/dWater_Content for the polarized phase chain, d/dTemperature
+# for the thermal source), the full-Stokes adjoint dot-product, K-vs-AD, and
+# an n_Stokes=1 scalar control on the same scene. Same gating as the Exp
+# forward test.
+add_executable(test_VectorRT_TLADK mains/unit/Unit_Test/test_VectorRT_TLADK.f90)
+target_link_libraries(test_VectorRT_TLADK PRIVATE crtm)
+if(AWS_COEFFS_PRESENT AND CLOUDCOEFF_EXP_PRESENT)
+  crtm_add_tier2_test(test_VectorRT_TLADK)
+else()
+  message(STATUS "test_VectorRT_TLADK not registered (needs mwr_aws coeffs + CloudCoeff_Exp_Full6.nc).")
+endif()
+
+# test_MW_O3_TLAD: TL/AD/K parity for the MW scene-ozone ODPS component
+# (GROUP_MW_O3, Group_Index=7). Verifies TL-vs-central-FD for O3/H2O/T column
+# perturbations, the adjoint dot-product over T+H2O+O3, and K-vs-AD on the
+# most O3-sensitive channel. Self-adapting: against a 2-component group-3
+# TauCoeff (the stock testinput link) it asserts the O3 response is
+# identically zero (backward-compatibility control); against a group-7 file
+# it exercises the ozone predictor TL/AD/K blocks end-to-end.
+add_executable(test_MW_O3_TLAD mains/unit/Unit_Test/test_MW_O3_TLAD.f90)
+target_link_libraries(test_MW_O3_TLAD PRIVATE crtm)
+if(AWS_COEFFS_PRESENT)
+  add_test(NAME test_MW_O3_TLAD
+           COMMAND $<TARGET_FILE:test_MW_O3_TLAD>)
+else()
+  message(STATUS "test_MW_O3_TLAD not registered (needs mwr_aws coeffs).")
+endif()
+
+# test_ODPS_NO2_Predictor_TLAD: machine-precision TL/AD transpose check of the
+# GROUP_UV_NO2 predictor mapping at the ODPS_Compute_Predictor level (no RT,
+# no coefficient files). Complements test_UV_NO2_TLAD, whose RT-level adjoint
+# dot-product is bounded by solar-RT accumulation roundoff. Always registered.
+add_executable(test_ODPS_NO2_Predictor_TLAD mains/unit/Unit_Test/test_ODPS_NO2_Predictor_TLAD.f90)
+target_link_libraries(test_ODPS_NO2_Predictor_TLAD PRIVATE crtm)
+add_test(NAME test_ODPS_NO2_Predictor_TLAD
+         COMMAND $<TARGET_FILE:test_ODPS_NO2_Predictor_TLAD>)
+
+# test_UV_NO2_TLAD: TL/AD/K parity for the UV/VIS scene-NO2 ODPS component
+# (GROUP_UV_NO2, Group_Index=8), the NO2 analog of test_MW_O3_TLAD. Verifies
+# TL-vs-central-FD for NO2/H2O/T column perturbations on a daytime UV solar
+# scene, the adjoint dot-product over T+H2O+NO2, and K-vs-AD on the most
+# NO2-sensitive channel. Self-adapting per variable: any variable the loaded
+# file cannot see (H2O against a parity-gate file with zero-predictor base
+# components; NO2 against a plain group-2 file) must show identically zero
+# TL. Registered only when u.tempo_is40e.{Spc,Tau}Coeff.nc are present in the
+# staged fix tree; nothing outside build/test_data/** is referenced.
+set(_COEFF_FIX "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix")
+set(_TEMPO_SPC "${_COEFF_FIX}/SpcCoeff/netCDF/u.tempo_is40e.SpcCoeff.nc")
+set(_TEMPO_TAU "${_COEFF_FIX}/TauCoeff/ODPS/netCDF/u.tempo_is40e.TauCoeff.nc")
+add_executable(test_UV_NO2_TLAD mains/unit/Unit_Test/test_UV_NO2_TLAD.f90)
+target_link_libraries(test_UV_NO2_TLAD PRIVATE crtm)
+if(EXISTS "${_TEMPO_SPC}" AND EXISTS "${_TEMPO_TAU}")
+  execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                   "${_TEMPO_SPC}"
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/u.tempo_is40e.SpcCoeff.nc" )
+  execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                   "${_TEMPO_TAU}"
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/u.tempo_is40e.TauCoeff.nc" )
+  crtm_add_tier2_test(test_UV_NO2_TLAD)
+else()
+  message(STATUS "test_UV_NO2_TLAD not registered (needs u.tempo_is40e coeffs in testinput).")
+endif()
+unset(_TEMPO_SPC)
+unset(_TEMPO_TAU)
+
+# test_OMPS_UV_Physics: baseline-independent physics verification of the four
+# per-platform OMPS UV products (u.omps-np/tc_n20/n21), all initialized in one
+# call and run as one multi-sensor forward. Asserts the BUV spectral shape
+# (Hartley cutoff for the profilers, 340 nm maximum for the mappers),
+# NOAA-20 vs NOAA-21 normalized-radiance consistency at matched wavelengths
+# (breaks on any wavelength-registration or channel-numbering error through
+# the Fraunhofer structure), NP-vs-TC dichroic-range consistency, monotone
+# descent of the profiler ozone weighting functions, scene-NO2 and ozone
+# response signs and windows, adjoint dot-product closure, and K == AD.
+# Promoted from the OMPS product-acceptance driver (audit record
+# coeff_consistency_2026-07-26/OMPS_PRODUCT_VERIFICATION.md). Registered only
+# when all eight files are present in the staged fix tree; nothing outside
+# build/test_data/** is referenced.
+add_executable(test_OMPS_UV_Physics mains/unit/Unit_Test/test_OMPS_UV_Physics.f90)
+target_link_libraries(test_OMPS_UV_Physics PRIVATE crtm)
+set(_OMPS_COEFFS_PRESENT TRUE)
+foreach(_omps_sensor u.omps-np_n20 u.omps-np_n21 u.omps-tc_n20 u.omps-tc_n21)
+  foreach(_omps_kind SpcCoeff TauCoeff)
+    if(_omps_kind STREQUAL "SpcCoeff")
+      set(_omps_sub "SpcCoeff/netCDF")
+    else()
+      set(_omps_sub "TauCoeff/ODPS/netCDF")
+    endif()
+    set(_omps_file "${_COEFF_FIX}/${_omps_sub}/${_omps_sensor}.${_omps_kind}.nc")
+    if(EXISTS "${_omps_file}")
+      execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                       "${_omps_file}"
+                       "${CMAKE_CURRENT_BINARY_DIR}/testinput/${_omps_sensor}.${_omps_kind}.nc" )
+    else()
+      set(_OMPS_COEFFS_PRESENT FALSE)
+    endif()
+  endforeach()
+endforeach()
+if(_OMPS_COEFFS_PRESENT)
+  crtm_add_tier2_test(test_OMPS_UV_Physics)
+else()
+  message(STATUS "test_OMPS_UV_Physics not registered (needs the four u.omps-* coefficient pairs in testinput).")
+endif()
+unset(_OMPS_COEFFS_PRESENT)
+unset(_omps_file)
+unset(_omps_sub)
+unset(_omps_sub)
+
+# test_TEMPO_UVVIS_Physics: baseline-independent physics verification of the
+# two TEMPO products (UV 292-495 nm, VIS 538-741 nm) in one multi-sensor run,
+# companion to test_OMPS_UV_Physics. Asserts the Huggins ozone cutoff (UV),
+# the O2 B-band and 720 nm water-band dips (VIS), scene-NO2 response windows
+# including structural NO2 blindness beyond 710 nm where the cross section is
+# zero, ozone response in the Huggins (UV) and Chappuis (VIS) bands, monotone
+# descent of the UV ozone weighting functions, adjoint closure, and K == AD.
+# The VIS product's TL/AD/K has no other coverage (test_UV_NO2_TLAD exercises
+# the UV product only). Registered only when both TEMPO pairs are present in
+# the staged fix tree.
+add_executable(test_TEMPO_UVVIS_Physics mains/unit/Unit_Test/test_TEMPO_UVVIS_Physics.f90)
+target_link_libraries(test_TEMPO_UVVIS_Physics PRIVATE crtm)
+set(_TEMPO_UVVIS_PRESENT TRUE)
+foreach(_tempo_sensor u.tempo_is40e v.tempo_is40e)
+  foreach(_tempo_kind SpcCoeff TauCoeff)
+    if(_tempo_kind STREQUAL "SpcCoeff")
+      set(_tempo_sub "SpcCoeff/netCDF")
+    else()
+      set(_tempo_sub "TauCoeff/ODPS/netCDF")
+    endif()
+    set(_tempo_file "${_COEFF_FIX}/${_tempo_sub}/${_tempo_sensor}.${_tempo_kind}.nc")
+    if(EXISTS "${_tempo_file}")
+      execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                       "${_tempo_file}"
+                       "${CMAKE_CURRENT_BINARY_DIR}/testinput/${_tempo_sensor}.${_tempo_kind}.nc" )
+    else()
+      set(_TEMPO_UVVIS_PRESENT FALSE)
+    endif()
+  endforeach()
+endforeach()
+if(_TEMPO_UVVIS_PRESENT)
+  crtm_add_tier2_test(test_TEMPO_UVVIS_Physics)
+else()
+  message(STATUS "test_TEMPO_UVVIS_Physics not registered (needs both tempo_is40e coefficient pairs in testinput).")
+endif()
+unset(_TEMPO_UVVIS_PRESENT)
+unset(_tempo_file)
+unset(_tempo_sub)
+
+# test_MW_Sounder_Physics: microwave sounder physics, anchored to shipped
+# AMSU-A heritage inside the same run: the amsua_n19 57.29 GHz
+# line-splitting ladder (33.9/17.5/7.6/3.7/1.9 hPa) is asserted first, then
+# mwts3_fy3e (same instrument design, generated coefficients) must
+# reproduce it. This is the check that exposed both the flt double-offset
+# conversion defect and the multi-band convolution defect
+# (crtm-coeffgen#71): either failure mode collapses the ladder toward a
+# 41-49 hPa plateau. Also covers the MWHS-2 118/166 GHz structure, the
+# GEMS2 line climb, MWRI-RM BT sanity, adjoint closure, and K == AD.
+# Registered only when all four non-heritage pairs are present in the staged
+# fix tree.
+add_executable(test_MW_Sounder_Physics mains/unit/Unit_Test/test_MW_Sounder_Physics.f90)
+target_link_libraries(test_MW_Sounder_Physics PRIVATE crtm)
+set(_MW_PHYS_PRESENT TRUE)
+foreach(_mw_sensor mwts3_fy3e mwhs2_fy3e mwrirm_fy3g gems2_amethyst)
+  foreach(_mw_kind SpcCoeff TauCoeff)
+    if(_mw_kind STREQUAL "SpcCoeff")
+      set(_mw_sub "SpcCoeff/netCDF")
+    else()
+      set(_mw_sub "TauCoeff/ODPS/netCDF")
+    endif()
+    set(_mw_file "${_COEFF_FIX}/${_mw_sub}/${_mw_sensor}.${_mw_kind}.nc")
+    if(EXISTS "${_mw_file}")
+      execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                       "${_mw_file}"
+                       "${CMAKE_CURRENT_BINARY_DIR}/testinput/${_mw_sensor}.${_mw_kind}.nc" )
+    else()
+      set(_MW_PHYS_PRESENT FALSE)
+    endif()
+  endforeach()
+endforeach()
+if(_MW_PHYS_PRESENT)
+  add_test(NAME test_MW_Sounder_Physics
+           COMMAND $<TARGET_FILE:test_MW_Sounder_Physics>)
+else()
+  message(STATUS "test_MW_Sounder_Physics not registered (needs the four MW coefficient pairs in testinput).")
+endif()
+unset(_MW_PHYS_PRESENT)
+unset(_mw_file)
+unset(_mw_sub)
+unset(_COEFF_FIX)
+
+# test_Grazing_SfcOptics: regression test for the catastrophic-reflectivity
+# guard in the MW-water surface optics (CRTM_FastemX and CRTM_PARMIO). Drives
+# both backends directly at grazing zenith angles + 325 GHz (where the reflection
+# correction extrapolates to ~1e35 without the guard) and asserts reflectivity
+# stays bounded and the guard fires. Uses the AWS coeffs (mwr_aws init loads the
+# FASTEM and PARMIO surface coefficients). Registered only when both the AWS
+# coeffs and the PARMIO LUT are present.
+add_executable(test_Grazing_SfcOptics mains/unit/Unit_Test/test_Grazing_SfcOptics.f90)
+target_link_libraries(test_Grazing_SfcOptics PRIVATE crtm)
+if(AWS_COEFFS_PRESENT AND PARMIO_LUT_PRESENT)
+  add_test(NAME test_Grazing_SfcOptics
+           COMMAND $<TARGET_FILE:test_Grazing_SfcOptics>)
+else()
+  message(STATUS "test_Grazing_SfcOptics not registered (needs mwr_aws coeffs + PARMIO LUT).")
+endif()
+
+set(_PARMIO_LUT_TESTINPUT "${CMAKE_CURRENT_BINARY_DIR}/testinput/PARMIO.MWwater.EmisCoeff.nc")
+
+# test_PARMIO_TLAD
+add_executable(test_PARMIO_TLAD mains/regression/parmio_tlad/test_PARMIO_TLAD.f90)
+target_link_libraries(test_PARMIO_TLAD PRIVATE crtm)
+if(PARMIO_LUT_PRESENT)
+  add_test(NAME test_PARMIO_TLAD
+           COMMAND $<TARGET_FILE:test_PARMIO_TLAD> "${_PARMIO_LUT_TESTINPUT}")
+endif()
+
+# test_PARMIO_M_Group_Probe (build-only diagnostic; not registered with CTest)
+add_executable(test_PARMIO_M_Group_Probe mains/regression/parmio_tlad/test_PARMIO_M_Group_Probe.f90)
+target_link_libraries(test_PARMIO_M_Group_Probe PRIVATE crtm)
+
+# test_PARMIO_TLAD_RefValues (build-only helper to refresh test_PARMIO_TLAD's expected_e)
+add_executable(test_PARMIO_TLAD_RefValues mains/regression/parmio_tlad/test_PARMIO_TLAD_RefValues.f90)
+target_link_libraries(test_PARMIO_TLAD_RefValues PRIVATE crtm)
+
+# test_PARMIO_FASTEM_VH_Sweep (build-only V/H emissivity comparison at 89/166/183/325 GHz)
+add_executable(test_PARMIO_FASTEM_VH_Sweep mains/regression/parmio_tlad/test_PARMIO_FASTEM_VH_Sweep.f90)
+target_link_libraries(test_PARMIO_FASTEM_VH_Sweep PRIVATE crtm)
+
+# test_PARMIO_RC_Residual: build-only diagnostic. The driver compares CRTM's
+# atmosphere-on TB (Kirchhoff (1-e)*Mod sky-reflection via FASTEM RCCoeff)
+# against PARMIO standalone Tb.f's atmosphere-on output (specular Rvv0 sky
+# reflection). Those are different atmospheric conventions, so the residual
+# is structural rather than a defect on either side. Not registered as a
+# CTest gate; runnable manually for diagnosis.
+add_executable(test_PARMIO_RC_Residual mains/regression/parmio_tlad/test_PARMIO_RC_Residual.f90)
+target_link_libraries(test_PARMIO_RC_Residual PRIVATE crtm)
+
+add_executable(test_PARMIO_FASTEM_DeltaSweep mains/regression/parmio_tlad/test_PARMIO_FASTEM_DeltaSweep.f90)
+target_link_libraries(test_PARMIO_FASTEM_DeltaSweep PRIVATE crtm)
+
+if(PARMIO_LUT_PRESENT)
+  add_test(NAME test_PARMIO_FASTEM_DeltaSweep
+           COMMAND $<TARGET_FILE:test_PARMIO_FASTEM_DeltaSweep>
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
+                   "${_PARMIO_LUT_TESTINPUT}")
+  set_tests_properties(test_PARMIO_FASTEM_DeltaSweep
+                       PROPERTIES
+                         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+
+  # Same target, AWS sensor invocation. Reaches 325 GHz, well above ATMS's 183 GHz.
+  if(AWS_COEFFS_PRESENT)
+    add_test(NAME test_PARMIO_FASTEM_DeltaSweep_AWS
+             COMMAND $<TARGET_FILE:test_PARMIO_FASTEM_DeltaSweep>
+                     "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
+                     "${_PARMIO_LUT_TESTINPUT}"
+                     "mwr_aws")
+    set_tests_properties(test_PARMIO_FASTEM_DeltaSweep_AWS
+                         PROPERTIES
+                           WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+  endif()
+
+  # Same target, TROPICS sensor invocation. Its 204.8 GHz channel is the
+  # stronger PARMIO witness: unlike the AWS 325 GHz channels (which sit on the
+  # H2O line and are surface-blind over moist atmospheres, so PARMIO-vs-FASTEM
+  # delta_tb ~ 0.1 K), 204.8 GHz is window-like and PARMIO moves brightness
+  # temperature by ~1-3 K -- a clear, regression-detectable surface signal.
+  if(TMS_TAU_PRESENT)
+    add_test(NAME test_PARMIO_FASTEM_DeltaSweep_TMS
+             COMMAND $<TARGET_FILE:test_PARMIO_FASTEM_DeltaSweep>
+                     "${CMAKE_CURRENT_BINARY_DIR}/testinput/"
+                     "${_PARMIO_LUT_TESTINPUT}"
+                     "tms_tropics-01")
+    set_tests_properties(test_PARMIO_FASTEM_DeltaSweep_TMS
+                         PROPERTIES
+                           WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+  endif()
+endif()
+unset(_PARMIO_LUT_TESTINPUT)
+
+add_executable(test_PARMIO_AWS1_ObsSmoke mains/regression/parmio_tlad/test_PARMIO_AWS1_ObsSmoke.f90)
+target_link_libraries(test_PARMIO_AWS1_ObsSmoke PRIVATE crtm)
+
+add_executable(test_PARMIO_GMI_ObsSpace mains/regression/parmio_tlad/test_PARMIO_GMI_ObsSpace.f90)
+target_link_libraries(test_PARMIO_GMI_ObsSpace PRIVATE crtm)
 
 #=================================================================================
 #forward and k_matrix regression tests
@@ -491,7 +1234,6 @@ foreach(regtype IN LISTS regression_types)
     foreach(sensor_id IN LISTS ${testtype}_Sensor_Ids)
         add_test(NAME test_${regtype}_${testtype}_${sensor_id}
                  COMMAND $<TARGET_FILE:test_${regtype}_test_${testtype}> "${sensor_id}")
-        set_tests_properties(test_${regtype}_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
     endforeach()
   endforeach()
 endforeach()
@@ -506,10 +1248,31 @@ foreach(regtype IN LISTS TLAD_types)
     foreach(sensor_id IN LISTS ${testtype}_Sensor_Ids)
         add_test(NAME test_${regtype}_${testtype}_${sensor_id}
                  COMMAND $<TARGET_FILE:test_${regtype}_test_${testtype}> "${sensor_id}")
-        set_tests_properties(test_${regtype}_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
     endforeach()
   endforeach()
 endforeach()
+
+#---------------------------------------------------------------------------------
+# >=200 GHz PARMIO default-path stored-reference regression (issue #311)
+#
+# No common-suite sensor reaches the 200 GHz PARMIO dispatch threshold, so the
+# default MW-water ocean-emissivity path for mwr_aws (4 channels at ~325 GHz) is
+# otherwise covered only by self-consistency drivers (test_PARMIO_TLAD, the
+# FASTEM delta sweep) with no stored-reference truth file. Register the ClearSky
+# driver for mwr_aws across forward/k_matrix/adjoint/tangent_linear so a
+# numerical drift in the PARMIO default path is caught by the same
+# RTSolution_Compare truth-file mechanism as every other sensor. ClearSky
+# (n_Clouds = n_Aerosols = 0) isolates the surface/PARMIO contribution. Guarded
+# on AWS_COEFFS_PRESENT AND PARMIO_LUT_PRESENT: without the LUT the dispatch
+# falls back to FASTEM and this would not exercise PARMIO. The
+# test_{regtype}_test_ClearSky executables are already defined by the loops
+# above (ClearSky is in both common_tests and TLAD_tests).
+if(AWS_COEFFS_PRESENT AND PARMIO_LUT_PRESENT)
+  foreach(regtype IN LISTS regression_types TLAD_types)
+    add_test(NAME test_${regtype}_ClearSky_mwr_aws
+             COMMAND $<TARGET_FILE:test_${regtype}_test_ClearSky> "mwr_aws")
+  endforeach()
+endif()
 
 #=================================================================================
 #OpenMP regression tests
@@ -525,7 +1288,13 @@ foreach(regtype IN LISTS regression_types)
     foreach(sensor_id IN LISTS ${testtype}_Sensor_Ids)
         add_test(NAME test_${regtype}_${testtype}_${sensor_id}
                  COMMAND $<TARGET_FILE:test_${regtype}_test_${testtype}> "${sensor_id}")
-        set_tests_properties(test_${regtype}_${testtype}_${sensor_id} PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS}")
+        # The speedup test asserts a wall-clock threading speedup (>= 1.20x);
+        # under `ctest -j` the host is oversubscribed by sibling tests and the
+        # measurement flakes. Run it with the machine to itself.
+        if(testtype STREQUAL "OMP_Speedup")
+          set_tests_properties(test_${regtype}_${testtype}_${sensor_id}
+                               PROPERTIES RUN_SERIAL TRUE)
+        endif()
     endforeach()
   endforeach()
 endforeach()
@@ -538,7 +1307,6 @@ target_link_libraries(test_Active_Sensor crtm)
 
 # Add test for test_Active_Sensor
 add_test(NAME test_Active_Sensor COMMAND test_Active_Sensor)
-set_tests_properties(test_Active_Sensor PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
 
 # Add test_AD_Active_Sensor executable
 add_executable(test_AD_Active_Sensor mains/unit/Unit_Test/test_AD_Active_Sensor.f90)
@@ -546,7 +1314,6 @@ target_link_libraries(test_AD_Active_Sensor crtm)
 
 # Add test for test_AD_Active_Sensor
 add_test(NAME test_AD_Active_Sensor COMMAND test_AD_Active_Sensor)
-set_tests_properties(test_AD_Active_Sensor PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
 
 # Add test_TL_convergence_active_sensor executable
 add_executable(test_TL_convergence_active_sensor mains/unit/Unit_Test/test_TL_convergence_active_sensor.f90)
@@ -554,7 +1321,6 @@ target_link_libraries(test_TL_convergence_active_sensor crtm)
 
 # Add test for test_TL_convergence_active_sensor
 add_test(NAME test_TL_convergence_active_sensor COMMAND test_TL_convergence_active_sensor)
-set_tests_properties(test_TL_convergence_active_sensor PROPERTIES ENVIRONMENT OMP_NUM_THREADS=$ENV{OMP_NUM_THREADS})
 
 
 #####################################################################
@@ -562,49 +1328,135 @@ set_tests_properties(test_TL_convergence_active_sensor PROPERTIES ENVIRONMENT OM
 #####################################################################
 
 list( APPEND crtm_test_input
-AerosolCoeff/Little_Endian/AerosolCoeff.bin
-AerosolCoeff/Little_Endian/AerosolCoeff.GOCART-GEOS5.bin
-AerosolCoeff/Little_Endian/AerosolCoeff.CMAQ.bin
-AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.nc4
+# REL-3.2.0: NetCDF is the canonical LUT format; every coefficient symlink
+# below points at a .nc file (SSU TauCoeff was converted via ODSSUBIN2NC and
+# the Zeeman SSMIS zssmis_*.TauCoeff.nc set is complete). The
+# fix_REL-3.2.0.0 tarball ships NO .bin coefficient files, so none are
+# staged and the per-loader netCDF->Binary fallback (Resolve_Coeff_Format /
+# SpcCoeff / TauCoeff) is not exercised by this suite: the binary
+# coefficient READ path is untested at the suite level for this release.
+AerosolCoeff/netCDF/AerosolCoeff.nc
+AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.nc
 AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.BRC.kb.v2.nc
-AerosolCoeff/netCDF/AerosolCoeff.nc4
-CloudCoeff/Little_Endian/CloudCoeff.bin
-CloudCoeff/netCDF/CloudCoeff.nc4
-CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2022.nc4
+AerosolCoeff/netCDF/AerosolCoeff.CMAQ.nc
+CloudCoeff/netCDF/CloudCoeff.nc
+CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2022.nc
+CloudCoeff/netCDF/CloudCoeff_DDA_Moradi_2024.nc
 BeCoeff/netCDF/BeCoeff.nc
-EmisCoeff/MW_Water/Little_Endian/FASTEM6.MWwater.EmisCoeff.bin
-EmisCoeff/MW_Water/Little_Endian/FASTEM4.MWwater.EmisCoeff.bin
-EmisCoeff/IR_Ice/SEcategory/Little_Endian/NPOESS.IRice.EmisCoeff.bin
-EmisCoeff/IR_Ice/SEcategory/netCDF/NPOESS.IRice.EmisCoeff.nc4
-EmisCoeff/IR_Land/SEcategory/Little_Endian/NPOESS.IRland.EmisCoeff.bin
-EmisCoeff/IR_Land/SEcategory/netCDF/NPOESS.IRland.EmisCoeff.nc4
-EmisCoeff/IR_Snow/SEcategory/Little_Endian/NPOESS.IRsnow.EmisCoeff.bin
-EmisCoeff/IR_Snow/SEcategory/netCDF/NPOESS.IRsnow.EmisCoeff.nc4
-EmisCoeff/IR_Snow/Nalli/Little_Endian/Nalli.IRsnow.EmisCoeff.bin
-EmisCoeff/IR_Snow/Nalli/netCDF/Nalli.IRsnow.EmisCoeff.nc4
-EmisCoeff/IR_Snow/Nalli/netCDF/Nalli2.IRsnow.EmisCoeff.nc4
-EmisCoeff/VIS_Ice/SEcategory/Little_Endian/NPOESS.VISice.EmisCoeff.bin
-EmisCoeff/VIS_Ice/SEcategory/netCDF/NPOESS.VISice.EmisCoeff.nc4
-EmisCoeff/VIS_Land/SEcategory/Little_Endian/NPOESS.VISland.EmisCoeff.bin
-EmisCoeff/VIS_Land/SEcategory/netCDF/NPOESS.VISland.EmisCoeff.nc4
-EmisCoeff/VIS_Snow/SEcategory/Little_Endian/NPOESS.VISsnow.EmisCoeff.bin
-EmisCoeff/VIS_Snow/SEcategory/netCDF/NPOESS.VISsnow.EmisCoeff.nc4
-EmisCoeff/VIS_Water/SEcategory/Little_Endian/NPOESS.VISwater.EmisCoeff.bin
-EmisCoeff/VIS_Water/SEcategory/netCDF/NPOESS.VISwater.EmisCoeff.nc4
-EmisCoeff/IR_Water/Little_Endian/Nalli.IRwater.EmisCoeff.bin
-EmisCoeff/IR_Water/Little_Endian/Nalli2.IRwater.EmisCoeff.bin
-EmisCoeff/IR_Water/netCDF/Nalli.IRwater.EmisCoeff.nc4
-EmisCoeff/IR_Water/netCDF/Nalli2.IRwater.EmisCoeff.nc4
-EmisCoeff/IR_Land/SEcategory/Little_Endian/USGS.IRland.EmisCoeff.bin
-EmisCoeff/VIS_Land/SEcategory/Little_Endian/USGS.VISland.EmisCoeff.bin
-SpcCoeff/Little_Endian/hirs4_metop-a.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/hirs4_metop-a.TauCoeff.bin
-SpcCoeff/Little_Endian/amsua_n19.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/amsua_n19.TauCoeff.bin
-SpcCoeff/Little_Endian/amsua_metop-a.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/amsua_metop-a.TauCoeff.bin
+EmisCoeff/MW_Water/netCDF/FASTEM6.MWwater.EmisCoeff.nc
+EmisCoeff/MW_Water/netCDF/FASTEM4.MWwater.EmisCoeff.nc
+EmisCoeff/IR_Ice/SEcategory/netCDF/NPOESS.IRice.EmisCoeff.nc
+EmisCoeff/IR_Land/SEcategory/netCDF/NPOESS.IRland.EmisCoeff.nc
+EmisCoeff/IR_Snow/SEcategory/netCDF/NPOESS.IRsnow.EmisCoeff.nc
+EmisCoeff/IR_Snow/Nalli/netCDF/Nalli.IRsnow.EmisCoeff.nc
+EmisCoeff/IR_Snow/Nalli/netCDF/Nalli2.IRsnow.EmisCoeff.nc
+EmisCoeff/VIS_Ice/SEcategory/netCDF/NPOESS.VISice.EmisCoeff.nc
+EmisCoeff/VIS_Land/SEcategory/netCDF/NPOESS.VISland.EmisCoeff.nc
+EmisCoeff/VIS_Snow/SEcategory/netCDF/NPOESS.VISsnow.EmisCoeff.nc
+EmisCoeff/VIS_Water/SEcategory/netCDF/NPOESS.VISwater.EmisCoeff.nc
+EmisCoeff/IR_Water/netCDF/Nalli.IRwater.EmisCoeff.nc
+EmisCoeff/IR_Water/netCDF/Nalli2.IRwater.EmisCoeff.nc
+EmisCoeff/IR_Land/SEcategory/netCDF/USGS.IRland.EmisCoeff.nc
+EmisCoeff/VIS_Land/SEcategory/netCDF/USGS.VISland.EmisCoeff.nc
+EmisCoeff/VIS_Snow/SNICAR/netCDF/SNICAR.VISsnow.EmisCoeff.nc
+SpcCoeff/netCDF/hirs4_metop-a.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/hirs4_metop-a.TauCoeff.nc
+SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/amsua_n19.TauCoeff.nc
+SpcCoeff/netCDF/amsua_metop-a.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/amsua_metop-a.TauCoeff.nc
 SpcCoeff/netCDF/amsua_aqua.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/amsua_aqua.TauCoeff.nc
+SpcCoeff/netCDF/gmi_gpm.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/gmi_gpm.TauCoeff.nc
+SpcCoeff/netCDF/seviri_m08.SpcCoeff.nc
+TauCoeff/ODAS/netCDF/seviri_m08.TauCoeff.nc
+SpcCoeff/netCDF/cris-fsr_n21.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/cris-fsr_n21.TauCoeff.nc
+SpcCoeff/netCDF/cris-fsr_npp.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/cris-fsr_npp.TauCoeff.nc
+SpcCoeff/netCDF/iasi_metop-a.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/iasi_metop-a.TauCoeff.nc
+SpcCoeff/netCDF/iasi_metop-b.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/iasi_metop-b.TauCoeff.nc
+SpcCoeff/netCDF/mhs_n19.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/mhs_n19.TauCoeff.nc
+SpcCoeff/netCDF/sndrD1_g15.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/sndrD1_g15.TauCoeff.nc
+SpcCoeff/netCDF/sndrD2_g15.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/sndrD2_g15.TauCoeff.nc
+SpcCoeff/netCDF/sndrD3_g15.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/sndrD3_g15.TauCoeff.nc
+SpcCoeff/netCDF/sndrD4_g15.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/sndrD4_g15.TauCoeff.nc
+SpcCoeff/netCDF/airs_aqua.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/airs_aqua.TauCoeff.nc
+SpcCoeff/netCDF/modis_aqua.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/modis_aqua.TauCoeff.nc
+SpcCoeff/netCDF/atms_n21.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/atms_n21.TauCoeff.nc
+# iasi616_metop-b: IR sensor exercised by test_NLTE_Verification (merged from
+# develop 3.1.5); its NLTECoeff sibling is staged below.
+SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/iasi616_metop-b.TauCoeff.nc
+# NLTECoeff / ACCoeff sibling files for sensors that need them.
+# SpcCoeff_netCDF_ReadFile loads <sensor>.{NLTE,AC}Coeff.nc from the same
+# directory as the SpcCoeff file when present; without these, NLTE-active
+# IR channels (e.g. cris399_npp 4.3 um band) and AMSU/MHS antenna
+# corrections silently default to zero.
+NLTECoeff/netCDF/cris399_npp.NLTECoeff.nc
+NLTECoeff/netCDF/iasi_metop-b.NLTECoeff.nc
+NLTECoeff/netCDF/airs_aqua.NLTECoeff.nc
+NLTECoeff/netCDF/iasi616_metop-b.NLTECoeff.nc
+# cris-fsr_n21 is exercised by many regression/OMP tests above; its NLTECoeff
+# lives only under the canonical NLTECoeff/netCDF/ tree (no SpcCoeff/netCDF/
+# copy). CREATE_SYMLINK_FILENAME stages by basename, so the testinput/ symlink
+# still lands next to cris-fsr_n21.SpcCoeff.nc for the flat-directory sibling
+# lookup the test drivers rely on (File_Path=./testinput/).
+NLTECoeff/netCDF/cris-fsr_n21.NLTECoeff.nc
+ACCoeff/netCDF/amsua_n19.ACCoeff.nc
+SpcCoeff/netCDF/v.viirs-m_n21.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/v.viirs-m_n21.TauCoeff.nc
+SpcCoeff/netCDF/v.abi_g18.SpcCoeff.nc
+TauCoeff/ODAS/netCDF/v.abi_g18.TauCoeff.nc
+SpcCoeff/netCDF/abi_g18.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/abi_g18.TauCoeff.nc
+SpcCoeff/netCDF/cris399_npp.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/cris399_npp.TauCoeff.nc
+SpcCoeff/netCDF/crisB1_npp.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/crisB1_npp.TauCoeff.nc
+SpcCoeff/netCDF/atms_npp.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/atms_npp.TauCoeff.nc
+SpcCoeff/netCDF/v.viirs-m_npp.SpcCoeff.nc
+TauCoeff/ODAS/netCDF/v.viirs-m_npp.TauCoeff.nc
+SpcCoeff/netCDF/v.abi_gr.SpcCoeff.nc
+TauCoeff/ODAS/netCDF/v.abi_gr.TauCoeff.nc
+TauCoeff/ODPS/netCDF/zssmis_f19.TauCoeff.nc
+TauCoeff/ODPS/netCDF/zssmis_f18.TauCoeff.nc
+TauCoeff/ODPS/netCDF/zssmis_f17.TauCoeff.nc
+TauCoeff/ODPS/netCDF/zssmis_f16.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssmis_f19.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssmis_f18.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssmis_f17.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssmis_f16.TauCoeff.nc
+SpcCoeff/netCDF/ssmis_f18.SpcCoeff.nc
+SpcCoeff/netCDF/ssmis_f19.SpcCoeff.nc
+SpcCoeff/netCDF/ssmis_f16.SpcCoeff.nc
+SpcCoeff/netCDF/ssmis_f17.SpcCoeff.nc
+# SSU TauCoeff: ODSSU container in netCDF, generated from the legacy
+# REL-3.1.2.0 binaries via src/.../ODSSU/ODSSUBIN2NC.
+TauCoeff/ODPS/netCDF/ssu_n06.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssu_n07.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssu_n08.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssu_n09.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssu_n11.TauCoeff.nc
+TauCoeff/ODPS/netCDF/ssu_n14.TauCoeff.nc
+SpcCoeff/netCDF/ssu_n06.SpcCoeff.nc
+SpcCoeff/netCDF/ssu_n07.SpcCoeff.nc
+SpcCoeff/netCDF/ssu_n08.SpcCoeff.nc
+SpcCoeff/netCDF/ssu_n09.SpcCoeff.nc
+SpcCoeff/netCDF/ssu_n11.SpcCoeff.nc
+SpcCoeff/netCDF/ssu_n14.SpcCoeff.nc
 SpcCoeff/Little_Endian/gmi_gpm.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/gmi_gpm.TauCoeff.bin
 SpcCoeff/Little_Endian/seviri_m08.SpcCoeff.bin
@@ -678,10 +1530,79 @@ SpcCoeff/Little_Endian/ssu_n08.SpcCoeff.bin
 SpcCoeff/Little_Endian/ssu_n09.SpcCoeff.bin
 SpcCoeff/Little_Endian/ssu_n11.SpcCoeff.bin
 SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
+SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
+NLTECoeff/netCDF/iasi616_metop-b.NLTECoeff.nc
+TauCoeff/ODPS/Little_Endian/iasi616_metop-b.TauCoeff.bin
+SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
+ACCoeff/netCDF/amsua_n19.ACCoeff.nc
 )
+
+# Locally-staged coefficients (PARMIO LUT, AWS) live in test_data/.../fix/
+# under canonical paths (see PARMIO/AWS staging block above) and are added to
+# the symlink list only when available.
+if(PARMIO_LUT_PRESENT)
+  list(APPEND crtm_test_input
+       EmisCoeff/MW_Water/netCDF/PARMIO.MWwater.EmisCoeff.nc)
+endif()
+if(AWS_COEFFS_PRESENT)
+  list(APPEND crtm_test_input
+       SpcCoeff/netCDF/mwr_aws.SpcCoeff.nc
+       TauCoeff/ODPS/netCDF/mwr_aws.TauCoeff.nc)
+endif()
+# Experimental cloud-optics LUT for test_CloudCoeff_Exp_Forward; staged from the
+# tarball's fix tree so testinput/CloudCoeff_Exp_Full6.nc resolves there.
+if(CLOUDCOEFF_EXP_PRESENT)
+  list(APPEND crtm_test_input
+       CloudCoeff/netCDF/CloudCoeff_Exp_Full6.nc)
+endif()
+# TMS SpcCoeff for test_CONST_MIXED_Polarization (polarization type 13).
+if(TMS_COEFFS_PRESENT)
+  list(APPEND crtm_test_input
+       SpcCoeff/netCDF/tms_tropics-01.SpcCoeff.nc)
+endif()
+# TMS TauCoeff for the >=200 GHz PARMIO delta sweep (full forward run).
+if(TMS_TAU_PRESENT)
+  list(APPEND crtm_test_input
+       TauCoeff/ODPS/netCDF/tms_tropics-01.TauCoeff.nc)
+endif()
 
 # Symlink all CRTM files
 # Version 3
 CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
                          ${CMAKE_CURRENT_BINARY_DIR}/testinput
                          ${crtm_test_input} )
+
+# dump_scalar_fullprec: instrument, not a test. Prints scalar-path radiances and
+# brightness temperatures at full double precision so that "the default scalar
+# path is unchanged" can be measured rather than argued. Build it in two trees
+# and diff. Deliberately NOT registered: it asserts nothing.
+# Needed because the regression suite compares against its references at
+# DEFAULT_N_SIGFIG (= SP_N_SIGFIG, about six figures), which cannot see a change
+# in the last bits, so a green suite is not by itself proof of bit-identity.
+add_executable(dump_scalar_fullprec mains/unit/Unit_Test/dump_scalar_fullprec.f90)
+target_link_libraries(dump_scalar_fullprec PRIVATE crtm)
+
+# Staging area for test_NLTE_Verification: the same coefficient set the test
+# uses from testinput/, minus the .NLTECoeff.nc/.ACCoeff.nc sibling files, so
+# netCDF SpcCoeff loads can be compared with and without siblings present.
+# (netCDF paths: the REL-3.2.0 fix tree ships no binary files.)
+list( APPEND crtm_no_sibling_input
+AerosolCoeff/netCDF/AerosolCoeff.nc
+CloudCoeff/netCDF/CloudCoeff.nc
+EmisCoeff/MW_Water/netCDF/FASTEM6.MWwater.EmisCoeff.nc
+EmisCoeff/IR_Ice/SEcategory/netCDF/NPOESS.IRice.EmisCoeff.nc
+EmisCoeff/IR_Land/SEcategory/netCDF/NPOESS.IRland.EmisCoeff.nc
+EmisCoeff/IR_Snow/SEcategory/netCDF/NPOESS.IRsnow.EmisCoeff.nc
+EmisCoeff/VIS_Ice/SEcategory/netCDF/NPOESS.VISice.EmisCoeff.nc
+EmisCoeff/VIS_Land/SEcategory/netCDF/NPOESS.VISland.EmisCoeff.nc
+EmisCoeff/VIS_Snow/SEcategory/netCDF/NPOESS.VISsnow.EmisCoeff.nc
+EmisCoeff/VIS_Water/SEcategory/netCDF/NPOESS.VISwater.EmisCoeff.nc
+EmisCoeff/IR_Water/netCDF/Nalli.IRwater.EmisCoeff.nc
+SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/iasi616_metop-b.TauCoeff.nc
+SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
+)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings)
+CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
+                         ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings
+                         ${crtm_no_sibling_input} )

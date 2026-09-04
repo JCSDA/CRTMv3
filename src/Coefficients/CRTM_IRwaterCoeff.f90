@@ -30,6 +30,7 @@ MODULE CRTM_IRwaterCoeff
   ! -----------------
   ! Module use
   USE Message_Handler    , ONLY: SUCCESS, FAILURE, Display_Message
+  USE File_Utility          , ONLY: Join_Path
   USE IRwaterCoeff_Define, ONLY: IRwaterCoeff_type, &
                                  IRwaterCoeff_Associated, &
                                  IRwaterCoeff_Destroy
@@ -181,7 +182,7 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_IRwaterCoeff_Load'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
-    CHARACTER(ML) :: IRwaterCoeff_File
+    CHARACTER(:), ALLOCATABLE :: IRwaterCoeff_File
     LOGICAL :: noisy
     ! Function variables
     LOGICAL :: Binary
@@ -189,9 +190,9 @@ CONTAINS
     ! Setup
     err_stat = SUCCESS
     ! ...Assign the filename to local variable
-    IRwaterCoeff_File = ADJUSTL(Filename)
+    IRwaterCoeff_File = TRIM(ADJUSTL(Filename))
     ! ...Add the file path
-    IF ( PRESENT(File_Path) ) IRwaterCoeff_File = TRIM(ADJUSTL(File_Path))//TRIM(IRwaterCoeff_File)
+    IF ( PRESENT(File_Path) ) IRwaterCoeff_File = Join_Path(File_Path, IRwaterCoeff_File)
     ! ...Check Quiet argument
     noisy = .TRUE.
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet

@@ -51,6 +51,9 @@ MODULE ODPS_Define
   
   ! Public parameters
   ! -----------------
+  ! Fixed OPTRAN predictor count (defines the OP_Index array extent; IO
+  ! modules validate file dimensions against it)
+  PUBLIC :: N_PREDICTOR_USED_OPTRAN
   ! Sensor Id defaults
   PUBLIC :: INVALID_WMO_SATELLITE_ID
   PUBLIC :: INVALID_WMO_SENSOR_ID

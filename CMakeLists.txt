@@ -1,12 +1,29 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(crtm VERSION 3.1.4 LANGUAGES Fortran)
+project(crtm VERSION 3.2.0 LANGUAGES Fortran)
 
 option(OPENMP "Build crtm with OpenMP support" ON)
 option(FIX_FILE_PATH "Path to fix files (default: fix/)" OFF)
+# Long-running tests are registered only when this is ON, and carry the ctest
+# label "tier2" so they can also be selected with `ctest -L tier2` or excluded
+# with `ctest -LE tier2`. Their executables are always built, so compiler
+# coverage of those sources is never lost; only the ctest registration is gated.
+# Toggling this is therefore a reconfigure with no recompilation.
+option(BUILD_TIER2_TESTS "Register long-running (tier2) tests" OFF)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 set(CMAKE_DIRECTORY_LABELS ${PROJECT_NAME})
+
+# In-build binaries must always run the in-build libcrtm. With the linker's
+# default RUNPATH dtags, LD_LIBRARY_PATH takes precedence at load time, and a
+# spack environment carrying its own crtm package silently substitutes its
+# library: the test suite then executes a different CRTM release against this
+# build's module interfaces (observed as 230/235 failures with garbage
+# optional arguments when spack's crtm-3.1.2 shadowed an ifx build). Classic
+# RPATH outranks LD_LIBRARY_PATH, so force it.
+if(UNIX AND NOT APPLE)
+  add_link_options(LINKER:--disable-new-dtags)
+endif()
 
 # Include GNUInstallDirs to get the standard installation directory variables
 include(GNUInstallDirs)
@@ -58,19 +75,17 @@ include(GNUInstallDirs)
 
 ## Dependencies (unchanged from original)
 if(OPENMP)
-  find_package(OpenMP COMPONENTS Fortran)
-
-	# Check if OMP_NUM_THREADS is set in the environment
-	if(DEFINED ENV{OMP_NUM_THREADS})
-		set(OMP_NUM_THREADS $ENV{OMP_NUM_THREADS})
-	else()
-		# Set a default value if not set
-		set(OMP_NUM_THREADS "1")
-	endif()
-	
-	# Export OMP_NUM_THREADS to the environment
-	set(ENV{OMP_NUM_THREADS} ${OMP_NUM_THREADS})
+  # REQUIRED: src/CMakeLists.txt links OpenMP::OpenMP_Fortran unconditionally
+  # when OPENMP=ON; without REQUIRED a missing OpenMP fails later at generate
+  # time with a cryptic "target not found" error.
+  find_package(OpenMP REQUIRED COMPONENTS Fortran)
 endif()
+
+# Enable portable Fortran source preprocessing across all supported compilers
+# (gfortran, ifort, ifx, flang, Cray, NVHPC, XL). This is the cross-compiler
+# replacement for hardcoded -cpp/-fpp flags and lets sources use #ifdef _OPENMP
+# guards regardless of file extension.
+set(CMAKE_Fortran_PREPROCESS ON)
 
 if(DEFINED ENV{NETCDF_PATH})
   list(APPEND CMAKE_PREFIX_PATH $ENV{NETCDF_PATH})
@@ -107,12 +122,12 @@ write_basic_package_version_file(
 install(FILES 
               "${CMAKE_CURRENT_BINARY_DIR}/crtm-config.cmake"
               "${CMAKE_CURRENT_BINARY_DIR}/crtm-config-version.cmake"
-        DESTINATION ${CRTM_INSTALL_PREFIX}/cmake/${PROJECT_NAME})
+        DESTINATION ${CRTM_INSTALL_PREFIX}/lib/cmake/${PROJECT_NAME})
 
 # Install the export set for use with the install-tree (unchanged, with modified destination)
 install(EXPORT ${PROJECT_NAME}-config
 	FILE "${PROJECT_NAME}-targets.cmake"
-	DESTINATION ${CRTM_INSTALL_PREFIX}/cmake/${PROJECT_NAME})
+	DESTINATION ${CRTM_INSTALL_PREFIX}/lib/cmake/${PROJECT_NAME})
 
 # For build-tree linkage (unchanged from original)
 export(EXPORT ${PROJECT_NAME}-config

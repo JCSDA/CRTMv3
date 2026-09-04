@@ -33,6 +33,7 @@ MODULE CRTM_IRsnowCoeff
   ! -----------------
   ! Module use
   USE Message_Handler  ,  ONLY: SUCCESS, FAILURE, Display_Message
+  USE File_Utility          , ONLY: Join_Path
   USE SEcategory_Define,  ONLY: SEcategory_type, &
                                 SEcategory_Associated, &
                                 SEcategory_Destroy
@@ -40,7 +41,7 @@ MODULE CRTM_IRsnowCoeff
   USE IRsnowCoeff_Define, ONLY: IRsnowCoeff_type, &
                                 IRsnowCoeff_Associated, &
                                 IRsnowCoeff_Destroy
-  USE IRsnowCoeff_IO,     ONLY: IRsnowCoeff_ReadFile
+  USE IRsnowCoeff_IO,     ONLY: IRsnowCoeff_ReadFile_IO
   ! Disable all implicit typing
   IMPLICIT NONE
 
@@ -203,7 +204,7 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_IRsnowCoeff_Load'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
-    CHARACTER(ML) :: IRsnowCoeff_File
+    CHARACTER(:), ALLOCATABLE :: IRsnowCoeff_File
     LOGICAL :: noisy
     ! Function variables
     LOGICAL :: Binary
@@ -212,9 +213,9 @@ CONTAINS
     ! Setup
     err_stat = SUCCESS
     ! ...Assign the filename to local variable
-    IRsnowCoeff_File = ADJUSTL(Filename)
+    IRsnowCoeff_File = TRIM(ADJUSTL(Filename))
     ! ...Add the file path
-    IF ( PRESENT(File_Path) ) IRsnowCoeff_File = TRIM(ADJUSTL(File_Path))//TRIM(IRsnowCoeff_File)
+    IF ( PRESENT(File_Path) ) IRsnowCoeff_File = Join_Path(File_Path, IRsnowCoeff_File)
     ! ...Check Quiet argument
     noisy = .TRUE.
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
@@ -245,7 +246,7 @@ CONTAINS
                    Quiet = .NOT. noisy )
     ELSE
       ! Other classifications
-      err_stat = IRsnowCoeff_ReadFile( &
+      err_stat = IRsnowCoeff_ReadFile_IO( &
                    IRsnowC, &
                    IRsnowCoeff_File, &
                    netCDF = .NOT. Binary, &
@@ -365,9 +366,7 @@ CONTAINS
 
   FUNCTION CRTM_IRsnowCoeff_IsLoaded() RESULT( IsLoaded )
     LOGICAL :: IsLoaded
-
     IsLoaded = IRsnowCoeff_Associated( IRsnowC )
-
   END FUNCTION CRTM_IRsnowCoeff_IsLoaded
 
 !------------------------------------------------------------------------------
@@ -388,9 +387,7 @@ CONTAINS
 
   FUNCTION CRTM_IRsnowCoeff_SE_IsLoaded() RESULT( IsLoaded )
     LOGICAL :: IsLoaded
-
     IsLoaded = SEcategory_Associated( IRsnowC_SE )
-
   END FUNCTION CRTM_IRsnowCoeff_SE_IsLoaded
 
 END MODULE CRTM_IRsnowCoeff
