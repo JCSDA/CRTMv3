@@ -13,8 +13,9 @@ coefficient tarball is **published**, so a default `cmake ..` downloads and
 checksum-verifies the correct coefficient tree with no extra arguments.
 Building against an already-unpacked tree is still supported via
 `-DFIX_FILE_PATH=<path-to>/fix_REL-3.2.0.0/fix`. See RELEASE_NOTES_v3.2.0.md.
+v3.1.5 (in development): loads netCDF NLTECoeff/ACCoeff sibling files (previously silently skipped)
 v3.1.4 released June 8, 2026
-v3.1.3 released February 12, 2026 (small release)
+v3.1.3 released February 10, 2025 (small release)
 v3.1.2 released July 11, 2025
 v3.1.1 released August 12, 2024
 v3.1.0 (alpha) Released October 31, 2023

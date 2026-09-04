@@ -610,6 +610,12 @@ foreach(io_test_index RANGE 0 ${io_tests_max} 2)
   ADD_CRTM_UNIT_TEST(${io_test_name} ${io_test_source})
 endforeach()
 
+# NLTE/AC sibling verification: the netCDF SpcCoeff load must pick up
+# co-located .NLTECoeff.nc/.ACCoeff.nc files and degrade gracefully without
+# them, and the forward model must apply the NLTE correction by day only.
+# Compares testinput/ (siblings staged) against testinput_no_siblings/.
+ADD_CRTM_UNIT_TEST(NLTE_Verification mains/unit/input_output/test_NLTE_Verification/test_nlte_verification.f90)
+
 #(PS) Hypsometric Equation test
 add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
 target_link_libraries(hypsometric_eq PRIVATE crtm)
@@ -1361,6 +1367,7 @@ SpcCoeff/netCDF/amsua_metop-a.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/amsua_metop-a.TauCoeff.nc
 SpcCoeff/netCDF/amsua_aqua.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/amsua_aqua.TauCoeff.nc
+<<<<<<< HEAD
 SpcCoeff/netCDF/gmi_gpm.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/gmi_gpm.TauCoeff.nc
 SpcCoeff/netCDF/seviri_m08.SpcCoeff.nc
@@ -1446,6 +1453,86 @@ SpcCoeff/netCDF/ssu_n08.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n09.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n11.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n14.SpcCoeff.nc
+=======
+SpcCoeff/Little_Endian/gmi_gpm.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/gmi_gpm.TauCoeff.bin
+SpcCoeff/Little_Endian/seviri_m08.SpcCoeff.bin
+TauCoeff/ODAS/Little_Endian/seviri_m08.TauCoeff.bin
+SpcCoeff/Little_Endian/cris-fsr_n21.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/cris-fsr_n21.TauCoeff.bin
+SpcCoeff/Little_Endian/cris-fsr_npp.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/cris-fsr_npp.TauCoeff.bin
+SpcCoeff/Little_Endian/iasi_metop-a.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/iasi_metop-a.TauCoeff.bin
+SpcCoeff/Little_Endian/iasi_metop-b.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/iasi_metop-b.TauCoeff.bin
+SpcCoeff/Little_Endian/mhs_n19.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/mhs_n19.TauCoeff.bin
+SpcCoeff/Little_Endian/sndrD1_g15.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/sndrD1_g15.TauCoeff.bin
+SpcCoeff/Little_Endian/sndrD2_g15.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/sndrD2_g15.TauCoeff.bin
+SpcCoeff/Little_Endian/sndrD3_g15.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/sndrD3_g15.TauCoeff.bin
+SpcCoeff/Little_Endian/sndrD4_g15.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/sndrD4_g15.TauCoeff.bin
+SpcCoeff/Little_Endian/airs_aqua.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/airs_aqua.TauCoeff.bin
+SpcCoeff/Little_Endian/modis_aqua.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/modis_aqua.TauCoeff.bin
+SpcCoeff/Little_Endian/cris-fsr_n21.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/cris-fsr_n21.TauCoeff.bin
+SpcCoeff/Little_Endian/atms_n21.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/atms_n21.TauCoeff.bin
+SpcCoeff/Little_Endian/v.viirs-m_j2.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/v.viirs-m_j2.TauCoeff.bin
+SpcCoeff/Little_Endian/v.abi_g18.SpcCoeff.bin
+TauCoeff/ODAS/Little_Endian/v.abi_g18.TauCoeff.bin
+SpcCoeff/Little_Endian/abi_g18.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/abi_g18.TauCoeff.bin
+SpcCoeff/Little_Endian/cris399_npp.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/cris399_npp.TauCoeff.bin
+SpcCoeff/Little_Endian/crisB1_npp.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/crisB1_npp.TauCoeff.bin
+SpcCoeff/Little_Endian/atms_npp.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/atms_npp.TauCoeff.bin
+SpcCoeff/Little_Endian/v.viirs-m_npp.SpcCoeff.bin
+TauCoeff/ODAS/Little_Endian/v.viirs-m_npp.TauCoeff.bin
+SpcCoeff/Little_Endian/v.abi_gr.SpcCoeff.bin
+TauCoeff/ODAS/Little_Endian/v.abi_gr.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/zssmis_f20.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/zssmis_f19.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/zssmis_f18.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/zssmis_f17.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/zssmis_f16.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/ssmis_f20.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/ssmis_f19.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/ssmis_f18.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/ssmis_f17.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/ssmis_f16.TauCoeff.bin
+SpcCoeff/Little_Endian/ssmis_f20.SpcCoeff.bin
+SpcCoeff/Little_Endian/ssmis_f18.SpcCoeff.bin
+SpcCoeff/Little_Endian/ssmis_f19.SpcCoeff.bin
+SpcCoeff/Little_Endian/ssmis_f16.SpcCoeff.bin
+SpcCoeff/Little_Endian/ssmis_f17.SpcCoeff.bin
+TauCoeff/ODPS/Little_Endian/ssu_n06.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/ssu_n07.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/ssu_n08.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/ssu_n09.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/ssu_n11.TauCoeff.bin
+TauCoeff/ODPS/Little_Endian/ssu_n14.TauCoeff.bin
+SpcCoeff/Little_Endian/ssu_n06.SpcCoeff.bin
+SpcCoeff/Little_Endian/ssu_n07.SpcCoeff.bin
+SpcCoeff/Little_Endian/ssu_n08.SpcCoeff.bin
+SpcCoeff/Little_Endian/ssu_n09.SpcCoeff.bin
+SpcCoeff/Little_Endian/ssu_n11.SpcCoeff.bin
+SpcCoeff/Little_Endian/ssu_n14.SpcCoeff.bin
+SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
+SpcCoeff/netCDF/iasi616_metop-b.NLTECoeff.nc
+TauCoeff/ODPS/Little_Endian/iasi616_metop-b.TauCoeff.bin
+SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
+SpcCoeff/netCDF/amsua_n19.ACCoeff.nc
+>>>>>>> develop
 )
 
 # Locally-staged coefficients (PARMIO LUT, AWS) live in test_data/.../fix/
@@ -1483,6 +1570,7 @@ CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM
                          ${CMAKE_CURRENT_BINARY_DIR}/testinput
                          ${crtm_test_input} )
 
+<<<<<<< HEAD
 # dump_scalar_fullprec: instrument, not a test. Prints scalar-path radiances and
 # brightness temperatures at full double precision so that "the default scalar
 # path is unchanged" can be measured rather than argued. Build it in two trees
@@ -1492,3 +1580,28 @@ CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM
 # in the last bits, so a green suite is not by itself proof of bit-identity.
 add_executable(dump_scalar_fullprec mains/unit/Unit_Test/dump_scalar_fullprec.f90)
 target_link_libraries(dump_scalar_fullprec PRIVATE crtm)
+=======
+# Staging area for test_NLTE_Verification: the same coefficient set the test
+# uses from testinput/, minus the .NLTECoeff.nc/.ACCoeff.nc sibling files, so
+# netCDF SpcCoeff loads can be compared with and without siblings present.
+list( APPEND crtm_no_sibling_input
+AerosolCoeff/Little_Endian/AerosolCoeff.bin
+CloudCoeff/Little_Endian/CloudCoeff.bin
+EmisCoeff/MW_Water/Little_Endian/FASTEM6.MWwater.EmisCoeff.bin
+EmisCoeff/IR_Ice/SEcategory/Little_Endian/NPOESS.IRice.EmisCoeff.bin
+EmisCoeff/IR_Land/SEcategory/Little_Endian/NPOESS.IRland.EmisCoeff.bin
+EmisCoeff/IR_Snow/SEcategory/Little_Endian/NPOESS.IRsnow.EmisCoeff.bin
+EmisCoeff/VIS_Ice/SEcategory/Little_Endian/NPOESS.VISice.EmisCoeff.bin
+EmisCoeff/VIS_Land/SEcategory/Little_Endian/NPOESS.VISland.EmisCoeff.bin
+EmisCoeff/VIS_Snow/SEcategory/Little_Endian/NPOESS.VISsnow.EmisCoeff.bin
+EmisCoeff/VIS_Water/SEcategory/Little_Endian/NPOESS.VISwater.EmisCoeff.bin
+EmisCoeff/IR_Water/Little_Endian/Nalli.IRwater.EmisCoeff.bin
+SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
+TauCoeff/ODPS/Little_Endian/iasi616_metop-b.TauCoeff.bin
+SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
+)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings)
+CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
+                         ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings
+                         ${crtm_no_sibling_input} )
+>>>>>>> develop
