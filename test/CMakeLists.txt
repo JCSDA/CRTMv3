@@ -1368,6 +1368,9 @@ TauCoeff/ODPS/netCDF/amsua_metop-a.TauCoeff.nc
 SpcCoeff/netCDF/amsua_aqua.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/amsua_aqua.TauCoeff.nc
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 0c74967f92f31039babf840e842f44fdf560e012
 SpcCoeff/netCDF/gmi_gpm.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/gmi_gpm.TauCoeff.nc
 SpcCoeff/netCDF/seviri_m08.SpcCoeff.nc
@@ -1396,6 +1399,10 @@ SpcCoeff/netCDF/modis_aqua.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/modis_aqua.TauCoeff.nc
 SpcCoeff/netCDF/atms_n21.SpcCoeff.nc
 TauCoeff/ODPS/netCDF/atms_n21.TauCoeff.nc
+# iasi616_metop-b: IR sensor exercised by test_NLTE_Verification (merged from
+# develop 3.1.5); its NLTECoeff sibling is staged below.
+SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
+TauCoeff/ODPS/netCDF/iasi616_metop-b.TauCoeff.nc
 # NLTECoeff / ACCoeff sibling files for sensors that need them.
 # SpcCoeff_netCDF_ReadFile loads <sensor>.{NLTE,AC}Coeff.nc from the same
 # directory as the SpcCoeff file when present; without these, NLTE-active
@@ -1404,6 +1411,7 @@ TauCoeff/ODPS/netCDF/atms_n21.TauCoeff.nc
 NLTECoeff/netCDF/cris399_npp.NLTECoeff.nc
 NLTECoeff/netCDF/iasi_metop-b.NLTECoeff.nc
 NLTECoeff/netCDF/airs_aqua.NLTECoeff.nc
+NLTECoeff/netCDF/iasi616_metop-b.NLTECoeff.nc
 # cris-fsr_n21 is exercised by many regression/OMP tests above; its NLTECoeff
 # lives only under the canonical NLTECoeff/netCDF/ tree (no SpcCoeff/netCDF/
 # copy). CREATE_SYMLINK_FILENAME stages by basename, so the testinput/ symlink
@@ -1453,6 +1461,7 @@ SpcCoeff/netCDF/ssu_n08.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n09.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n11.SpcCoeff.nc
 SpcCoeff/netCDF/ssu_n14.SpcCoeff.nc
+<<<<<<< HEAD
 =======
 SpcCoeff/Little_Endian/gmi_gpm.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/gmi_gpm.TauCoeff.bin
@@ -1533,6 +1542,8 @@ TauCoeff/ODPS/Little_Endian/iasi616_metop-b.TauCoeff.bin
 SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
 SpcCoeff/netCDF/amsua_n19.ACCoeff.nc
 >>>>>>> develop
+=======
+>>>>>>> 0c74967f92f31039babf840e842f44fdf560e012
 )
 
 # Locally-staged coefficients (PARMIO LUT, AWS) live in test_data/.../fix/
@@ -1571,6 +1582,9 @@ CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM
                          ${crtm_test_input} )
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 0c74967f92f31039babf840e842f44fdf560e012
 # dump_scalar_fullprec: instrument, not a test. Prints scalar-path radiances and
 # brightness temperatures at full double precision so that "the default scalar
 # path is unchanged" can be measured rather than argued. Build it in two trees
@@ -1580,28 +1594,36 @@ CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM
 # in the last bits, so a green suite is not by itself proof of bit-identity.
 add_executable(dump_scalar_fullprec mains/unit/Unit_Test/dump_scalar_fullprec.f90)
 target_link_libraries(dump_scalar_fullprec PRIVATE crtm)
+<<<<<<< HEAD
 =======
+=======
+
+>>>>>>> 0c74967f92f31039babf840e842f44fdf560e012
 # Staging area for test_NLTE_Verification: the same coefficient set the test
 # uses from testinput/, minus the .NLTECoeff.nc/.ACCoeff.nc sibling files, so
 # netCDF SpcCoeff loads can be compared with and without siblings present.
+# (netCDF paths: the REL-3.2.0 fix tree ships no binary files.)
 list( APPEND crtm_no_sibling_input
-AerosolCoeff/Little_Endian/AerosolCoeff.bin
-CloudCoeff/Little_Endian/CloudCoeff.bin
-EmisCoeff/MW_Water/Little_Endian/FASTEM6.MWwater.EmisCoeff.bin
-EmisCoeff/IR_Ice/SEcategory/Little_Endian/NPOESS.IRice.EmisCoeff.bin
-EmisCoeff/IR_Land/SEcategory/Little_Endian/NPOESS.IRland.EmisCoeff.bin
-EmisCoeff/IR_Snow/SEcategory/Little_Endian/NPOESS.IRsnow.EmisCoeff.bin
-EmisCoeff/VIS_Ice/SEcategory/Little_Endian/NPOESS.VISice.EmisCoeff.bin
-EmisCoeff/VIS_Land/SEcategory/Little_Endian/NPOESS.VISland.EmisCoeff.bin
-EmisCoeff/VIS_Snow/SEcategory/Little_Endian/NPOESS.VISsnow.EmisCoeff.bin
-EmisCoeff/VIS_Water/SEcategory/Little_Endian/NPOESS.VISwater.EmisCoeff.bin
-EmisCoeff/IR_Water/Little_Endian/Nalli.IRwater.EmisCoeff.bin
+AerosolCoeff/netCDF/AerosolCoeff.nc
+CloudCoeff/netCDF/CloudCoeff.nc
+EmisCoeff/MW_Water/netCDF/FASTEM6.MWwater.EmisCoeff.nc
+EmisCoeff/IR_Ice/SEcategory/netCDF/NPOESS.IRice.EmisCoeff.nc
+EmisCoeff/IR_Land/SEcategory/netCDF/NPOESS.IRland.EmisCoeff.nc
+EmisCoeff/IR_Snow/SEcategory/netCDF/NPOESS.IRsnow.EmisCoeff.nc
+EmisCoeff/VIS_Ice/SEcategory/netCDF/NPOESS.VISice.EmisCoeff.nc
+EmisCoeff/VIS_Land/SEcategory/netCDF/NPOESS.VISland.EmisCoeff.nc
+EmisCoeff/VIS_Snow/SEcategory/netCDF/NPOESS.VISsnow.EmisCoeff.nc
+EmisCoeff/VIS_Water/SEcategory/netCDF/NPOESS.VISwater.EmisCoeff.nc
+EmisCoeff/IR_Water/netCDF/Nalli.IRwater.EmisCoeff.nc
 SpcCoeff/netCDF/iasi616_metop-b.SpcCoeff.nc
-TauCoeff/ODPS/Little_Endian/iasi616_metop-b.TauCoeff.bin
+TauCoeff/ODPS/netCDF/iasi616_metop-b.TauCoeff.nc
 SpcCoeff/netCDF/amsua_n19.SpcCoeff.nc
 )
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings)
 CREATE_SYMLINK_FILENAME( ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix
                          ${CMAKE_CURRENT_BINARY_DIR}/testinput_no_siblings
                          ${crtm_no_sibling_input} )
+<<<<<<< HEAD
 >>>>>>> develop
+=======
+>>>>>>> 0c74967f92f31039babf840e842f44fdf560e012

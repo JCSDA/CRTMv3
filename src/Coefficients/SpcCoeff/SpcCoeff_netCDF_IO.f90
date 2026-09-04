@@ -36,8 +36,6 @@ MODULE SpcCoeff_netCDF_IO
   USE ACCoeff_netCDF_IO   , ONLY: ACCoeff_netCDF_ReadFile
   USE NLTECoeff_netCDF_IO , ONLY: NLTECoeff_netCDF_ReadFile
   USE SensorInfo_Parameters, ONLY: ACTIVE_SENSOR
-  USE ACCoeff_netCDF_IO   , ONLY: ACCoeff_netCDF_ReadFile
-  USE NLTECoeff_netCDF_IO , ONLY: NLTECoeff_netCDF_ReadFile
 
   USE netcdf
   ! Disable implicit typing
