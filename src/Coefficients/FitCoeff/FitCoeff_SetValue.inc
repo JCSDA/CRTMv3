@@ -19,7 +19,7 @@
       IF ( self%Dimensions(i) /= SIZE(C,DIM=i) ) THEN
         WRITE( msg,'("Different dimension ",i0," size between ",&
                     &"structure (",i0,") and array (",i0,")")' ) &
-                   i, self%Dimensions(i) /= SIZE(C,DIM=i)
+                   i, self%Dimensions(i), SIZE(C,DIM=i)
         CALL Display_Message( ROUTINE_NAME, msg, FAILURE )
         CALL FitCoeff_Destroy( self )
         RETURN

@@ -18,7 +18,7 @@ MODULE CRTM_VIS_Snow_SfcOptics
   ! -----------------
   ! Module use
   USE Type_Kinds               , ONLY: fp
-  USE Message_Handler          , ONLY: SUCCESS, Display_Message
+  USE Message_Handler          , ONLY: SUCCESS, FAILURE, Display_Message
   USE Spectral_Units_Conversion, ONLY: Inverse_cm_to_Micron
   USE CRTM_Parameters          , ONLY: ZERO, ONE, MAX_N_ANGLES
   USE CRTM_SpcCoeff            , ONLY: SC
@@ -27,7 +27,15 @@ MODULE CRTM_VIS_Snow_SfcOptics
   USE CRTM_SfcOptics_Define    , ONLY: CRTM_SfcOptics_type
   USE CRTM_SEcategory          , ONLY: SEVar_type => iVar_type, &
                                        SEcategory_Emissivity
-  USE CRTM_VISsnowCoeff        , ONLY: VISsnowC
+  USE CRTM_VISsnowCoeff        , ONLY: CRTM_VISsnowCoeff_IsLoaded, &
+                                       CRTM_VISsnowCoeff_SE_IsLoaded, &
+                                       VISsnowC, &
+                                       VISsnowC_SE
+  USE CRTM_VISsnowRF           , ONLY: VISsnowVar_type => iVar_type, &
+                                       CRTM_Compute_VISsnowRF, &
+                                       CRTM_Compute_VISsnowRF_TL, &
+                                       CRTM_Compute_VISsnowRF_AD
+
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -38,7 +46,7 @@ MODULE CRTM_VIS_Snow_SfcOptics
   ! Everything private by default
   PRIVATE
   ! Data types
-  PUBLIC :: iVar_type
+  PUBLIC :: iVar_SE_type, iVar_type
   ! Science routines
   PUBLIC :: Compute_VIS_Snow_SfcOptics
   PUBLIC :: Compute_VIS_Snow_SfcOptics_TL
@@ -56,9 +64,14 @@ MODULE CRTM_VIS_Snow_SfcOptics
   ! Structure definition to hold forward
   ! variables across FWD, TL, and AD calls
   ! --------------------------------------
-  TYPE :: iVar_type
+  TYPE :: iVar_SE_type
     PRIVATE
     TYPE(SEVar_type) :: sevar
+  END TYPE iVar_SE_type
+
+  TYPE :: iVar_type
+    PRIVATE
+    TYPE(VISsnowVar_type) :: vissnowvar
   END TYPE iVar_type
 
 
@@ -147,6 +160,7 @@ CONTAINS
     SensorIndex , &  ! Input
     ChannelIndex, &  ! Input
     SfcOptics   , &  ! Output
+    iVar_SE     , &  ! Internal variable output
     iVar        ) &  ! Internal variable output
   RESULT( err_stat )
     ! Arguments
@@ -154,6 +168,7 @@ CONTAINS
     INTEGER,                   INTENT(IN)     :: SensorIndex
     INTEGER,                   INTENT(IN)     :: ChannelIndex
     TYPE(CRTM_SfcOptics_type), INTENT(IN OUT) :: SfcOptics
+    TYPE(iVar_SE_type),        INTENT(IN OUT) :: iVar_SE
     TYPE(iVar_type),           INTENT(IN OUT) :: iVar
     ! Function result
     INTEGER :: err_stat
@@ -161,36 +176,73 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_VIS_Snow_SfcOptics'
     ! Local variables
     CHARACTER(ML) :: msg
-    INTEGER  :: j
+    INTEGER  :: j, nZ
     REAL(fp) :: frequency, emissivity
+    LOGICAL  :: isSEcategory, isVISsnowC
+
 
     ! Set up
     err_stat = SUCCESS
     frequency = SC(SensorIndex)%Wavenumber(ChannelIndex)
+    ! ...Short name for angle dimensions
+    nZ = SfcOptics%n_Angles
+    ! ...Check the required coefficient data is loaded
+    isSEcategory = CRTM_VISsnowCoeff_SE_IsLoaded()
+    isVISsnowC   = CRTM_VISsnowCoeff_IsLoaded()
 
 
     ! Compute Lambertian surface emissivity
-    err_stat = SEcategory_Emissivity( &
-                 VISsnowC         , &  ! Input
-                 frequency        , &  ! Input
-                 Surface%Snow_Type, &  ! Input
-                 emissivity       , &  ! Output
-                 iVar%sevar         )  ! Internal variable output
-    IF ( err_stat /= SUCCESS ) THEN
-      msg = 'Error occurred in SEcategory_Emissivity()'
-      CALL Display_Message( ROUTINE_NAME, msg, err_stat ); RETURN
+    IF ( isSEcategory ) THEN
+      err_stat = SEcategory_Emissivity( &
+                  VISsnowC_SE      , &  ! Input
+                  frequency        , &  ! Input
+                  Surface%Snow_Type, &  ! Input
+                  emissivity       , &  ! Output
+                  iVar_SE%sevar         )  ! Internal variable output
+      IF ( err_stat /= SUCCESS ) THEN
+        msg = 'Error occurred in SEcategory_Emissivity()'
+        CALL Display_Message( ROUTINE_NAME, msg, err_stat ); RETURN
+      END IF
+
+      ! Solar direct component
+      SfcOptics%Direct_Reflectivity(:,1) = ONE - emissivity
+
+      ! Fill the return emissivity and reflectivity arrays
+      SfcOptics%Emissivity(1:SfcOptics%n_Angles,1) = emissivity
+      DO j = 1, SfcOptics%n_Angles
+        SfcOptics%Reflectivity(1:SfcOptics%n_Angles,1,j,1) = (ONE - SfcOptics%Emissivity(j,1))*SfcOptics%Weight(j)
+      END DO
+    
+    ELSE IF ( isVISsnowC ) THEN
+      err_stat = CRTM_Compute_VISsnowRF( &
+                  VISsnowC                      , &  ! Input
+                  Surface%Snow_Grain_Size       , &  ! Input
+                  Surface%Snow_Depth            , &  ! Input
+                  Surface%Snow_Density          , &  ! Input
+                  frequency                     , &  ! Input
+                  SfcOptics%Angle(1:nZ)         , &  ! Input
+                  iVar%vissnowvar               , &  ! Internal variable output
+                  SfcOptics%Direct_Reflectivity(1:nZ,1)   )  ! Output
+      IF ( err_stat /= SUCCESS ) THEN
+        msg = 'Error occurred in CRTM_Compute_VISsnowRF()'
+        CALL Display_Message( ROUTINE_NAME, msg, err_stat ); RETURN
+      END IF
+      
+      DO j = 1, SfcOptics%n_Angles
+        SfcOptics%Reflectivity(1:SfcOptics%n_Angles,1,j,1) = SfcOptics%Direct_Reflectivity(j,1)*SfcOptics%Weight(j)
+      END DO
+
+      ! Cheng: is this needed?
+      ! Fill the return emissivity arrays
+      SfcOptics%Emissivity(1:SfcOptics%n_Angles,1) = ONE - SfcOptics%Direct_Reflectivity(1:nZ,1)
+
+    ELSE
+      ! Neither table is loaded: returning SUCCESS here would hand the caller
+      ! whatever SfcOptics already held, with no message at any point.
+      err_stat = FAILURE
+      msg = 'No visible snow reflectance data loaded (neither SEcategory nor VISsnowCoeff)'
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
     END IF
-
-
-    ! Solar direct component
-    SfcOptics%Direct_Reflectivity(:,1) = ONE - emissivity
-
-
-    ! Fill the return emissivity and reflectivity arrays
-    SfcOptics%Emissivity(1:SfcOptics%n_Angles,1) = emissivity
-    DO j = 1, SfcOptics%n_Angles
-      SfcOptics%Reflectivity(1:SfcOptics%n_Angles,1,j,1) = (ONE - SfcOptics%Emissivity(j,1))*SfcOptics%Weight(j)
-    END DO
 
   END FUNCTION Compute_VIS_Snow_SfcOptics
 

@@ -13,29 +13,39 @@ endif()
 ####################################################################
 
 set( CMAKE_Fortran_FLAGS_RELEASE
-     "-O3 -unroll -no-heap-arrays -assume byterecl -qopenmp" )
+     "-O3 -unroll -no-heap-arrays -assume byterecl" )
 
 ####################################################################
 # DEBUG FLAGS
 ####################################################################
 
 set( CMAKE_Fortran_FLAGS_DEBUG
-     "-O0 -g -check bounds -traceback -warn all -no-heap-arrays -fpe0 -ftz -check all -assume byterecl -qopenmp" )
+     "-O0 -g -check bounds -traceback -warn all -no-heap-arrays -fpe0 -ftz -check all -assume byterecl" )
 
 ####################################################################
 # RELWITHDEBINFO FLAGS
 ####################################################################
 
 set( CMAKE_Fortran_FLAGS_RELWITHDEBINFO
-     "-g -O0 -traceback -fno-openmp" )
-#     "-O2 -g -DNDEBUG -check bounds -traceback -no-heap-arrays -assume byterecl -qopenmp" )
+     "-g -O0 -traceback" )
+#     "-O2 -g -DNDEBUG -check bounds -traceback -no-heap-arrays -assume byterecl" )
 
 ####################################################################
 # BIT REPRODUCIBLE FLAGS
 ####################################################################
 
 set( CMAKE_Fortran_FLAGS_BIT
-     "-O2 -no-heap-arrays -fp-model strict -assume byterecl -qopenmp" )
+     "-O2 -no-heap-arrays -fp-model strict -assume byterecl" )
+
+####################################################################
+# OpenMP (gated on the top-level OPENMP option)
+####################################################################
+
+if( OPENMP )
+  set( CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE} -qopenmp" )
+  set( CMAKE_Fortran_FLAGS_DEBUG   "${CMAKE_Fortran_FLAGS_DEBUG} -qopenmp" )
+  set( CMAKE_Fortran_FLAGS_BIT     "${CMAKE_Fortran_FLAGS_BIT} -qopenmp" )
+endif()
 
 ####################################################################
 # LINK FLAGS

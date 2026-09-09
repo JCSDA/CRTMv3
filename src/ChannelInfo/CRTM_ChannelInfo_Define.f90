@@ -512,6 +512,19 @@ CONTAINS
       END DO Channel_Loop
       ! Clean up
       DEALLOCATE( subset_idx )
+      ! The sweep above consumes one subset entry per matched sensor channel,
+      ! so j must have advanced past the whole list (j == n+1). If it did not,
+      ! the requested list contained channel numbers this sensor does not have
+      ! (the MINVAL/MAXVAL test only bounds the range, not membership) or
+      ! duplicate entries. Either way the result would silently have fewer
+      ! channels active than the caller asked for -- flag it instead.
+      IF ( j <= n ) THEN
+        ChannelInfo%Process_Channel = .FALSE.
+        err_stat = FAILURE
+        msg = 'Specified Channel_Subset contains channels not present in '//&
+              'this sensor, or duplicate entries!'
+        CALL Display_Message( ROUTINE_NAME, msg, err_stat ); RETURN
+      END IF
     END IF
 
   END FUNCTION CRTM_ChannelInfo_Subset

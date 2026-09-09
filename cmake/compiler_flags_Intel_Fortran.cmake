@@ -39,5 +39,16 @@ set( CMAKE_Fortran_FLAGS_BIT     "-O2 -ip -ipo -unroll -inline -no-heap-arrays" 
 set( CMAKE_Fortran_LINK_FLAGS    "" )
 
 ####################################################################
+# OpenMP (gated on the top-level OPENMP option)
+####################################################################
+
+if( OPENMP )
+  set( CMAKE_Fortran_FLAGS_RELEASE        "${CMAKE_Fortran_FLAGS_RELEASE} -qopenmp" )
+  set( CMAKE_Fortran_FLAGS_DEBUG          "${CMAKE_Fortran_FLAGS_DEBUG} -qopenmp" )
+  set( CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELWITHDEBINFO} -qopenmp" )
+  set( CMAKE_Fortran_FLAGS_BIT            "${CMAKE_Fortran_FLAGS_BIT} -qopenmp" )
+endif()
+
+####################################################################
 
   

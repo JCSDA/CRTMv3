@@ -18,7 +18,7 @@ set( CMAKE_Fortran_LINK_EXECUTABLE "<CMAKE_Fortran_COMPILER> <CMAKE_Fortran_LINK
 # FLAGS COMMON TO ALL BUILD TYPES
 ####################################################################
 
-if( ${HAVE_OMP} )
+if( OPENMP )
   set( CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -qsmp=omp" )
   set( CMAKE_Fortran_LINK_FLAGS "${CMAKE_Fortran_LINK_FLAGS} -qsmp=omp" )
 else( )

@@ -34,9 +34,7 @@ MODULE CRTM_Predictor_Define
                                         PAFV_Associated          , &
                                         PAFV_Destroy             , &
                                         PAFV_Create
-  USE ODPS_Predictor,             ONLY: ODPS_Get_n_Components    , &
-                                        ODPS_Get_max_n_Predictors, &
-                                        ODPS_Get_n_Absorbers     , &
+  USE ODPS_Predictor,             ONLY: ODPS_Max_n_Predictors_For, &
                                         ODPS_Get_SaveFWVFlag     , &
                                         ALLOW_OPTRAN
   ! ODZeeman modules
@@ -250,14 +248,15 @@ CONTAINS
         i = TC%ODPS(idx)%Group_Index
         ! ...Set OPTRAN flag
         no_optran = .NOT. ((TC%ODPS(idx)%n_OCoeffs > 0) .AND. ALLOW_OPTRAN)
-        ! ...Allocate main structure
+        ! ...Allocate main structure from the file's own rosters (the
+        !    load-time validation guarantees kernel support)
         CALL ODPS_Predictor_Create( &
-               self%ODPS                   , &
-               TC%ODPS(idx)%n_Layers       , &
-               n_Layers                    , &
-               ODPS_Get_n_Components(i)    , &
-               ODPS_Get_max_n_Predictors(i), &
-               No_OPTRAN = no_optran         )
+               self%ODPS                        , &
+               TC%ODPS(idx)%n_Layers            , &
+               n_Layers                         , &
+               SIZE(TC%ODPS(idx)%Component_ID)  , &
+               ODPS_Max_n_Predictors_For(i, TC%ODPS(idx)%Component_ID), &
+               No_OPTRAN = no_optran              )
         allocate_success = ODPS_Predictor_Associated(self%ODPS)
         ! ...Allocate memory for saved forward variables
         ! *****FLAW*****
@@ -265,11 +264,11 @@ CONTAINS
         IF ( PRESENT(SaveFWV) .AND. ODPS_Get_SaveFWVFlag() ) THEN
         ! *****FLAW*****
           CALL PAFV_Create( &
-                 self%ODPS%PAFV         , &
-                 TC%ODPS(idx)%n_Layers  , &
-                 n_Layers               , &
-                 ODPS_Get_n_Absorbers(i), &
-                 No_OPTRAN = no_optran    )
+                 self%ODPS%PAFV                 , &
+                 TC%ODPS(idx)%n_Layers          , &
+                 n_Layers                       , &
+                 SIZE(TC%ODPS(idx)%Absorber_ID) , &
+                 No_OPTRAN = no_optran            )
           allocate_success = allocate_success .AND. &
                              PAFV_Associated(self%ODPS%PAFV)
         END IF
@@ -295,14 +294,14 @@ CONTAINS
             i = TC%ODSSU(idx)%ODPS(1)%Group_Index
             ! ...Set OPTRAN flag
             no_optran = .NOT. ((TC%ODSSU(idx)%ODPS(1)%n_OCoeffs > 0) .AND. ALLOW_OPTRAN)
-            ! ...Allocate main structure
+            ! ...Allocate main structure from the file's own rosters
             CALL ODPS_Predictor_Create( &
-                   self%ODPS                     , &
-                   TC%ODSSU(idx)%ODPS(1)%n_Layers, &
-                   n_Layers                      , &
-                   ODPS_Get_n_Components(i)      , &
-                   ODPS_Get_max_n_Predictors(i)  , &
-                   No_OPTRAN = no_optran           )
+                   self%ODPS                                 , &
+                   TC%ODSSU(idx)%ODPS(1)%n_Layers            , &
+                   n_Layers                                  , &
+                   SIZE(TC%ODSSU(idx)%ODPS(1)%Component_ID)  , &
+                   ODPS_Max_n_Predictors_For(i, TC%ODSSU(idx)%ODPS(1)%Component_ID), &
+                   No_OPTRAN = no_optran                       )
             allocate_success = ODPS_Predictor_Associated(self%ODPS)
             ! ...Allocate memory for saved forward variables
             ! *****FLAW*****
@@ -310,11 +309,11 @@ CONTAINS
             IF ( PRESENT(SaveFWV) .AND. ODPS_Get_SaveFWVFlag() ) THEN
             ! *****FLAW*****
               CALL PAFV_Create( &
-                     self%ODPS%PAFV                , &
-                     TC%ODSSU(idx)%ODPS(1)%n_Layers, &
-                     n_Layers                      , &
-                     ODPS_Get_n_Absorbers(i)       , &
-                     No_OPTRAN = no_optran           )
+                     self%ODPS%PAFV                          , &
+                     TC%ODSSU(idx)%ODPS(1)%n_Layers          , &
+                     n_Layers                                , &
+                     SIZE(TC%ODSSU(idx)%ODPS(1)%Absorber_ID) , &
+                     No_OPTRAN = no_optran                     )
               allocate_success = allocate_success .AND. &
                                  PAFV_Associated(self%ODPS%PAFV)
             END IF

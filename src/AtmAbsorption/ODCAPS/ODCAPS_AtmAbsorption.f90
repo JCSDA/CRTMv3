@@ -262,8 +262,9 @@ CONTAINS
     REAL( fp ) ::    XZ 
     REAL( fp ), DIMENSION(MAX_N_TRACEGASES_PREDICTORS,Predictor%n_Layers) :: TraceGas_Predictors
     INTEGER :: idx
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
+    NULLIFY(TC)
     TC => ODCAPS_TC(Sensor_Index)
  
 
@@ -1172,7 +1173,7 @@ CONTAINS
                                 TraceGas_Predictors, TraceGas_Predictors_TL
     REAL( fp ) ::    XZ, XZ_TL 
     INTEGER :: idx
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
  
@@ -2502,7 +2503,7 @@ CONTAINS
                                   TraceGas_Predictors,  TraceGas_Predictors_AD
     REAL( fp ) ::    XZ, XZ_AD 
     INTEGER :: idx
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
  
@@ -4408,7 +4409,7 @@ CONTAINS
     INTEGER ::   LOP	  
     REAL( fp), DIMENSION(MAX_N_WATER_OPTRAN_LAYERS) :: KWOP
     INTEGER :: idx
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
  
@@ -4497,7 +4498,7 @@ CONTAINS
     INTEGER ::   LOP	  
     REAL( fp), DIMENSION(MAX_N_WATER_OPTRAN_LAYERS) ::KWOP, KWOPP, KWOP_TL, KWOPP_TL
     INTEGER :: idx
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
 
@@ -4618,7 +4619,7 @@ CONTAINS
     REAL( fp), DIMENSION(MAX_N_WATER_OPTRAN_LAYERS) :: KWOP, KWOPP, KWOP_AD, KWOPP_AD
     REAL( fp ), DIMENSION(MAX_N_ODCAPS_LAYERS):: H2O_Optical_Depth
     INTEGER :: idx
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
  
@@ -4929,7 +4930,7 @@ CONTAINS
     INTEGER :: INONLTE ! Channel index for Non_LTE  
 
     INTEGER :: Do_Sun_Calc 
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
  
@@ -5034,7 +5035,7 @@ CONTAINS
     INTEGER :: INONLTE ! Channel index for Non_LTE  
 
     INTEGER :: Do_Sun_Calc 
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
  
@@ -5133,7 +5134,7 @@ CONTAINS
  
     INTEGER :: Do_Sun_Calc 
     
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
  

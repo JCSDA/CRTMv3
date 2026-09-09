@@ -99,9 +99,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:            Set this logical argument to access netCDF format
 !                          NLTECoeff datafiles.
-!                          If == .FALSE., file format is BINARY [DEFAULT].
-!                             == .TRUE.,  file format is NETCDF.
-!                          If not specified, default is .FALSE.
+!                          If == .FALSE., file format is BINARY.
+!                             == .TRUE.,  file format is NETCDF [DEFAULT].
+!                          If not specified, default is .TRUE.
 !                          UNITS:      N/A
 !                          TYPE:       LOGICAL
 !                          DIMENSION:  Scalar
@@ -243,17 +243,17 @@ CONTAINS
     ! Function result
     INTEGER :: err_stat
     ! Function variables
-    LOGICAL :: binary
+    LOGICAL :: Binary
 
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    binary = .TRUE.
-    IF ( PRESENT(netCDF) ) binary = .NOT. netCDF
+    Binary = .FALSE.
+    IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
 
     ! Call the appropriate function
-    IF ( binary ) THEN
+    IF ( Binary ) THEN
       err_stat = NLTECoeff_Binary_InquireFile( &
                    Filename, &
                    n_Predictors     = n_Predictors    , &
@@ -325,9 +325,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:         Set this logical argument to access netCDF format
 !                       NLTECoeff datafiles.
-!                       If == .FALSE., file format is BINARY [DEFAULT].
-!                          == .TRUE.,  file format is NETCDF.
-!                       If not specified, default is .FALSE.
+!                       If == .FALSE., file format is BINARY.
+!                          == .TRUE.,  file format is NETCDF [DEFAULT].
+!                       If not specified, default is .TRUE.
 !                       UNITS:      N/A
 !                       TYPE:       LOGICAL
 !                       DIMENSION:  Scalar
@@ -403,16 +403,16 @@ CONTAINS
     ! Function result
     INTEGER :: err_stat
     ! Function variables
-    LOGICAL :: binary
+    LOGICAL :: Binary
 
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    binary = .TRUE.
-    IF ( PRESENT(netCDF) ) binary = .NOT. netCDF
+    Binary = .FALSE.
+    IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
     ! Call the appropriate function
-    IF ( binary ) THEN
+    IF ( Binary ) THEN
       err_stat = NLTECoeff_Binary_ReadFile( &
                    Filename , &
                    NLTECoeff, &
@@ -467,9 +467,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:         Set this logical argument to access netCDF format
 !                       NLTECoeff datafiles.
-!                       If == .FALSE., file format is BINARY [DEFAULT].
-!                          == .TRUE.,  file format is NETCDF.
-!                       If not specified, default is .FALSE.
+!                       If == .FALSE., file format is BINARY.
+!                          == .TRUE.,  file format is NETCDF [DEFAULT].
+!                       If not specified, default is .TRUE.
 !                       UNITS:      N/A
 !                       TYPE:       LOGICAL
 !                       DIMENSION:  Scalar
@@ -544,16 +544,16 @@ CONTAINS
     ! Function result
     INTEGER :: err_stat
     ! Local variables
-    LOGICAL :: binary
+    LOGICAL :: Binary
 
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    binary = .TRUE.
-    IF ( PRESENT(netCDF) ) binary = .NOT. netCDF
+    Binary = .FALSE.
+    IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
     ! Call the appropriate function
-    IF ( binary ) THEN
+    IF ( Binary ) THEN
       err_stat = NLTECoeff_Binary_WriteFile( &
                    Filename , &
                    NLTECoeff, &
@@ -658,7 +658,7 @@ CONTAINS
     END IF
 
     ! Write the Binary file
-    err_stat = NLTECoeff_WriteFile( BIN_Filename, nltecoeff, Quiet = Quiet )
+    err_stat = NLTECoeff_WriteFile( BIN_Filename, nltecoeff, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error writing Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -667,7 +667,7 @@ CONTAINS
 
     ! Check the write was successful
     ! ...Read the Binary file
-    err_stat = NLTECoeff_ReadFile( BIN_Filename, nltecoeff_copy, Quiet = Quiet )
+    err_stat = NLTECoeff_ReadFile( BIN_Filename, nltecoeff_copy, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)//' for test'
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )

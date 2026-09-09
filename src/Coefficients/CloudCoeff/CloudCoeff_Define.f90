@@ -103,6 +103,10 @@ MODULE CloudCoeff_Define
     ! Release and version information
     INTEGER(Long) :: Release = CLOUDCOEFF_RELEASE
     INTEGER(Long) :: Version = INVALID_CLOUDCOEFF
+    ! Cloud-optics scheme, derived from the loaded data (see CRTM_CloudCoeff_Load): MIE_TAMU_CLOUDCOEFF
+    ! (Mie spheres, MW interpolation on effective radius) or DDA_ARTS_CLOUDCOEFF (non-spherical habits,
+    ! MW interpolation on water content). Used by CRTM_CloudScatter to dispatch the MW cloud optics.
+    INTEGER(Long) :: Data_Type = MIE_TAMU_CLOUDCOEFF
     ! Allocation indicator
     LOGICAL :: Is_Allocated = .FALSE.
     ! Dataset parameter definitions (eventually stored in the datafile)

@@ -197,6 +197,14 @@ CONTAINS
 
     ! Perform Interpolation
     CALL interp_1D( SEcategory%Reflectance(iVar%i1:iVar%i2, Surface_Type), iVar%xlp, reflectance )
+    ! The 4-point Lagrange interpolant overshoots the physical range where the
+    ! tabulated spectrum has sharp structure: the NPOESS VIS snow table holds
+    ! exact zeros at 4000 and 5000 cm-1 with positive neighbours, giving a
+    ! reflectance near -0.03 at 2.25 um for both snow types. A value outside
+    ! [0,1] is unphysical, and a negative one propagates to a negative
+    ! radiance and then a NaN brightness temperature (LOG of a negative
+    ! argument in the inverse Planck), so clamp at the source.
+    reflectance = MIN( MAX( reflectance, ZERO ), ONE )
     Emissivity = ONE - reflectance
 
   END FUNCTION SEcategory_Emissivity

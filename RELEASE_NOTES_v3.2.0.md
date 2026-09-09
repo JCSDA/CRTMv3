@@ -1,0 +1,754 @@
+# CRTM v3.2.0 Release Notes
+
+**Status:** release candidate. The library code is frozen and the coefficient
+tarball is **rolled, verified and published**; it remains subject to re-rolls
+until the evaluation period closes (the pinned md5 in
+`Get_CRTM_Binary_Files.sh` / `test/CMakeLists.txt` is authoritative). Note:
+the build now skips the tarball download and hash when an extracted
+`fix_REL-3.2.0.0/` tree already exists, so after any re-roll, delete the
+extracted tree to pick up the new tarball.
+
+**Coefficient data.** Three efforts landed: the IASI-NG regeneration (SpcCoeff
+and ODPS TauCoeff, regenerated 2026-08-01 by `crtm-coeffgen` on the LBLRTM
+backend), the GeoXO `gxi` rework (`gxi_geoxo` and `v.gxi_geoxo`, same date), and
+the ABI ODPS family regeneration (2026-08-03/04, see below). Note that
+`gxs_geoxo_lw` and `gxs_geoxo_mw` are unchanged v3.1.4 inheritances and were not
+part of the GeoXO rework.
+
+The tarball was verified against the staging tree file by file: **1440 files,
+all netCDF, zero differences**, extracting to `fix_REL-3.2.0.0/fix/`.
+
+### Scope of the coefficient change
+
+Every file classified against the v3.1.4 baseline (`fix_REL-3.1.2.0`, md5
+`0e5888cae80aa674b2e67ecd4490317d`, the tarball v3.1.4 itself pinned). Method
+and full artifacts: `test-data-release/coeff_delta_REL-3.2.0/`.
+
+| family | identical | metadata-only | data-changed | new | retired |
+|---|---|---|---|---|---|
+| SpcCoeff | 396 | 53 | 14 | 75 | 1172 |
+| TauCoeff | 0 | 705 | 11 | 93 | 1883 |
+| NLTECoeff | 0 | 6 | 1 | 32 | 0 |
+| EmisCoeff | 3 | 0 | 0 | 19 | 2 |
+| CloudCoeff | 1 | 0 | 0 | 9 | 15 |
+| AerosolCoeff | 0 | 0 | 0 | 4 | 0 |
+| ACCoeff | 0 | 15 | 0 | 2 | 2 |
+| BeCoeff | 1 | 0 | 0 | 0 | 0 |
+| test_data | 0 | 0 | 0 | 0 | 531 |
+| **total** | **401** | **779** | **26** | **234** | **3605** |
+
+Reading that table:
+
+- **234 files are new** and **26 have changed numbers**. Those 26 are the only
+  files that can move a brightness temperature for a sensor you already use.
+- **779 are metadata-only**: the provenance backfill wrote Title, History,
+  Comment and Profile_Set_Id where they had never been written. No radiometric
+  change.
+- **3605 "retired" overstates the loss.** 2558 of those are format drops, not
+  retirements: the Big_Endian/Little_Endian binary split disappears because the
+  tree is now uniformly netCDF. Of the genuine netCDF retirements, 14 are
+  renames with verified counterparts (JPSS-2 became NOAA-21 at launch, so
+  `atms_j2` is now `atms_n21`, and similarly for its siblings), 361 are bulk
+  per-detector and passband variants, and 7 are withdrawals with individual
+  justification. The reconciliation is in
+  `coeff_delta_REL-3.2.0/retirement_reconciliation/RETIREMENT_RECONCILIATION.md`.
+  **If a sensor you use appears to have vanished, check the rename list first.**
+
+**The ABI infrared family was regenerated late in the cycle.** All six products
+(`abi_g16`, `abi_g17`, `abi_g18`, `abi_g19`, `abi_gr`, `abi-81K_g17`; SpcCoeff
+and ODPS TauCoeff each) carry new numbers. The staged `abi_g19` was a 2024 STAR
+test article whose fitted-CO2 extrapolation produced a measured -1.67 K channel
+16 bias against 1279 GOES-19 clear-ocean superobs, plus spurious stratospheric
+water Jacobians in the window channels; it had shipped since REL-3.1.2.0. The
+family was rebuilt at the 2026.5 gas epoch with per-flight-model CWG SRFs
+authenticated against NOAA NCC. **ABI users should expect a brightness
+temperature change and should not carry forward bias corrections trained on the
+old coefficients.** The `v.abi_*` visible halves were not part of this pass.
+
+| | |
+|---|---|
+| file | `fix_REL-3.2.0.0.tgz` |
+| size | 3,377,422,223 bytes |
+| md5 | `88995873986cf2b077808a75d1c56f83` |
+| published | 2026-08-06, `https://bin.ssec.wisc.edu/pub/s4/CRTM/` |
+
+It is smaller than the June 2026 tarball because the July campaign retired and
+replaced coefficient files and the tree is now uniformly netCDF.
+
+**A default build works.** The checksum above is what `test/CMakeLists.txt`
+and `Get_CRTM_Binary_Files.sh` pin, and it is what the server serves, so
+`cmake ..` downloads and verifies the correct tree with no extra arguments.
+The 2026-08-06 archive was verified locally before promotion: all 1440 members
+byte-identical to the staging tree (which itself is hash-verified against the
+validated coefficient sources in the campaign ledger). Upload confirmed
+against the server on 2026-08-06: `Content-Length: 3377422223`, with the first
+and last MiB byte-compared clean against the local roll. The size alone
+(3,377,422,223 vs 3,377,517,263) distinguishes it from the superseded
+2026-08-05 copy. Building against an unpacked tree remains supported:
+
+```
+cmake .. -DFIX_FILE_PATH=<path-to>/fix_REL-3.2.0.0/fix
+```
+
+Developer-facing detail for every item below (commits, affected tests, TB
+impact) is in `REL-3.2.0_changes_vs_develop.md`. Changes are stated relative
+to CRTM v3.1.4; the v3.1.4 tag and the `develop` branch point differ only in
+the default coefficient-data location (no library code differences), so the
+same catalog applies against either baseline. A per-sensor inventory of the
+shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
+
+## Highlights
+
+- **netCDF coefficient transition.** netCDF is now the canonical coefficient
+  format: SpcCoeff, TauCoeff (ODPS/ODAS/ODSSU/Zeeman), CloudCoeff,
+  AerosolCoeff, and emissivity LUTs all load from `.nc` files, and the fix
+  tarball ships netCDF only. Regression baselines are netCDF as well.
+- **PARMIO MW-water emissivity (new, default-on at and above 200 GHz).** A
+  LUT-driven physical-reference ocean emissivity backend for sub-mm sounders
+  (AWS, TROPICS class). When `PARMIO.MWwater.EmisCoeff.nc` is present
+  (`CRTM_Init` auto-loads it; it ships in the fix tarball), MW-water channels
+  at or above 200 GHz route to PARMIO; below 200 GHz (every legacy sensor)
+  the FASTEM path is byte-identical to v3.1.x.
+- **TELSEM2 MW-land emissivity atlas (new, opt-in).** Enabled by the new
+  `CRTM_Init` argument `Use_MWland_Atlas=.TRUE.` (which auto-resolves the
+  default-named `TELSEM2.MWland.EmisCoeff.nc` from the coefficient path) or by
+  passing an explicit `MWlandCoeff_File`. Without the opt-in, MW land
+  emissivity uses NESDIS_LandEM exactly as before, even if the atlas file is
+  present in the coefficient directory.
+- **Level-resolved downwelling/upwelling radiance profiles (new outputs).**
+  Opt-in via `Options%Compute_Down_Radiance_Profile` /
+  `Compute_Up_Radiance_Profile`; fully differentiated (FWD/TL/AD/K) and
+  combined correctly for fractional cloud. The surface downwelling radiance
+  `RTSolution%Down_Radiance` is a first-class output (always populated on the
+  emission path; enabled via `Options%Compute_Down_Radiance` for scattering).
+- **Vector radiative transfer (`Options%n_Stokes > 1`) substantially repaired.**
+  The surface is now handed to the solver in the Stokes basis rather than
+  (V,H); the third and fourth Stokes components survive the surface aggregation
+  and the azimuthal accumulation instead of being zeroed at both ends; the
+  clear-sky path gained a vector solver, so a cloud-free polarimetric run no
+  longer returns Q = U = V = 0; the fractional-cloud clear/cloudy combine is
+  differentiated across all Stokes components; and `RTSolution%Radiance` is now
+  the channel-polarized measurement rather than Stokes I (see behavior change
+  14). Tangent-linear, adjoint and K are verified at `n_Stokes = 4` against
+  finite differences, the adjoint dot-product identity and K against AD, for
+  both atmospheric and surface control variables including wind direction.
+  **This path has not been validated against an external model; see the known
+  issues before using U or V quantitatively.**
+- **Analytic MW-land surface Jacobians** (issue #281) — the NESDIS_LandEM
+  microwave land path (< 80 GHz) now returns analytic TL/AD/K sensitivities for
+  **every physical land-state variable**: LAI, vegetation fraction, soil
+  moisture, soil temperature, and land (skin) temperature. `Canopy_Water_Content`
+  has an exactly-zero Jacobian (the forward never consumes it). This also
+  corrects the `Land_Temperature` Jacobian below 80 GHz, which previously omitted
+  the emissivity's skin-temperature dependence (through the LandEM `gsect0`
+  thermal ratio) and was therefore too large; it now matches finite differences.
+  Forward radiances are unchanged.
+- **MW scene-ozone transmittance component** (`GROUP_MW_O3`, Group_Index=7)
+  for microwave sensors.
+- **UV scene-NO2 transmittance component** (`GROUP_UV_NO2`, Group_Index=8,
+  issue #340) for UV-VIS air-quality spectrometers (TEMPO, GEMS class). A
+  sixth ODPS component carries scene-variable NO2 absorption: supply an NO2
+  profile in the Atmosphere (HITRAN id 10, ppmv) and NO2-sensitive radiances
+  respond; omit it and the coefficient file's reference climatology applies.
+  Full FWD/TL/AD/K support, verified by a machine-precision predictor-level
+  transpose test and an end-to-end TL/AD/K parity test. Group 1/2/3/7
+  coefficient files never reach the new code.
+- **UV sensors can now run the forward operator** (issue #339). The
+  surface-optics dispatch previously had no UV (Sensor_Type 4) branch, so
+  every UV SpcCoeff (the shipped OMPS family included) failed CRTM_Forward
+  with "Unrecognised sensor type". UV channels now share the VIS Lambertian
+  surface-optics path, and a UV-only sensor list loads the VIS surface
+  emissivity LUTs at CRTM_Init. MW/IR/VIS behavior is unchanged.
+- **New sensor: `gems2_amethyst`** (Weather Stream GEMS2 24-channel
+  microwave sounder, 118.75 GHz oxygen bank plus 160-183.31 GHz humidity
+  bank, on the GEMS2-Amethyst smallsat). Generated with crtm-coeffgen
+  (MonoRTM, ECMWF84); brightness-temperature validation against
+  line-by-line truth averages 0.04 K. WMO ids are invalid-value sentinels
+  until C-5/C-8 assign codes; the 118.75 GHz line-center channels carry no
+  Zeeman treatment. Unrelated to the Korean GEMS UV spectrometer
+  (`gems_gk2b`) despite the acronym.
+- **FY-3 microwave family completed (12 sensors, FY-3C through FY-3G).**
+  New coefficient pairs for MWHS-2 (FY-3C/D and the E-variant on FY-3E/F),
+  MWTS-2 (FY-3C/D), MWTS-3 (FY-3E/F), MWRI (FY-3C/D), MWRI-2 (FY-3F;
+  instrument failed in 2025, coefficient serves historical reprocessing),
+  and MWRI-RM (FY-3G). Generated with crtm-coeffgen from the NWP-SAF
+  passband definitions and validated with forward, weighting-function, and
+  adjoint physics checks; the 57 GHz line-splitting channels reproduce the
+  AMSU-A weighting-function progression.
+- **AMSR3 humidity-channel bandwidths corrected to WMO OSCAR.** The bundled
+  AMSR3 spectral response function was too wide on its three highest channels:
+  165.5 GHz by a factor of 1.25, 183.31 +/- 7 by 2.35, and 183.31 +/- 3 by 2.72,
+  all against the per-sideband figures published by WMO OSCAR. The other 18 of
+  21 channels matched OSCAR exactly and are unchanged, and STAR independently
+  revised the same three. Against 2152 collocated observations the 183.31 +/- 3
+  bias improves from +4.270 K to +3.422 K and 183.31 +/- 7 from +3.118 K to
+  +2.906 K, with channels 1 to 18 unmoved. The larger effect is on the
+  Jacobians: the 183.31 +/- 3 water vapour Jacobian error against a
+  reference-free tiled-channel truth falls from 9.468 percent to 0.338 percent,
+  which retires the belief that ODPS could not represent a wide double-sideband
+  channel. That was never an ODPS limitation, only a band 2.72 times too wide.
+  Recorded caveat: 165.5 GHz moved the wrong way on observation-minus-background
+  (+3.951 K to +4.168 K), but that channel sits inside a 3.4 to 4.2 K
+  common-mode bias shared by every variant including STAR's, so
+  observation-minus-background cannot arbitrate it; the change rests on OSCAR,
+  on STAR's independent revision, and on the 18-of-21 exact match. Spectroscopy,
+  training profiles and algorithm are unchanged, and only the TauCoeff differs
+  (the regenerated SpcCoeff is identical in every data variable).
+- **INSAT-3DS visible sensors completed.** `v.imgr_insat-3ds` and
+  `v.sndr_insat-3ds` previously shipped a SpcCoeff with no TauCoeff and
+  could not pass `CRTM_Init`; both now carry TauCoeffs generated from the
+  measured ISRO SRFs (crtm-coeffgen, ECMWF84) and regenerated SpcCoeffs
+  whose centroids match the previously shipped files to better than
+  0.03 nm.
+- **CRTM-Exp cloud-optics schema (experimental, opt-in).** A new
+  habit-resolved cloud LUT format selected explicitly with
+  `Cloud_Model='CRTM-Exp'`; the default cloud path is unchanged.
+- **SNICAR visible snow reflectance LUT (new, opt-in).** A SNICAR-based VIS-snow
+  reflectance table, `SNICAR.VISsnow.EmisCoeff.nc`, ships in the fix tarball
+  alongside updated IR snow emissivity modules. The default snow surface path
+  (NPOESS) is unchanged: you get SNICAR only by asking for it by filename, since
+  there is no `VISsnowCoeff_Scheme` argument (unlike `MWwaterCoeff_Scheme`).
+
+  ```fortran
+  err = CRTM_Init( Sensor_Id, ChannelInfo, &
+                   VISsnowCoeff_File = 'SNICAR.VISsnow.EmisCoeff.nc', &
+                   File_Path         = coeff_path )
+  ```
+
+  `VISsnowCoeff_Format` selects the file format and defaults to `netCDF`.
+  An unrecognised filename prefix (anything other than `NPOESS` or `SNICAR`)
+  is a hard `CRTM_Init` failure rather than a silent fallback to no snow table.
+
+  **Maturity, stated plainly:** this table is shipped, loadable, and exercised
+  by one radiance-level test (`test_SNICAR_VISsnow_Physics`) that pins the
+  grain-size, depth and density response against an invariant NPOESS control
+  through the full radiative transfer path. That is the extent of what is
+  verified. Two known limitations remain: the table's angle dimension is
+  labelled "Solar Zenith Angle" in the file but is interpolated at the RT
+  view/quadrature angles, so the solar zenith angle never reaches the table;
+  and the forward path applies no bounds guard, so snow states outside the
+  table extrapolate silently while the tangent-linear and adjoint return
+  exactly zero. It carries no validation package of the kind behind the ABI or
+  IASI-NG coefficient work. Treat it as experimental and evaluate it against
+  your own cases before operational use.
+- **ODPS transmittance-algorithm modernization** (issue #343). The ODPS group
+  system was rebuilt on a single group registry with load-time validation of
+  `Group_Index` and the `Component_ID`/`Absorber_ID` rosters (malformed or
+  mislabeled coefficient files are now rejected at load with a clear message
+  instead of computing garbage), per-component predictor kernels for FWD, TL,
+  and AD, and file-roster-driven dispatch. Results are bit-identical for valid
+  coefficient files; Zeeman-reserved group indexes are refused (the historical
+  OMPS "Group 4" failure mode).
+- **Long coefficient paths** (issue #238). Coefficient file paths are now
+  carried in deferred-length strings instead of fixed 80/128/256-character
+  buffers, so deep installation paths no longer truncate silently;
+  initialization through a ~300-character path is regression-tested.
+- **Fastem1 SST Jacobian corrected.** On the legacy Fastem1 MW-water path
+  (`Options%Use_Old_MWSSEM=.TRUE.`, frequency >= 20 GHz) the emissivity's
+  sea-surface-temperature derivative was silently dropped, so
+  `Surface_K%Water_Temperature` carried only the skin-emission term. The
+  Jacobian is now complete and validated against finite differences. The
+  default (FastemX) path was never affected.
+- **Intel builds fixed: TELSEM2 atlas load and the PRA polarization angle.**
+  Two defects that a GNU-only test suite had been passing, both found by adding
+  an `ifx` build to the release verification.
+
+  On Intel, `CRTM_Init` segmentation faulted whenever the TELSEM2 atlas was
+  requested, on any machine with the stock 8 MB Linux stack limit. The atlas is
+  large: `n_data` is 2,770,889, so `cell_number` is 11 MB and `emissivity` is
+  155 MB. `nf90_get_var` takes an assumed-shape dummy and passes it down to an
+  F77 layer that takes an assumed-size one, and the compiler bridges the two
+  with a contiguous copy-in temporary. That temporary is created inside the
+  netCDF library's own compiled code, so it follows the flags netCDF was built
+  with and not CRTM's, which is why no CRTM compiler flag can prevent it. The
+  reader now takes the atlas in bounded slices, so every temporary stays small
+  however netCDF was built. This is a read-path change only; the values loaded
+  are identical.
+
+  Separately, the `PRA_POLARIZATION` surface-optics branch divided zero by zero
+  at nadir scan angle. The shared denominator reduces exactly to
+  `|sin(phi)|*sqrt(1 + sin(theta_f)^2)`, and both numerators vanish with it, so
+  the expression was undefined there and returned whatever the compiler folded
+  it to: GNU gave a polarization weight of 1, which selects the **opposite**
+  polarization to the correct limit of 0, and Intel gave a NaN that propagated
+  into the radiance, the weighting functions and the adjoint. The singularity is
+  removable, and passing the two numerators to `ATAN2` removes it rather than
+  special-casing it. This affects `gems2_amethyst` and `gems2_beryl` only, both
+  new in this release, so no previously released sensor changes behavior. The
+  expression had been duplicated in the forward, tangent-linear, adjoint and
+  Stokes-projection paths and is now one shared function.
+- **netCDF `SpcCoeff` now loads its `NLTECoeff` and `ACCoeff` siblings.** The
+  binary `SpcCoeff` reader streams both substructures inline from the same file
+  via a `DATA_PRESENT` indicator; the netCDF layout instead stores them as
+  separate `<sensor>.NLTECoeff.nc` and `<sensor>.ACCoeff.nc`. In v3.1.4 the
+  runtime read path never looked for them, so a netCDF run silently attached
+  neither. The machinery existed but was wired only into
+  `SpcCoeff_netCDF_to_Binary` and `SpcCoeff_Binary_to_netCDF`, so placing the
+  siblings next to the `SpcCoeff` did not help either, contrary to a
+  reasonable expectation. v3.2.0 resolves the sibling from the canonical
+  `fix/NLTECoeff/netCDF/` layout and falls back to a flat co-located layout.
+
+  Measured on AIRS by running both libraries against **identical** coefficients:
+  brightness temperatures differ by up to **36.4 K** on the 4.3 um shortwave CO2
+  channels in daylight, confined to channels 1900-2114 (the NLTE set), with
+  identical optical depths, and **exactly zero** difference at night where the
+  NLTE correction is inactive. The Jacobian effect is proportionally larger:
+  peak `dTB/dT` on the affected channels changes by a median of 23 percent and
+  up to 90 percent.
+
+  The antenna-correction half was measured the same way, on AMSU-A with
+  `Options%Use_Antenna_Correction = .TRUE.` and a non-zero `iFOV`: deleting
+  `amsua_n19.ACCoeff.nc` changes v3.1.4's answer on **zero** of 3780 rows and
+  v3.2.0's on **all** of them, by up to **1.225 K** with a mean of 0.611 K.
+  Smaller than the NLTE effect but it touches every channel and enters as a
+  systematic bias rather than a scatter.
+
+  In the v3.1.4 coefficient tree this reaches **7 sensors with an NLTE sibling**
+  (AIRS and its module variants, CrIS B3, IASI B3) and **17 with an
+  antenna-correction sibling** (AMSU-A, AMSU-B, MHS). Users reading binary
+  coefficients were never affected, since that reader streams both
+  substructures inline.
+
+- **A visible-sensor hang without cloud coefficients is gone.** Under v3.1.4 a
+  clear-sky visible forward run with `Load_CloudCoeff=.FALSE.` and
+  `Load_AerosolCoeff=.FALSE.` initialized normally, entered the first
+  `CRTM_Forward` call and did not return: one call exceeded 100 seconds of CPU
+  where the full 84-profile, three-angle run otherwise finishes inside that.
+  Loading the two coefficient sets avoids it, and v3.2.0 runs the same
+  configuration to completion. Reported for the benefit of anyone who hit this
+  and worked around it; the trigger is identified, but the underlying
+  non-convergence was not traced and it was not proven that the v3.1.4 call
+  never terminates.
+
+- **Runtime OpenMP control.** `OMP_NUM_THREADS` is honored at run time (no
+  longer captured at configure time).
+- **Expanded self-checking test coverage.** New baseline-independent checks
+  include general TL-vs-FD and adjoint-consistency tests across the three
+  main sensor types (#280), multi-sensor single-call bit-consistency, ODPS
+  group-validation and long-path initialization tests, a DDA-ARTS ICE_CLOUD
+  behavior pin, multi-sensor OMPS UV and TEMPO UV+VIS physics verifications
+  (each registered when its pre-release coefficient pairs are present), and
+  OpenMP thread-count consistency tests (#111).
+
+## Coefficient changes
+
+The shipped tree is **1440 files, all netCDF**. Every one was hash-classified
+against the v3.1.4 baseline (`fix_REL-3.1.2.0`), with NaN bit-patterns
+canonicalised and VLEN strings hashed by content:
+
+| classification | files | meaning |
+|---|---|---|
+| identical | 403 | byte-equivalent content |
+| metadata-only | 789 | provenance attributes written or backfilled; **no physics change** |
+| **data-changed** | **14** | the actual work list |
+| new | 234 | products that did not exist in v3.1.4 |
+
+The 14 data-changed files are the only ones whose numbers moved:
+`airs_aqua.NLTECoeff`; SpcCoeff for `iasi-ng_metop-sg-a1`,
+`metimage_metop-sg-a1`, `mws_metop-sg-a1`, `v.abi_g18`, `v.imgr_insat-3ds`,
+`v.metimage_metop-sg-a1`, `v.sndr_insat-3ds`, `v.viirs-i_n21`; and TauCoeff for
+`iasi-ng_metop-sg-a1`, `metimage_metop-sg-a1`, `mws_metop-sg-a1`,
+`v.metimage_metop-sg-a1`, `v.viirs-i_n21`.
+
+**On the large "retired" count, which is easy to misread.** The census records
+3605 retired paths, but **2612 of those are `.bin` files** removed by the
+deliberate binary-format drop, not products withdrawn. Of the 993 netCDF
+retirements, the overwhelming majority are per-detector and spectral-shift
+variant families withdrawn deliberately, plus **14 renames whose counterparts
+are verified present** (JPSS-2 became NOAA-21 at launch, and similar), and 7
+individually justified withdrawals. No operational product disappeared without
+a counterpart.
+
+Per-sensor detail (id, platform, generation date, provenance, ACCoeff/NLTECoeff
+presence, validation status) is in `REL-3.2.0_coefficient_inventory.md`. The
+evidence behind the data-changed entries — line-by-line truth comparisons,
+observation closure, Jacobian statistics, cross-sensor validation and a
+standing adversarial audit — is in
+`test-data-release/coeff_delta_REL-3.2.0/`, indexed by its `DELTAS.md`.
+
+## Breaking and behavior changes
+
+1. **RTSolution file formats changed incompatibly.** The netCDF reader
+   requires variables absent from files written by earlier versions
+   (per-element `RT_Algorithm_Name`, `Reflectance`, `Downwelling_Radiance`,
+   the `n_Layers` global attribute), and the binary record grew. RTSolution
+   files written by pre-3.2.0 code cannot be read; regenerate archived files.
+2. **`Options%Obs_4_downward_P` removed** (compile-breaking). Migrate to
+   `Options%Compute_Down_Radiance` / `Compute_Down_Radiance_Profile` and read
+   `RTSolution%Down_Radiance` / `RTSolution%Downwelling_Radiance(:)`.
+3. **Coefficient wrapper I/O defaults flipped Binary → netCDF**
+   (`CloudCoeff_ReadFile`/`WriteFile`/`InquireFile` and the analogous wrapper
+   modules). External callers reading `.bin` files through these routines must
+   now pass `netCDF=.FALSE.` explicitly.
+4. **`CRTM_ChannelInfo_Subset` hard-fails on duplicate or non-member channel
+   lists** (previously silent misbehavior: stalled merges and silently
+   deactivated channels).
+5. **DDA-ARTS cloud optics: `ICE_CLOUD` now scatters** (the legacy
+   non-scattering shortcut applies only to Mie-TAMU tables), and its default
+   DDA habit changed from IceSphere to IconCloudIce. Users of DDA-ARTS
+   CloudCoeff tables with `ICE_CLOUD` in their profiles will see different
+   brightness temperatures (validated against a sub-mm sounder; tropical O−B
+   at 325 GHz moved from ~+13 K to ~−0.6 K). Default (Mie-TAMU) cloud optics
+   are bit-identical.
+6. **PARMIO is presence-activated; TELSEM2 is opt-in.** Placing
+   `PARMIO.MWwater.EmisCoeff.nc` in the coefficient directory switches MW
+   water emissivity physics at and above 200 GHz; removing it restores FASTEM.
+   `CRTM_Init` prints an INFORMATION message when a sensor with ≥ 200 GHz
+   channels initializes without the PARMIO LUT. The TELSEM2 MW-land atlas, by
+   contrast, is **never** loaded unless requested (`Use_MWland_Atlas=.TRUE.`
+   or an explicit `MWlandCoeff_File`); a present-but-not-requested atlas file
+   is ignored. Note that with TELSEM2 opted in, all land-parameter Jacobians
+   (LAI, vegetation, soil moisture, soil/land temperature) are zero; the
+   atlas is a climatology and does not depend on them; the analytic
+   NESDIS_LandEM Jacobians apply only when the atlas is not loaded.
+
+   The 200 GHz figure is a safety floor, not physics. It was placed where the
+   traditional sounding sensors stop so that enabling PARMIO could not disturb
+   operational channels. `Options%Use_PARMIO_MWSSEM` drops the floor and runs
+   PARMIO everywhere its table has data. Table coverage is checked separately
+   and is never relaxed, including when a caller opts in, because the
+   alternative is a confident number computed at the wrong frequency: the
+   interpolator otherwise clamps silently, and a 204.78 GHz channel was being
+   evaluated at 229 GHz. Channels where PARMIO is wanted but uncovered fall
+   back to FASTEM.
+7. **OpenMP threading.** `CRTM_Init` reads `OMP_NUM_THREADS` at run time; if
+   it is **unset or empty, CRTM defaults to a single thread** via
+   `OMP_SET_NUM_THREADS(1)`. Because that call is process-global, it also
+   affects OpenMP regions of the host application after `CRTM_Init` — export
+   `OMP_NUM_THREADS` explicitly in threaded host applications (DA systems
+   embedding libcrtm). The configure-time capture of `OMP_NUM_THREADS` (and
+   the per-test ENVIRONMENT overrides) are gone: the environment at run time
+   is what counts.
+8. **Binary coefficient files are on the way out.** The v3.2.0 fix tarball
+   ships no `.bin` coefficient files and the test suite no longer exercises
+   the binary coefficient read path. The binary readers remain in the library
+   for users with existing binary trees, but they should be considered
+   deprecated (removal expected in a later v3.2.x, per the README).
+
+9. **Duplicate `_j2` sensor aliases removed from the fix tree.** Six
+   sensors shipped twice under both a `_j2` and an `_n21` name for the same
+   satellite (JPSS-2 = NOAA-21). Five of those pairs are identical in every
+   data variable; the sixth (`atms_j2` / `atms_n21`) agrees to
+   floating-point round-off only (largest difference 5.7e-14 in
+   `Frequency`, with the derived Planck and band-correction coefficients
+   differing in their last bits from independent computation), which is
+   radiometrically identical but not literally bit-identical. Otherwise the
+   pairs differ only in the internal `Sensor_Id` string and the creation
+   timestamp. A seventh entry, `v.viirs-m_j2`, had no `_n21` counterpart in
+   v3.1.4 and is a straight rename rather than a de-duplication. The `_j2`
+   copies are gone; use the `_n21` name:
+
+   | removed | use instead |
+   |---|---|
+   | `atms_j2` | `atms_n21` |
+   | `atms_j2-srf` | `atms_n21-srf` |
+   | `cris-fsr_j2` | `cris-fsr_n21` |
+   | `viirs-i_j2` | `viirs-i_n21` |
+   | `viirs-m_j2` | `viirs-m_n21` |
+   | `v.viirs-i_j2` | `v.viirs-i_n21` |
+   | `v.viirs-m_j2` | `v.viirs-m_n21` |
+
+   `cris-fsr_j2.NLTECoeff.nc` went with them (identical to
+   `cris-fsr_n21.NLTECoeff.nc`, and orphaned once its SpcCoeff was removed).
+
+   `CRTM_Init` resolves coefficients by filename, so any caller configured
+   with a `_j2` sensor id must be updated or initialization will fail. The
+   duplication was a maintenance hazard as much as dead weight: nothing in the
+   tree recorded that the two names were meant to be twins, so regenerating
+   one would have silently left the other stale.
+
+   Note this does **not** apply to the visible-channel files that share
+   content across detector variants (`v.imgrD1..D8_gNN`, `v.sndrD1..D4_gNN`,
+   `v.mi-l/m_coms`). Those are genuinely distinct sensors whose parent IR
+   channels differ; they share a common visible channel by instrument design
+   and are all retained.
+
+10. **Twelve further sensor renames.** These are name changes only: in every
+    case the replacement file is identical to the removed one in every data
+    variable, and only the filename and the internal `Sensor_Id` differ.
+    `CRTM_Init` resolves coefficients by filename, so a caller configured with
+    an old name will fail to initialize and must be updated.
+
+    | removed | use instead | why |
+    |---|---|---|
+    | `viirs-i_j1` | `viirs-i_n20` | JPSS-1 became NOAA-20 at launch. Every one of these files already carried `WMO_Satellite_Id` 225, which is NOAA-20 in WMO C-5, so the `_j1` name contradicted the file's own content. |
+    | `viirs-m_j1` | `viirs-m_n20` | as above |
+    | `v.viirs-i_j1` | `v.viirs-i_n20` | as above |
+    | `v.viirs-m_j1` | `v.viirs-m_n20` | as above |
+    | `v.viirs-dnb_j1` | `v.viirs-dnb_n20` | as above |
+    | `mwi_metop-sg-a1` | `mwi_metop-sg-b1` | platform correction. MWI flies on Metop-SG-B, not Metop-SG-A. |
+    | `tms_tomorrow-s01_v4` | `tms_tomorrow-s01_v4-STAR` | lineage relabel, so the v4 delivery is tagged to the organization it came from. Six sensors, `s01` through `s06`. |
+
+    The six `tms_tomorrow-sNN_v4` entries follow the same pattern and are not
+    listed individually.
+
+11. **Five products withdrawn.** Two were duplicates under a nonsensical name
+    and three were never-flown or notional instruments:
+
+    | withdrawn | why |
+    |---|---|
+    | `airs_g13` | identical in every data variable to `airs281_aqua`, which still ships. Its own `WMO_Satellite_Id` is 784 (Aqua) and its sensor id is 420 (AIRS), so the `g13` suffix never described the content. |
+    | `iasi_g13` | identical in every data variable to `iasi616_metop-a`, `-b` and `-c`, all of which still ship and which are distinguished from each other only by their WMO satellite ids (4, 3 and 5), as they should be for one instrument design on three platforms. `iasi_g13` carried WMO satellite 1022, which identifies no platform. `iasi_g13.NLTECoeff.nc` went with it. |
+    | `ssmis_f20` | DMSP F-20 was cancelled and never launched. The file carried `WMO_Satellite_Id` 1023, the invalid-value sentinel, because no satellite id was ever assigned. |
+    | `zssmis_f20` | the Zeeman companion to the above, withdrawn with it. |
+    | `atms-ng_v1` | a notional next-generation ATMS with 1169 channels and placeholder WMO ids (satellite 1, sensor 1). No such instrument exists. |
+
+    Nothing that still ships is lost by any of these: users of `airs_g13` or
+    `iasi_g13` should switch to the correctly named file, which holds the same
+    numbers.
+
+12. **Twelve unnamed CloudCoeff development artifacts removed.** The v3.1.4
+    tree carried `test_new.bin_type0` through `test_new.bin_type10` and
+    `test_new.bin_MIESNOW` under `CloudCoeff/Little_Endian/`, and the netCDF
+    transition converted them along with everything else. They carry no title,
+    history or comment attribute of any kind, nothing in the library or the
+    test suite references them, and their names describe a conversion run
+    rather than a product. Removing them takes about 540 MB off the tarball.
+    The named cloud tables are all retained, including the microphysics-scheme
+    variants (`CloudCoeff.GFDLFV3`, `CloudCoeff.Thompson08`, `CloudCoeff.WSM6`)
+    and the TAMU tables, none of which the test suite exercises either.
+
+13. **OMPS replaced by per-platform NOAA-20 and NOAA-21 products.** The two
+    shipped OMPS files were unusable and mislabelled, and have been retired in
+    favor of four regenerated products:
+
+    | removed | replaced by |
+    |---|---|
+    | `u.omps-npAllFOV_j2` | `u.omps-np_n20` (151 ch), `u.omps-np_n21` (158 ch) |
+    | `u.omps-tcAllFOV_j2` | `u.omps-tc_n20` (196 ch), `u.omps-tc_n21` (198 ch) |
+
+    Three separate defects motivated this:
+
+    - **The files could not be loaded at all.** Both carried
+      `Group_Index=4`, which has been Zeeman-reserved with zero components
+      since 2008, so `CRTM_Predictor_Create` failed outright. The replacements
+      are `Group_Index=8` (`GROUP_UV_NO2`), the UV variant carrying a scene-NO2
+      component, and all four now pass `CRTM_Init`.
+    - **The platform labels were wrong, in opposite directions.**
+      `u.omps-npAllFOV_j2` was labelled NOAA-21 (WMO 226) but its channel set
+      matches the NOAA-20 grid (rms 0.04 nm, max 0.07 nm; every other
+      platform's grid is at least 7 times farther); NOAA-21's nadir profiler
+      natively has 158 channels reaching 245 nm, not 151. `u.omps-tcAllFOV_j2`
+      really was NOAA-21 content, but indexed with a three-channel offset.
+    - **Only one platform was represented** where two instruments exist.
+
+    Channel numbering now follows each platform's own SRF. For total column,
+    old channel *N* corresponds to `u.omps-tc_n21` channel *N+3*; the old file
+    omitted n21 channels 1 to 3 (298.1 to 298.9 nm) and extended three channels
+    past its red end. Channel selections carried over from the old files must
+    be re-mapped, not reused.
+
+    The per-platform channel sets are verified against primary sources: the
+    JPSS NOAA-21 OMPS SDR validated-maturity record (nadir profiler 158
+    channels, nadir mapper 198) and the published instrument table in Yan et
+    al. 2024, doi:10.3390/rs16234488 (nadir profiler SNPP 147 / NOAA-20 151 /
+    NOAA-21 158; nadir mapper 196 / 196 / 198). Note the same record flags
+    NOAA-21 nadir mapper radiances below 302 nm (roughly `u.omps-tc_n21`
+    channels 1 to 10) as not validated for operational use.
+
+14. **`RTSolution%Radiance` is now the channel-polarized measurement when
+    `n_Stokes > 1`, not Stokes I.** The emergent Stokes vector is projected onto
+    the channel's polarization, so a vertically polarized channel reports I+Q
+    where it previously reported I. `Brightness_Temperature`, which is derived
+    from it, moves with it. `RTSolution%Stokes` is unchanged and still holds the
+    physical (I, Q, U, V). Anyone already running `n_Stokes > 1` on a polarized
+    channel will see the reported radiance and brightness temperature change by
+    the polarization difference, which over ocean is order 20 percent of the
+    signal. The projection weights are taken from the scalar path's own
+    polarization handling, so the two now agree: a run with the channel forced
+    to pure vertical or pure horizontal reproduces the corresponding scalar
+    radiance to machine precision. Nothing at `n_Stokes = 1` changes.
+
+15. **`RTSolution_AD%Radiance` and `RTSolution_K%Radiance` are now honoured as
+    input seeds on the vector path.** Previously `%Radiance` was an output alias
+    for `Stokes(1)` but not an input one, and seeding it for an `n_Stokes > 1`
+    run silently produced a zero Jacobian; only `%Stokes` or
+    `%Brightness_Temperature` worked. Both now work. Code that seeded
+    `%Radiance` and `%Stokes(1)` together to work around this will now double
+    count.
+
+16. **`RT_Algorithm_Id = RT_SOI` with `n_Stokes > 1` is now an error.**
+    Previously the vector branch was taken before the algorithm selector was
+    consulted, so the caller silently received ADA results labelled as SOI. SOI
+    has no vector solver, so this is now rejected with a message naming RT_ADA.
+
+17. **`CRTM_MWwaterCoeff_Load_FASTEM` discards the previously loaded scheme and
+    reports failure.** Switching scheme, for example FASTEM6 to FASTEM4, used to
+    leave the shared coefficient structure deallocated while the function
+    returned SUCCESS, because the underlying setter rejects a shape mismatch by
+    destroying the target. Scheme switching now works, and a failed load returns
+    FAILURE instead of SUCCESS. Related: a coefficient dimension mismatch used to
+    terminate the program with a Fortran runtime formatting error rather than
+    reporting cleanly.
+
+18. **Surface reflectance from category tables is clamped to the physical
+    range.** The 4-point Lagrange interpolation across SEcategory reflectance
+    spectra overshoots [0,1] where the tabulated spectrum has sharp structure.
+    The NPOESS VIS snow table holds exact zeros at 4000 and 5000 cm-1 with
+    positive neighbours, which produced a reflectance near -0.03 at 2.25
+    micron for both snow types, a negative top-of-atmosphere radiance (about
+    -0.17 mW/(m2 sr cm-1) for VIIRS M11 over old snow), and a NaN brightness
+    temperature from the inverse Planck. The interpolant is now clamped in
+    `SEcategory_Emissivity`, and the visible-path direct-reflectivity limiter
+    clamps below zero as well as above one. The defect is present in v3.1.4
+    (reproduced end to end there), so this fixes an inherited problem rather
+    than a 3.2.0 regression. Results change only where the clamp engages;
+    in-range channels are untouched.
+
+19. **`CRTM_VISsnowCoeff_Load` returns FAILURE for an unrecognised
+    classification prefix.** The classification is parsed from the filename
+    text before the first dot (`NPOESS` or `SNICAR`); any other prefix, or a
+    filename with no dot at all, used to print a FAILURE message and return
+    SUCCESS, so `CRTM_Init` succeeded with no visible snow table loaded and
+    the snow surface optics quietly returned whatever the SfcOptics structure
+    already held. Both arms now return FAILURE, and
+    `Compute_VIS_Snow_SfcOptics` reports FAILURE if it is ever reached with
+    neither table loaded.
+
+20. **CRTM restores the caller's OpenMP nesting policy.** `CRTM_Forward`,
+    `CRTM_Tangent_Linear` and `CRTM_K_Matrix` raise `max-active-levels` to run
+    their nested channel loop. That setting is global to the OpenMP runtime and
+    was never put back, so a host doing its own threading found its nesting
+    policy silently replaced by a CRTM compute call, which can turn the host's
+    own nested regions from serialised into thread-spawning.  `CRTM_Adjoint`
+    never sets the level, so it inherited whatever the previous forward or
+    K-matrix call left behind. Each routine now saves and restores the value on
+    every exit path. No computational code is touched and no result changes.
+    The defect is present in v3.1.4, so this fixes an inherited problem rather
+    than a 3.2.0 regression.
+
+21. **Channels are no longer split across threads when the split cannot pay for
+    itself.** Channel-level threading gives every thread its own optical-depth,
+    surface-optics and RT scratch structures, sized by the layer count and
+    stream maxima rather than by how many channels the thread receives. When
+    threads outnumbered profiles, CRTM divided the channels among all spare
+    threads regardless of how few each would get, and for small sensors that
+    cost far more than it saved: a single 22-channel microwave profile on 16
+    threads ran about 30 times slower than the same build on one thread. The
+    thread count is now capped so each channel-thread owns at least
+    `MIN_CHANNELS_PER_CHANNEL_THREAD` channels, and CRTM no longer spawns a
+    thread team merely to count the available threads. Spare threads below the
+    threshold are left idle deliberately.
+
+    This only ever lowers the chosen thread count, so it cannot create nesting
+    where there was none, and it is a no-op wherever profiles already absorb
+    every thread. Results are unchanged; only the thread decomposition differs.
+    The defect is present in v3.1.4 and is not a 3.2.0 regression.
+
+    Who was affected: hosts that call CRTM with **one profile at a time while
+    also setting `OMP_NUM_THREADS` greater than 1**. GSI does pass a single
+    profile per call, so a hybrid MPI/OpenMP GSI configuration was exposed; a
+    pure-MPI configuration with `OMP_NUM_THREADS=1` never entered the path.
+    JEDI and UFO were never exposed, because they pass the whole observation
+    batch as profiles.
+
+    Measured effect on the single-profile case (forward, wall clock, against
+    the same build on one thread): 22-channel microwave sensor on 16 threads
+    0.03x to 1.00x and on 8 threads 0.10x to 1.00x; 399-channel infrared
+    sounder on 8 threads 0.92x to 2.12x; 2211-channel infrared sounder on 8
+    threads 1.96x to 2.79x. Cases where profiles already met or exceeded the
+    thread count are unchanged at 4.4x to 5.4x.
+
+## Known issues and limitations
+
+- **Sub-mm thin frozen cloud (≈ 325 GHz):** optically thin frozen-cloud
+  layers can produce nonphysical TBs through the adding-doubling/MOM path
+  (small-τ matrix conditioning with high phase-function truncation orders).
+  Affects sub-mm scattering scenes only; under investigation.
+- **The FASTEM to PARMIO handover at 200 GHz is a step, not a blend.** The two
+  models are independent and are not reconciled at the boundary, so a sensor
+  with channels either side of 200 GHz sees a discontinuity in ocean
+  emissivity there. Measured at -1.42 K mean in brightness temperature for
+  TROPICS channel 12. This is a consequence of switching models at a frequency
+  rather than a defect in either one, and it is why the floor sits where no
+  operational sounding channel crosses it. PARMIO's own published validation
+  stops at 165.5 GHz, so its whole default dispatch range is above the range
+  its authors validated; the table labels that band
+  `extrapolated-experimental` in its `confidence_label` variable, and callers
+  should read that label rather than assume the table is uniform.
+- **SNICAR visible snow LUT (opt-in): two known limitations,** detailed with
+  the feature under Highlights: the table's angle dimension is labelled
+  "Solar Zenith Angle" in the file but is interpolated at the RT
+  view/quadrature angles (the solar zenith angle never reaches the table),
+  and the forward path applies no LUT bounds guard while the tangent-linear
+  and adjoint return exactly zero out of bounds. Both are deferred beyond
+  v3.2.0; the angle question is pending confirmation with the table's
+  author before either the file metadata or the surface-optics dispatch is
+  changed.
+- **ODSSU netCDF supports the ODPS sub-algorithm only** (the shipped SSU
+  files are ODPS-based; ODAS-based SSU coefficient files remain binary-only).
+- **Options binary I/O does not persist the new fields** (`n_Stokes` and the
+  radiance-profile switches); they will be added with the next format
+  revision.
+
+### Polarimetric (`Options%n_Stokes > 1`) radiative transfer
+
+The vector path is functional and internally verified, and its surface sign
+convention has been checked against RTTOV, but the emergent radiance has **not
+been validated end to end against an independent radiative transfer model or
+against observations**. Treat it as a capability under development rather than
+a production-ready product. The specific limitations follow.
+
+- **No external reference for the emergent radiance.** Every check on the
+  radiance itself compares CRTM against CRTM: tangent-linear against finite
+  differences, the adjoint dot-product identity, K against AD, physical
+  invariants such as the polarization bound, and agreement with the scalar path
+  in the limits where the two must agree. None of that can catch a convention
+  that is consistently wrong. One such convention has now been settled
+  externally: the **sign of the third and fourth Stokes components** at the
+  surface was compared against RTTOV's FASTEM5 and matches at every relative
+  wind azimuth, so U and V may be used quantitatively without first
+  establishing the sign yourself. That validates one interface. The solver, the
+  polarized phase matrix and the transport still have no independent reference,
+  so a top-of-atmosphere U or V remains unvalidated end to end.
+- **The default microwave water surface has no polarimetric model.** The
+  `CRTM_Init` default is FASTEM6, whose azimuth model parameterises the
+  vertical and horizontal components only and returns the third and fourth
+  Stokes components as identically zero. A polarimetric surface requires
+  `MWwaterCoeff_Scheme = 'FASTEM4'` (or FASTEM5), or PARMIO, which is used
+  automatically at and above 200 GHz when its lookup table is present. Either
+  argument selects the model: `MWwaterCoeff_Scheme` is the direct selector, and
+  `MWwaterCoeff_File` is now honoured as one too, with the scheme recovered
+  from the leading component of the file name. An explicit scheme wins if the
+  two disagree, and the disagreement is reported rather than resolved silently.
+  In v3.1.4 and earlier, `MWwaterCoeff_File` selected nothing at all and a
+  request for FASTEM4 through it silently left FASTEM6 loaded.
+- **Microwave only.** The coupled (V,H) to Stokes surface branch exists only in
+  the microwave section of the surface optics. Infrared and visible sensors
+  populate the first Stokes component alone, so a vector run there returns
+  Q = U = V = 0 from the surface regardless of geometry.
+- **Aerosols contribute no polarization.** The shipped `AerosolCoeff` carries a
+  single phase element, so a vector run mixes polarized cloud scattering with
+  unpolarized aerosol scattering. This is deliberate and is not blocked, since
+  a scalar aerosol table must not prevent a polarized cloud run.
+- **The surface reflects no U or V.** Both FASTEM and PARMIO set the third and
+  fourth Stokes reflectivity components to zero, so U and V are emitted by the
+  surface but never reflected. This is exact for clear sky, where the
+  downwelling reaching a specular surface is unpolarized and symmetry about the
+  meridional plane forbids a reflected U. It is an approximation once the
+  downwelling is itself polarized by scattering.
+- **Polarimetric cloud lookup tables are not validated.** The `n_Stokes > 1`
+  scattering path requires a six-phase-element table (the experimental
+  `CRTM-Exp` scheme). Those tables have not been validated for full-Stokes
+  work, so polarized scattering results carry that uncertainty independently of
+  the code.
+- **Phase-matrix normalization is inconsistent for below-diagonal polarized
+  blocks.** `Normalize_Phase` scales each row's intensity and polarized
+  elements together and then applies an intensity-only symmetry copy, so a
+  block below the diagonal ends up with its (1,1) element carrying one row's
+  normalization and its polarized elements another. This does not produce a
+  polarization-bound violation with the shipped coefficients, where the
+  measured worst ratio is 0.65, but it is not the correct polarized symmetry
+  treatment.
+- **Mixed-polarization channels are projected at the sensor angle.** For the
+  V/H-mixed, constant-mixed and PRA polarizations the vector path applies the
+  polarization mixing once, to the emergent radiance at the sensor angle, which
+  is where a receiver projects. The scalar path instead applies it to the
+  surface emissivity at every quadrature angle. The two coincide when there is
+  a single angle, and differ slightly for a scattering mixed-polarization
+  channel.
+- **`plus45L`, `minus45L`, `RC` and `LC` polarizations are treated as
+  vertical**, inherited unchanged from the scalar path so that the two agree.
+  These are placeholders, not the true projections.
+- **`RT_Algorithm_Id = RT_SOI` is not supported with `n_Stokes > 1`** and is now
+  rejected; see the behavior changes above. SOI has no vector solver.

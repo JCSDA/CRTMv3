@@ -21,6 +21,15 @@
 ! Patrick Stegmann 2021-08-31     Added PRA_POLARIZATION scheme for GEMS-1.
 !
 ! Cheng Dang       2022-05-31     Added IRsnowCoeff TL and AD modules
+!
+! B. T. Johnson    2026-05-28     Removed GeometryInfo%Distance_Ratio scaling from
+!                                 the CONST_MIXED_POLARIZATION (=13) emissivity/
+!                                 reflectivity mixing in the FWD/TL/AD routines.
+!                                 PolAngle is the fixed channel polarization angle,
+!                                 not a zenith angle, so the scan-geometry ratio
+!                                 should not be applied. Affects TMS (TROPICS /
+!                                 tomorrow.io) sensors. (per Y. Chen / Y.-K. Lee /
+!                                 J. Zhang investigation)
 
 MODULE CRTM_SfcOptics
 
@@ -101,6 +110,7 @@ MODULE CRTM_SfcOptics
                                       Compute_VIS_Water_SfcOptics_TL, &
                                       Compute_VIS_Water_SfcOptics_AD
   USE CRTM_VIS_Snow_SfcOptics,  ONLY: VISSSOVar_type => iVar_type, &
+                                      VISSSOVar_SE_type => iVar_SE_type, &
                                       Compute_VIS_Snow_SfcOptics, &
                                       Compute_VIS_Snow_SfcOptics_TL, &
                                       Compute_VIS_Snow_SfcOptics_AD
@@ -126,6 +136,7 @@ MODULE CRTM_SfcOptics
   PUBLIC :: CRTM_Compute_SfcOptics
   PUBLIC :: CRTM_Compute_SfcOptics_TL
   PUBLIC :: CRTM_Compute_SfcOptics_AD
+  PUBLIC :: PRA_Sin2_Angle
 
 
   ! -----------------
@@ -153,14 +164,73 @@ MODULE CRTM_SfcOptics
     TYPE(IRSSOVar_SE_type)  :: IRSSOV_SE ! Snow, SE category
     TYPE(IRISOVar_type)     :: IRISOV    ! Ice
     ! Visible
-    TYPE(VISLSOVar_type) :: VISLSOV ! Land
-    TYPE(VISWSOVar_type) :: VISWSOV ! Water
-    TYPE(VISSSOVar_type) :: VISSSOV ! Snow
-    TYPE(VISISOVar_type) :: VISISOV ! Ice
+    TYPE(VISLSOVar_type)    :: VISLSOV    ! Land
+    TYPE(VISWSOVar_type)    :: VISWSOV    ! Water
+    TYPE(VISSSOVar_type)    :: VISSSOV    ! Snow
+    TYPE(VISSSOVar_SE_type) :: VISSSOV_SE ! Snow, SE category
+    TYPE(VISISOVar_type)    :: VISISOV    ! Ice
   END TYPE iVar_type
 
 
 CONTAINS
+
+
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       PRA_Sin2_Angle
+!
+! PURPOSE:
+!       Sine squared of the polarization rotation angle for a PRA_POLARIZATION
+!       channel, whose polarization basis rotates as the scan angle changes.
+!       This is the weight w in the channel mixing
+!
+!         e = e_V*w + e_H*(1 - w)
+!
+!       and it is shared by the forward, tangent-linear and adjoint surface
+!       optics and by the Stokes projection in Common_RTSolution, so the four
+!       cannot drift apart.
+!
+! ARGUMENTS:
+!       phi:      Sensor scan angle, radians.
+!       theta_f:  Instrument polarization offset angle, radians.
+!
+! NOTES:
+!       The published form divides two quantities that share the positive
+!       factor 1/SQRT(SIN(phi)**2 + SIN(theta_f)**2*(1 - COS(phi)**2)) and then
+!       takes ATAN of their ratio. Since 1 - COS(phi)**2 is SIN(phi)**2, that
+!       denominator is |SIN(phi)|*SQRT(1 + SIN(theta_f)**2) and it vanishes at
+!       nadir, where both numerators vanish as well. The published form is
+!       therefore 0/0 at phi = 0 and returns whatever the compiler happens to
+!       fold it to: gfortran gives 1, which selects the WRONG polarization,
+!       and ifx gives a NaN that propagates into the radiance, the weighting
+!       functions and the adjoint.
+!
+!       Passing the two numerators to ATAN2 removes the singularity rather than
+!       special-casing it. A shared positive factor does not change an ATAN2
+!       angle, so the denominator drops out and no division is performed at
+!       all; ATAN2(0,0) is zero by definition, which is exactly the limit the
+!       expression approaches as phi goes to zero. Adding PI to the angle,
+!       which is the only way ATAN2 differs from ATAN, leaves SIN**2 unchanged.
+!       Verified equal to the published form to 4.4e-16 over the defined domain.
+!
+!--------------------------------------------------------------------------------
+
+  PURE FUNCTION PRA_Sin2_Angle( phi, theta_f ) RESULT( Sin2_Angle )
+    ! Arguments
+    REAL(fp), INTENT(IN) :: phi
+    REAL(fp), INTENT(IN) :: theta_f
+    ! Function result
+    REAL(fp) :: Sin2_Angle
+    ! Local variables
+    REAL(fp) :: ph_num, pv_num
+
+    ph_num =    SIN(phi) * ( COS(phi) + SIN(theta_f)*(ONE - COS(phi)) )
+    pv_num = -( SIN(phi)**2 - SIN(theta_f)*(ONE - COS(phi))*COS(phi) )
+
+    Sin2_Angle = SIN( ATAN2( -pv_num, ph_num ) )**2
+
+  END FUNCTION PRA_Sin2_Angle
 
 
 !--------------------------------------------------------------------------------
@@ -472,13 +542,12 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Compute_SfcOptics'
     ! Local variables
     CHARACTER(ML) :: Message
-    INTEGER :: i
-    INTEGER :: nL, nZ
+    INTEGER :: i, j
+    INTEGER :: nL, nZ, nS
     REAL(fp) :: SIN2_Angle
-    REAL(fp) :: pv
-    REAL(fp) :: ph
     REAL(fp) :: phi
     REAL(fp) :: theta_f
+    REAL(fp) :: rV, rH
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES) :: Emissivity
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES, &
                         SfcOptics%n_Angles,MAX_N_STOKES) :: Reflectivity
@@ -492,6 +561,12 @@ CONTAINS
     Error_Status = SUCCESS
     nL = SfcOptics%n_Stokes
     nZ = SfcOptics%n_Angles
+    ! Number of Stokes components to carry through the microwave coverage
+    ! aggregation. The scalar path needs both V and H even at nL = 1, because
+    ! its polarization mixing forms combinations of the two, so the floor is 2
+    ! rather than nL. On the vector path the surface model's third and fourth
+    ! Stokes components must reach the solver rather than being dropped here.
+    nS = MAX(2, nL)
     Polarization = SC(SensorIndex)%Polarization(ChannelIndex)
     ! Initialise the local emissivity and reflectivities
     Emissivity   = ZERO
@@ -517,9 +592,11 @@ CONTAINS
           ! Compute the surface optics
           Error_Status = Compute_MW_Land_SfcOptics( &
                            Surface     , &  ! Input
+                           GeometryInfo, &  ! Input
                            SensorIndex , &  ! Input
                            ChannelIndex, &  ! Input
-                           SfcOptics     )  ! In/Output
+                           SfcOptics   , &  ! In/Output
+                           iVar%MWLSOV   )  ! Internal variable output
           IF ( Error_Status /= SUCCESS ) THEN
             WRITE( Message,'("Error computing MW land SfcOptics at ",&
                             &"channel index ",i0)' ) ChannelIndex
@@ -557,11 +634,20 @@ CONTAINS
 
 
           ! Accumulate the surface optics properties
-          ! based on water coverage fraction
-          Emissivity(1:nZ,1:2) = Emissivity(1:nZ,1:2) + &
-            (SfcOptics%Emissivity(1:nZ,1:2)*Surface%Water_Coverage)
-          Reflectivity(1:nZ,1:2,1:nZ,1:2) = Reflectivity(1:nZ,1:2,1:nZ,1:2) + &
-            (SfcOptics%Reflectivity(1:nZ,1:2,1:nZ,1:2)*Surface%Water_Coverage)
+          ! based on water coverage fraction.
+          ! Water is the only microwave surface with a polarimetric model, so
+          ! it is the only one aggregated over nS rather than the first two
+          ! components: FastemX (FASTEM4/5) and PARMIO both return a full
+          ! four-component emissivity, whose third and fourth components carry
+          ! the wind-direction signal. Dropping them here left the vector
+          ! solver with U = V = 0 whatever the surface model computed. The land,
+          ! snow and ice models write components 1 and 2 only and never define
+          ! 3 and 4, so they must stay at 1:2; the accumulator is zeroed above,
+          ! which is the physically correct contribution for them.
+          Emissivity(1:nZ,1:nS) = Emissivity(1:nZ,1:nS) + &
+            (SfcOptics%Emissivity(1:nZ,1:nS)*Surface%Water_Coverage)
+          Reflectivity(1:nZ,1:nS,1:nZ,1:nS) = Reflectivity(1:nZ,1:nS,1:nZ,1:nS) + &
+            (SfcOptics%Reflectivity(1:nZ,1:nS,1:nZ,1:nS)*Surface%Water_Coverage)
 
          END IF Microwave_Water
 
@@ -744,8 +830,11 @@ CONTAINS
             ! (Personal Communication)
             !
             CASE ( CONST_MIXED_POLARIZATION )
-              SIN2_Angle = (GeometryInfo%Distance_Ratio * &
-                           SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)))**2
+              ! Constant (scan-independent) polarization mixing. PolAngle is the
+              ! fixed channel polarization angle, so it is NOT scaled by
+              ! GeometryInfo%Distance_Ratio (unlike the V/H-mixed cases, where
+              ! Distance_Ratio converts the local zenith angle to the scan angle).
+              SIN2_Angle = SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex))**2
               DO i = 1, nZ
                 SfcOptics%Emissivity(i,1) = (Emissivity(i,1)*(SIN2_Angle)) + &
                                               (Emissivity(i,2)*(ONE-SIN2_Angle))
@@ -765,14 +854,8 @@ CONTAINS
                 phi = GeometryInfo%Sensor_Scan_Radian
                 ! Instrument offset angle:
                 theta_f = DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)
-                ph = SIN(phi) * ( COS(phi) + SIN(theta_f)*(1.0_fp - COS(phi))  ) &
-                   ! --------------------------------------------------------------
-                     / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(1.0_fp - COS(phi)**2) )
-                pv = - ( SIN(phi)**2 - SIN(theta_f)*(1.0_fp - COS(phi))*COS(phi) ) &
-                   ! ---------------------------------------------------------------
-                     / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(1.0_fp - COS(phi)**2) )
                 ! Sine square of Polarization Rotation Angle (PRA)
-                SIN2_Angle = SIN(ATAN( -pv/ph ))**2
+                SIN2_Angle = PRA_Sin2_Angle( phi, theta_f )
                 SfcOptics%Emissivity(i,1) = (Emissivity(i,1)*(SIN2_Angle)) + &
                                                (Emissivity(i,2)*(ONE-SIN2_Angle))
                 SfcOptics%Reflectivity(i,1,i,1) = (Reflectivity(i,1,i,1)*SIN2_Angle) + &
@@ -792,12 +875,38 @@ CONTAINS
         ELSE
 
 
-          ! ------------------------------------
-          ! Coupled polarization from atmosphere
-          ! considered. Simply copy the data
-          ! ------------------------------------
-          SfcOptics%Emissivity(1:nZ,1:nL)             = Emissivity(1:nZ,1:nL)
+          ! ----------------------------------------------------------------
+          ! Coupled (vector / n_Stokes>1) polarization. The MW/IR surface
+          ! models return emissivity in the (V,H) basis (component 1 = eV,
+          ! component 2 = eH), but the polarimetric RT solver expects the
+          ! Stokes basis (I,Q,U,V). Convert here:
+          !   e_I = (eV+eH)/2 ,  e_Q = (eV-eH)/2 ;  U,V pass through.
+          ! Without this conversion the solver reads eH as e_Q and injects a
+          ! large spurious surface Stokes-Q source (e_Q ~ 0.5 instead of a
+          ! few %), producing an unphysical V-polarized brightness (I+Q can
+          ! exceed the physical temperature). Mirrors the n_Stokes==1 path.
+          ! NOTE: the reflectivity still needs the analogous (V,H)->Stokes
+          ! block conversion for full energy consistency (see follow-up).
+          ! ----------------------------------------------------------------
+          SfcOptics%Emissivity(1:nZ,1) = POINT_5*(Emissivity(1:nZ,1)+Emissivity(1:nZ,2))
+          SfcOptics%Emissivity(1:nZ,2) = POINT_5*(Emissivity(1:nZ,1)-Emissivity(1:nZ,2))
+          IF ( nL > 2 ) SfcOptics%Emissivity(1:nZ,3:nL) = Emissivity(1:nZ,3:nL)
+          ! Reflectivity: copy through, then convert the (V,H) intensity block
+          ! (components 1,2) to the Stokes (I,Q) reflection matrix, consistent
+          ! with the emissivity conversion above (specular MW/IR surface, no
+          ! V<->H cross term):  R_II = R_QQ = (rV+rH)/2 ,  R_IQ = R_QI = (rV-rH)/2 .
+          ! U,V (components 3,4) pass through unchanged.
           SfcOptics%Reflectivity(1:nZ,1:nL,1:nZ,1:nL) = Reflectivity(1:nZ,1:nL,1:nZ,1:nL)
+          DO j = 1, nZ
+            DO i = 1, nZ
+              rV = Reflectivity(i,1,j,1)
+              rH = Reflectivity(i,2,j,2)
+              SfcOptics%Reflectivity(i,1,j,1) = POINT_5*(rV+rH)
+              SfcOptics%Reflectivity(i,1,j,2) = POINT_5*(rV-rH)
+              SfcOptics%Reflectivity(i,2,j,1) = POINT_5*(rV-rH)
+              SfcOptics%Reflectivity(i,2,j,2) = POINT_5*(rV+rH)
+            END DO
+          END DO
 
         END IF Decoupled_Polarization
 
@@ -953,7 +1062,9 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) ) THEN
+      ! UV sensors use the same Lambertian (SEcategory) surface optics as VIS
+      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) .OR. &
+                SpcCoeff_IsUltravioletSensor( SC(SensorIndex) ) ) THEN
 
         mth_Azi_Test: IF( SfcOptics%mth_Azi == 0 ) THEN
 
@@ -1027,11 +1138,12 @@ CONTAINS
 
             ! Compute the surface optics
             Error_Status = Compute_VIS_Snow_SfcOptics( &
-                             Surface     , &  ! Input
-                             SensorIndex , &  ! Input
-                             ChannelIndex, &  ! Input
-                             SfcOptics   , &  ! In/Output
-                             iVar%VISSSOV  )  ! Internal variable output
+                             Surface        , &  ! Input
+                             SensorIndex    , &  ! Input
+                             ChannelIndex   , &  ! Input
+                             SfcOptics      , &  ! In/Output
+                             iVar%VISSSOV_SE, &  ! Internal variable output
+                             iVar%VISSSOV     )  ! Internal variable output
             IF ( Error_Status /= SUCCESS ) THEN
               WRITE( Message,'("Error computing VIS snow SfcOptics at ",&
                               &"channel index ",i0)' ) ChannelIndex
@@ -1254,11 +1366,11 @@ CONTAINS
     ! Local variables
     CHARACTER(ML) :: Message
     INTEGER :: i
-    INTEGER :: nL, nZ
+    INTEGER :: j
+    REAL(fp) :: rV_TL, rH_TL
+    INTEGER :: nL, nZ, nS
     INTEGER :: Polarization
     REAL(fp) :: SIN2_Angle
-    REAL(fp) :: pv
-    REAL(fp) :: ph
     REAL(fp) :: phi
     REAL(fp) :: theta_f
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES) :: Emissivity_TL
@@ -1272,6 +1384,7 @@ CONTAINS
     Error_Status = SUCCESS
     nL = SfcOptics%n_Stokes
     nZ = SfcOptics%n_Angles
+    nS = MAX(2, nL)   ! see the forward model for why the floor is 2
     Polarization = SC(SensorIndex)%Polarization( ChannelIndex )
     ! Initialise the local emissivity and reflectivities
     Emissivity_TL   = ZERO
@@ -1295,7 +1408,11 @@ CONTAINS
         Microwave_Land: IF( Surface%Land_Coverage > ZERO) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_MW_Land_SfcOptics_TL( SfcOptics_TL )
+          Error_Status = Compute_MW_Land_SfcOptics_TL( &
+                           SfcOptics   , &  ! Input
+                           Surface_TL  , &  ! Input
+                           SfcOptics_TL, &  ! Output
+                           iVar%MWLSOV   )  ! Internal variable input
           IF ( Error_Status /= SUCCESS ) THEN
             WRITE( Message,'("Error computing MW land SfcOptics_TL at ",&
                             &"channel index ",i0)' ) ChannelIndex
@@ -1335,11 +1452,14 @@ CONTAINS
           END IF
 
           ! Accumulate the surface optics properties
-          ! based on water coverage fraction
-          Emissivity_TL(1:nZ,1:2) = Emissivity_TL(1:nZ,1:2) + &
-            ( SfcOptics_TL%Emissivity(1:nZ,1:2) * Surface%Water_Coverage )
-          Reflectivity_TL(1:nZ,1:2,1:nZ,1:2) = Reflectivity_TL(1:nZ,1:2,1:nZ,1:2) + &
-            ( SfcOptics_TL%Reflectivity(1:nZ,1:2,1:nZ,1:2) * Surface%Water_Coverage )
+          ! based on water coverage fraction. Carried over nS to match the
+          ! forward model, which aggregates the water surface's third and
+          ! fourth Stokes components; a TL truncated at 1:2 would linearize a
+          ! different surface mapping than the forward model used.
+          Emissivity_TL(1:nZ,1:nS) = Emissivity_TL(1:nZ,1:nS) + &
+            ( SfcOptics_TL%Emissivity(1:nZ,1:nS) * Surface%Water_Coverage )
+          Reflectivity_TL(1:nZ,1:nS,1:nZ,1:nS) = Reflectivity_TL(1:nZ,1:nS,1:nZ,1:nS) + &
+            ( SfcOptics_TL%Reflectivity(1:nZ,1:nS,1:nZ,1:nS) * Surface%Water_Coverage )
 
         END IF Microwave_Water
 
@@ -1494,8 +1614,11 @@ CONTAINS
 
             ! Polarization mixing with constant offset angle for TROPICS
             CASE ( CONST_MIXED_POLARIZATION )
-              SIN2_Angle = (GeometryInfo%Distance_Ratio * &
-                           SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)))**2
+              ! Constant (scan-independent) polarization mixing. PolAngle is the
+              ! fixed channel polarization angle, so it is NOT scaled by
+              ! GeometryInfo%Distance_Ratio (unlike the V/H-mixed cases, where
+              ! Distance_Ratio converts the local zenith angle to the scan angle).
+              SIN2_Angle = SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex))**2
               DO i = 1, nZ
                 SfcOptics_TL%Emissivity(i,1) = (Emissivity_TL(i,1)*(SIN2_Angle)) + &
                                                   (Emissivity_TL(i,2)*(ONE-SIN2_Angle))
@@ -1525,14 +1648,8 @@ CONTAINS
                 phi = GeometryInfo%Sensor_Scan_Radian
                 ! Instrument offset angle:
                 theta_f = DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)
-                ph = SIN(phi) * ( COS(phi) + SIN(theta_f)*(1.0_fp - COS(phi))  ) &
-                   ! --------------------------------------------------------------
-                     / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(1.0_fp - COS(phi)**2) )
-                pv = - ( SIN(phi)**2 - SIN(theta_f)*(1.0_fp - COS(phi))*COS(phi) ) &
-                   ! ---------------------------------------------------------------
-                     / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(1.0_fp - COS(phi)**2) )
                 ! Sine square of Polarization Rotation Angle (PRA)
-                SIN2_Angle = SIN(ATAN( -pv/ph ))**2
+                SIN2_Angle = PRA_Sin2_Angle( phi, theta_f )
                 SfcOptics_TL%Emissivity(i,1) = (Emissivity_TL(i,1)*(SIN2_Angle)) + &
                                                (Emissivity_TL(i,2)*(ONE-SIN2_Angle))
                 SfcOptics_TL%Reflectivity(i,1,i,1) = (Reflectivity_TL(i,1,i,1)*SIN2_Angle) + &
@@ -1553,12 +1670,38 @@ CONTAINS
         ELSE
 
 
-          ! ------------------------------------
-          ! Coupled polarization from atmosphere
-          ! considered. Simply copy the data
-          ! ------------------------------------
-          SfcOptics_TL%Emissivity   = Emissivity_TL(1:nZ,1:nL)
-          SfcOptics_TL%Reflectivity = Reflectivity_TL(1:nZ,1:nL,1:nZ,1:nL)
+          ! ----------------------------------------------------------------
+          ! Coupled (vector / n_Stokes>1) polarization. Tangent-linear of the
+          ! (V,H) -> Stokes (I,Q) basis conversion applied in the forward
+          ! model: the map is linear with constant coefficients, so the TL
+          ! carries the identical form on the perturbations.
+          !   e_I' = (eV'+eH')/2 ,  e_Q' = (eV'-eH')/2 ;  U,V pass through.
+          ! Keeping this in step with the forward is what makes the vector
+          ! Jacobians consistent; a plain copy here linearizes a different
+          ! surface mapping than the one the forward model used.
+          ! ----------------------------------------------------------------
+          ! NOTE: index the LHS sub-blocks (matching the forward model)
+          ! so the allocatable target keeps its (MAX_N_ANGLES,MAX_N_STOKES) size.
+          ! A whole-array assignment here reallocates the target to (nZ,nL), which
+          ! shrinks SfcOptics_TL%Emissivity below MAX_N_STOKES and causes a
+          ! subsequent FASTEM-X surface TL write (Iv/Ih/U/V => 4 Stokes) to run
+          ! out of bounds for n_Stokes>1.
+          SfcOptics_TL%Emissivity(1:nZ,1) = POINT_5*(Emissivity_TL(1:nZ,1)+Emissivity_TL(1:nZ,2))
+          SfcOptics_TL%Emissivity(1:nZ,2) = POINT_5*(Emissivity_TL(1:nZ,1)-Emissivity_TL(1:nZ,2))
+          IF ( nL > 2 ) SfcOptics_TL%Emissivity(1:nZ,3:nL) = Emissivity_TL(1:nZ,3:nL)
+          ! Reflectivity: copy through, then convert the (V,H) intensity block
+          ! exactly as the forward model does.
+          SfcOptics_TL%Reflectivity(1:nZ,1:nL,1:nZ,1:nL) = Reflectivity_TL(1:nZ,1:nL,1:nZ,1:nL)
+          DO j = 1, nZ
+            DO i = 1, nZ
+              rV_TL = Reflectivity_TL(i,1,j,1)
+              rH_TL = Reflectivity_TL(i,2,j,2)
+              SfcOptics_TL%Reflectivity(i,1,j,1) = POINT_5*(rV_TL+rH_TL)
+              SfcOptics_TL%Reflectivity(i,1,j,2) = POINT_5*(rV_TL-rH_TL)
+              SfcOptics_TL%Reflectivity(i,2,j,1) = POINT_5*(rV_TL-rH_TL)
+              SfcOptics_TL%Reflectivity(i,2,j,2) = POINT_5*(rV_TL+rH_TL)
+            END DO
+          END DO
 
         END IF Decoupled_Polarization
 
@@ -1710,7 +1853,9 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) ) THEN
+      ! UV sensors use the same Lambertian (SEcategory) surface optics as VIS
+      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) .OR. &
+                SpcCoeff_IsUltravioletSensor( SC(SensorIndex) ) ) THEN
 
 
         ! -------------------
@@ -1880,11 +2025,12 @@ CONTAINS
     ! Local variables
     CHARACTER(256)  :: Message
     INTEGER :: i
-    INTEGER :: nL, nZ
+    INTEGER :: j
+    INTEGER :: nL, nZ, nS
     INTEGER :: Polarization
     REAL(fp) :: SIN2_Angle
     REAL(fp) :: theta_f
-    REAL(fp) :: phi, ph, pv
+    REAL(fp) :: phi
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES) :: Emissivity_AD
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES, &
                         SfcOptics%n_Angles,MAX_N_STOKES) :: Reflectivity_AD
@@ -1896,6 +2042,7 @@ CONTAINS
     Error_Status = SUCCESS
     nL = SfcOptics%n_Stokes
     nZ = SfcOptics%n_Angles
+    nS = MAX(2, nL)   ! see the forward model for why the floor is 2
     Polarization = SC(SensorIndex)%Polarization( ChannelIndex )
     ! Initialise the local emissivity and reflectivity adjoints
     Emissivity_AD = ZERO
@@ -2033,8 +2180,11 @@ CONTAINS
 
             ! Polarization mixing with constant offset angle for TROPICS
             CASE ( CONST_MIXED_POLARIZATION )
-              SIN2_Angle = (GeometryInfo%Distance_Ratio * &
-                           SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)))**2
+              ! Constant (scan-independent) polarization mixing. PolAngle is the
+              ! fixed channel polarization angle, so it is NOT scaled by
+              ! GeometryInfo%Distance_Ratio (unlike the V/H-mixed cases, where
+              ! Distance_Ratio converts the local zenith angle to the scan angle).
+              SIN2_Angle = SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex))**2
               DO i = 1, nZ
                 ! PS: The adjoint is the transpose of the TL relationship:
                 ! eV_AD = e_AD * SIN^2(theta)
@@ -2073,14 +2223,8 @@ CONTAINS
                 phi = GeometryInfo%Sensor_Scan_Radian
                 ! Instrument offset angle:
                 theta_f = DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)
-                ph = SIN(phi) * ( COS(phi) + SIN(theta_f)*(1.0_fp - COS(phi))  ) &
-                   ! --------------------------------------------------------------
-                     / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(1.0_fp - COS(phi)**2) )
-                pv = - ( SIN(phi)**2 - SIN(theta_f)*(1.0_fp - COS(phi))*COS(phi) ) &
-                   ! ---------------------------------------------------------------
-                     / SQRT( SIN(phi)**2 + SIN(theta_f)**2*(1.0_fp - COS(phi)**2) )
                 ! Sine square of Polarization Rotation Angle (PRA)
-                SIN2_Angle = SIN(ATAN( -pv/ph ))**2
+                SIN2_Angle = PRA_Sin2_Angle( phi, theta_f )
                 ! PS: The adjoint is the transpose of the TL relationship:
                 ! eV_AD = e_AD * SIN^2(theta)
                 ! eH_AD = e_AD * COS^2(theta)
@@ -2106,13 +2250,37 @@ CONTAINS
         ELSE
 
 
-          ! ------------------------------------
-          ! Coupled polarization from atmosphere
-          ! considered. Simply copy the data
-          ! ------------------------------------
-          Emissivity_AD(1:nZ,1:nL) = SfcOptics_AD%Emissivity(1:nZ,1:nL)
+          ! ----------------------------------------------------------------
+          ! Coupled (vector / n_Stokes>1) polarization. Adjoint of the
+          ! (V,H) -> Stokes (I,Q) basis conversion applied in the forward
+          ! model. The forward map on (eV,eH) is
+          !     M = [ 1/2  1/2 ; 1/2  -1/2 ] ,
+          ! which is symmetric, so the adjoint carries the same coefficients
+          ! with the roles of the components exchanged:
+          !     eV_AD = (e_I_AD + e_Q_AD)/2 ,  eH_AD = (e_I_AD - e_Q_AD)/2 .
+          ! U,V pass through. The reflectivity adjoint is the transpose of the
+          ! forward (rV,rH) -> (R_II,R_IQ,R_QI,R_QQ) map, so each of rV,rH
+          ! collects all four Stokes blocks.
+          ! ----------------------------------------------------------------
+          Emissivity_AD(1:nZ,1) = POINT_5*(SfcOptics_AD%Emissivity(1:nZ,1)+SfcOptics_AD%Emissivity(1:nZ,2))
+          Emissivity_AD(1:nZ,2) = POINT_5*(SfcOptics_AD%Emissivity(1:nZ,1)-SfcOptics_AD%Emissivity(1:nZ,2))
+          IF ( nL > 2 ) Emissivity_AD(1:nZ,3:nL) = SfcOptics_AD%Emissivity(1:nZ,3:nL)
           SfcOptics_AD%Emissivity = ZERO
           Reflectivity_AD(1:nZ,1:nL,1:nZ,1:nL) = SfcOptics_AD%Reflectivity(1:nZ,1:nL,1:nZ,1:nL)
+          DO j = 1, nZ
+            DO i = 1, nZ
+              Reflectivity_AD(i,1,j,1) = POINT_5*( SfcOptics_AD%Reflectivity(i,1,j,1) &
+                                                 + SfcOptics_AD%Reflectivity(i,1,j,2) &
+                                                 + SfcOptics_AD%Reflectivity(i,2,j,1) &
+                                                 + SfcOptics_AD%Reflectivity(i,2,j,2) )
+              Reflectivity_AD(i,2,j,2) = POINT_5*( SfcOptics_AD%Reflectivity(i,1,j,1) &
+                                                 - SfcOptics_AD%Reflectivity(i,1,j,2) &
+                                                 - SfcOptics_AD%Reflectivity(i,2,j,1) &
+                                                 + SfcOptics_AD%Reflectivity(i,2,j,2) )
+              Reflectivity_AD(i,1,j,2) = ZERO
+              Reflectivity_AD(i,2,j,1) = ZERO
+            END DO
+          END DO
           SfcOptics_AD%Reflectivity = ZERO
 
         END IF Decoupled_Polarization
@@ -2180,12 +2348,15 @@ CONTAINS
           ! The surface optics properties based on water coverage fraction
           ! Note that the Emissivity_AD and Reflectivity_AD local adjoints
           ! are NOT zeroed here.
-          SfcOptics_AD%Emissivity(1:nZ,1:2) = &
-            SfcOptics_AD%Emissivity(1:nZ,1:2) + &
-            (Emissivity_AD(1:nZ,1:2)*Surface%Water_Coverage)
-          SfcOptics_AD%Reflectivity(1:nZ,1:2,1:nZ,1:2) = &
-            SfcOptics_AD%Reflectivity(1:nZ,1:2,1:nZ,1:2) + &
-            (Reflectivity_AD(1:nZ,1:2,1:nZ,1:2)*Surface%Water_Coverage)
+          ! Carried over nS, the exact transpose of the forward model's water
+          ! aggregation, so the third and fourth Stokes sensitivities reach the
+          ! surface model adjoint instead of being discarded.
+          SfcOptics_AD%Emissivity(1:nZ,1:nS) = &
+            SfcOptics_AD%Emissivity(1:nZ,1:nS) + &
+            (Emissivity_AD(1:nZ,1:nS)*Surface%Water_Coverage)
+          SfcOptics_AD%Reflectivity(1:nZ,1:nS,1:nZ,1:nS) = &
+            SfcOptics_AD%Reflectivity(1:nZ,1:nS,1:nZ,1:nS) + &
+            (Reflectivity_AD(1:nZ,1:nS,1:nZ,1:nS)*Surface%Water_Coverage)
 
           ! Compute the surface optics adjoints
           Error_Status = Compute_MW_Water_SfcOptics_AD( &
@@ -2222,7 +2393,11 @@ CONTAINS
             (Reflectivity_AD(1:nZ,1:2,1:nZ,1:2)*Surface%Land_Coverage)
 
           ! Compute the surface optics adjoints
-          Error_Status = Compute_MW_Land_SfcOptics_AD( SfcOptics_AD )
+          Error_Status = Compute_MW_Land_SfcOptics_AD( &
+                           SfcOptics   , &  ! Input
+                           SfcOptics_AD, &  ! Input
+                           Surface_AD  , &  ! Output
+                           iVar%MWLSOV   )  ! Internal variable input
           IF ( Error_Status /= SUCCESS ) THEN
             WRITE( Message,'("Error computing MW land SfcOptics_AD at ",&
                             &"channel index ",i0)' ) ChannelIndex
@@ -2393,7 +2568,9 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) ) THEN
+      ! UV sensors use the same Lambertian (SEcategory) surface optics as VIS
+      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) .OR. &
+                SpcCoeff_IsUltravioletSensor( SC(SensorIndex) ) ) THEN
 
 
         ! -------------------

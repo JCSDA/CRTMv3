@@ -28,6 +28,7 @@ MODULE RTV_Define
   USE Message_Handler,       ONLY: SUCCESS, FAILURE, Display_Message
   USE CRTM_Parameters,       ONLY: SET, ZERO, ONE, TWO, PI, &
                                    MAX_N_LAYERS, MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, &
+                                   MAX_N_STOKES, &
                                    DEGREES_TO_RADIANS, &
                                    SECANT_DIFFUSIVITY, &
                                    SCATTERING_ALBEDO_THRESHOLD, &
@@ -54,7 +55,6 @@ MODULE RTV_Define
   PUBLIC :: MAX_N_SOI_ITERATIONS
   ! Datatypes
   PUBLIC :: aircraft_rt_type
-  PUBLIC :: obs_4_downward_type
   PUBLIC :: RTV_type
   ! Procedures
   PUBLIC :: RTV_Associated
@@ -97,13 +97,6 @@ MODULE RTV_Define
     ! The output level index
     INTEGER :: idx
   END TYPE aircraft_rt_type
-  ! ...Downward AD calculation
-  TYPE :: obs_4_downward_type
-    ! The switch
-    LOGICAL :: rt = .FALSE.
-    ! The output level index
-    INTEGER :: idx
-  END TYPE obs_4_downward_type
   ! --------------------------------------
   ! Structure definition to hold forward
   ! variables across FWD, TL, and AD calls
@@ -148,6 +141,10 @@ MODULE RTV_Define
     REAL(fp), DIMENSION(   MAX_N_LAYERS ) :: e_Layer_Trans_DOWN = ZERO
     REAL(fp), DIMENSION( 0:MAX_N_LAYERS ) :: e_Level_Rad_UP     = ZERO
     REAL(fp), DIMENSION( 0:MAX_N_LAYERS ) :: e_Level_Rad_DOWN   = ZERO
+    ! Polarized Stokes components (2:n_Stokes) of the emergent radiance on the
+    ! non-scattering path, at the observer level. Slot 1 is unused: the total
+    ! intensity is e_Level_Rad_UP, which the scalar solver already produces.
+    REAL(fp), DIMENSION( MAX_N_STOKES )   :: e_Rad_UP_Stokes    = ZERO
 
     ! Planck radiances
     REAL(fp)                               :: Planck_Surface    = ZERO
@@ -170,8 +167,16 @@ MODULE RTV_Define
     ! Aircraft model RT information
     TYPE(aircraft_rt_type) :: aircraft
 
-    ! Downwelling radiance
-    TYPE(obs_4_downward_type) :: obs_4_downward
+    ! Opt-in switch: compute surface downwelling radiance in the scattering solvers
+    LOGICAL :: Compute_Down_Radiance = .FALSE.
+
+    ! Opt-in switch: compute the level-resolved downwelling radiance profile
+    ! (RTSolution%Downwelling_Radiance), fully differentiated, for all solvers.
+    LOGICAL :: Compute_Down_Radiance_Profile = .FALSE.
+
+    ! Opt-in switch: compute the level-resolved upwelling radiance profile
+    ! (RTSolution%Upwelling_Radiance) in the scattering solvers, fully differentiated.
+    LOGICAL :: Compute_Up_Radiance_Profile = .FALSE.
 
     ! Scattering, visible model variables
     INTEGER :: n_Streams         = 0       ! Number of *hemispheric* stream angles used in RT

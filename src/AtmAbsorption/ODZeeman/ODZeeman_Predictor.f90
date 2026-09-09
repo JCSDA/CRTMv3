@@ -19,6 +19,8 @@ MODULE ODZeeman_Predictor
   USE Message_Handler,       ONLY: SUCCESS, FAILURE, Display_Message
   USE ODPS_Predictor_Define, ONLY: ODPS_Predictor_type
   USE ODPS_Define,           ONLY: ODPS_type
+  USE ODPS_Predictor,        ONLY: RESERVED_ZSSMIS_GROUP, &
+                                   RESERVED_ZAMSUA_GROUP
 
   ! Disable implicit typing
   IMPLICIT NONE
@@ -60,7 +62,8 @@ MODULE ODZeeman_Predictor
   !----------------------------------------------------------------
   !  ZSSMIS parameters (SSMIS channels 19 - 22)
   !----------------------------------------------------------------
-  INTEGER, PARAMETER :: ODPS_gINDEX_ZSSMIS = 4  ! ODPS group index
+  ! ODPS group index; the reserved value is owned by ODPS_Predictor
+  INTEGER, PARAMETER :: ODPS_gINDEX_ZSSMIS = RESERVED_ZSSMIS_GROUP
   INTEGER, PARAMETER :: MAX_N_PREDICTORS_ZSSMIS = 18
   ! Global to ZSSMIS channel index mapping
   INTEGER, PARAMETER :: N_CHANNELS_SSMIS = 24
@@ -74,7 +77,8 @@ MODULE ODZeeman_Predictor
   !  ZAMSUA parameters (AMSUA channel 14)
   !----------------------------------------------------------------
   INTEGER, PARAMETER :: MAX_N_PREDICTORS_ZAMSUA = 7
-  INTEGER, PARAMETER :: ODPS_gINDEX_ZAMSUA = 5  ! ODPS group index
+  ! ODPS group index; the reserved value is owned by ODPS_Predictor
+  INTEGER, PARAMETER :: ODPS_gINDEX_ZAMSUA = RESERVED_ZAMSUA_GROUP
   ! Global to ZAMSUA channel index mapping
   INTEGER, PARAMETER :: N_CHANNELS_AMSUA = 15
   INTEGER, PARAMETER :: ZAMSUA_ChannelMap(N_CHANNELS_AMSUA) = (/&
