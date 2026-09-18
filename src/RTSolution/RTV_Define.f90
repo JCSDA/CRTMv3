@@ -480,16 +480,12 @@ CONTAINS
        RETURN
     END IF
 
-    ! zero items after allocation to prevent underflow / overflow issues
-    RTV%Pff      = ZERO
-    RTV%Pbb      = ZERO
-    RTV%Pplus    = ZERO
-    RTV%Pminus   = ZERO
-    RTV%Pleg     = ZERO
-    RTV%Off      = ZERO
-    RTV%Obb      = ZERO
-    RTV%n_Factor = ZERO
-    RTV%sum_fac  = ZERO
+    ! NOTE: the work arrays are deliberately NOT zero-filled after allocation.
+    ! RTV_Create runs once per profile in every CRTM entry point; zero-filling the
+    ! ~40 MB (n_Stokes=1) of freshly allocated memory faulted every page back in on
+    ! every call and made cloudy CRTM_Forward/K_Matrix ~45x slower than v2.4.1,
+    ! which never zeroed these arrays. The RT solvers write every element they
+    ! read. See JCSDA/CRTMv3 issues #370 and #368.
 
 
     ! Perform the allocation for adding-doubling variables
@@ -524,28 +520,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! zero items after allocation
-    RTV%Inv_Gamma           = ZERO
-    RTV%Inv_GammaT          = ZERO
-    RTV%Refl_Trans          = ZERO
-    RTV%s_Layer_Trans       = ZERO
-    RTV%s_Layer_Refl        = ZERO
-    RTV%s_Level_Refl_UP     = ZERO
-    RTV%s_Level_Rad_UP      = ZERO
-    RTV%s_Layer_Source_UP   = ZERO
-    RTV%s_Layer_Source_DOWN = ZERO
 
-    ! Add by CD: we don't need to aero the following items for variables of
-    ! aircraft level and downward AD calculation?
-    RTV%s_Level_Rad_UPT     = ZERO
-    RTV%s_Level_Rad_DOWN    = ZERO
-    RTV%s_Level_Refl_DOWN   = ZERO
-    RTV%s_Level_Refl_DOWNT  = ZERO
-    RTV%s_Level_Rad_DOWNT   = ZERO
-    RTV%Inv_Gamma2          = ZERO
-    RTV%Inv_Gamma2T         = ZERO
-    RTV%Inv_Gamma3          = ZERO
-    RTV%Refl_Trans_DOWN     = ZERO
 
     ! Perform the allocation for AMOM variables
     ALLOCATE( RTV%Thermal_C(nZ, n_Layers)        , &
@@ -579,32 +554,6 @@ CONTAINS
       RETURN
     END IF
 
-    ! zero items after allocation
-    RTV%Thermal_C = ZERO
-    RTV%EigVa     = ZERO
-    RTV%Exp_x     = ZERO
-    RTV%EigValue  = ZERO
-    RTV%HH        = ZERO
-    RTV%PM        = ZERO
-    RTV%PP        = ZERO
-    RTV%PPM       = ZERO
-    RTV%PPP       = ZERO
-    RTV%i_PPM     = ZERO
-    RTV%i_PPP     = ZERO
-    RTV%EigVe     = ZERO
-    RTV%Gm        = ZERO
-    RTV%i_Gm      = ZERO
-    RTV%Gp        = ZERO
-    RTV%EigVeF    = ZERO
-    RTV%EigVeVa   = ZERO
-    RTV%A1        = ZERO
-    RTV%A2        = ZERO
-    RTV%A3        = ZERO
-    RTV%A4        = ZERO
-    RTV%A5        = ZERO
-    RTV%A6        = ZERO
-    RTV%Gm_A5     = ZERO
-    RTV%i_Gm_A5   = ZERO
 
     ! Perform the allocation for SOI variables
     ALLOCATE( RTV%e_Layer_Trans( nZ, n_Layers), &
@@ -626,20 +575,6 @@ CONTAINS
        RETURN
     END IF
 
-    ! zero items after allocation
-    RTV%e_Layer_Trans        = ZERO
-    RTV%s_Level_IterRad_DOWN = ZERO
-    RTV%s_Level_IterRad_UP   = ZERO
-    RTV%EXPFACT              = ZERO
-    RTV%Number_Doubling      = ZERO
-    RTV%Delta_Tau   = ZERO
-    RTV%Refl        = ZERO
-    RTV%Trans       = ZERO
-    RTV%Inv_BeT     = ZERO
-    RTV%C1          = ZERO
-    RTV%C2          = ZERO
-    RTV%Source_up   = ZERO
-    RTV%Source_down = ZERO
 
 
     IF(RTV%RT_Algorithm_Id == RT_VMOM) THEN
@@ -657,15 +592,6 @@ CONTAINS
         RETURN
       END IF
 
-      ! zero items after allocation
-      RTV%ADS1  = ZERO
-      RTV%ADS2  = ZERO
-      RTV%ADS3  = ZERO
-      RTV%ADS4  = ZERO
-      RTV%ADS   = ZERO
-      RTV%ADSr  = ZERO
-      RTV%AmBS4 = ZERO
-      RTV%ApBS3 = ZERO
 
     END IF
     ! Set dimensions
