@@ -1,4 +1,4 @@
-CRTM REL-3.1.5
+CRTM REL-3.1.6
 ====================
 
 [![Build Status](https://app.travis-ci.com/JCSDA/CRTMv3.svg?branch=develop)](https://app.travis-ci.com/JCSDA/CRTMv3)
@@ -6,8 +6,9 @@ CRTM REL-3.1.5
 Preamble
 --------
 
-CRTM v3.1.5 release (`REL-3.1.5`)
+CRTM v3.1.6 release (`REL-3.1.6`)
 
+v3.1.6 (in development): removes the per-call zero-fill of the RTV work arrays in RTV_Create that made cloudy CRTM_Forward/K_Matrix up to ~45x slower than v2.4.1 (#370)
 v3.1.5 released August 23, 2026: loads netCDF NLTECoeff/ACCoeff sibling files (previously silently skipped)
 v3.1.4 released June 8, 2026 
 v3.1.3 released February 10, 2025 
@@ -60,7 +61,7 @@ Contents
 
 Configuration, building, and testing the library
 ================================================  
-JCSDA CRTM v3.1.5 Build Instructions
+JCSDA CRTM v3.1.6 Build Instructions
 
 The CRTM repository directory structure looks (something) like:
 
