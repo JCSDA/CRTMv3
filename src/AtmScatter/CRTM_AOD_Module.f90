@@ -549,6 +549,9 @@ CONTAINS
       Check_Input = .TRUE.
       IF (Options_Present) THEN
         Check_Input = Options(m)%Check_Input
+
+        ! Check whether to skip this profile
+        IF ( Options(m)%Skip_Profile ) CYCLE Profile_Loop
       END IF
 
 
@@ -887,6 +890,9 @@ CONTAINS
       Check_Input = .TRUE.
       IF (Options_Present) THEN
         Check_Input = Options(m)%Check_Input
+
+        ! Check whether to skip this profile
+        IF ( Options(m)%Skip_Profile ) CYCLE Profile_Loop
       END IF
 
 
@@ -1239,6 +1245,9 @@ CONTAINS
       Check_Input = .TRUE.
       IF (Options_Present) THEN
         Check_Input = Options(m)%Check_Input
+
+        ! Check whether to skip this profile
+        IF ( Options(m)%Skip_Profile ) CYCLE Profile_Loop
       END IF
 
 
