@@ -197,6 +197,8 @@ list( APPEND crtm_src_files
       Test_Utility/UnitTest/UnitTest_Define.f90
       Utility/Binary_File_Utility.f90
       Utility/Compare_Float_Numbers.f90
+      Utility/CSV_Utility/csv_data_define.f90
+      Utility/CSV_Utility/csv_data_io.f90
       Utility/DateTime_Utility/DateTime_Utility.f90
       Utility/DateTime_Utility/Date_Utility.f90
       Utility/Endian_Utility/Endian_Utility.f90
