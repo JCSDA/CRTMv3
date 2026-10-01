@@ -8,7 +8,7 @@ Preamble
 
 CRTM v3.1.6 release (`REL-3.1.6`)
 
-v3.1.6 (in development): removes the per-call zero-fill of the RTV work arrays in RTV_Create that made cloudy CRTM_Forward/K_Matrix up to ~45x slower than v2.4.1 (#370)
+v3.1.6 released <MONTH DD, YYYY>: removes the per-call zero-fill of the RTV work arrays in RTV_Create that dominated the cost of CRTM calls with clouds, aerosols or visible sensors (#370); CRTM_AOD_TL/AD/K now honor Options%Skip_Profile (#372)
 v3.1.5 released August 23, 2026: loads netCDF NLTECoeff/ACCoeff sibling files (previously silently skipped)
 v3.1.4 released June 8, 2026 
 v3.1.3 released February 10, 2025 
