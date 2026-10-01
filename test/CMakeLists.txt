@@ -461,6 +461,12 @@ ADD_CRTM_UNIT_TEST(NLTE_Verification mains/unit/input_output/test_NLTE_Verificat
 # outputs untouched, and give bit-identical results for every other profile.
 ADD_CRTM_UNIT_TEST(AOD_Skip_Profile mains/unit/Unit_Test/test_AOD_Skip_Profile/test_aod_skip_profile.f90)
 
+# Multi-sensor single-call consistency: one CRTM_Forward/TL/K_Matrix call with
+# ChannelInfo(1:2) must match the per-sensor calls bit-for-bit (guards the
+# cumulative 'ln' channel-offset bookkeeping in the sensor/channel loops,
+# which no single-sensor test can see).
+ADD_CRTM_UNIT_TEST(Unit_MultiSensor_SingleCall mains/unit/Unit_Test/test_MultiSensor_SingleCall.f90)
+
 #(PS) Hypsometric Equation test
 add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
 target_link_libraries(hypsometric_eq PRIVATE crtm)
