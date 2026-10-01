@@ -504,6 +504,7 @@ CONTAINS
       INTEGER :: SensorIndex
       INTEGER :: ChannelIndex
       INTEGER :: ln, nc, ks
+      INTEGER :: ln_base
       INTEGER :: n_Full_Streams, mth_Azi
       INTEGER :: cloud_coverage_flag
       REAL(fp) :: Source_ZA, r_cloudy
@@ -945,9 +946,12 @@ CONTAINS
         ! ------------
         ! THREAD LOOP
         ! ------------
+        ! ln_base is the read-only per-sensor base; every Thread_Loop iteration
+        ! rebuilds ln from it, and the post-loop advance derives from it too.
+        ln_base = ln
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
-!$OMP    FIRSTPRIVATE(ln, r_cloudy)                                               &
-!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,    &
+!$OMP    FIRSTPRIVATE(ln_base, r_cloudy)                                               &
+!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar, ln,    &
 !$OMP          start_ch, end_ch, Wavenumber, transmittance, transmittance_TL,   &
 !$OMP          transmittance_clear, transmittance_clear_TL, l, mth_Azi, ks, Status_FWD,Status_TL)
         Thread_Loop: DO nt = 1, n_channel_threads
@@ -958,9 +962,9 @@ CONTAINS
           ELSE
             end_ch = start_ch + chunk_ch - 1
           END IF
-          ! ln enters FIRSTPRIVATE holding the cumulative channel count of all
-          ! previous sensors in this call; offset it by this thread's chunk.
-          ln = ln + (start_ch - 1) - n_inactive_channels(nt)
+          ! Rebuild ln from the per-sensor base every iteration, offset by this
+          ! chunk. Never accumulate onto the previous iteration's ln.
+          ln = ln_base + (start_ch - 1) - n_inactive_channels(nt)
 
           ! -------------
           ! CHANNEL LOOP
@@ -1377,7 +1381,9 @@ CONTAINS
 
         IF ( Error_Status == FAILURE ) RETURN
 
-        ln = ln + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
+        ! Advance from ln_base, not the loop-exit ln: on a serial channel loop
+        ! Thread_Loop mutates the outer ln and accumulating here would double-count.
+        ln = ln_base + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
 
       END DO Sensor_Loop
 
