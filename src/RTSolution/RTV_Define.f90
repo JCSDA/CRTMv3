@@ -489,8 +489,13 @@ CONTAINS
     ! RTV_Create runs once per profile in every CRTM entry point; zero-filling the
     ! ~40 MB (n_Stokes=1) of freshly allocated memory faulted every page back in on
     ! every call and made cloudy CRTM_Forward/K_Matrix ~45x slower than v2.4.1,
-    ! which never zeroed these arrays. The RT solvers write every element they
-    ! read. See JCSDA/CRTMv3 issues #370 and #368.
+    ! which never zeroed these arrays. See JCSDA/CRTMv3 issues #370 and #368.
+    !
+    ! The one exception is Pff. The ADA solvers (CRTM_ADA, _TL, _AD) test
+    ! maxval(abs(Pff(:,:,k))) for every layer, and at n_Stokes=1 CRTM_Phase_Matrix
+    ! only fills Pff for scattering layers, so that test reads unwritten memory for
+    ! the others. Zero Pff (~200 KB at n_Stokes=1) so the read is defined.
+    RTV%Pff = ZERO
 
 
     ! Perform the allocation for adding-doubling variables
