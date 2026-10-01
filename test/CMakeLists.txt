@@ -456,6 +456,11 @@ endforeach()
 # Compares testinput/ (siblings staged) against testinput_no_siblings/.
 ADD_CRTM_UNIT_TEST(NLTE_Verification mains/unit/input_output/test_NLTE_Verification/test_nlte_verification.f90)
 
+# AOD Skip_Profile verification: CRTM_AOD, _TL, _AD and _K must skip a profile
+# flagged with Options%Skip_Profile, even when its input is invalid, leave its
+# outputs untouched, and give bit-identical results for every other profile.
+ADD_CRTM_UNIT_TEST(AOD_Skip_Profile mains/unit/Unit_Test/test_AOD_Skip_Profile/test_aod_skip_profile.f90)
+
 #(PS) Hypsometric Equation test
 add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
 target_link_libraries(hypsometric_eq PRIVATE crtm)
