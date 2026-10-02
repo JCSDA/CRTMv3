@@ -812,7 +812,10 @@ CONTAINS
             AtmOptics%Include_Scattering ) THEN
           ! Assign algorithm selector
           RTV%RT_Algorithm_Id = Opt%RT_Algorithm_Id
-          CALL RTV_Create( RTV, MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
+          ! RTV is per-profile; for the 2nd+ sensor of a multi-sensor call it
+          ! is already allocated (same dims) and re-ALLOCATE would fail.
+          IF ( .NOT. RTV_Associated(RTV) ) &
+            CALL RTV_Create( RTV, MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
           IF ( .NOT. RTV_Associated(RTV) ) THEN
             Error_Status=FAILURE
             WRITE( Message,'("Error allocating RTV structure for profile #",i0, &
