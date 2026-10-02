@@ -74,14 +74,14 @@ IF(EXISTS  ${FIX_FILE_PATH})
 
 else() # Download CRTM coefficients
   set( CRTM_COEFFS_BRANCH_PREFIX "" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
-  set( CRTM_COEFFS_BRANCH "fix_REL-3.1.2.0" )
+  set( CRTM_COEFFS_BRANCH "fix_REL-3.1.6.0" )
 
   set(CRTM_COEFFS_PATH ${CMAKE_SOURCE_DIR}/test-data-release)
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
 
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
   set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz)
-  set(checksum "0e5888cae80aa674b2e67ecd4490317d") # MD5SUM of fix_REL-3.1.2.0.tgz
+  set(checksum "b0de48587aa0bf731a4aa41fd4094ecc") # MD5SUM of fix_REL-3.1.6.0.tgz
 
   # Check if the CRTM binary tarball is already present otherwise download it.
   message(STATUS "Checking if ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH} already exists...")
@@ -648,8 +648,6 @@ SpcCoeff/Little_Endian/airs_aqua.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/airs_aqua.TauCoeff.bin
 SpcCoeff/Little_Endian/modis_aqua.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/modis_aqua.TauCoeff.bin
-SpcCoeff/Little_Endian/cris-fsr_n21.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/cris-fsr_n21.TauCoeff.bin
 SpcCoeff/Little_Endian/atms_n21.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/atms_n21.TauCoeff.bin
 SpcCoeff/Little_Endian/v.viirs-m_j2.SpcCoeff.bin
