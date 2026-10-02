@@ -529,6 +529,18 @@ CONTAINS
       PRINT *,' error in allocate s_Level_Rad_UPT ',alloc_stat
       RETURN
     END IF
+    ! Three level-radiance arrays (nZ x (n_Layers+1) each, a few KB) are also zeroed,
+    ! because some paths read elements that no solver writes:
+    ! - s_Level_Rad_DOWN, s_Level_Rad_DOWNT: when the downward sweep runs (aircraft
+    !   observer or Compute_Down_Radiance*/Compute_Up_Radiance_Profile), ADA/VMOM set
+    !   only the Stokes-I rows of level 0 to the cosmic background, then read (and, for
+    !   the aircraft observer, copy out) every row, so at n_Stokes>1 the Q/U/V rows of
+    !   level 0 are read unwritten.
+    ! - s_Level_Rad_UP: with an aircraft observer the radiance is taken from
+    !   s_Level_Rad_UP at the aircraft level, which SOI does not compute.
+    RTV%s_Level_Rad_UP    = ZERO
+    RTV%s_Level_Rad_DOWN  = ZERO
+    RTV%s_Level_Rad_DOWNT = ZERO
 
 
 
