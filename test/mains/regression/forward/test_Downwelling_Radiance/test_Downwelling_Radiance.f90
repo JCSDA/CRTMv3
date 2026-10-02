@@ -12,6 +12,7 @@ PROGRAM test_Downwelling_Radiance
   !
   ! Module usage
   USE CRTM_Module
+  USE CRTM_RTSolution_Diff, ONLY: Report_RTSolution_Diff
   ! Disable all implicit typing
   IMPLICIT NONE
   ! ============================================================================
@@ -85,7 +86,8 @@ PROGRAM test_Downwelling_Radiance
   ! --------------
   CALL CRTM_Version( Version )
   CALL Program_Message( PROGRAM_NAME, &
-    'Test program for the aircraft instrument option under clear sky conditions.', &
+    'Forward regression of the first-class surface downwelling radiance output '//&
+    '(RTSolution%Down_Radiance, Options%Compute_Down_Radiance).', &
     'CRTM Version: '//TRIM(Version) )
 
 
@@ -167,9 +169,15 @@ PROGRAM test_Downwelling_Radiance
                                Source_Zenith_Angle = SOURCE_ZENITH_ANGLE )
 
 
-  ! 4c. Set the aircraft pressure altitude
-  ! --------------------------------------
-  Opt%obs_4_downward_P = 320.0_fp
+  ! 4c. Request the first-class surface downwelling radiance output
+  ! ---------------------------------------------------------------
+  ! The legacy Obs_4_downward_P option (downwelling at an arbitrary pressure
+  ! level, forward-only, inert in TL/AD/K) has been retired.  Surface downwelling
+  ! radiance is now a first-class, fully-differentiated RTSolution output
+  ! (%Down_Radiance), opt-in for the scattering solvers via Compute_Down_Radiance
+  ! (always-on for the clear-sky emission path).  The TL/AD/K of %Down_Radiance is
+  ! verified to machine precision by test_Unit_Downwelling_TLADK.
+  Opt%Compute_Down_Radiance = .TRUE.
   ! ============================================================================
 
 
@@ -214,13 +222,13 @@ PROGRAM test_Downwelling_Radiance
   ! 8a. Create the output file if it does not exist
   ! -----------------------------------------------
   ! ...Generate a filename
-  rts_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.bin'
+  rts_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.nc'
   ! ...Check if the file exists
   IF ( .NOT. File_Exists(rts_File) ) THEN
     Message = 'RTSolution save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write RTSolution structure to file
-    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, Quiet=.TRUE. )
+    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating RTSolution save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -230,7 +238,7 @@ PROGRAM test_Downwelling_Radiance
 
   ! 8b. Inquire the saved file
   ! --------------------------
-  Error_Status = CRTM_RTSolution_InquireFile( rts_File, &
+  Error_Status = CRTM_RTSolution_InquireFile( rts_File, NetCDF=.TRUE., &
                                               n_Channels = n_l, &
                                               n_Profiles = n_m )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -258,7 +266,7 @@ PROGRAM test_Downwelling_Radiance
 
   ! 8e. Read the saved data
   ! -----------------------
-  Error_Status = CRTM_RTSolution_ReadFile( rts_File, rts, Quiet=.TRUE. )
+  Error_Status = CRTM_RTSolution_ReadFile( rts_File, rts, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading RTSolution save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -273,9 +281,10 @@ PROGRAM test_Downwelling_Radiance
   ELSE
     Message = 'RTSolution results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
+    CALL Report_RTSolution_Diff( actual=RTSolution, expected=rts, label=PROGRAM_NAME )
     ! Write the current RTSolution results to file
-    rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.bin'
-    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, Quiet=.TRUE. )
+    rts_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution.nc'
+    Error_Status = CRTM_RTSolution_WriteFile( rts_File, RTSolution, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary RTSolution save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )

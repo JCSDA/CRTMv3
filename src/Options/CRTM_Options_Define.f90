@@ -129,11 +129,41 @@ MODULE CRTM_Options_Define
     ! User defined MW water emissivity algorithm
     LOGICAL :: Use_Old_MWSSEM = .FALSE.
 
+    ! Use PARMIO as the MW water emissivity backend wherever its table has
+    ! data, instead of only at and above the conservative default frequency
+    ! floor. The floor exists so that enabling PARMIO could not disturb the
+    ! operational sounding channels, not because PARMIO is unsuitable below
+    ! it, so this is the switch for exercising PARMIO deliberately. It never
+    ! grants access to frequencies the table does not cover: coverage is
+    ! checked independently, because the alternative is a silently
+    ! edge-clamped result from the wrong frequency.
+    LOGICAL :: Use_PARMIO_MWSSEM = .FALSE.
+
     ! Antenna correction application
     LOGICAL :: Use_Antenna_Correction = .FALSE.
 
     ! NLTE radiance correction is ON by default
     LOGICAL :: Apply_NLTE_Correction = .TRUE.
+
+    ! Compute the surface downwelling radiance (RTSolution%Down_Radiance) for the
+    ! scattering solvers (ADA/SOI). OFF by default because it adds the adding-doubling
+    ! downward sweep / per-order accumulation cost. Clear-sky (emission) downwelling is
+    ! always computed regardless of this flag.
+    LOGICAL :: Compute_Down_Radiance = .FALSE.
+
+    ! Compute the level-resolved downwelling radiance PROFILE
+    ! (RTSolution%Downwelling_Radiance(:), surface->TOA) for all solvers, fully
+    ! differentiated (TL/AD/K). OFF by default: the per-level adjoint (seeding every
+    ! level) is materially more expensive than the surface scalar above. Setting this
+    ! also drives the scattering downward sweep.
+    LOGICAL :: Compute_Down_Radiance_Profile = .FALSE.
+
+    ! Compute the level-resolved UPWELLING radiance PROFILE
+    ! (RTSolution%Upwelling_Radiance(:)) for the scattering solvers (the emission/clear
+    ! path always computes it), fully differentiated (TL/AD/K). OFF by default: the
+    ! per-level finalization adds the same adding-doubling sweep cost as the downwelling
+    ! profile. Primary DA use is the Forward + K_Matrix output at each layer.
+    LOGICAL :: Compute_Up_Radiance_Profile = .FALSE.
 
     ! RT Algorithm is set to ADA by default
     INTEGER(Long) :: RT_Algorithm_Id = RT_ADA
@@ -141,7 +171,6 @@ MODULE CRTM_Options_Define
     ! Aircraft flight level pressure
     ! Value > 0 turns "on" the aircraft option
     REAL(Double) :: Aircraft_Pressure = -ONE
-    REAL(Double) :: Obs_4_downward_P = -ONE
     REAL(Double) :: depolarization = 0.0279_fp  !  0.031_fp
     ! User defined number of RT solver streams (streams up + streams down)
     LOGICAL       :: Use_n_Streams = .FALSE.
@@ -347,31 +376,71 @@ CONTAINS
 !                             DIMENSION:  Conformable with Options object
 !                             ATTRIBUTES: INTENT(IN), OPTIONAL
 !
+!   Compute_Down_Radiance:    Set this logical argument to compute the surface
+!                             downwelling radiance (RTSolution%Down_Radiance) for
+!                             the scattering solvers (ADA/SOI). The clear-sky
+!                             (emission) downwelling is always computed.
+!                             If == .TRUE. , scattering downwelling is computed
+!                                == .FALSE., it is not [DEFAULT]
+!                             UNITS:      N/A
+!                             TYPE:       LOGICAL
+!                             DIMENSION:  Conformable with Options object
+!                             ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+!   Compute_Down_Radiance_Profile:
+!                             Set this logical argument to compute the level-resolved
+!                             downwelling radiance profile
+!                             (RTSolution%Downwelling_Radiance(:)), fully
+!                             differentiated (TL/AD/K).
+!                             If == .TRUE. , the profile is computed
+!                                == .FALSE., it is not [DEFAULT]
+!                             UNITS:      N/A
+!                             TYPE:       LOGICAL
+!                             DIMENSION:  Conformable with Options object
+!                             ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+!   Compute_Up_Radiance_Profile:
+!                             Set this logical argument to compute the level-resolved
+!                             upwelling radiance profile
+!                             (RTSolution%Upwelling_Radiance(:)), fully
+!                             differentiated (TL/AD/K).
+!                             If == .TRUE. , the profile is computed
+!                                == .FALSE., it is not [DEFAULT]
+!                             UNITS:      N/A
+!                             TYPE:       LOGICAL
+!                             DIMENSION:  Conformable with Options object
+!                             ATTRIBUTES: INTENT(IN), OPTIONAL
+!
 !:sdoc-:
 !--------------------------------------------------------------------------------
 
   ELEMENTAL SUBROUTINE CRTM_Options_SetValue( &
-    self                   , &
-    Check_Input            , &
-    Use_Old_MWSSEM         , &
-    Use_Antenna_Correction , &
-    Apply_NLTE_Correction  , &
-    Set_ADA_RT             , &
-    Set_SOI_RT             , &
-    Include_Scattering     , &
-    Set_Maximum_Overlap    , &
-    Set_Random_Overlap     , &
-    Set_MaxRan_Overlap     , &
-    Set_Average_Overlap    , &
-    Set_Overcast_Overlap   , &
-    Use_Emissivity         , &
-    Use_Direct_Reflectivity, &
-    n_Streams              , &
-    Aircraft_Pressure        )
+    self                         , &
+    Check_Input                  , &
+    Use_Old_MWSSEM               , &
+    Use_PARMIO_MWSSEM            , &
+    Use_Antenna_Correction       , &
+    Apply_NLTE_Correction        , &
+    Set_ADA_RT                   , &
+    Set_SOI_RT                   , &
+    Include_Scattering           , &
+    Set_Maximum_Overlap          , &
+    Set_Random_Overlap           , &
+    Set_MaxRan_Overlap           , &
+    Set_Average_Overlap          , &
+    Set_Overcast_Overlap         , &
+    Use_Emissivity               , &
+    Use_Direct_Reflectivity      , &
+    n_Streams                    , &
+    Aircraft_Pressure            , &
+    Compute_Down_Radiance        , &
+    Compute_Down_Radiance_Profile, &
+    Compute_Up_Radiance_Profile    )
     ! Arguments
     TYPE(CRTM_Options_type), INTENT(IN OUT) :: self
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Check_Input
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_Old_MWSSEM
+    LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_PARMIO_MWSSEM
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_Antenna_Correction
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Apply_NLTE_Correction
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Set_ADA_RT
@@ -386,14 +455,23 @@ CONTAINS
     LOGICAL ,      OPTIONAL, INTENT(IN)     :: Use_Direct_Reflectivity
     INTEGER ,      OPTIONAL, INTENT(IN)     :: n_Streams
     REAL(fp),      OPTIONAL, INTENT(IN)     :: Aircraft_Pressure
+    LOGICAL ,      OPTIONAL, INTENT(IN)     :: Compute_Down_Radiance
+    LOGICAL ,      OPTIONAL, INTENT(IN)     :: Compute_Down_Radiance_Profile
+    LOGICAL ,      OPTIONAL, INTENT(IN)     :: Compute_Up_Radiance_Profile
 
     ! Set the "direct copy" components
     IF ( PRESENT(Check_Input           ) ) self%Check_Input            = Check_Input
     IF ( PRESENT(Use_Old_MWSSEM        ) ) self%Use_Old_MWSSEM         = Use_Old_MWSSEM
+    IF ( PRESENT(Use_PARMIO_MWSSEM     ) ) self%Use_PARMIO_MWSSEM      = Use_PARMIO_MWSSEM
     IF ( PRESENT(Use_Antenna_Correction) ) self%Use_Antenna_Correction = Use_Antenna_Correction
     IF ( PRESENT(Apply_NLTE_Correction ) ) self%Apply_NLTE_Correction  = Apply_NLTE_Correction
     IF ( PRESENT(Include_Scattering    ) ) self%Include_Scattering     = Include_Scattering
     IF ( PRESENT(Aircraft_Pressure     ) ) self%Aircraft_Pressure      = Aircraft_Pressure
+    IF ( PRESENT(Compute_Down_Radiance ) ) self%Compute_Down_Radiance  = Compute_Down_Radiance
+    IF ( PRESENT(Compute_Down_Radiance_Profile) ) &
+      self%Compute_Down_Radiance_Profile = Compute_Down_Radiance_Profile
+    IF ( PRESENT(Compute_Up_Radiance_Profile) ) &
+      self%Compute_Up_Radiance_Profile = Compute_Up_Radiance_Profile
 
     ! Set the "minimal processing" components
     IF ( PRESENT(n_Streams) ) THEN
@@ -815,6 +893,7 @@ CONTAINS
     ! Display components
     WRITE(*,'(3x,"Check input flag            :",1x,l1)') self%Check_Input
     WRITE(*,'(3x,"Use old MWSSEM flag         :",1x,l1)') self%Use_Old_MWSSEM
+    WRITE(*,'(3x,"Use PARMIO MWSSEM flag      :",1x,l1)') self%Use_PARMIO_MWSSEM
     WRITE(*,'(3x,"Use antenna correction flag :",1x,l1)') self%Use_Antenna_Correction
     WRITE(*,'(3x,"Apply NLTE correction flag  :",1x,l1)') self%Apply_NLTE_Correction
     WRITE(*,'(3x,"Aircraft pressure altitude  :",1x,es22.15)') self%Aircraft_Pressure
@@ -822,6 +901,10 @@ CONTAINS
     WRITE(*,'(3x,"Include scattering flag     :",1x,l1)') self%Include_Scattering
     WRITE(*,'(3x,"Use n_Streams flag          :",1x,l1)') self%Use_n_Streams
     WRITE(*,'(3x,"n_Streams                   :",1x,i0)') self%n_Streams
+    WRITE(*,'(3x,"n_Stokes                    :",1x,i0)') self%n_Stokes
+    WRITE(*,'(3x,"Compute down radiance       :",1x,l1)') self%Compute_Down_Radiance
+    WRITE(*,'(3x,"Compute down radiance prof. :",1x,l1)') self%Compute_Down_Radiance_Profile
+    WRITE(*,'(3x,"Compute up radiance profile :",1x,l1)') self%Compute_Up_Radiance_Profile
     WRITE(*,'(3x,"Cloud cover overlap method  :",1x,a )') TRIM(CloudCover_Overlap_Name(self%Overlap_Id))
     ! ...Emissivity component
     IF ( CRTM_Options_Associated(self) ) THEN
@@ -1333,12 +1416,17 @@ CONTAINS
 
     is_equal = (x%Check_Input              .EQV.   y%Check_Input           ) .AND. &
                (x%Use_Old_MWSSEM           .EQV.   y%Use_Old_MWSSEM        ) .AND. &
+               (x%Use_PARMIO_MWSSEM        .EQV.   y%Use_PARMIO_MWSSEM     ) .AND. &
                (x%Use_Antenna_Correction   .EQV.   y%Use_Antenna_Correction) .AND. &
                (x%Apply_NLTE_Correction    .EQV.   y%Apply_NLTE_Correction ) .AND. &
                (x%RT_Algorithm_Id           ==     y%RT_Algorithm_Id       ) .AND. &
                (x%Aircraft_Pressure      .EqualTo. y%Aircraft_Pressure     ) .AND. &
                (x%Use_n_Streams            .EQV.   y%Use_n_Streams         ) .AND. &
                (x%n_Streams                 ==     y%n_Streams             ) .AND. &
+               (x%n_Stokes                  ==     y%n_Stokes              ) .AND. &
+               (x%Compute_Down_Radiance         .EQV. y%Compute_Down_Radiance        ) .AND. &
+               (x%Compute_Down_Radiance_Profile .EQV. y%Compute_Down_Radiance_Profile) .AND. &
+               (x%Compute_Up_Radiance_Profile   .EQV. y%Compute_Up_Radiance_Profile  ) .AND. &
                (x%Include_Scattering       .EQV.   y%Include_Scattering    ) .AND. &
                (x%Overlap_Id                ==     y%Overlap_Id            )
 
@@ -1422,6 +1510,12 @@ CONTAINS
 
 
     ! Read the optional values
+    ! NOTE: the binary record format deliberately excludes the newer type
+    ! components (n_Stokes, Compute_Down_Radiance, Compute_Down_Radiance_Profile,
+    ! Compute_Up_Radiance_Profile, Use_PARMIO_MWSSEM) -- they take their type
+    ! defaults on read.
+    ! Adding them is a file-format change that must be coordinated with
+    ! Write_Record and existing Options files.
     ! ...Input checking logical
     err_stat = ReadLogical_Binary_File( fid, opt%Check_Input )
     IF ( err_stat /= SUCCESS ) THEN

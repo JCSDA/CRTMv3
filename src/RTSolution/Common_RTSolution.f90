@@ -19,7 +19,16 @@ MODULE Common_RTSolution
   USE CRTM_Parameters,           ONLY: ONE, ZERO, TWO, PI, &
                                        DEGREES_TO_RADIANS, &
                                        SECANT_DIFFUSIVITY, &
-                                       SCATTERING_ALBEDO_THRESHOLD
+                                       SCATTERING_ALBEDO_THRESHOLD, &
+                                       MAX_N_STOKES, &
+                                       RT_SOI
+  USE SensorInfo_Parameters,     ONLY: INTENSITY, SECOND_STOKES_COMPONENT, &
+                                       THIRD_STOKES_COMPONENT, FOURTH_STOKES_COMPONENT, &
+                                       VL_POLARIZATION, HL_POLARIZATION, &
+                                       plus45L_POLARIZATION, minus45L_POLARIZATION, &
+                                       VL_MIXED_POLARIZATION, HL_MIXED_POLARIZATION, &
+                                       RC_POLARIZATION, LC_POLARIZATION, &
+                                       CONST_MIXED_POLARIZATION, PRA_POLARIZATION
   USE Message_Handler,           ONLY: SUCCESS, Display_Message
   USE CRTM_Atmosphere_Define,    ONLY: CRTM_Atmosphere_type
   USE CRTM_Surface_Define,       ONLY: CRTM_Surface_type
@@ -54,6 +63,12 @@ MODULE Common_RTSolution
   PUBLIC :: Assign_Common_Output_TL
   PUBLIC :: Assign_Common_Input_AD
   PUBLIC :: Assign_Common_Output_AD
+  ! Exposed for testing only. CRTM_Phase_Matrix assembles the polarized phase
+  ! matrix from the expansion coefficients; making it callable lets a unit test
+  ! assert physical invariants of the assembled matrix (degree of polarization
+  ! bounded by unity, intensity-block invariance under n_Stokes) directly,
+  ! rather than inferring them from end-to-end radiances. No behaviour change.
+  PUBLIC :: CRTM_Phase_Matrix
 
   ! -----------------
   ! Module parameters
@@ -999,6 +1014,9 @@ CONTAINS
     INTEGER :: Error_Status
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Assign_Common_Input_AD'
+    ! Local variables
+    REAL(fp) :: w_cos, w_sin
+    REAL(fp) :: w_pol(MAX_N_STOKES), Stokes_AD(MAX_N_STOKES), rad_AD
 
     ! -----
     ! Setup
@@ -1017,6 +1035,7 @@ CONTAINS
     ! ------------------------------------------
     ! Compute the brightness temperature adjoint
     ! ------------------------------------------
+    rad_AD = ZERO
     IF ( SpcCoeff_IsInfraredSensor( SC(SensorIndex) ) .OR. &
          SpcCoeff_IsMicrowaveSensor( SC(SensorIndex) ) ) THEN
       IF( RTV%mth_Azi == 0 ) THEN
@@ -1025,22 +1044,31 @@ CONTAINS
                ChannelIndex                        , & ! Input
                RTSolution%Radiance                 , & ! Input
                RTSolution_AD%Brightness_Temperature, & ! Input
-               Radiance_AD(1)                        ) ! Output
+               rad_AD                                ) ! Output
         RTSolution_AD%Brightness_Temperature = ZERO
       END IF
     END IF
 
     ! accumulate Fourier component
+    CALL Azimuth_Fourier_Weights( RTV, GeometryInfo, w_cos, w_sin )
     IF( RTV%n_Stokes == 1 ) THEN
-      Radiance_AD(1) = Radiance_AD(1) + RTSolution_AD%Radiance * &
-         COS( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+      Radiance_AD(1) = Radiance_AD(1) + rad_AD + RTSolution_AD%Radiance * w_cos
     ELSE
-      Radiance_AD(1:2) = Radiance_AD(1:2) + RTSolution_AD%Stokes(1:2) * &
-         COS( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+      ! Adjoint of the channel-polarization projection. The forward model builds
+      ! the reported Radiance as a weighted sum over the Stokes vector, so its
+      ! adjoint distributes back onto every component. This is also what makes
+      ! seeding %Radiance, or %Brightness_Temperature, meaningful on the vector
+      ! path: before the projection existed, %Radiance was an output alias for
+      ! Stokes(1) but not an input one, and seeding it did nothing at all.
+      w_pol = Channel_Polarization_Weights( SfcOptics, GeometryInfo, SensorIndex, ChannelIndex )
+      rad_AD = rad_AD + RTSolution_AD%Radiance
+      Stokes_AD(1:RTV%n_Stokes) = RTSolution_AD%Stokes(1:RTV%n_Stokes) + &
+                                  w_pol(1:RTV%n_Stokes) * rad_AD
+
+      Radiance_AD(1:2) = Radiance_AD(1:2) + Stokes_AD(1:2) * w_cos
 
       IF(  RTV%n_Stokes > 2 ) THEN
-       Radiance_AD(3:RTV%n_Stokes) = Radiance_AD(3:RTV%n_Stokes) + RTSolution_AD%Stokes(3:RTV%n_Stokes)* &
-       SIN( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+       Radiance_AD(3:RTV%n_Stokes) = Radiance_AD(3:RTV%n_Stokes) + Stokes_AD(3:RTV%n_Stokes)*w_sin
       END IF
     END IF
 
@@ -1168,6 +1196,8 @@ CONTAINS
     ! Local variables
     INTEGER :: no, na, nt, n1
     REAL(fp) :: Radiance(RTV%n_Stokes)
+    REAL(fp) :: w_cos, w_sin
+    REAL(fp) :: w_pol(MAX_N_STOKES)
 
     Error_Status = SUCCESS
     n1 = (SfcOptics%Index_Sat_Ang-1)*RTV%n_Stokes + 1
@@ -1181,9 +1211,52 @@ CONTAINS
         Radiance(:) = RTV%s_Level_Rad_UP(n1:n1-1+RTV%n_Stokes, 0)
       END IF
 
-      ! Output downwelling radiance
-      IF ( RTV%obs_4_downward%rt ) THEN
-        Radiance = RTV%s_Level_Rad_DOWN(n1:n1-1+RTV%n_Stokes, RTV%obs_4_downward%idx)
+      ! Surface downwelling radiance output (Stokes I at the sensor angle), opt-in
+      ! for scattering via Options%Compute_Down_Radiance.
+      IF ( RTV%Compute_Down_Radiance ) THEN
+        IF ( RTV%RT_Algorithm_Id == RT_SOI ) THEN
+          ! SOI stores the finalized surface downwelling directly in s_Level_Rad_DOWN.
+          RTSolution%Down_Radiance = RTV%s_Level_Rad_DOWN(n1, Atmosphere%n_Layers)
+        ELSE
+          ! ADA/VMOM: s_Level_Rad_DOWN retains the INTERMEDIATE (adding-down) values
+          ! so the TL/AD downward sweeps can reuse them (the FWD copy-back is gated on
+          ! the aircraft observer); the finalized surface value is in s_Level_Rad_DOWNT.
+          RTSolution%Down_Radiance = RTV%s_Level_Rad_DOWNT(n1, Atmosphere%n_Layers)
+        END IF
+      END IF
+
+      ! Level-resolved downwelling radiance PROFILE (Stokes I at the sensor angle),
+      ! opt-in via Options%Compute_Down_Radiance_Profile. SOI stores the finalized
+      ! profile in s_Level_Rad_DOWN; ADA/VMOM in s_Level_Rad_DOWNT (s_Level_Rad_DOWN
+      ! holds the intermediate adding-down values for the TL/AD).
+      IF ( RTV%Compute_Down_Radiance_Profile .AND. CRTM_RTSolution_Associated(RTSolution) ) THEN
+        na = RTV%n_Added_Layers
+        nt = RTV%n_Layers
+        ! Clamp to the conformant extent: a user RTSolution allocated with a
+        ! different n_Layers than the atmosphere must not drive the section
+        ! assignment out of bounds.
+        no = MIN( RTSolution%n_Layers, nt - na )
+        IF ( RTV%RT_Algorithm_Id == RT_SOI ) THEN
+          RTSolution%Downwelling_Radiance(1:no) = RTV%s_Level_Rad_DOWN(n1, na+1:na+no)
+        ELSE
+          RTSolution%Downwelling_Radiance(1:no) = RTV%s_Level_Rad_DOWNT(n1, na+1:na+no)
+        END IF
+      END IF
+
+      ! Level-resolved UPWELLING radiance PROFILE (Stokes I at the sensor angle), opt-in
+      ! for scattering via Options%Compute_Up_Radiance_Profile. SOI uses the per-order
+      ! sum s_Level_Rad_UP; ADA/VMOM the FINALIZED s_Level_Rad_UPT (s_Level_Rad_UP holds
+      ! the intermediate adding-up values for the TL/AD). The emission/clear path sets
+      ! Upwelling_Radiance unconditionally (below).
+      IF ( RTV%Compute_Up_Radiance_Profile .AND. CRTM_RTSolution_Associated(RTSolution) ) THEN
+        na = RTV%n_Added_Layers
+        nt = RTV%n_Layers
+        no = MIN( RTSolution%n_Layers, nt - na )  ! conformant extent (see above)
+        IF ( RTV%RT_Algorithm_Id == RT_SOI ) THEN
+          RTSolution%Upwelling_Radiance(1:no) = RTV%s_Level_Rad_UP(n1, na+1:na+no)
+        ELSE
+          RTSolution%Upwelling_Radiance(1:no) = RTV%s_Level_Rad_UPT(n1, na+1:na+no)
+        END IF
       END IF
 
     ! Emission specific assignments
@@ -1195,11 +1268,12 @@ CONTAINS
       ELSE
         Radiance(1) = RTV%e_Level_Rad_UP(0)
       END IF
-
-      ! Output downwelling radiance
-      IF ( RTV%obs_4_downward%rt ) THEN
-        Radiance = RTV%e_Level_Rad_DOWN(RTV%obs_4_downward%idx)
-      END IF
+      ! Polarized components from the non-scattering vector completion
+      ! (CRTM_Emission_Stokes). This also guarantees Radiance(2:n_Stokes) is
+      ! defined: the scalar solver fills slot 1 only, so the accumulation below
+      ! was previously reading an automatic array before it was ever assigned.
+      IF ( RTV%n_Stokes > 1 ) &
+        Radiance(2:RTV%n_Stokes) = RTV%e_Rad_UP_Stokes(2:RTV%n_Stokes)
 
       ! Other emission-only output
       RTSolution%Up_Radiance             = RTV%Up_Radiance
@@ -1208,29 +1282,40 @@ CONTAINS
       RTSolution%Surface_Planck_Radiance = RTV%Planck_Surface
       IF ( CRTM_RTSolution_Associated( RTSolution ) ) THEN
         ! Shorter names for indexing
-        no = RTSolution%n_Layers  ! Original no. of layers
         na = RTV%n_Added_Layers   ! No. of added layers
         nt = RTV%n_Layers         ! Current total no. of layers
+        ! Original no. of layers, clamped to the conformant extent (a user
+        ! RTSolution allocated with a different n_Layers must not drive the
+        ! section assignments out of bounds)
+        no = MIN( RTSolution%n_Layers, nt - na )
         ! Assign only the upwelling radiance profile
         ! defined by the user input layering
-        RTSolution%Upwelling_Radiance(1:no) = RTV%e_Level_Rad_UP(na+1:nt)
-        RTSolution%Upwelling_Overcast_Radiance(1:no) = RTV%e_Cloud_Radiance_UP(na+1:nt)
+        RTSolution%Upwelling_Radiance(1:no) = RTV%e_Level_Rad_UP(na+1:na+no)
+        RTSolution%Upwelling_Overcast_Radiance(1:no) = RTV%e_Cloud_Radiance_UP(na+1:na+no)
+        ! Level-resolved downwelling radiance profile (opt-in). Surface value
+        ! (level nt) equals the Down_Radiance scalar.
+        IF ( RTV%Compute_Down_Radiance_Profile ) &
+          RTSolution%Downwelling_Radiance(1:no) = RTV%e_Level_Rad_DOWN(na+1:na+no)
       END IF
     END IF
 
     ! accumulate Fourier component
+    CALL Azimuth_Fourier_Weights( RTV, GeometryInfo, w_cos, w_sin )
     IF( RTV%n_Stokes == 1 ) THEN
-     RTSolution%Radiance = RTSolution%Radiance + Radiance(1)*  &
-       COS( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+     RTSolution%Radiance = RTSolution%Radiance + Radiance(1)*w_cos
       RTSolution%Stokes(1) = RTSolution%Radiance
     ELSE
-     RTSolution%Stokes(1:2) = RTSolution%Stokes(1:2) + Radiance(1:2)*  &
-       COS( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+     RTSolution%Stokes(1:2) = RTSolution%Stokes(1:2) + Radiance(1:2)*w_cos
        IF(  RTV%n_Stokes > 2 ) THEN
-     RTSolution%Stokes(3:RTV%n_Stokes) = RTSolution%Stokes(3:RTV%n_Stokes) + Radiance(3:RTV%n_Stokes)*  &
-       SIN( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+     RTSolution%Stokes(3:RTV%n_Stokes) = RTSolution%Stokes(3:RTV%n_Stokes) + Radiance(3:RTV%n_Stokes)*w_sin
        END IF
-       RTSolution%Radiance = RTSolution%Stokes(1)
+       ! Project the emergent Stokes vector onto what this channel measures.
+       ! Reporting Stokes(1) here handed a vertically polarized channel the
+       ! total intensity I instead of I+Q. Stokes itself is untouched and stays
+       ! the physical (I,Q,U,V); only the scalar Radiance, and the brightness
+       ! temperature computed from it below, are projected.
+       w_pol = Channel_Polarization_Weights( SfcOptics, GeometryInfo, SensorIndex, ChannelIndex )
+       RTSolution%Radiance = DOT_PRODUCT( w_pol(1:RTV%n_Stokes), RTSolution%Stokes(1:RTV%n_Stokes) )
     END IF
 
     ! ------------------------------------------------
@@ -1372,7 +1457,8 @@ CONTAINS
     SensorIndex            , & ! Input
     ChannelIndex           , & ! Input
     RTV                    , & ! Input
-    RTSolution_TL          ) & ! Output
+    RTSolution_TL          , & ! Output
+    Stokes_TL              ) & ! Optional input
   RESULT( Error_Status )
     ! Arguments
     TYPE(CRTM_SfcOptics_type)   , INTENT(IN)     :: SfcOptics
@@ -1384,10 +1470,15 @@ CONTAINS
     INTEGER                     , INTENT(IN)     :: ChannelIndex
     TYPE(RTV_type)              , INTENT(IN)     :: RTV
     TYPE(CRTM_RTSolution_type)  , INTENT(IN OUT) :: RTSolution_TL
+    ! Tangent linear of the polarized components on the non-scattering path.
+    ! Optional so callers that never take that path are unaffected.
+    REAL(fp)          , OPTIONAL, INTENT(IN)     :: Stokes_TL(:)
 
     ! Function Result
     INTEGER :: Error_Status,n1
     REAL(fp) :: SRadiance_TL(RTV%n_Stokes)
+    REAL(fp) :: w_cos, w_sin
+    REAL(fp) :: w_pol(MAX_N_STOKES)
     ! Local Parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Assign_Common_Output_TL'
 
@@ -1400,21 +1491,32 @@ CONTAINS
     ! Emission specific assignments
     ELSE
         SRadiance_TL(1) = Radiance_TL
+        ! Polarized components from the non-scattering vector completion. Also
+        ! guarantees SRadiance_TL(2:) is defined rather than read unassigned.
+        IF ( RTV%n_Stokes > 1 ) THEN
+          IF ( PRESENT(Stokes_TL) ) THEN
+            SRadiance_TL(2:RTV%n_Stokes) = Stokes_TL(2:RTV%n_Stokes)
+          ELSE
+            SRadiance_TL(2:RTV%n_Stokes) = ZERO
+          END IF
+        END IF
     END IF
 
     ! accumulate Fourier component
+    CALL Azimuth_Fourier_Weights( RTV, GeometryInfo, w_cos, w_sin )
     IF( RTV%n_Stokes == 1 ) THEN
-      RTSolution_TL%Radiance = RTSolution_TL%Radiance + SRadiance_TL(1)*  &
-         COS( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+      RTSolution_TL%Radiance = RTSolution_TL%Radiance + SRadiance_TL(1)*w_cos
       RTSolution_TL%Stokes(1) = RTSolution_TL%Radiance
     ELSE
-      RTSolution_TL%Stokes(1:2) = RTSolution_TL%Stokes(1:2) + SRadiance_TL(1:2)*  &
-         COS( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
-      RTSolution_TL%Radiance = RTSolution_TL%Stokes(1)
+      RTSolution_TL%Stokes(1:2) = RTSolution_TL%Stokes(1:2) + SRadiance_TL(1:2)*w_cos
       IF(  RTV%n_Stokes > 2 ) THEN
-      RTSolution_TL%Stokes(3:RTV%n_Stokes) = RTSolution_TL%Stokes(3:RTV%n_Stokes) + SRadiance_TL(3:RTV%n_Stokes)* &
-       SIN( RTV%mth_Azi*(GeometryInfo%Sensor_Azimuth_Radian-GeometryInfo%Source_Azimuth_Radian) )
+      RTSolution_TL%Stokes(3:RTV%n_Stokes) = RTSolution_TL%Stokes(3:RTV%n_Stokes) + SRadiance_TL(3:RTV%n_Stokes)*w_sin
      END IF
+      ! Tangent linear of the channel-polarization projection. The weights are
+      ! geometry and coefficient constants, not functions of the state, so the
+      ! TL carries the same linear form.
+      w_pol = Channel_Polarization_Weights( SfcOptics, GeometryInfo, SensorIndex, ChannelIndex )
+      RTSolution_TL%Radiance = DOT_PRODUCT( w_pol(1:RTV%n_Stokes), RTSolution_TL%Stokes(1:RTV%n_Stokes) )
     END IF
 
 
@@ -1821,6 +1923,225 @@ CONTAINS
 !################################################################################
 !################################################################################
 
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       Azimuth_Fourier_Weights
+!
+! PURPOSE:
+!       Returns the weights with which the mth azimuthal Fourier component of
+!       the emergent radiance is accumulated into RTSolution%Stokes. Shared by
+!       the forward, tangent-linear and adjoint accumulations so the three can
+!       never drift apart.
+!
+!       Stokes components 1 and 2 (I,Q) accumulate with the cosine series and
+!       components 3 and 4 (U,V) with the sine series, which is the standard
+!       convention for a solar problem decomposed about the principal plane.
+!
+!       The m = 0 sine weight is unity, not SIN(0). Two facts make that the
+!       correct choice rather than a special case:
+!
+!       1. CRTM sets n_Azi > 0 only for visible channels
+!          (CRTM_Forward_Module.f90:993 versus :1011), while the coupled
+!          polarimetric surface branch exists only for microwave. Every run in
+!          which n_Stokes > 1 is meaningful therefore performs a single m = 0
+!          solve, whose azimuth dependence is carried by the surface (evaluated
+!          at the actual relative wind azimuth) rather than by a Fourier
+!          series. There is nothing to synthesize, so the weight is unity, as
+!          it already is for components 1 and 2. Taking SIN(0) instead
+!          annihilated U and V on their way out, whatever the solver computed.
+!
+!       2. On the solar and visible path, where the sine series is genuine, the
+!          m = 0 U and V are identically zero, so the weight applied to them is
+!          immaterial. At m = 0 the generalized spherical function T_l^m
+!          (RTV%Pminus) vanishes exactly: Gl2n (CRTM_Utility.f90:1295) drops its
+!          n argument when MF = 0, in both the seed and the recursion, so
+!          Pminus = (Gl2n(-2) - Gl2n(2))/2 is zero. Every phase-matrix block
+!          carrying a Pminus factor vanishes with it, which is all of (1,3),
+!          (3,1), (2,3), (3,2), (2,4) and (4,2), leaving the m = 0 phase matrix
+!          block diagonal in {I,Q} and {U,V}. The infrared and visible surface
+!          fills component 1 only and the thermal source is intensity only, so
+!          the m = 0 U and V sources are zero and so is their solution.
+!
+!--------------------------------------------------------------------------------
+
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       Channel_Polarization_Weights
+!
+! PURPOSE:
+!       Returns the weights w such that the radiance a channel actually
+!       measures is DOT_PRODUCT( w(1:n_Stokes), Stokes(1:n_Stokes) ).
+!
+!       On the scalar path the channel polarization is applied to the surface
+!       emissivity, in the (V,H) basis, and the solver then carries a single
+!       already-projected radiance. On the vector path the solver carries the
+!       whole Stokes vector, so the projection has to be applied to the
+!       emergent radiance instead. Without it a vertically polarized channel
+!       reports I where the instrument measures I+Q.
+!
+!       The weights are derived from the scalar branch of CRTM_SfcOptics rather
+!       than from first principles, so that the two paths agree by construction.
+!       Every case there is a combination a*eV + b*eH (+ c*e3 + d*e4), and with
+!       eV = I+Q and eH = I-Q that is
+!
+!           w = (/ a+b, a-b, c, d /) .
+!
+!       Two caveats inherited deliberately from the scalar branch. It treats
+!       plus45L, minus45L, RC and LC as vertical, which is a placeholder rather
+!       than the true projection; mirroring it keeps the paths consistent, and
+!       fixing it belongs with those polarizations, not here. And for the mixed
+!       cases the scalar path applies the mixing at every quadrature angle
+!       inside the radiative transfer, whereas this applies it once to the
+!       emergent radiance at the sensor angle, which is where a receiver
+!       actually projects. The two coincide when there is one angle, and differ
+!       slightly for a scattering mixed-polarization channel.
+!
+!--------------------------------------------------------------------------------
+
+  FUNCTION Channel_Polarization_Weights( &
+    SfcOptics    , &  ! Input
+    GeometryInfo , &  ! Input
+    SensorIndex  , &  ! Input
+    ChannelIndex ) &  ! Input
+  RESULT( w )
+    ! Arguments
+    TYPE(CRTM_SfcOptics_type)   , INTENT(IN) :: SfcOptics
+    TYPE(CRTM_GeometryInfo_type), INTENT(IN) :: GeometryInfo
+    INTEGER                     , INTENT(IN) :: SensorIndex
+    INTEGER                     , INTENT(IN) :: ChannelIndex
+    ! Function result
+    REAL(fp) :: w(MAX_N_STOKES)
+    ! Local variables
+    INTEGER  :: isat
+    REAL(fp) :: SIN2_Angle, phi, theta_f
+
+    ! Default to reporting the total intensity, which is what the vector path
+    ! did before any projection existed.
+    w    = ZERO
+    w(1) = ONE
+
+    isat = SfcOptics%Index_Sat_Ang
+    IF ( isat < 1 ) RETURN
+
+    SELECT CASE( SC(SensorIndex)%Polarization(ChannelIndex) )
+
+      ! I. Note INTENSITY == UNPOLARIZED == FIRST_STOKES_COMPONENT
+      CASE( INTENSITY )
+        w(1) = ONE
+
+      ! Q
+      CASE( SECOND_STOKES_COMPONENT )
+        w(1) = ZERO ; w(2) = ONE
+
+      ! U
+      CASE( THIRD_STOKES_COMPONENT )
+        w(1) = ZERO ; w(3) = ONE
+
+      ! V
+      CASE( FOURTH_STOKES_COMPONENT )
+        w(1) = ZERO ; w(4) = ONE
+
+      ! eV = I + Q. plus45L, minus45L, RC and LC are treated as vertical by the
+      ! scalar branch; see the caveat above.
+      CASE( VL_POLARIZATION, plus45L_POLARIZATION, minus45L_POLARIZATION, &
+            RC_POLARIZATION, LC_POLARIZATION )
+        w(1) = ONE ; w(2) = ONE
+
+      ! eH = I - Q
+      CASE( HL_POLARIZATION )
+        w(1) = ONE ; w(2) = -ONE
+
+      ! eV*(1-s2) + eH*s2
+      CASE( VL_MIXED_POLARIZATION )
+        SIN2_Angle = (GeometryInfo%Distance_Ratio * &
+                      SIN(DEGREES_TO_RADIANS*SfcOptics%Angle(isat)))**2
+        w(1) = ONE ; w(2) = ONE - TWO*SIN2_Angle
+
+      ! eV*s2 + eH*(1-s2)
+      CASE( HL_MIXED_POLARIZATION )
+        SIN2_Angle = (GeometryInfo%Distance_Ratio * &
+                      SIN(DEGREES_TO_RADIANS*SfcOptics%Angle(isat)))**2
+        w(1) = ONE ; w(2) = TWO*SIN2_Angle - ONE
+
+      ! Constant, scan-independent mixing. PolAngle is a fixed channel angle and
+      ! is deliberately NOT scaled by Distance_Ratio; see the scalar branch.
+      CASE( CONST_MIXED_POLARIZATION )
+        SIN2_Angle = SIN(DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex))**2
+        w(1) = ONE ; w(2) = TWO*SIN2_Angle - ONE
+
+      ! Polarization rotation angle varying with scan angle
+      CASE( PRA_POLARIZATION )
+        phi     = GeometryInfo%Sensor_Scan_Radian
+        theta_f = DEGREES_TO_RADIANS*SC(SensorIndex)%PolAngle(ChannelIndex)
+        SIN2_Angle = PRA_Sin2_Angle( phi, theta_f )
+        w(1) = ONE ; w(2) = TWO*SIN2_Angle - ONE
+
+      ! Anything else keeps the total-intensity default set above.
+      CASE DEFAULT
+        w    = ZERO
+        w(1) = ONE
+
+    END SELECT
+
+  END FUNCTION Channel_Polarization_Weights
+
+
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       Bound_Phase_Block
+!
+! PURPOSE:
+!       Bounds every element of one n_Stokes x n_Stokes phase-matrix block by
+!       the magnitude of its own (1,1) element, which is the necessary
+!       condition for the block to map physically realisable Stokes vectors to
+!       physically realisable ones. Used only where the (1,1) element has just
+!       been clamped away from a negative value, which makes the rest of that
+!       block numerically meaningless; see the call site.
+!
+!--------------------------------------------------------------------------------
+
+  SUBROUTINE Bound_Phase_Block( P, i1, j1, n_Stokes, bound )
+    ! Arguments
+    REAL(fp), INTENT(IN OUT) :: P(:,:)
+    INTEGER , INTENT(IN)     :: i1, j1, n_Stokes
+    REAL(fp), INTENT(IN)     :: bound
+    ! Local variables
+    INTEGER :: ii, jj
+
+    DO jj = 0, n_Stokes-1
+      DO ii = 0, n_Stokes-1
+        IF ( ii == 0 .AND. jj == 0 ) CYCLE          ! the (1,1) element itself
+        P(i1+ii,j1+jj) = SIGN( MIN(ABS(P(i1+ii,j1+jj)), bound), P(i1+ii,j1+jj) )
+      END DO
+    END DO
+
+  END SUBROUTINE Bound_Phase_Block
+
+
+  SUBROUTINE Azimuth_Fourier_Weights( RTV, GeometryInfo, w_cos, w_sin )
+    ! Arguments
+    TYPE(RTV_type)              , INTENT(IN)  :: RTV
+    TYPE(CRTM_GeometryInfo_type), INTENT(IN)  :: GeometryInfo
+    REAL(fp)                    , INTENT(OUT) :: w_cos
+    REAL(fp)                    , INTENT(OUT) :: w_sin
+    ! Local variables
+    REAL(fp) :: dphi
+
+    dphi  = RTV%mth_Azi * ( GeometryInfo%Sensor_Azimuth_Radian - &
+                            GeometryInfo%Source_Azimuth_Radian )
+    w_cos = COS( dphi )
+    IF ( RTV%mth_Azi == 0 ) THEN
+      w_sin = ONE
+    ELSE
+      w_sin = SIN( dphi )
+    END IF
+
+  END SUBROUTINE Azimuth_Fourier_Weights
+
+
 ! -------------------------------------------------------------------------------
 !
 ! NAME:
@@ -2080,10 +2401,29 @@ CONTAINS
             RTV%Pff(i1,j1,k) = RTV%Off(i,j,k)
             RTV%Pbb(i1,j1,k) = RTV%Obb(i,j,k)
 
-            ! For intensity, the phase matrix element must >= ZERO
+            ! For intensity, the phase matrix element must >= ZERO.
+            ! A negative (1,1) is Legendre truncation ringing, and the clamp
+            ! keeps the intensity solve stable. On the vector path the clamp
+            ! alone is not enough: the polarized elements of the same block come
+            ! from the same truncated series, and once (1,1) has been raised to
+            ! PHASE_THRESHOLD they are no longer bounded by it, so the block can
+            ! imply a degree of polarization far above unity (measured at 5.6e6
+            ! in the stress case of test_PhaseMatrix_Invariants). A block whose
+            ! intensity element is numerically meaningless cannot have
+            ! meaningful polarized elements either, so bound the whole block by
+            ! the clamped value, which keeps it physically admissible.
+            ! Measured to fire ZERO times in 7092 assembled elements on the
+            ! shipped CRTM-Exp lookup table, so this is a dormant hazard rather
+            ! than an active correction: it changes no current result.
             IF ( RTV%mth_Azi == 0 ) THEN
-              IF(RTV%Pff(i1,j1,k) < ZERO) RTV%Pff(i1,j1,k) = PHASE_THRESHOLD
-              IF(RTV%Pbb(i1,j1,k) < ZERO) RTV%Pbb(i1,j1,k) = PHASE_THRESHOLD
+              IF(RTV%Pff(i1,j1,k) < ZERO) THEN
+                RTV%Pff(i1,j1,k) = PHASE_THRESHOLD
+                CALL Bound_Phase_Block( RTV%Pff(:,:,k), i1, j1, RTV%n_Stokes, PHASE_THRESHOLD )
+              END IF
+              IF(RTV%Pbb(i1,j1,k) < ZERO) THEN
+                RTV%Pbb(i1,j1,k) = PHASE_THRESHOLD
+                CALL Bound_Phase_Block( RTV%Pbb(:,:,k), i1, j1, RTV%n_Stokes, PHASE_THRESHOLD )
+              END IF
             END IF
 
             ! qliu   set P' = P D
@@ -2463,13 +2803,18 @@ CONTAINS
         END DO
 
           ! Normalisation for energy conservation
-          ! Using FWD results Lff, Lbb and normalize Pff_TL, Pbb_TL (n_Angles, n_Angles)
+          ! Using FWD results Lff, Lbb and normalize Pff_TL, Pbb_TL (n_Angles, n_Angles).
+          ! The full TL slices carry the polarized off-diagonal block elements,
+          ! which mirror the forward's D2 normalization (intensity elements of
+          ! the full slices are scattered back from Lff_TL/Lbb_TL below).
           CALL Normalize_Phase_TL( &
                  k, RTV, &
                  Lff,           & ! FWD Input
                  Lbb,           & ! FWD Input
                  Lff_TL(:,:), & ! TL  Output
-                 Lbb_TL(:,:)  ) ! TL  Output
+                 Lbb_TL(:,:), & ! TL  Output
+                 Pff_TL_full = Pff_TL(:,:,k), & ! TL Output, polarized blocks
+                 Pbb_TL_full = Pbb_TL(:,:,k)  ) ! TL Output, polarized blocks
 
         DO j = 1, jn
           DO i = 1, RTV%n_Angles
@@ -2681,11 +3026,16 @@ CONTAINS
           END DO
         END DO
 
+        ! The full AD slices carry the polarized off-diagonal block elements
+        ! (transpose of the TL mirror); intensity elements travel through the
+        ! contracted Lff_AD/Lbb_AD and are scattered back below.
         CALL Normalize_Phase_AD( &
               k, RTV, &
               Lff, Lbb,      & ! FWD Input
               Lff_AD, & ! AD  Output
-              Lbb_AD  ) ! AD  Output
+              Lbb_AD, & ! AD  Output
+              Pff_AD_full = Pff_AD(:,:,k), & ! AD Output, polarized blocks
+              Pbb_AD_full = Pbb_AD(:,:,k)  ) ! AD Output, polarized blocks
 
         DO j = 1, RTV%n_Angles
           ! add solar angle
@@ -2898,7 +3248,7 @@ CONTAINS
     INTEGER,        INTENT(IN)     :: k
     TYPE(RTV_type), INTENT(IN OUT) :: RTV
     ! Local variables
-    INTEGER :: i, j, nZ, i1, j1
+    INTEGER :: i, j, nZ, i1, j1, ii, jj
 
     nZ = RTV%n_Angles
 
@@ -2958,6 +3308,19 @@ CONTAINS
         RTV%Pff(i1,j1,k)=RTV%Pff(i1,j1,k)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k))
         RTV%Pbb(i1,j1,k)=RTV%Pbb(i1,j1,k)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k))
       END DO
+      ! D2: scale this row's polarized off-diagonal block elements by the same
+      ! intensity-normalization factor (polarized blocks are pre-built for all
+      ! columns j; the (1,1) elements were scaled just above).
+      DO j = 1, nZ
+        j1 = (j-1)*RTV%n_Stokes + 1
+        DO jj = 0, RTV%n_Stokes-1
+          DO ii = 0, RTV%n_Stokes-1
+            IF( ii == 0 .AND. jj == 0 ) CYCLE
+            RTV%Pff(i1+ii,j1+jj,k)=RTV%Pff(i1+ii,j1+jj,k)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k))
+            RTV%Pbb(i1+ii,j1+jj,k)=RTV%Pbb(i1+ii,j1+jj,k)/RTV%n_Factor(i,k)*(ONE-RTV%Sum_Fac(i-1,k))
+          END DO
+        END DO
+      END DO
       RTV%Sum_Fac(i,k)=ZERO
       IF( i < nZ ) THEN
         DO j=i+1,nZ
@@ -2973,23 +3336,28 @@ CONTAINS
     END DO
 
     IF( RTV%n_Streams < nZ ) THEN
-      ! Sensor viewing angle differs from the Gaussian angles
+      ! Sensor viewing angle differs from the Gaussian angles. The intensity
+      ! element of the sensor-angle block is column/row (nZ-1)*n_Stokes+1
+      ! (same j1 convention as every block above), NOT nZ*n_Stokes, which is
+      ! the last polarized component of that block.
+      i1 = (nZ-1)*RTV%n_Stokes + 1
       RTV%n_Factor(nZ,k) =  RTV%Sum_Fac(nZ-1,k)
       DO j = 1, nZ
         j1 = (j-1)*RTV%n_Stokes + 1
-        RTV%Pff(j1,nZ*RTV%n_Stokes,k) = RTV%Pff(j1,nZ*RTV%n_Stokes,k)/RTV%n_Factor(nZ,k)
-        RTV%Pbb(j1,nZ*RTV%n_Stokes,k) = RTV%Pbb(j1,nZ*RTV%n_Stokes,k)/RTV%n_Factor(nZ,k)
+        RTV%Pff(j1,i1,k) = RTV%Pff(j1,i1,k)/RTV%n_Factor(nZ,k)
+        RTV%Pbb(j1,i1,k) = RTV%Pbb(j1,i1,k)/RTV%n_Factor(nZ,k)
         ! Symmetric condition
         IF( j < nZ ) THEN
-          RTV%Pff(nZ*RTV%n_Stokes,j1,k) = RTV%Pff(j1,nZ*RTV%n_Stokes,k)
-          RTV%Pbb(nZ*RTV%n_Stokes,j1,k) = RTV%Pbb(j1,nZ*RTV%n_Stokes,k)
+          RTV%Pff(i1,j1,k) = RTV%Pff(j1,i1,k)
+          RTV%Pbb(i1,j1,k) = RTV%Pbb(j1,i1,k)
         END IF
       END DO
     END IF
 
   END SUBROUTINE Normalize_Phase
 
-  SUBROUTINE Normalize_Phase_TL( k, RTV, Pff, Pbb, Pff_TL, Pbb_TL )
+  SUBROUTINE Normalize_Phase_TL( k, RTV, Pff, Pbb, Pff_TL, Pbb_TL, &
+                                 Pff_TL_full, Pbb_TL_full )
     ! Arguments
     INTEGER       , INTENT(IN)     :: k
     TYPE(RTV_type), INTENT(IN)     :: RTV
@@ -2997,10 +3365,17 @@ CONTAINS
     REAL(fp)      , INTENT(IN)     :: Pbb(:,:)
     REAL(fp)      , INTENT(IN OUT) :: Pff_TL(:,:)
     REAL(fp)      , INTENT(IN OUT) :: Pbb_TL(:,:)
+    ! Full (n_Angles*n_Stokes) TL phase matrices for the n_Stokes>1 path:
+    ! mirrors the forward's D2 scaling of the polarized off-diagonal block
+    ! elements. Pff/Pbb/Pff_TL/Pbb_TL above are the intensity-contracted
+    ! (n_Angles x n_Angles) work arrays; these are the uncontracted slices.
+    REAL(fp), OPTIONAL, INTENT(IN OUT) :: Pff_TL_full(:,:)
+    REAL(fp), OPTIONAL, INTENT(IN OUT) :: Pbb_TL_full(:,:)
     ! Local variables
     REAL(fp) :: n_Factor_TL
     REAL(fp) :: Sum_Fac_TL(0:RTV%n_Angles)
-    INTEGER :: i, j, nZ
+    REAL(fp) :: pol_scale, pol_ratio_TL
+    INTEGER :: i, j, nZ, i1, j1, ii, jj
 
     nZ = RTV%n_Angles
 
@@ -3020,6 +3395,28 @@ CONTAINS
                       Pbb(i,j)/RTV%n_Factor(i,k)/RTV%n_Factor(i,k)*n_Factor_TL*(ONE-RTV%Sum_Fac(i-1,k)) - &
                       Pbb(i,j)/RTV%n_Factor(i,k)*Sum_Fac_TL(i-1)
       END DO
+      ! D2 mirror (n_Stokes>1): TL of the forward's polarized off-diagonal
+      ! block scaling P_pol' = P_pol * S_i, S_i = (1-Sum_Fac(i-1))/n_Factor(i).
+      ! The S_i-derivative cross term uses the post-normalization forward
+      ! values in RTV%Pff/Pbb: P_pol*S_i_TL = P_pol' * (S_i_TL/S_i).
+      IF ( RTV%n_Stokes > 1 .AND. PRESENT(Pff_TL_full) ) THEN
+        pol_scale    = (ONE-RTV%Sum_Fac(i-1,k))/RTV%n_Factor(i,k)
+        pol_ratio_TL = -Sum_Fac_TL(i-1)/(ONE-RTV%Sum_Fac(i-1,k)) &
+                       - n_Factor_TL/RTV%n_Factor(i,k)
+        i1 = (i-1)*RTV%n_Stokes + 1
+        DO j = 1, nZ
+          j1 = (j-1)*RTV%n_Stokes + 1
+          DO jj = 0, RTV%n_Stokes-1
+            DO ii = 0, RTV%n_Stokes-1
+              IF( ii == 0 .AND. jj == 0 ) CYCLE
+              Pff_TL_full(i1+ii,j1+jj) = Pff_TL_full(i1+ii,j1+jj)*pol_scale &
+                                       + RTV%Pff(i1+ii,j1+jj,k)*pol_ratio_TL
+              Pbb_TL_full(i1+ii,j1+jj) = Pbb_TL_full(i1+ii,j1+jj)*pol_scale &
+                                       + RTV%Pbb(i1+ii,j1+jj,k)*pol_ratio_TL
+            END DO
+          END DO
+        END DO
+      END IF
       Sum_Fac_TL(i)=ZERO
       ! Symmetric condition
       IF( i < nZ ) THEN
@@ -3052,7 +3449,8 @@ CONTAINS
 
   END SUBROUTINE Normalize_Phase_TL
 
-  SUBROUTINE Normalize_Phase_AD( k, RTV, Pff, Pbb, Pff_AD, Pbb_AD )
+  SUBROUTINE Normalize_Phase_AD( k, RTV, Pff, Pbb, Pff_AD, Pbb_AD, &
+                                 Pff_AD_full, Pbb_AD_full )
     ! Arguments
     INTEGER       , INTENT(IN)     :: k
     TYPE(RTV_type), INTENT(IN)     :: RTV
@@ -3060,10 +3458,15 @@ CONTAINS
     REAL(fp)      , INTENT(IN)     :: Pbb(:,:)
     REAL(fp)      , INTENT(IN OUT) :: Pff_AD(:,:)
     REAL(fp)      , INTENT(IN OUT) :: Pbb_AD(:,:)
+    ! Full (n_Angles*n_Stokes) AD phase matrices for the n_Stokes>1 path:
+    ! exact transpose of the Normalize_Phase_TL polarized-block mirror.
+    REAL(fp), OPTIONAL, INTENT(IN OUT) :: Pff_AD_full(:,:)
+    REAL(fp), OPTIONAL, INTENT(IN OUT) :: Pbb_AD_full(:,:)
     ! Local variables
-    INTEGER :: i, j, nZ
+    INTEGER :: i, j, nZ, i1, j1, ii, jj
     REAL(fp) :: n_Factor_AD
     REAL(fp) :: Sum_Fac_AD(0:RTV%n_Angles)
+    REAL(fp) :: pol_scale, pol_ratio_AD
 
 
     nZ = RTV%n_Angles
@@ -3106,6 +3509,32 @@ CONTAINS
         END DO
       END IF
       Sum_Fac_AD(i) = ZERO
+      ! D2 mirror adjoint (n_Stokes>1): exact transpose of the polarized
+      ! off-diagonal block TL in Normalize_Phase_TL. The inner product with
+      ! the post-normalization forward values is accumulated before the
+      ! in-place rescaling of each polarized adjoint element; the result
+      ! feeds Sum_Fac_AD(i-1) and n_Factor_AD, which the existing intensity
+      ! adjoint chains below propagate.
+      IF ( RTV%n_Stokes > 1 .AND. PRESENT(Pff_AD_full) ) THEN
+        pol_scale    = (ONE-RTV%Sum_Fac(i-1,k))/RTV%n_Factor(i,k)
+        pol_ratio_AD = ZERO
+        i1 = (i-1)*RTV%n_Stokes + 1
+        DO j = 1, nZ
+          j1 = (j-1)*RTV%n_Stokes + 1
+          DO jj = 0, RTV%n_Stokes-1
+            DO ii = 0, RTV%n_Stokes-1
+              IF( ii == 0 .AND. jj == 0 ) CYCLE
+              pol_ratio_AD = pol_ratio_AD &
+                           + RTV%Pff(i1+ii,j1+jj,k)*Pff_AD_full(i1+ii,j1+jj) &
+                           + RTV%Pbb(i1+ii,j1+jj,k)*Pbb_AD_full(i1+ii,j1+jj)
+              Pff_AD_full(i1+ii,j1+jj) = Pff_AD_full(i1+ii,j1+jj)*pol_scale
+              Pbb_AD_full(i1+ii,j1+jj) = Pbb_AD_full(i1+ii,j1+jj)*pol_scale
+            END DO
+          END DO
+        END DO
+        Sum_Fac_AD(i-1) = Sum_Fac_AD(i-1) - pol_ratio_AD/(ONE-RTV%Sum_Fac(i-1,k))
+        n_Factor_AD     = n_Factor_AD     - pol_ratio_AD/RTV%n_Factor(i,k)
+      END IF
       DO j = nZ, i, -1
         Sum_Fac_AD(i-1) = Sum_Fac_AD(i-1) - Pbb(i,j)/RTV%n_Factor(i,k)*Pbb_AD(i,j)
         n_Factor_AD = n_Factor_AD -Pbb(i,j)/RTV%n_Factor(i,k)/RTV%n_Factor(i,k) * &

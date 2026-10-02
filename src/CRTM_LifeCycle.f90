@@ -34,7 +34,9 @@ MODULE CRTM_LifeCycle
   ! Environment setup
   ! -----------------
   ! Module usage
+  USE Type_Kinds             , ONLY: fp
   USE Message_Handler
+  USE File_Utility           , ONLY: File_Exists, Join_Path
   USE CRTM_ChannelInfo_Define, ONLY: CRTM_ChannelInfo_type, &
                                      CRTM_ChannelInfo_Associated, &
                                      CRTM_ChannelInfo_Destroy, &
@@ -77,6 +79,17 @@ MODULE CRTM_LifeCycle
   USE CRTM_MWwaterCoeff      , ONLY: CRTM_MWwaterCoeff_Load, &
                                      CRTM_MWwaterCoeff_Destroy, &
                                      CRTM_MWwaterCoeff_Load_FASTEM
+  USE CRTM_PARMIOCoeff       , ONLY: CRTM_PARMIOCoeff_Load, &
+                                     CRTM_PARMIOCoeff_Destroy, &
+                                     CRTM_PARMIOCoeff_IsLoaded
+  USE CRTM_MWlandCoeff       , ONLY: CRTM_MWlandCoeff_Load, &
+                                     CRTM_MWlandCoeff_Destroy, &
+                                     CRTM_MWlandCoeff_IsLoaded
+  USE CRTM_MW_Water_SfcOptics, ONLY: PARMIO_FREQ_THRESHOLD
+  ! ...OpenMP API
+#ifdef _OPENMP
+  USE OMP_LIB
+#endif
   ! Disable all implicit typing
   IMPLICIT NONE
 
@@ -133,6 +146,9 @@ CONTAINS
 !                                 VISsnowCoeff_File   = VISsnowCoeff_File   , &
 !                                 VISiceCoeff_File    = VISiceCoeff_File    , &
 !                                 MWwaterCoeff_File   = MWwaterCoeff_File   , &
+!                                 PARMIOCoeff_File    = PARMIOCoeff_File    , &
+!                                 MWlandCoeff_File    = MWlandCoeff_File    , &
+!                                 Use_MWland_Atlas    = Use_MWland_Atlas    , &
 !                                 IRwaterCoeff_Format = IRwaterCoeff_Format , &
 !                                 IRlandCoeff_Format  = IRlandCoeff_Format  , &
 !                                 IRiceCoeff_Format   = IRiceCoeff_Format   , &
@@ -152,10 +168,12 @@ CONTAINS
 !                           initialised. These sensor ids are used to construct
 !                           the sensor specific SpcCoeff and TauCoeff filenames
 !                           containing the necessary coefficient data, i.e.
-!                             <Sensor_ID>.SpcCoeff.bin
+!                             <Sensor_ID>.SpcCoeff.nc
 !                           and
-!                             <Sensor_ID>.TauCoeff.bin
-!                           for each sensor Id in the list.
+!                             <Sensor_ID>.TauCoeff.nc
+!                           for each sensor Id in the list. The filename
+!                           extension follows the resolved coefficient format
+!                           (.nc for netCDF, the default; .bin for Binary).
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Rank-1 (n_Sensors)
@@ -171,6 +189,15 @@ CONTAINS
 !                           ATTRIBUTES: INTENT(OUT)
 !
 ! OPTIONAL INPUTS:
+!       Note on coefficient file formats:
+!         From REL-3.2.0 the default coefficient format is netCDF, and the
+!         default filenames carry the .nc extension. Each <X>Coeff_Format
+!         argument below overrides the format for that coefficient type, and
+!         accepts 'netCDF' or 'Binary'. Whatever format is selected, if the
+!         requested file is not present on disk but its equivalent in the other
+!         format is, the reader falls back to the format that exists. Binary
+!         files are read from File_Path and netCDF files from NC_File_Path, so
+!         the two formats may live in separate directory trees.
 !       Aerosol_Model:     Name of the aerosol scheme for scattering calculation
 !                          Available aerosol scheme:
 !                          - CRTM  [DEFAULT]
@@ -184,8 +211,8 @@ CONTAINS
 !
 !       AerosolCoeff_Format:    Format of the aerosol optical properties data
 !                               Available options:
-!                               - Binary  [DEFAULT]
-!                               - netCDF
+!                               - netCDF  [DEFAULT]
+!                               - Binary
 !                               UNITS:      N/A
 !                               TYPE:       CHARACTER(*)
 !                               DIMENSION:  Scalar
@@ -195,17 +222,17 @@ CONTAINS
 !                           properties data for scattering calculations.
 !                           Available datafiles:
 !                           CRTM:
-!                           - AerosolCoeff.bin      [DEFAULT, Binary]
-!                           - AerosolCoeff.nc/nc4   [netCDF-Classic/4]
+!                           - AerosolCoeff.nc       [DEFAULT, netCDF]
+!                           - AerosolCoeff.bin      [Binary]
 !                           CMAQ:
+!                           - AerosolCoeff.CMAQ.nc       [netCDF]
 !                           - AerosolCoeff.CMAQ.bin      [Binary]
-!                           - AerosolCoeff.CMAQ.nc/nc4   [netCDF-Classic/4]
 !                           GOCART-GEOS5:
+!                           - AerosolCoeff.GOCART-GEOS5.nc       [netCDF]
 !                           - AerosolCoeff.GOCART-GEOS5.bin      [Binary]
-!                           - AerosolCoeff.GOCART-GEOS5.nc/nc4   [netCDF-Classic/4]
 !                           NAAPS:
+!                           - AerosolCoeff.NAAPS.nc       [netCDF]
 !                           - AerosolCoeff.NAAPS.bin      [Binary]
-!                           - AerosolCoeff.NAAPS.nc/nc4   [netCDF-Classic/4]
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -221,8 +248,8 @@ CONTAINS
 !
 !       CloudCoeff_Format:     Format of the cloud optical properties data
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -231,8 +258,8 @@ CONTAINS
 !       CloudCoeff_File:    Name of the data file containing the cloud optical
 !                           properties data for scattering calculations.
 !                           Available datafiles:
-!                           - CloudCoeff.bin  [DEFAULT, Binary]
-!                           - CloudCoeff.nc     [netCDF-Classic/4]
+!                           - CloudCoeff.nc   [DEFAULT, netCDF]
+!                           - CloudCoeff.bin  [Binary]
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -240,8 +267,8 @@ CONTAINS
 !
 !       SpcCoeff_Format:     Format of the CRTM spectral coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -249,8 +276,8 @@ CONTAINS
 !
 !       TauCoeff_Format:     Format of the CRTM transmittance coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -279,19 +306,70 @@ CONTAINS
 !       MWwaterCoeff_File:  Name of the data file containing the coefficient
 !                           data for the microwave water emissivity model.
 !                           Available datafiles:
-!                           - FASTEM6.MWwater.EmisCoeff.bin  [DEFAULT]
-!                           - FASTEM5.MWwater.EmisCoeff.bin
-!                           - FASTEM4.MWwater.EmisCoeff.bin
+!                           - FASTEM6.MWwater.EmisCoeff.nc  [DEFAULT]
+!                           - FASTEM5.MWwater.EmisCoeff.nc
+!                           - FASTEM4.MWwater.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
+!                           DIMENSION:  Scalar
+!                           ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+!       PARMIOCoeff_File:   Name of the look-up table used by the PARMIO
+!                           microwave water emissivity model, which supersedes
+!                           FASTEM for channel frequencies at or above 200 GHz.
+!                           Available datafiles:
+!                           - PARMIO.MWwater.EmisCoeff.nc  [DEFAULT]
+!                           If this argument is not specified, the default file
+!                           is loaded from the coefficient path when the sensor
+!                           set contains a microwave sensor; if it is not found
+!                           there, CRTM continues using FASTEM at all
+!                           frequencies (an absent default file is not an
+!                           error). If this argument IS specified and the named
+!                           file cannot be read, initialisation fails.
+!                           Channels below 200 GHz are unaffected either way.
+!                           UNITS:      N/A
+!                           TYPE:       CHARACTER(*)
+!                           DIMENSION:  Scalar
+!                           ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+!       MWlandCoeff_File:   Name of the microwave land emissivity atlas file.
+!                           Available datafiles:
+!                           - TELSEM2.MWland.EmisCoeff.nc
+!                           Supplying this argument is an explicit opt-in to the
+!                           TELSEM2 climatological atlas (it may name a
+!                           non-default location); a supplied-but-missing file is
+!                           an error. The atlas is NOT loaded from mere file
+!                           presence on the coefficient path -- opt-in is
+!                           required (this argument, or Use_MWland_Atlas below).
+!                           When loaded, the atlas replaces the NESDIS_LandEM
+!                           physical model for microwave land surfaces.
+!                           UNITS:      N/A
+!                           TYPE:       CHARACTER(*)
+!                           DIMENSION:  Scalar
+!                           ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+!       Use_MWland_Atlas:   Opt-in switch for the microwave land emissivity
+!                           atlas. Default .FALSE.: microwave land surfaces use
+!                           the NESDIS_LandEM physical model, which supplies
+!                           analytic land-emissivity Jacobians (LAI, vegetation
+!                           fraction, soil moisture). Set .TRUE. to load the
+!                           default-named atlas (TELSEM2.MWland.EmisCoeff.nc)
+!                           from the coefficient path; if it is not found CRTM
+!                           issues a warning and falls back to NESDIS_LandEM
+!                           (non-fatal). Passing MWlandCoeff_File is an
+!                           equivalent opt-in for a non-default location. Note
+!                           the atlas depends only on latitude, longitude and
+!                           month, so its tangent-linear and adjoint are zero.
+!                           UNITS:      N/A
+!                           TYPE:       LOGICAL
 !                           DIMENSION:  Scalar
 !                           ATTRIBUTES: INTENT(IN), OPTIONAL
 !
 !       IRwaterCoeff_File:  Name of the data file containing the coefficient
 !                           data for the infrared water emissivity model.
 !                           Available datafiles:
-!                           - Nalli.IRwater.EmisCoeff.bin  [DEFAULT]
-!                           - WuSmith.IRwater.EmisCoeff.bin
+!                           - Nalli.IRwater.EmisCoeff.nc  [DEFAULT]
+!                           - WuSmith.IRwater.EmisCoeff.nc
 !                           If not specified the Nalli datafile is read.
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
@@ -301,9 +379,9 @@ CONTAINS
 !       IRlandCoeff_File:   Name of the data file containing the coefficient
 !                           data for the infrared land emissivity model.
 !                           Available datafiles:
-!                           - NPOESS.IRland.EmisCoeff.bin  [DEFAULT]
-!                           - IGBP.IRland.EmisCoeff.bin
-!                           - USGS.IRland.EmisCoeff.bin
+!                           - NPOESS.IRland.EmisCoeff.nc  [DEFAULT]
+!                           - IGBP.IRland.EmisCoeff.nc
+!                           - USGS.IRland.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -312,10 +390,10 @@ CONTAINS
 !       IRsnowCoeff_File:   Name of the data file containing the coefficient
 !                           data for the infrared snow emissivity model.
 !                           Available datafiles:
-!                           - NPOESS.IRsnow.EmisCoeff.bin  [DEFAULT]
-!                           - IGBP.IRsnow.EmisCoeff.bin
-!                           - USGS.IRsnow.EmisCoeff.bin
-!                           - Nalli.IRsnow.EmisCoeff.bin
+!                           - NPOESS.IRsnow.EmisCoeff.nc  [DEFAULT]
+!                           - IGBP.IRsnow.EmisCoeff.nc
+!                           - USGS.IRsnow.EmisCoeff.nc
+!                           - Nalli.IRsnow.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -324,9 +402,9 @@ CONTAINS
 !       IRiceCoeff_File:    Name of the data file containing the coefficient
 !                           data for the infrared ice emissivity model.
 !                           Available datafiles:
-!                           - NPOESS.IRice.EmisCoeff.bin  [DEFAULT]
-!                           - IGBP.IRice.EmisCoeff.bin
-!                           - USGS.IRice.EmisCoeff.bin
+!                           - NPOESS.IRice.EmisCoeff.nc  [DEFAULT]
+!                           - IGBP.IRice.EmisCoeff.nc
+!                           - USGS.IRice.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -335,9 +413,9 @@ CONTAINS
 !       VISwaterCoeff_File: Name of the data file containing the coefficient
 !                           data for the visible water emissivity model.
 !                           Available datafiles:
-!                           - NPOESS.VISwater.EmisCoeff.bin  [DEFAULT]
-!                           - IGBP.VISwater.EmisCoeff.bin
-!                           - USGS.VISwater.EmisCoeff.bin
+!                           - NPOESS.VISwater.EmisCoeff.nc  [DEFAULT]
+!                           - IGBP.VISwater.EmisCoeff.nc
+!                           - USGS.VISwater.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -346,20 +424,22 @@ CONTAINS
 !       VISlandCoeff_File:  Name of the data file containing the coefficient
 !                           data for the visible land emissivity model.
 !                           Available datafiles:
-!                           - NPOESS.VISland.EmisCoeff.bin  [DEFAULT]
-!                           - IGBP.VISland.EmisCoeff.bin
-!                           - USGS.VISland.EmisCoeff.bin
+!                           - NPOESS.VISland.EmisCoeff.nc  [DEFAULT]
+!                           - IGBP.VISland.EmisCoeff.nc
+!                           - USGS.VISland.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
 !                           ATTRIBUTES: INTENT(IN), OPTIONAL
 !
 !       VISsnowCoeff_File:  Name of the data file containing the coefficient
-!                           data for the visible snow emissivity model.
+!                           data for the visible snow reflectance model. The
+!                           scheme is selected by the filename prefix (the text
+!                           before the first dot); unrecognised prefixes are
+!                           rejected at load time.
 !                           Available datafiles:
-!                           - NPOESS.VISsnow.EmisCoeff.bin  [DEFAULT]
-!                           - IGBP.VISsnow.EmisCoeff.bin
-!                           - USGS.VISsnow.EmisCoeff.bin
+!                           - NPOESS.VISsnow.EmisCoeff.nc  [DEFAULT]
+!                           - SNICAR.VISsnow.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -368,9 +448,9 @@ CONTAINS
 !       VISiceCoeff_File:   Name of the data file containing the coefficient
 !                           data for the visible ice emissivity model.
 !                           Available datafiles:
-!                           - NPOESS.VISice.EmisCoeff.bin  [DEFAULT]
-!                           - IGBP.VISice.EmisCoeff.bin
-!                           - USGS.VISice.EmisCoeff.bin
+!                           - NPOESS.VISice.EmisCoeff.nc  [DEFAULT]
+!                           - IGBP.VISice.EmisCoeff.nc
+!                           - USGS.VISice.EmisCoeff.nc
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -378,8 +458,8 @@ CONTAINS
 !
 !     IRwaterCoeff_Format:   Format of the CRTM IRwater coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -387,8 +467,8 @@ CONTAINS
 !
 !      IRlandCoeff_Format:   Format of the CRTM IRland coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -396,8 +476,8 @@ CONTAINS
 !
 !      IRsnowCoeff_Format:   Format of the CRTM IRsnow coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -405,8 +485,8 @@ CONTAINS
 !
 !       IRiceCoeff_Format:   Format of the CRTM IRice coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -414,8 +494,8 @@ CONTAINS
 !
 !    VISwaterCoeff_Format:   Format of the CRTM VISwater coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -423,8 +503,8 @@ CONTAINS
 !
 !     VISlandCoeff_Format:   Format of the CRTM VISland coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -432,8 +512,8 @@ CONTAINS
 !
 !     VISsnowCoeff_Format:   Format of the CRTM VISsnow coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -441,8 +521,8 @@ CONTAINS
 !
 !     VISiceCoeff_Format:   Format of the CRTM VISice coefficients
 !                              Available options
-!                              - Binary  [DEFAULT]
-!                              - netCDF
+!                              - netCDF  [DEFAULT]
+!                              - Binary
 !                              UNITS:      N/A
 !                              TYPE:       CHARACTER(*)
 !                              DIMENSION:  Scalar
@@ -540,6 +620,9 @@ CONTAINS
     VISiceCoeff_File    , &  ! Optional input
     MWwaterCoeff_File   , &  ! Optional input
     MWwaterCoeff_Scheme , &  ! Optional input
+    PARMIOCoeff_File    , &  ! Optional input
+    MWlandCoeff_File    , &  ! Optional input
+    Use_MWland_Atlas    , &  ! Optional input
     IRwaterCoeff_Format , &  ! Optional input
     IRlandCoeff_Format  , &  ! Optional input
     IRsnowCoeff_Format  , &  ! Optional input
@@ -579,6 +662,9 @@ CONTAINS
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: VISiceCoeff_File
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: MWwaterCoeff_File
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: MWwaterCoeff_Scheme
+    CHARACTER(*),      OPTIONAL, INTENT(IN)  :: PARMIOCoeff_File
+    CHARACTER(*),      OPTIONAL, INTENT(IN)  :: MWlandCoeff_File
+    LOGICAL     ,      OPTIONAL, INTENT(IN)  :: Use_MWland_Atlas
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRwaterCoeff_Format
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRlandCoeff_Format
     CHARACTER(*),      OPTIONAL, INTENT(IN)  :: IRsnowCoeff_Format
@@ -618,8 +704,11 @@ CONTAINS
     CHARACTER(SL) :: Default_VISlandCoeff_File
     CHARACTER(SL) :: Default_VISsnowCoeff_File
     CHARACTER(SL) :: Default_VISiceCoeff_File
-    CHARACTER(SL) :: Default_MWwaterCoeff_File
+    CHARACTER(:), ALLOCATABLE :: Default_MWwaterCoeff_File
     CHARACTER(SL) :: Default_MWwaterCoeff_Scheme
+    CHARACTER(SL) :: Derived_Scheme
+    CHARACTER(:), ALLOCATABLE :: Resolved_PARMIOCoeff_File
+    CHARACTER(:), ALLOCATABLE :: Resolved_MWlandCoeff_File
     CHARACTER(SL) :: Default_IRwaterCoeff_Format
     CHARACTER(SL) :: Default_IRlandCoeff_Format
     CHARACTER(SL) :: Default_IRsnowCoeff_Format
@@ -630,6 +719,9 @@ CONTAINS
     CHARACTER(SL) :: Default_VISsnowCoeff_Format
     CHARACTER(SL) :: Default_VISiceCoeff_Format
     CHARACTER(SL) :: Default_File_Path
+    CHARACTER(SL) :: Effective_Bin_Path
+    CHARACTER(SL) :: Effective_NC_Path
+    CHARACTER(SL) :: Effective_Coeff_Path
 
 
     INTEGER :: l, n, n_Sensors
@@ -637,6 +729,8 @@ CONTAINS
     LOGICAL :: Local_Load_AerosolCoeff
     LOGICAL :: netCDF, isSEcategory
     LOGICAL :: Quiet_
+    LOGICAL :: parmio_explicit, parmio_present
+    LOGICAL :: mwland_explicit, mwland_present, mwland_opt_in
     INTEGER :: iQuiet ! TODO: iQuiet should be removed once load routine interfaces have been modified
     Quiet_ = .TRUE.
     IF ( PRESENT(Quiet) ) Quiet_ = Quiet
@@ -644,6 +738,22 @@ CONTAINS
     IF ( Quiet_ ) THEN
       iQuiet = 1
     END IF
+
+    ! Honor OMP_NUM_THREADS from the runtime environment.
+    ! If the variable is unset OR set but empty, default to a single thread.
+    ! libgomp can corrupt the heap when OMP_NUM_THREADS is the empty string,
+    ! so an empty value must be coerced to 1 the same as unset.
+#ifdef _OPENMP
+    BLOCK
+      CHARACTER(32) :: omp_env_value
+      INTEGER       :: omp_env_status
+      CALL GET_ENVIRONMENT_VARIABLE( 'OMP_NUM_THREADS', &
+                                     VALUE  = omp_env_value, &
+                                     STATUS = omp_env_status )
+      IF ( omp_env_status /= 0 .OR. LEN_TRIM(omp_env_value) == 0 ) &
+        CALL OMP_SET_NUM_THREADS( 1 )
+    END BLOCK
+#endif
 
     ! Set up
     err_stat = SUCCESS
@@ -680,33 +790,35 @@ CONTAINS
     Default_File_Path = ''
     ! ...Default filenames
     Default_Aerosol_Model       = 'CRTM'
-    Default_AerosolCoeff_File   = 'AerosolCoeff.bin'
+    Default_AerosolCoeff_File   = 'AerosolCoeff.nc'
     Default_Cloud_Model         = 'CRTM'
-    Default_CloudCoeff_File     = 'CloudCoeff.bin'
-    Default_IRwaterCoeff_File   = 'Nalli.IRwater.EmisCoeff.bin'
-    Default_IRlandCoeff_File    = 'NPOESS.IRland.EmisCoeff.bin'
+    Default_CloudCoeff_File     = 'CloudCoeff.nc'
+    Default_IRwaterCoeff_File   = 'Nalli.IRwater.EmisCoeff.nc'
+    Default_IRlandCoeff_File    = 'NPOESS.IRland.EmisCoeff.nc'
     Default_IRsnow_Model        = 'SEcategory'
-    Default_IRsnowCoeff_File    = 'NPOESS.IRsnow.EmisCoeff.bin'
-    Default_IRiceCoeff_File     = 'NPOESS.IRice.EmisCoeff.bin'
-    Default_VISwaterCoeff_File  = 'NPOESS.VISwater.EmisCoeff.bin'
-    Default_VISlandCoeff_File   = 'NPOESS.VISland.EmisCoeff.bin'
-    Default_VISsnowCoeff_File   = 'NPOESS.VISsnow.EmisCoeff.bin'
-    Default_VISiceCoeff_File    = 'NPOESS.VISice.EmisCoeff.bin'
-    Default_MWwaterCoeff_File   = 'FASTEM6.MWwater.EmisCoeff.bin'
+    Default_IRsnowCoeff_File    = 'NPOESS.IRsnow.EmisCoeff.nc'
+    Default_IRiceCoeff_File     = 'NPOESS.IRice.EmisCoeff.nc'
+    Default_VISwaterCoeff_File  = 'NPOESS.VISwater.EmisCoeff.nc'
+    Default_VISlandCoeff_File   = 'NPOESS.VISland.EmisCoeff.nc'
+    Default_VISsnowCoeff_File   = 'NPOESS.VISsnow.EmisCoeff.nc'
+    Default_VISiceCoeff_File    = 'NPOESS.VISice.EmisCoeff.nc'
+    Default_MWwaterCoeff_File   = 'FASTEM6.MWwater.EmisCoeff.nc'
     Default_MWwaterCoeff_Scheme = 'FASTEM6'
-    ! ... Default file formats
-    Default_AerosolCoeff_Format = 'Binary'
-    Default_CloudCoeff_Format   = 'Binary'
-    Default_SpcCoeff_Format     = 'Binary'
-    Default_TauCoeff_Format     = 'Binary'
-    Default_IRwaterCoeff_Format = 'Binary'
-    Default_IRlandCoeff_Format  = 'Binary'
-    Default_IRsnowCoeff_Format  = 'Binary'
-    Default_IRiceCoeff_Format   = 'Binary'
-    Default_VISwaterCoeff_Format= 'Binary'
-    Default_VISlandCoeff_Format = 'Binary'
-    Default_VISsnowCoeff_Format = 'Binary'
-    Default_VISiceCoeff_Format  = 'Binary'
+    ! ... Default file formats (NetCDF is the canonical format from REL-3.2.0;
+    !     Resolve_Coeff_Format below will fall back to Binary if a NetCDF file
+    !     is missing on disk but the .bin equivalent is present.)
+    Default_AerosolCoeff_Format = 'netCDF'
+    Default_CloudCoeff_Format   = 'netCDF'
+    Default_SpcCoeff_Format     = 'netCDF'
+    Default_TauCoeff_Format     = 'netCDF'
+    Default_IRwaterCoeff_Format = 'netCDF'
+    Default_IRlandCoeff_Format  = 'netCDF'
+    Default_IRsnowCoeff_Format  = 'netCDF'
+    Default_IRiceCoeff_Format   = 'netCDF'
+    Default_VISwaterCoeff_Format= 'netCDF'
+    Default_VISlandCoeff_Format = 'netCDF'
+    Default_VISsnowCoeff_Format = 'netCDF'
+    Default_VISiceCoeff_Format  = 'netCDF'
     ! ...Were coefficient models specified?
     IF ( PRESENT(Aerosol_Model       ) ) Default_Aerosol_Model       = TRIM(ADJUSTL(Aerosol_Model))
     IF ( PRESENT(Cloud_Model         ) ) Default_Cloud_Model         = TRIM(ADJUSTL(Cloud_Model))
@@ -739,26 +851,80 @@ CONTAINS
     ! ...MW water emissivity scheme
     IF ( PRESENT(MWwaterCoeff_Scheme ) ) Default_MWwaterCoeff_Scheme  = TRIM(ADJUSTL(MWwaterCoeff_Scheme))
 
+    ! ...Honour MWwaterCoeff_File as a model selector.
+    !
+    !    The file-based MWwaterCoeff load is commented out below (it was only
+    !    ever needed for the FASTEM5 binary lookup tables), so the microwave
+    !    water model is chosen by the scheme string alone. That left
+    !    MWwaterCoeff_File accepted, stored, echoed in the "Loading MW water
+    !    emissivity coefficients" message, and otherwise ignored: a caller
+    !    asking for FASTEM4 silently got FASTEM6. That is not a harmless no-op,
+    !    because FASTEM6 has no third or fourth Stokes azimuth model and returns
+    !    U and V as identically zero, so a polarimetric caller who selected a
+    !    polarimetric backend received an unpolarised surface and no diagnostic.
+    !    JEDI/UFO reaches CRTM this way: it builds the argument as
+    !    TRIM(MWwaterCoeff)//".MWwater.EmisCoeff.nc" from its own yaml key.
+    !
+    !    The filenames are exactly <SCHEME>.MWwater.EmisCoeff.nc, so the scheme
+    !    is recovered as the leading component of the base name. An explicitly
+    !    supplied MWwaterCoeff_Scheme is the direct selector and still wins; a
+    !    disagreement between the two is reported rather than resolved silently.
+    !    Deriving before the File_Path join below keeps this working whether or
+    !    not a path was supplied.
+    IF ( PRESENT(MWwaterCoeff_File) ) THEN
+      Derived_Scheme = MWwaterCoeff_Scheme_From_File( Default_MWwaterCoeff_File )
+      IF ( LEN_TRIM(Derived_Scheme) > 0 ) THEN
+        IF ( .NOT. PRESENT(MWwaterCoeff_Scheme) ) THEN
+          Default_MWwaterCoeff_Scheme = Derived_Scheme
+        ELSE IF ( TRIM(Derived_Scheme) /= TRIM(Default_MWwaterCoeff_Scheme) ) THEN
+          msg = 'MWwaterCoeff_File implies '//TRIM(Derived_Scheme)//' but '//&
+                'MWwaterCoeff_Scheme requests '//TRIM(Default_MWwaterCoeff_Scheme)//&
+                '. Using the scheme; the file argument selects no model.'
+          CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),WARNING )
+        END IF
+      END IF
+    END IF
+
     ! ...Was a path specified?
     IF ( PRESENT(File_Path) ) THEN
-      Default_MWwaterCoeff_File  = TRIM(ADJUSTL(File_Path)) // TRIM(Default_MWwaterCoeff_File)
+      Default_MWwaterCoeff_File  = Join_Path(File_Path, Default_MWwaterCoeff_File)
+    END IF
+
+    ! ...Effective search paths for the format-resolver. NC_File_Path wins for
+    !    NetCDF when it is supplied separately; otherwise both formats are
+    !    expected to live under File_Path (the typical layout for the CRTM
+    !    test-data tree and most external callers).
+    Effective_Bin_Path = ''
+    IF ( PRESENT(File_Path)    ) Effective_Bin_Path = File_Path
+    IF ( PRESENT(NC_File_Path) ) THEN
+      Effective_NC_Path = NC_File_Path
+    ELSE
+      Effective_NC_Path = Effective_Bin_Path
     END IF
 
     ! Load the spectral coefficients
+    ! ...Search the path matching the requested format, so a caller supplying
+    !    split Binary/netCDF trees (File_Path + NC_File_Path) gets Binary
+    !    Spc/Tau files from File_Path as before, not the netCDF tree.
     netCDF = .FALSE.
     IF (Default_SpcCoeff_Format == 'netCDF' ) THEN
         netCDF = .TRUE.
     END IF
+    IF ( netCDF ) THEN
+      Effective_Coeff_Path = Effective_NC_Path
+    ELSE
+      Effective_Coeff_Path = Effective_Bin_Path
+    END IF
     IF ( .NOT. Quiet_ ) THEN
-      WRITE(*,*) "Loading"//SpcCoeff_Format//" spectral coefficients."
+      WRITE(*,*) "Loading "//TRIM(Default_SpcCoeff_Format)//" spectral coefficients."
     END IF
     err_stat = CRTM_SpcCoeff_Load( &
-                 Sensor_ID                            , &
-                 File_Path         = File_Path        , &
-                 netCDF            = netCDF           , &
-                 Quiet             = Quiet            , &
-                 Process_ID        = Process_ID       , &
-                 Output_Process_ID = Output_Process_ID  )
+                 Sensor_ID                                 , &
+                 File_Path         = Effective_Coeff_Path  , &
+                 netCDF            = netCDF                , &
+                 Quiet             = Quiet                 , &
+                 Process_ID        = Process_ID            , &
+                 Output_Process_ID = Output_Process_ID       )
     IF ( err_stat /= SUCCESS ) THEN
       CALL Display_Message( ROUTINE_NAME,'Error loading SpcCoeff data'//TRIM(pid_msg),err_stat )
       RETURN
@@ -766,20 +932,26 @@ CONTAINS
 
 
     ! Load the transmittance model coefficients
+    ! ...Same per-format path selection as the SpcCoeff load above.
     netCDF = .FALSE.
     IF (Default_TauCoeff_Format == 'netCDF' ) THEN
         netCDF = .TRUE.
     END IF
+    IF ( netCDF ) THEN
+      Effective_Coeff_Path = Effective_NC_Path
+    ELSE
+      Effective_Coeff_Path = Effective_Bin_Path
+    END IF
     IF ( .NOT. Quiet_ ) THEN
-      WRITE(*,*) "Loading "//TauCoeff_Format//" transmittance coefficients."
+      WRITE(*,*) "Loading "//TRIM(Default_TauCoeff_Format)//" transmittance coefficients."
     END IF
     err_stat = CRTM_Load_TauCoeff( &
-                 Sensor_ID         = Sensor_ID        , &
-                 File_Path         = File_Path        , &
-                 Quiet             = iQuiet           , &  ! *** Use of iQuiet temporary
-                 netCDF            = netCDF           , &
-                 Process_ID        = Process_ID       , &
-                 Output_Process_ID = Output_Process_ID  )
+                 Sensor_ID         = Sensor_ID             , &
+                 File_Path         = Effective_Coeff_Path  , &
+                 Quiet             = iQuiet                , &  ! *** Use of iQuiet temporary
+                 netCDF            = netCDF                , &
+                 Process_ID        = Process_ID            , &
+                 Output_Process_ID = Output_Process_ID       )
     IF ( err_stat /= SUCCESS ) THEN
       CALL Display_Message( ROUTINE_NAME,'Error loading TauCoeff data'//TRIM(pid_msg),err_stat )
       RETURN
@@ -788,14 +960,11 @@ CONTAINS
 
     ! Load the cloud coefficients
     IF ( Local_Load_CloudCoeff ) THEN
-      IF ( Default_CloudCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
-      ! Default_CloudCoeff_File = TRIM(ADJUSTL(Default_File_Path)) // TRIM(Default_CloudCoeff_File)
+      CALL Resolve_Coeff_Format( Default_CloudCoeff_File, Default_CloudCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_CloudCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading cloud coefficients: ", a) ') TRIM(Default_CloudCoeff_File)
       END IF
@@ -817,13 +986,11 @@ CONTAINS
 
     ! Load the aerosol coefficients
     IF ( Local_Load_AerosolCoeff ) THEN
-      IF ( Default_AerosolCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_AerosolCoeff_File, Default_AerosolCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_AerosolCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading aerosol coefficients: ", a) ') TRIM(Default_AerosolCoeff_File)
       END IF
@@ -847,13 +1014,11 @@ CONTAINS
     ! ...Infrared
     Infrared_Sensor: IF ( ANY(SpcCoeff_IsInfraredSensor(SC)) ) THEN
       ! ...IR land
-      IF ( Default_IRlandCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_IRlandCoeff_File, Default_IRlandCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_IRlandCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading IR land emissivity coefficients: ", a) ') TRIM(Default_IRlandCoeff_File)
       END IF
@@ -870,13 +1035,11 @@ CONTAINS
         RETURN
       END IF
       ! ...IR Water
-      IF ( Default_IRwaterCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_IRwaterCoeff_File, Default_IRwaterCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_IRwaterCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading IR water emissivity coefficients: ", a) ') TRIM(Default_IRwaterCoeff_File)
       END IF
@@ -893,13 +1056,11 @@ CONTAINS
         RETURN
       END IF
       ! ...IR snow
-      IF ( Default_IRsnowCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_IRsnowCoeff_File, Default_IRsnowCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_IRsnowCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF (Default_IRsnow_Model == 'SEcategory') THEN
         isSEcategory = .TRUE.
       ELSE
@@ -922,13 +1083,11 @@ CONTAINS
         RETURN
       END IF
       ! ...IR ice
-      IF ( Default_IRiceCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_IRiceCoeff_File, Default_IRiceCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_IRiceCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading IR ice emissivity coefficients: ", a) ') TRIM(Default_IRiceCoeff_File)
       END IF
@@ -947,15 +1106,16 @@ CONTAINS
     END IF Infrared_Sensor
 
     ! ...Visible
-    Visible_Sensor: IF ( ANY(SpcCoeff_IsVisibleSensor(SC)) ) THEN
+    ! UV sensors share the VIS (Lambertian SEcategory) surface optics, so a
+    ! UV-only sensor list must load the VIS emissivity LUTs too.
+    Visible_Sensor: IF ( ANY(SpcCoeff_IsVisibleSensor(SC)) .OR. &
+                         ANY(SpcCoeff_IsUltravioletSensor(SC)) ) THEN
       ! ...VIS land
-      IF ( Default_VISlandCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_VISlandCoeff_File, Default_VISlandCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_VISlandCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading VIS land emissivity coefficients: ", a) ') TRIM(Default_VISlandCoeff_File)
       END IF
@@ -972,13 +1132,11 @@ CONTAINS
         RETURN
       END IF
       ! ...VIS water
-      IF ( Default_VISwaterCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_VISwaterCoeff_File, Default_VISwaterCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_VISwaterCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading VIS water emissivity coefficients: ", a) ') TRIM(Default_VISwaterCoeff_File)
       END IF
@@ -995,13 +1153,11 @@ CONTAINS
         RETURN
       END IF
       ! ...VIS snow
-      IF ( Default_VISsnowCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_VISsnowCoeff_File, Default_VISsnowCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_VISsnowCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading VIS snow emissivity coefficients: ", a) ') TRIM(Default_VISsnowCoeff_File)
       END IF
@@ -1018,13 +1174,11 @@ CONTAINS
         RETURN
       END IF
       ! ...VIS ice
-      IF ( Default_VISiceCoeff_Format == 'netCDF' ) THEN
-        netCDF = .TRUE.
-        IF ( PRESENT(NC_File_Path) ) Default_File_Path = NC_File_Path
-      ELSE
-        netCDF = .FALSE.
-        IF ( PRESENT(File_Path) ) Default_File_Path = File_Path
-      END IF
+      CALL Resolve_Coeff_Format( Default_VISiceCoeff_File, Default_VISiceCoeff_Format, &
+                                 Effective_NC_Path, Effective_Bin_Path, &
+                                 Effective_Coeff_Path, Quiet=Quiet_ )
+      netCDF = ( TRIM(Default_VISiceCoeff_Format) == 'netCDF' )
+      Default_File_Path = Effective_Coeff_Path
       IF ( .NOT. Quiet_ ) THEN
         WRITE(*, '("Loading VIS ice emissivity coefficients: ", a) ') TRIM(Default_VISiceCoeff_File)
       END IF
@@ -1043,8 +1197,12 @@ CONTAINS
     END IF Visible_Sensor
 
     ! ...Microwave
+    ! Report the scheme actually loaded. This used to name
+    ! Default_MWwaterCoeff_File, which is never read: the file-based load below
+    ! is commented out and the model comes from the scheme string, so the
+    ! message asserted a file had been loaded when it had not.
     IF ( .NOT. Quiet_ ) THEN
-      WRITE(*, '("Loading MW water emissivity coefficients: ", a) ') TRIM(Default_MWwaterCoeff_File)
+      WRITE(*, '("Loading MW water emissivity model: ", a) ') TRIM(Default_MWwaterCoeff_Scheme)
     END IF
     Microwave_Sensor: IF ( ANY(SpcCoeff_IsMicrowaveSensor(SC)) ) THEN
 
@@ -1073,6 +1231,127 @@ CONTAINS
         CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
         RETURN
       END IF
+
+      ! ...PARMIO LUT. By default CRTM_Init auto-loads
+      !    File_Path/PARMIO.MWwater.EmisCoeff.nc when the file is present, so
+      !    PARMIO is "drop-in" at the coefficient path. Absence of the file
+      !    silently falls through to FASTEM (byte-identical to a pre-PARMIO
+      !    build). The caller can override by passing PARMIOCoeff_File
+      !    explicitly to point at a non-default location; in that case a
+      !    missing file is treated as an error.
+      !    Once loaded, the MW-water dispatcher routes channels at or above
+      !    PARMIO_FREQ_THRESHOLD (200 GHz) through the LUT.
+      parmio_explicit = .FALSE.
+      IF ( PRESENT(PARMIOCoeff_File) ) THEN
+        Resolved_PARMIOCoeff_File = TRIM(ADJUSTL(PARMIOCoeff_File))
+        IF ( LEN_TRIM(Resolved_PARMIOCoeff_File) > 0 ) parmio_explicit = .TRUE.
+      END IF
+      IF ( .NOT. parmio_explicit ) THEN
+        Resolved_PARMIOCoeff_File = 'PARMIO.MWwater.EmisCoeff.nc'
+      END IF
+      IF ( PRESENT(File_Path) ) THEN
+        Resolved_PARMIOCoeff_File = Join_Path(File_Path, Resolved_PARMIOCoeff_File)
+      END IF
+      INQUIRE(FILE=TRIM(Resolved_PARMIOCoeff_File), EXIST=parmio_present)
+      ! ...The drop-in default is a netCDF file: when the caller keeps netCDF
+      !    data under a separate NC_File_Path, probe that tree too.
+      IF ( .NOT. parmio_present .AND. .NOT. parmio_explicit .AND. &
+           PRESENT(NC_File_Path) ) THEN
+        Resolved_PARMIOCoeff_File = Join_Path(NC_File_Path, 'PARMIO.MWwater.EmisCoeff.nc')
+        INQUIRE(FILE=TRIM(Resolved_PARMIOCoeff_File), EXIST=parmio_present)
+      END IF
+      IF ( parmio_present ) THEN
+        IF ( .NOT. Quiet_ ) THEN
+          WRITE(*, '("Loading PARMIO MW water emissivity LUT: ", a)') TRIM(Resolved_PARMIOCoeff_File)
+        END IF
+        err_stat = CRTM_PARMIOCoeff_Load( TRIM(Resolved_PARMIOCoeff_File), Quiet=Quiet )
+        IF ( err_stat /= SUCCESS ) THEN
+          msg = 'Error loading PARMIOCoeff data from '//TRIM(Resolved_PARMIOCoeff_File)
+          CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+          RETURN
+        END IF
+      ELSE IF ( parmio_explicit ) THEN
+        msg = 'PARMIOCoeff_File explicitly supplied but file not found: '//TRIM(Resolved_PARMIOCoeff_File)
+        err_stat = FAILURE
+        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+        RETURN
+      END IF
+      ! ...Make the FASTEM fallback visible: without the LUT, MW-water channels
+      !    at/above the PARMIO dispatch threshold use FASTEM extrapolated
+      !    beyond its tuning band, which changes the physics silently.
+      IF ( .NOT. CRTM_PARMIOCoeff_IsLoaded() .AND. .NOT. Quiet_ ) THEN
+        DO n = 1, n_Sensors
+          IF ( SpcCoeff_IsMicrowaveSensor(SC(n)) ) THEN
+            IF ( ANY(SC(n)%Frequency >= PARMIO_FREQ_THRESHOLD) ) THEN
+              WRITE( msg,'(a," has channels at/above ",f0.0," GHz but no PARMIO LUT is loaded; ",&
+                     &"MW water emissivity there falls back to FASTEM")' ) &
+                     TRIM(SC(n)%Sensor_Id), PARMIO_FREQ_THRESHOLD
+              CALL Display_Message( ROUTINE_NAME, TRIM(msg)//TRIM(pid_msg), INFORMATION )
+            END IF
+          END IF
+        END DO
+      END IF
+
+      ! ...TELSEM2 MW land emissivity atlas. OPT-IN (default: NESDIS_LandEM).
+      !    Unlike PARMIO, the atlas is NOT activated by mere file presence on the
+      !    coefficient path: it loads only when the caller explicitly opts in,
+      !    either by setting Use_MWland_Atlas=.TRUE. (auto-resolves the
+      !    default-named TELSEM2.MWland.EmisCoeff.nc from File_Path/NC_File_Path)
+      !    or by passing MWlandCoeff_File (which also opts in and may name a
+      !    non-default location). Without opt-in the atlas is skipped even if the
+      !    file is present, so MW land surface optics use NESDIS_LandEM, which
+      !    carries the analytic land-emissivity Jacobians. Rationale: loading the
+      !    atlas silently zeroes those Jacobians, so it must be a deliberate act.
+      mwland_explicit = .FALSE.
+      IF ( PRESENT(MWlandCoeff_File) ) THEN
+        Resolved_MWlandCoeff_File = TRIM(ADJUSTL(MWlandCoeff_File))
+        IF ( LEN_TRIM(Resolved_MWlandCoeff_File) > 0 ) mwland_explicit = .TRUE.
+      END IF
+      mwland_opt_in = mwland_explicit
+      IF ( PRESENT(Use_MWland_Atlas) ) mwland_opt_in = mwland_opt_in .OR. Use_MWland_Atlas
+      Load_MWland_Atlas: IF ( mwland_opt_in ) THEN
+        IF ( .NOT. mwland_explicit ) THEN
+          Resolved_MWlandCoeff_File = 'TELSEM2.MWland.EmisCoeff.nc'
+        END IF
+        IF ( PRESENT(File_Path) ) THEN
+          Resolved_MWlandCoeff_File = Join_Path(File_Path, Resolved_MWlandCoeff_File)
+        END IF
+        INQUIRE(FILE=TRIM(Resolved_MWlandCoeff_File), EXIST=mwland_present)
+        ! ...The default-named atlas is a netCDF file: when the caller keeps
+        !    netCDF data under a separate NC_File_Path, probe that tree too.
+        IF ( .NOT. mwland_present .AND. .NOT. mwland_explicit .AND. &
+             PRESENT(NC_File_Path) ) THEN
+          Resolved_MWlandCoeff_File = Join_Path(NC_File_Path, 'TELSEM2.MWland.EmisCoeff.nc')
+          INQUIRE(FILE=TRIM(Resolved_MWlandCoeff_File), EXIST=mwland_present)
+        END IF
+        IF ( mwland_present ) THEN
+          IF ( .NOT. Quiet_ ) THEN
+            WRITE(*, '("Loading TELSEM2 MW land emissivity atlas: ", a)') TRIM(Resolved_MWlandCoeff_File)
+          END IF
+          err_stat = CRTM_MWlandCoeff_Load( &
+                       TRIM(Resolved_MWlandCoeff_File), &
+                       Quiet             = Quiet            , &
+                       Process_ID        = Process_ID       , &
+                       Output_Process_ID = Output_Process_ID  )
+          IF ( err_stat /= SUCCESS ) THEN
+            msg = 'Error loading MWlandCoeff data from '//TRIM(Resolved_MWlandCoeff_File)
+            CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+            RETURN
+          END IF
+        ELSE IF ( mwland_explicit ) THEN
+          ! Named a specific file that isn't there: a hard error.
+          msg = 'MWlandCoeff_File explicitly supplied but file not found: '//TRIM(Resolved_MWlandCoeff_File)
+          err_stat = FAILURE
+          CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+          RETURN
+        ELSE
+          ! Opt-in via Use_MWland_Atlas but the default-named atlas is absent:
+          ! non-fatal, fall back to NESDIS_LandEM with a warning.
+          msg = 'Use_MWland_Atlas requested but TELSEM2.MWland.EmisCoeff.nc not '// &
+                'found on the coefficient path; using NESDIS_LandEM.'
+          CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),WARNING )
+        END IF
+      END IF Load_MWland_Atlas
     END IF Microwave_Sensor
 
 
@@ -1277,6 +1556,18 @@ CONTAINS
       CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
     END IF
 
+    IF ( CRTM_PARMIOCoeff_IsLoaded() ) CALL CRTM_PARMIOCoeff_Destroy()
+
+    ! ...TELSEM2 MW land emissivity atlas
+    IF ( CRTM_MWlandCoeff_IsLoaded() ) THEN
+      Destroy_Status = CRTM_MWlandCoeff_Destroy( Process_ID = Process_ID )
+      IF ( Destroy_Status /= SUCCESS ) THEN
+        err_stat = Destroy_Status
+        msg = 'Error deallocating shared MWlandCoeff data structure'//TRIM(pid_msg)
+        CALL Display_Message( ROUTINE_NAME,TRIM(msg)//TRIM(pid_msg),err_stat )
+      END IF
+    END IF
+
   END FUNCTION CRTM_Destroy
 
 
@@ -1316,4 +1607,153 @@ CONTAINS
     LOGICAL :: Status
     Status = ALL(CRTM_ChannelInfo_Associated(ChannelInfo))
   END FUNCTION CRTM_IsInitialized
+
+
+!------------------------------------------------------------------------------
+! Resolve_Coeff_Format
+!
+! Decide which format/file/directory a coefficient loader should actually use
+! given a requested format and the user-supplied paths. The filename extension
+! is authoritative for the requested format (.nc/.nc4 => netCDF, .bin =>
+! Binary), so an explicit legacy '<name>.bin' filename is read with the Binary
+! reader even though the default Format is netCDF. If the requested file
+! exists, return it (with the reconciled Format). Otherwise, probe the
+! alternate-format equivalent (NetCDF <-> Binary) and rewrite Filename,
+! Format, and Resolved_Path in place so the caller transparently loads the
+! available format. Supports the REL-3.2.0 Binary -> NetCDF transition.
+!
+! NC_Path and Bin_Path are the user's preferred directories for each format
+! (typically NC_File_Path and File_Path arguments to CRTM_Init). When only
+! one path is meaningful, callers can pass the same string for both.
+!
+! When falling back from .bin to NetCDF the helper prefers .nc4 then .nc,
+! matching the on-disk extensions used by different coefficient categories.
+!
+! When neither file exists, the in/out arguments are left unchanged so the
+! downstream loader's existing "file not found" error path triggers normally.
+!------------------------------------------------------------------------------
+  SUBROUTINE Resolve_Coeff_Format( Filename, Format, NC_Path, Bin_Path, &
+                                   Resolved_Path, Quiet )
+    CHARACTER(*),           INTENT(IN OUT) :: Filename
+    CHARACTER(*),           INTENT(IN OUT) :: Format
+    CHARACTER(*),           INTENT(IN)     :: NC_Path
+    CHARACTER(*),           INTENT(IN)     :: Bin_Path
+    CHARACTER(*),           INTENT(OUT)    :: Resolved_Path
+    LOGICAL,      OPTIONAL, INTENT(IN)     :: Quiet
+    ! Locals
+    CHARACTER(LEN(Filename)) :: trial_name, requested_name
+    CHARACTER(LEN(Format))   :: requested_format
+    LOGICAL :: noisy
+    INTEGER :: dot
+
+    noisy = .TRUE.
+    IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
+
+    ! The filename extension is authoritative for the format of the file the
+    ! caller actually named: a legacy caller passing an explicit '<name>.bin'
+    ! while Format holds the (netCDF) default must get the Binary reader, not
+    ! the netCDF reader pointed at a binary file (and vice versa). Unrecognized
+    ! extensions leave the requested Format in effect.
+    dot = INDEX(Filename, '.', BACK=.TRUE.)
+    IF ( dot >= 1 ) THEN
+      SELECT CASE ( TRIM(Filename(dot:)) )
+        CASE ( '.nc', '.nc4' ) ; Format = 'netCDF'
+        CASE ( '.bin' )        ; Format = 'Binary'
+      END SELECT
+    END IF
+
+    requested_name   = Filename
+    requested_format = Format
+
+    ! Default the resolved path to whichever directory matches the request.
+    IF ( TRIM(Format) == 'netCDF' ) THEN
+      Resolved_Path = NC_Path
+    ELSE
+      Resolved_Path = Bin_Path
+    END IF
+
+    ! Already on disk: nothing to do.
+    IF ( File_Exists(TRIM(Resolved_Path)//TRIM(Filename)) ) RETURN
+
+    IF ( dot < 1 ) RETURN  ! No extension; can't infer alternate.
+
+    SELECT CASE ( TRIM(Filename(dot:)) )
+    CASE ( '.nc', '.nc4' )
+      ! Requested NetCDF; try the binary alternate in Bin_Path.
+      trial_name = Filename(:dot-1) // '.bin'
+      IF ( File_Exists(TRIM(Bin_Path)//TRIM(trial_name)) ) THEN
+        Filename      = trial_name
+        Format        = 'Binary'
+        Resolved_Path = Bin_Path
+      END IF
+
+    CASE ( '.bin' )
+      ! Requested Binary; try .nc4 then .nc in NC_Path.
+      trial_name = Filename(:dot-1) // '.nc4'
+      IF ( File_Exists(TRIM(NC_Path)//TRIM(trial_name)) ) THEN
+        Filename      = trial_name
+        Format        = 'netCDF'
+        Resolved_Path = NC_Path
+      ELSE
+        trial_name = Filename(:dot-1) // '.nc'
+        IF ( File_Exists(TRIM(NC_Path)//TRIM(trial_name)) ) THEN
+          Filename      = trial_name
+          Format        = 'netCDF'
+          Resolved_Path = NC_Path
+        END IF
+      END IF
+
+    END SELECT
+
+    IF ( noisy .AND. Filename /= requested_name ) THEN
+      CALL Display_Message( 'CRTM_Init', &
+        'Requested '//TRIM(requested_format)//' file '//TRIM(requested_name)// &
+        ' not found; falling back to '//TRIM(Format)//' file '//TRIM(Filename), &
+        INFORMATION )
+    END IF
+  END SUBROUTINE Resolve_Coeff_Format
+
+
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       MWwaterCoeff_Scheme_From_File
+!
+! PURPOSE:
+!       Recover the microwave water emissivity scheme name from a MWwaterCoeff
+!       filename.
+!
+!       The shipped names are exactly <SCHEME>.MWwater.EmisCoeff.<ext>, for
+!       example FASTEM6.MWwater.EmisCoeff.nc, so the scheme is the leading
+!       component of the base name. Any directory prefix is stripped first so
+!       the result does not depend on whether a File_Path was joined on.
+!
+!       Returns an empty string when the name does not follow that pattern, in
+!       which case the caller keeps whatever scheme it already had rather than
+!       guessing.
+!
+!--------------------------------------------------------------------------------
+
+  FUNCTION MWwaterCoeff_Scheme_From_File( Filename ) RESULT( Scheme )
+    ! Arguments
+    CHARACTER(*), INTENT(IN) :: Filename
+    ! Function result
+    CHARACTER(SL) :: Scheme
+    ! Local variables
+    CHARACTER(SL) :: base
+    INTEGER :: i
+
+    Scheme = ''
+
+    ! ...Strip any directory prefix
+    base = ADJUSTL(Filename)
+    i = INDEX(base, '/', BACK=.TRUE.)
+    IF ( i > 0 ) base = base(i+1:)
+
+    ! ...The scheme is everything before the first separator
+    i = INDEX(base, '.')
+    IF ( i > 1 ) Scheme = base(:i-1)
+
+  END FUNCTION MWwaterCoeff_Scheme_From_File
+
 END MODULE CRTM_LifeCycle

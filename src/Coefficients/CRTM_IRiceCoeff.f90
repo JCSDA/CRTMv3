@@ -30,6 +30,7 @@ MODULE CRTM_IRiceCoeff
   ! -----------------
   ! Module use
   USE Message_Handler  , ONLY: SUCCESS, FAILURE, Display_Message
+  USE File_Utility          , ONLY: Join_Path
   USE SEcategory_Define, ONLY: SEcategory_type, &
                                SEcategory_Associated, &
                                SEcategory_Destroy
@@ -181,7 +182,7 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_IRiceCoeff_Load'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
-    CHARACTER(ML) :: IRiceCoeff_File
+    CHARACTER(:), ALLOCATABLE :: IRiceCoeff_File
     LOGICAL :: noisy
     ! Function variables
     LOGICAL :: Binary
@@ -189,9 +190,9 @@ CONTAINS
     ! Setup
     err_stat = SUCCESS
     ! ...Assign the filename to local variable
-    IRiceCoeff_File = ADJUSTL(Filename)
+    IRiceCoeff_File = TRIM(ADJUSTL(Filename))
     ! ...Add the file path
-    IF ( PRESENT(File_Path) ) IRiceCoeff_File = TRIM(ADJUSTL(File_Path))//TRIM(IRiceCoeff_File)
+    IF ( PRESENT(File_Path) ) IRiceCoeff_File = Join_Path(File_Path, IRiceCoeff_File)
     ! ...Check Quiet argument
     noisy = .TRUE.
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet

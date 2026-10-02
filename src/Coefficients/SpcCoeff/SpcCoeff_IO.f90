@@ -97,9 +97,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:            Set this logical argument to access netCDF format
 !                          SpcCoeff datafiles.
-!                          If == .FALSE., file format is BINARY [DEFAULT].
-!                             == .TRUE.,  file format is NETCDF.
-!                          If not specified, default is .FALSE.
+!                          If == .FALSE., file format is BINARY.
+!                             == .TRUE.,  file format is NETCDF [DEFAULT].
+!                          If not specified, default is .TRUE.
 !                          UNITS:      N/A
 !                          TYPE:       LOGICAL
 !                          DIMENSION:  Scalar
@@ -208,17 +208,17 @@ CONTAINS
     ! Function result
     INTEGER :: err_stat
     ! Function variables
-    LOGICAL :: binary
+    LOGICAL :: Binary
 
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    binary = .TRUE.
-    IF ( PRESENT(netCDF) ) binary = .NOT. netCDF
+    Binary = .FALSE.
+    IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
 
     ! Call the appropriate function
-    IF ( binary ) THEN
+    IF ( Binary ) THEN
       err_stat = SpcCoeff_Binary_InquireFile( &
                    Filename, &
                    n_Channels       = n_Channels      , &
@@ -282,9 +282,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:         Set this logical argument to access netCDF format
 !                       SpcCoeff datafiles.
-!                       If == .FALSE., file format is BINARY [DEFAULT].
-!                          == .TRUE.,  file format is NETCDF.
-!                       If not specified, default is .FALSE.
+!                       If == .FALSE., file format is BINARY.
+!                          == .TRUE.,  file format is NETCDF [DEFAULT].
+!                       If not specified, default is .TRUE.
 !                       UNITS:      N/A
 !                       TYPE:       LOGICAL
 !                       DIMENSION:  Scalar
@@ -360,16 +360,16 @@ CONTAINS
     ! Function result
     INTEGER :: err_stat
     ! Function variables
-    LOGICAL :: binary
+    LOGICAL :: Binary
 
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    binary = .TRUE.
-    IF ( PRESENT(netCDF) ) binary = .NOT. netCDF
+    Binary = .FALSE.
+    IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
     ! Call the appropriate function
-    IF ( binary ) THEN
+    IF ( Binary ) THEN
       err_stat = SpcCoeff_Binary_ReadFile( &
                    Filename, &
                    SpcCoeff, &
@@ -424,9 +424,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:         Set this logical argument to access netCDF format
 !                       SpcCoeff datafiles.
-!                       If == .FALSE., file format is BINARY [DEFAULT].
-!                          == .TRUE.,  file format is NETCDF.
-!                       If not specified, default is .FALSE.
+!                       If == .FALSE., file format is BINARY.
+!                          == .TRUE.,  file format is NETCDF [DEFAULT].
+!                       If not specified, default is .TRUE.
 !                       UNITS:      N/A
 !                       TYPE:       LOGICAL
 !                       DIMENSION:  Scalar
@@ -501,16 +501,16 @@ CONTAINS
     ! Function result
     INTEGER :: err_stat
     ! Local variables
-    LOGICAL :: binary
+    LOGICAL :: Binary
 
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    binary = .TRUE.
-    IF ( PRESENT(netCDF) ) binary = .NOT. netCDF
+    Binary = .FALSE.
+    IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
     ! Call the appropriate function
-    IF ( binary ) THEN
+    IF ( Binary ) THEN
       err_stat = SpcCoeff_Binary_WriteFile( &
                    Filename, &
                    SpcCoeff, &
@@ -676,7 +676,7 @@ CONTAINS
 
     ! Write the Binary file
     WRITE(*,'(/5x,"Writing the output binary datafile...")')
-    err_stat = SpcCoeff_WriteFile( BIN_Filename, spccoeff, Quiet = Quiet )
+    err_stat = SpcCoeff_WriteFile( BIN_Filename, spccoeff, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error writing Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -687,7 +687,7 @@ CONTAINS
     ! Check the write was successful
     WRITE(*,'(/5x,"Test reading the output binary datafile...")')
     ! ...Read the Binary file
-    err_stat = SpcCoeff_ReadFile( BIN_Filename, spccoeff_copy, Quiet = Quiet )
+    err_stat = SpcCoeff_ReadFile( BIN_Filename, spccoeff_copy, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)//' for test'
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )

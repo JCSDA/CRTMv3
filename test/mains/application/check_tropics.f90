@@ -178,9 +178,9 @@ PROGRAM check_crtm
     TauCoeff_Format     = 'Binary'
   ELSE IF ( Coeff_Format == 'netCDF' ) THEN
     AerosolCoeff_Format = 'netCDF'
-    AerosolCoeff_File   = 'AerosolCoeff.'//TRIM(Aerosol_Scheme)//'nc4'
+    AerosolCoeff_File   = 'AerosolCoeff.'//TRIM(Aerosol_Scheme)//'nc'
     CloudCoeff_Format   = 'netCDF'
-    CloudCoeff_File     = 'CloudCoeff.'//TRIM(Cloud_Scheme)//'nc4'
+    CloudCoeff_File     = 'CloudCoeff.'//TRIM(Cloud_Scheme)//'nc'
     SpcCoeff_Format     = 'netCDF'
     TauCoeff_Format     = 'netCDF'
   END IF

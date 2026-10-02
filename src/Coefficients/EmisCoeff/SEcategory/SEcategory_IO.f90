@@ -81,9 +81,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:            Set this logical argument to access netCDF format
 !                          SEcategory datafiles.
-!                          If == .FALSE., file format is BINARY [DEFAULT].
-!                             == .TRUE.,  file format is NETCDF.
-!                          If not specified, default is .FALSE.
+!                          If == .FALSE., file format is BINARY.
+!                             == .TRUE.,  file format is NETCDF [DEFAULT].
+!                          If not specified, default is .TRUE.
 !                          UNITS:      N/A
 !                          TYPE:       LOGICAL
 !                          DIMENSION:  Scalar
@@ -183,7 +183,7 @@ CONTAINS
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    Binary = .TRUE.
+    Binary = .FALSE.
     IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
 
@@ -246,9 +246,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:         Set this logical argument to access netCDF format
 !                       SEcategory datafiles.
-!                       If == .FALSE., file format is BINARY [DEFAULT].
-!                          == .TRUE.,  file format is NETCDF.
-!                       If not specified, default is .FALSE.
+!                       If == .FALSE., file format is BINARY.
+!                          == .TRUE.,  file format is NETCDF [DEFAULT].
+!                       If not specified, default is .TRUE.
 !                       UNITS:      N/A
 !                       TYPE:       LOGICAL
 !                       DIMENSION:  Scalar
@@ -331,7 +331,7 @@ CONTAINS
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    Binary = .TRUE.
+    Binary = .FALSE.
     IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
     !Call the appropriate function
@@ -390,9 +390,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:         Set this logical argument to access netCDF format
 !                       SEcategory datafiles.
-!                       If == .FALSE., file format is BINARY [DEFAULT].
-!                          == .TRUE.,  file format is NETCDF.
-!                       If not specified, default is .FALSE.
+!                       If == .FALSE., file format is BINARY.
+!                          == .TRUE.,  file format is NETCDF [DEFAULT].
+!                       If not specified, default is .TRUE.
 !                       UNITS:      N/A
 !                       TYPE:       LOGICAL
 !                       DIMENSION:  Scalar
@@ -486,7 +486,7 @@ CONTAINS
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    Binary = .TRUE.
+    Binary = .FALSE.
     IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
     ! Call the appropriate function
@@ -600,7 +600,7 @@ CONTAINS
     END IF
 
     ! Write the Binary file
-    err_stat = SEcategory_WriteFile_IO(cc, BIN_Filename, Quiet = Quiet )
+    err_stat = SEcategory_WriteFile_IO(cc, BIN_Filename, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error writing Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -609,7 +609,7 @@ CONTAINS
 
     ! Check the write was successful
     ! ...Read the Binary file
-    err_stat =  SEcategory_ReadFile_IO(cc_copy, BIN_Filename, Quiet = Quiet)
+    err_stat =  SEcategory_ReadFile_IO(cc_copy, BIN_Filename, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)//' for test'
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -703,7 +703,7 @@ CONTAINS
     err_stat = SUCCESS
 
     ! Read the Binary file
-    err_stat = SEcategory_ReadFile_IO(cc, BIN_Filename, Quiet = Quiet)
+    err_stat = SEcategory_ReadFile_IO(cc, BIN_Filename, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
