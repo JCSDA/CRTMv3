@@ -524,6 +524,17 @@ CONTAINS
       PRINT *,' error in allocate s_Level_Rad_UPT ',alloc_stat
       RETURN
     END IF
+    ! Three level-radiance arrays (nZ x (n_Layers+1) each, a few KB) are also zeroed,
+    ! because the aircraft observer (Options%Aircraft_Pressure > 0) reads elements
+    ! that no solver writes:
+    ! - s_Level_Rad_UP: the radiance is taken from s_Level_Rad_UP at the aircraft
+    !   level, which SOI does not compute.
+    ! - s_Level_Rad_DOWN, s_Level_Rad_DOWNT: ADA/VMOM set only the Stokes-I rows of
+    !   level 0 to the cosmic background, then read and copy out every row, so at
+    !   n_Stokes>1 the Q/U/V rows of level 0 are read unwritten.
+    RTV%s_Level_Rad_UP    = ZERO
+    RTV%s_Level_Rad_DOWN  = ZERO
+    RTV%s_Level_Rad_DOWNT = ZERO
 
 
 
