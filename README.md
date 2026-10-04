@@ -8,11 +8,11 @@ Preamble
 
 CRTM v3.1.6 release (`REL-3.1.6`)
 
-v3.1.6 released October 2, 2026: removes the per-call zero-fill of the RTV work arrays in RTV_Create that dominated the cost of CRTM calls with clouds, aerosols or visible sensors (#370); CRTM_AOD_TL/AD/K now honor Options%Skip_Profile (#372); calls that pass more than one sensor now return correct results; new coefficient set fix_REL-3.1.6.0 (47 new sensors and the 3.1.x-compatible updates from the v3.2.0 coefficients)
+v3.1.6 released October 4, 2026: removes the per-call zero-fill of the RTV work arrays in RTV_Create that dominated the cost of CRTM calls with clouds, aerosols or visible sensors (#370); CRTM_AOD_TL/AD/K now honor Options%Skip_Profile (#372); calls that pass more than one sensor now return correct results; new coefficient set fix_REL-3.1.6.0 (47 new sensors and the 3.1.x-compatible updates from the v3.2.0 coefficients)
 v3.1.5 released August 23, 2026: loads netCDF NLTECoeff/ACCoeff sibling files (previously silently skipped)
 v3.1.4 released June 8, 2026 
-v3.1.3 released February 10, 2025 
-v3.1.2 released July 11, 2025
+v3.1.3 released February 12, 2026
+v3.1.2 released June 12, 2025
 v3.1.1 released August 12, 2024
 v3.1.0 (alpha) Released October 31, 2023
 v3.0.0 Released March, 2023  
@@ -32,7 +32,7 @@ Basic requirements:
 
 =========================================================
 
-**JEDI NOTE** This release branch is also designed to work directly in a JEDI container or JEDI environment. If you're doing JEDI things, you're probably in the right spot. However, you should stop reading right now and have a look at the README_JEDI.md file.   
+**JEDI NOTE** This release branch is also designed to work directly in a JEDI container or JEDI environment. In most cases you will build CRTM as part of a JEDI bundle (e.g. jedi-bundle), which downloads the coefficients during the cmake step; the build instructions below also apply to a stand-alone build in a JEDI environment.
 
 If you're looking for an older version of CRTM (v2.3.0 or older) you should obtain the appropriate tarball from
 https://bin.ssec.wisc.edu/pub/s4/CRTM/   OR https://github.com/JCSDA/crtm (old versions).   
