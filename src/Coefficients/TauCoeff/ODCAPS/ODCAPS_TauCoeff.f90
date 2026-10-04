@@ -197,10 +197,11 @@ CONTAINS
     ! Local variables
     CHARACTER(256) :: Message
     CHARACTER(256) :: Process_ID_Tag
-    CHARACTER(256), DIMENSION(MAX_N_SENSORS) :: TauCoeff_File
+    CHARACTER(:), ALLOCATABLE :: TauCoeff_File(:)
     INTEGER :: Allocate_Status
     INTEGER :: n, n_Sensors, n_Channels
     INTEGER :: Max_n_Channels  ! Maximum channels protected variable
+    INTEGER :: Path_Length
 
     ! Set up
     Error_Status = SUCCESS
@@ -212,6 +213,12 @@ CONTAINS
       Process_ID_Tag = ' '
     END IF
 
+    ! Allocate the filename array with room for the path prefix, so a long
+    ! File_Path is never truncated. The filename portion is bounded (a sensor
+    ! id plus extension); the path portion is sized from the actual argument.
+    Path_Length = 0
+    IF ( PRESENT(File_Path) ) Path_Length = LEN_TRIM(ADJUSTL(File_Path))
+    ALLOCATE( CHARACTER(Path_Length+256) :: TauCoeff_File(MAX_N_SENSORS) )
     ! Determine the number of sensors and construct their filenames
     IF ( PRESENT(Sensor_ID) ) THEN
       ! Construct filenames for specified sensors
@@ -263,10 +270,9 @@ CONTAINS
                                            Output_Process_ID=Output_Process_ID, &
                                            Message_Log      =Message_Log        )
       IF ( Error_Status /= SUCCESS ) THEN
-        WRITE(Message,'("Error reading TauCoeff file #",i0,", ",a)') &
-                      n, TRIM(TauCoeff_File(n))
+        WRITE(Message,'("Error reading TauCoeff file #",i0)') n
         CALL Display_Message( ROUTINE_NAME, &
-                              TRIM(Message)//TRIM(Process_ID_Tag), &
+                              TRIM(Message)//", "//TRIM(TauCoeff_File(n))//TRIM(Process_ID_Tag), &
                               Error_Status, &
                               Message_Log=Message_Log )
         RETURN

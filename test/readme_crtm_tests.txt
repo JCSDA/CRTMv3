@@ -46,6 +46,9 @@ Cleanup:
 Troubleshooting/Support:
   Please feel free to contact us at:
     https://forums.jcsda.org/
-    or 
-    crtm-support@groups.google.com
+    or
+    Benjamin.T.Johnson@noaa.gov
+  For complex problems (build failures, incorrect results, crashes),
+  please open an issue in the CRTMv3 repository:
+    https://github.com/JCSDA/CRTMv3/issues
   

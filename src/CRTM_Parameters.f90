@@ -261,12 +261,40 @@ MODULE CRTM_Parameters
   REAL(fp), PUBLIC, PARAMETER :: SCATTERING_ALBEDO_THRESHOLD = BS_THRESHOLD  ! Eventually replace this with BS_THRESHOLD
   REAL(fp), PUBLIC, PARAMETER :: Transmittance_THRESHOLD   = 0.000000001_fp
 
-  INTEGER, PUBLIC, PARAMETER :: MAX_N_LEGENDRE_TERMS = 16
+  ! Raised 16->64 for the experimental 'CRTM-Exp' cloud-optics scheme, whose
+  ! phase-function Legendre truncation is decoupled from the RT stream count and
+  ! can require many terms for forward-peaked DDA habits at sub-mm frequencies.
+  ! Legacy schemes request <=16 terms and are unaffected (only array headroom grows).
+  INTEGER, PUBLIC, PARAMETER :: MAX_N_LEGENDRE_TERMS = 64
   INTEGER, PUBLIC, PARAMETER :: MAX_N_PHASE_ELEMENTS = 6
   INTEGER, PUBLIC, PARAMETER :: MAX_N_STREAMS = 16 
   INTEGER, PUBLIC, PARAMETER :: MAX_N_ANGLES = 16
   INTEGER, PUBLIC, PARAMETER :: MAX_N_STOKES = 4
   INTEGER, PUBLIC, PARAMETER :: MAX_N_AZIMUTH_FOURIER = 16   ! maximum number of Fourier components for azimuth angles
+
+  ! Minimum channels a channel-thread must own before splitting channels across
+  ! threads is worth doing.
+  !
+  ! Channel-level threading gives each thread its own AtmOptics/SfcOptics/RTV/
+  ! CSvar/ASvar scratch structures, allocated per profile per call. That cost is
+  ! set by n_Layers and the stream/angle maxima, NOT by how many channels the
+  ! thread then processes, so a thread holding only a handful of channels pays
+  ! far more to exist than it saves. Measured on one profile (gfortran 13.3,
+  ! forward, wall clock, speedup against the same build on one thread):
+  !
+  !   channels/thread :  1105   553   276   138   100    50    25    11   2.8
+  !   speedup         :  1.90  2.44  1.96  1.36  1.70  0.92  0.32  0.70  0.10
+  !
+  ! Break-even lies between 50 and 100; below it, threading channels is slower
+  ! than not threading at all (down to 0.03x for a 22-channel sensor on 16
+  ! threads). 128 is chosen to sit clear of break-even, since the true crossover
+  ! moves with layer count, cloud state and host. Sensors below this many
+  ! channels simply do not channel-thread; large sounders are unaffected.
+  !
+  ! This only ever LOWERS the thread count chosen by the profile/channel split,
+  ! so it cannot introduce nesting where there was none, and it is a no-op
+  ! whenever profiles already absorb every thread (n_channel_threads is 1 there).
+  INTEGER, PUBLIC, PARAMETER :: MIN_CHANNELS_PER_CHANNEL_THREAD = 128
     
 !### SOI uses HG phase function (modified by Tahara, Feb 2008)
   LOGICAL, PUBLIC, PARAMETER :: HGPHASE = .FALSE.

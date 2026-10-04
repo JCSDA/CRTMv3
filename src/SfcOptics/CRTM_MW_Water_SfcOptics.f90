@@ -22,7 +22,7 @@ MODULE CRTM_MW_Water_SfcOptics
   ! -----------------
   ! Module use
   USE Type_Kinds,               ONLY: fp
-  USE Message_Handler,          ONLY: SUCCESS
+  USE Message_Handler,          ONLY: SUCCESS, FAILURE, WARNING, Display_Message
   USE CRTM_Parameters,          ONLY: SET, NOT_SET, &
                                       ZERO, ONE, &
                                       MAX_N_ANGLES, &
@@ -42,6 +42,13 @@ MODULE CRTM_MW_Water_SfcOptics
                                       Compute_FastemX_TL,&
                                       Compute_FastemX_AD
   USE CRTM_MWwaterCoeff       , ONLY: MWwaterC
+  USE CRTM_PARMIO,              ONLY: PARMIO_type => iVar_type, &
+                                      Compute_PARMIO
+  USE PARMIO_LUT_Interpolation, ONLY: PARMIO_LUT_Clamped_Axes
+  USE CRTM_PARMIO_TL,           ONLY: Compute_PARMIO_TL
+  USE CRTM_PARMIO_AD,           ONLY: Compute_PARMIO_AD
+  USE CRTM_PARMIOCoeff,         ONLY: PARMIOC, CRTM_PARMIOCoeff_IsLoaded, &
+                                      CRTM_PARMIOCoeff_Covers_Frequency
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -57,6 +64,13 @@ MODULE CRTM_MW_Water_SfcOptics
   PUBLIC :: Compute_MW_Water_SfcOptics
   PUBLIC :: Compute_MW_Water_SfcOptics_TL
   PUBLIC :: Compute_MW_Water_SfcOptics_AD
+  ! Dispatch threshold (CRTM_LifeCycle reports the FASTEM fallback against it)
+  PUBLIC :: PARMIO_FREQ_THRESHOLD
+  ! Runtime control and the single predicate answering "will PARMIO be used
+  ! at this frequency?". Everything that needs to know asks this rather than
+  ! re-deriving it, so the policy and the table-coverage rule cannot drift
+  ! apart between call sites.
+  PUBLIC :: PARMIO_Is_Active_At
 
 
   ! -----------------
@@ -64,6 +78,58 @@ MODULE CRTM_MW_Water_SfcOptics
   ! -----------------
   ! Low frequency model threshold
   REAL(fp), PARAMETER :: LOW_F_THRESHOLD = 20.0_fp ! GHz
+  ! Finite-difference step (K) for the Fastem1 emissivity SST derivative. Fastem1
+  ! returns only wind-speed derivatives, so d(emissivity)/d(Water_Temperature) is
+  ! obtained by a central difference around the forward call (see below).
+  REAL(fp), PARAMETER :: FASTEM1_DTS = 0.1_fp
+  ! PARMIO LUT is the surface-emissivity backend at and above this frequency
+  ! when the LUT has been loaded. Below this threshold the FASTEM/Stogryn
+  ! legacy path is used.
+  ! The value is arbitrary and is a safety gate, not a physical boundary. It
+  ! was placed above where the traditional sounding sensors stop, so that
+  ! enabling PARMIO could not disturb anything exercised operationally while
+  ! the implementation was still being shaken out: nothing at or above
+  ! 200 GHz was in operational use, so nothing could regress. Any round number
+  ! above the ATMS band would have served equally.
+  !
+  ! Obs-space validation against ATMS-NPP (2026-05-13) supports keeping FASTEM
+  ! below the gate rather than choosing this number: FASTEM6 is tuned and
+  ! competitive against real obs through the entire ATMS band (max
+  ! 183.31 GHz), and PARMIO's physical-reference advantage shows cleanly only
+  ! where FASTEM6 extrapolates beyond its tuning band (e.g. the 325 GHz
+  ! synthetic-RT wind-roughness sign flip). That argues for a gate somewhere
+  ! above 183.31, not for 200 in particular.
+  !
+  ! One consequence of the arbitrariness was worth knowing: 200 used to land
+  ! inside a hole in the shipped coefficient table (see below), which is why
+  ! coverage is checked separately rather than inferred from this value. The
+  ! hole is closed, the check stays.
+  !
+  ! Note this value is unrelated to the coefficient table's own 200 GHz group
+  ! boundary, which they share only by coincidence. That one is a grid
+  ! partition inside the table; this one is a dispatch policy. Neither is
+  ! physics, and changing one does not imply changing the other.
+  REAL(fp), PARAMETER :: PARMIO_FREQ_THRESHOLD = 200.0_fp ! GHz
+
+  ! The policy threshold above is only half the question. Being loaded and
+  ! being above the threshold does not mean the table has data at a given
+  ! frequency: the coefficient groups are gridded separately, and their grids
+  ! need not meet the group boundaries. Where they do not, the interpolator
+  ! clamps to the nearest grid edge without saying so, and a 204.78 GHz
+  ! channel was being evaluated at 229 GHz.
+  !
+  ! So the dispatch asks both questions, in PARMIO_Is_Active_At: is PARMIO
+  ! wanted here, and does the table have data here. Coverage is a hard
+  ! requirement and is not relaxed by opting in, because the alternative is a
+  ! confident number computed at the wrong frequency.
+  !
+  ! The floor itself is a safety gate rather than physics. It was set where
+  ! the traditional sounding sensors stop, so that enabling PARMIO could not
+  ! disturb operational channels while the implementation was still being
+  ! shaken out. Options%Use_PARMIO_MWSSEM is how a caller opts out of it and
+  ! exercises PARMIO across everything the table covers.
+
+  LOGICAL, SAVE :: PARMIO_Clamp_Warn_Pending = .TRUE.
 
 
   ! --------------------------------------
@@ -76,6 +142,8 @@ MODULE CRTM_MW_Water_SfcOptics
     TYPE(FastemX_type), DIMENSION(MAX_N_ANGLES)   :: FastemX_Var
     ! Low frequency model internal variable structure
     TYPE(LF_MWSSEM_type), DIMENSION(MAX_N_ANGLES) :: LF_MWSSEM_Var
+    ! PARMIO model internal variable structure
+    TYPE(PARMIO_type), DIMENSION(MAX_N_ANGLES)    :: PARMIO_Var
     ! Fastem outputs
     REAL(fp), DIMENSION(MAX_N_ANGLES) :: dEH_dTs        = ZERO
     REAL(fp), DIMENSION(MAX_N_ANGLES) :: dEH_dWindSpeed = ZERO
@@ -84,6 +152,29 @@ MODULE CRTM_MW_Water_SfcOptics
   END TYPE iVar_type
 
 CONTAINS
+
+
+!--------------------------------------------------------------------------------
+!
+! PARMIO_Is_Active_At: the single predicate answering whether PARMIO will
+! serve a given frequency. Everything that needs to know asks this rather
+! than re-deriving the rule, so the policy and the coverage requirement
+! cannot drift apart between call sites.
+!
+!   Use_PARMIO  caller opted into PARMIO across its full covered range
+!               (Options%Use_PARMIO_MWSSEM). Opting in drops the default
+!               frequency floor; it does not drop the coverage requirement.
+!
+!--------------------------------------------------------------------------------
+
+  PURE FUNCTION PARMIO_Is_Active_At( Frequency, Use_PARMIO ) RESULT( Active )
+    REAL(fp), INTENT(IN) :: Frequency
+    LOGICAL,  INTENT(IN) :: Use_PARMIO
+    LOGICAL :: Active
+    Active = CRTM_PARMIOCoeff_IsLoaded()
+    IF ( Active .AND. (.NOT. Use_PARMIO) ) Active = ( Frequency >= PARMIO_FREQ_THRESHOLD )
+    IF ( Active ) Active = CRTM_PARMIOCoeff_Covers_Frequency( Frequency )
+  END FUNCTION PARMIO_Is_Active_At
 
 
 
@@ -195,11 +286,14 @@ CONTAINS
     INTEGER :: err_stat
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_MW_Water_SfcOptics'
+    CHARACTER(64) :: Clamped_Axes
     ! Local variables
     INTEGER  :: i, j
     REAL(fp) :: Frequency
     REAL(fp) :: Source_Azimuth_Angle, Sensor_Azimuth_Angle
     REAL(fp) :: Reflectivity(N_STOKES)
+    ! Fastem1 SST-derivative finite-difference scratch (V=1, H=2)
+    REAL(fp) :: emis_pTs(2), emis_mTs(2), dwind_h, dwind_v
 
 
     ! Set up
@@ -212,9 +306,110 @@ CONTAINS
            Source_Azimuth_Angle = Source_Azimuth_Angle, &
            Sensor_Azimuth_Angle = Sensor_Azimuth_Angle  )
 
-    
+
+    ! ------------------------------------------------------------------
+    ! Polarimetric azimuth convention (authoritative definition)
+    ! ------------------------------------------------------------------
+    ! Every microwave water backend below takes its relative azimuth from
+    ! the single expression
+    !
+    !     phi = Surface%Wind_Direction - Sensor_Azimuth_Angle   [degrees]
+    !
+    ! and each applies it as phi_radians = phi * DEGREES_TO_RADIANS with no
+    ! further reflection or offset. The two terms are defined by CRTM as
+    !
+    !   Wind_Direction       the direction the wind blows TOWARD, clockwise
+    !                        from North. Zero is a wind blowing toward the
+    !                        north, i.e. a southerly. This is the opposite
+    !                        of the meteorological convention
+    !                        (CRTM_Surface_Define.f90, DEFAULT_WIND_DIRECTION).
+    !   Sensor_Azimuth_Angle the azimuth of the horizontal projection of the
+    !                        line from the satellite to the FOV, clockwise
+    !                        from North (CRTM_Geometry_Define.f90:312-316).
+    !
+    ! so phi = 0 means the wind blows toward the same compass azimuth as the
+    ! satellite-to-FOV horizontal projection.
+    !
+    ! The azimuthal emissivity is expanded as (Liu et al., FASTEM-4
+    ! validation, NWPSAF-MO-VS-045, equations 2a-2d)
+    !
+    !     e_V = ... + SUM_m c_m cos(m phi)      e_U   = SUM_m e_m sin(m phi)
+    !     e_H = ... + SUM_m d_m cos(m phi)      e_V4  = SUM_m g_m sin(m phi)
+    !
+    ! Cosine for V and H, sine for the third and fourth Stokes components.
+    ! All three backends implement exactly this: Azimuth_Emissivity_Module
+    ! (FASTEM4/5), Azimuth_Emissivity_F6_Module (FASTEM6) and
+    ! PARMIO_Azimuth_Module. The third Stokes component follows the standard
+    ! radiometric definition U = T(+45) - T(-45), as used by WindSat, whose
+    ! measurements the FASTEM azimuth coefficients were fitted to, and by
+    ! RTTOV.
+    !
+    ! Consequences worth knowing:
+    !   * V and H are EVEN in phi and U and V4 are ODD. A sign error in the
+    !     azimuth convention is therefore invisible in I and Q and shows up
+    !     only in U and V4. test_VectorRT_SurfaceFrame pins that parity.
+    !   * FASTEM6, the CRTM default, parameterises V and H only and returns
+    !     the third and fourth Stokes components as identically zero. A
+    !     polarimetric run has a real surface U and V4 only on FASTEM4 or
+    !     PARMIO. Note that only FASTEM4 and FASTEM6 can actually be loaded;
+    !     Azimuth_Emissivity_Module serves FASTEM4 and FASTEM5, but FASTEM5
+    !     is not a selectable scheme and asking for it is a hard error.
+    !
+    ! See docs/design/polarimetric_conventions.md for the full statement
+    ! and the literature basis. The phi origin and U/V sign conventions
+    ! have been verified against RTTOV FASTEM5 (2026-08-02).
+    ! ------------------------------------------------------------------
+    !
     ! Compute the surface optical parameters
-    IF( SfcOptics%Use_New_MWSSEM ) THEN
+    ! PARMIO dispatch is gated by frequency: at and above
+    ! PARMIO_FREQ_THRESHOLD (and provided the LUT was loaded at CRTM_Init
+    ! time) PARMIO is used as the MW-water emissivity backend. Below the
+    ! threshold the FASTEM/Stogryn legacy path is used. If no LUT was
+    ! loaded the path is byte-identical to a pre-PARMIO build at every
+    ! frequency.
+    IF( PARMIO_Is_Active_At( Frequency, SfcOptics%Use_PARMIO_MWSSEM ) ) THEN
+
+      ! PARMIO_MWSSEM (LUT-driven, replaces FASTEM at runtime)
+      SfcOptics%Azimuth_Angle = Surface%Wind_Direction - Sensor_Azimuth_Angle
+      DO i = 1, SfcOptics%n_Angles
+        CALL Compute_PARMIO( &
+               PARMIOC                                , &  ! Input PARMIO LUT coefficients
+               Frequency                              , &  ! Input
+               SfcOptics%n_Angles                     , &  ! Input
+               SfcOptics%Angle(i)                     , &  ! Input
+               Surface%Water_Temperature              , &  ! Input
+               Surface%Salinity                       , &  ! Input
+               Surface%Wind_Speed                     , &  ! Input
+               iVar%PARMIO_Var(i)                     , &  ! Internal variable output
+               SfcOptics%Emissivity(i,:)              , &  ! Output
+               Reflectivity                           , &  ! Output
+               Azimuth_Angle = SfcOptics%Azimuth_Angle, &  ! Optional input
+               Transmittance = SfcOptics%Transmittance  )  ! Optional input
+        DO j = 1, N_STOKES
+          SfcOptics%Reflectivity(i,j,i,j) = Reflectivity(j)
+        END DO
+        ! Report an edge-clamped lookup once. The interpolator pins an
+        ! out-of-range query to the nearest grid node and returns a confident
+        ! number computed somewhere other than where it was asked, which is
+        ! defensible as a fallback and not as a silent one. Frequency cannot
+        ! clamp here because PARMIO_Is_Active_At already required coverage,
+        ! but the state axes can and do: the table spans zenith 0 to 65 deg,
+        ! wind 1 to 25 m/s and SST -2 to 30 C, all of which real scenes exceed.
+        ! Latched, because this sits in the per-angle loop of every channel of
+        ! every profile.
+        IF ( PARMIO_Clamp_Warn_Pending ) THEN
+          Clamped_Axes = PARMIO_LUT_Clamped_Axes( iVar%PARMIO_Var(i)%LUT_Var )
+          IF ( LEN_TRIM(Clamped_Axes) > 0 ) THEN
+            PARMIO_Clamp_Warn_Pending = .FALSE.
+            CALL Display_Message( ROUTINE_NAME, &
+              'PARMIO lookup clamped to the table edge on: '//TRIM(Clamped_Axes)//&
+              '. Results there are evaluated at the nearest grid node, not at '//&
+              'the requested value.', WARNING )
+          END IF
+        END IF
+      END DO
+
+    ELSE IF ( SfcOptics%Use_New_MWSSEM ) THEN
 
       ! FastemX model
       SfcOptics%Azimuth_Angle = Surface%Wind_Direction - Sensor_Azimuth_Angle
@@ -264,6 +459,15 @@ CONTAINS
                         SfcOptics%Emissivity(i,:), & ! Output
                         iVar%dEH_dWindSpeed(i)   , & ! Output
                         iVar%dEV_dWindSpeed(i)     ) ! Output
+          ! Fastem1 returns no SST derivative; obtain d(emissivity)/d(Water_Temperature)
+          ! by a central finite difference around the forward call so the TL/AD SST
+          ! Jacobian (iVar%dE?_dTs, read below) is not silently zero.
+          CALL Fastem1( Frequency, SfcOptics%Angle(i), Surface%Water_Temperature+FASTEM1_DTS, &
+                        Surface%Wind_Speed, emis_pTs, dwind_h, dwind_v )
+          CALL Fastem1( Frequency, SfcOptics%Angle(i), Surface%Water_Temperature-FASTEM1_DTS, &
+                        Surface%Wind_Speed, emis_mTs, dwind_h, dwind_v )
+          iVar%dEV_dTs(i) = (emis_pTs(1) - emis_mTs(1))/(2.0_fp*FASTEM1_DTS)  ! V (index 1)
+          iVar%dEH_dTs(i) = (emis_pTs(2) - emis_mTs(2))/(2.0_fp*FASTEM1_DTS)  ! H (index 2)
           SfcOptics%Reflectivity(i,1,i,1) = ONE-SfcOptics%Emissivity(i,1)
           SfcOptics%Reflectivity(i,2,i,2) = ONE-SfcOptics%Emissivity(i,2)
         END DO
@@ -420,7 +624,28 @@ CONTAINS
 
 
     ! Compute the tangent-linear surface optical parameters
-    IF( SfcOptics%Use_New_MWSSEM ) THEN
+    ! Dispatch matches the Forward path: PARMIO at and above
+    ! PARMIO_FREQ_THRESHOLD when the LUT is loaded.
+    IF( PARMIO_Is_Active_At( Frequency, SfcOptics%Use_PARMIO_MWSSEM ) ) THEN
+
+      ! PARMIO_MWSSEM (LUT-driven)
+      DO i = 1, SfcOptics%n_Angles
+        CALL Compute_PARMIO_TL( &
+               PARMIOC                                     , &  ! Input PARMIO LUT coefficients
+               Surface_TL%Water_Temperature                , &  ! TL Input
+               Surface_TL%Salinity                         , &  ! TL Input
+               Surface_TL%Wind_Speed                       , &  ! TL Input
+               iVar%PARMIO_Var(i)                          , &  ! Internal variable input
+               SfcOptics_TL%Emissivity(i,:)                , &  ! TL Output
+               Reflectivity_TL                             , &  ! TL Output
+               Azimuth_Angle_TL = Surface_TL%Wind_Direction, &  ! Optional TL input
+               Transmittance_TL = SfcOptics_TL%Transmittance )  ! Optional TL input
+        DO j = 1, N_STOKES
+          SfcOptics_TL%Reflectivity(i,j,i,j) = Reflectivity_TL(j)
+        END DO
+      END DO
+
+    ELSE IF( SfcOptics%Use_New_MWSSEM ) THEN
 
       ! FastemX model
       DO i = 1, SfcOptics%n_Angles
@@ -620,7 +845,30 @@ CONTAINS
 
 
     ! Compute the adjoint surface optical parameters
-    IF( SfcOptics%Use_New_MWSSEM ) THEN
+    ! Dispatch matches the Forward path: PARMIO at and above
+    ! PARMIO_FREQ_THRESHOLD when the LUT is loaded.
+    IF( PARMIO_Is_Active_At( Frequency, SfcOptics%Use_PARMIO_MWSSEM ) ) THEN
+
+      ! PARMIO_MWSSEM (LUT-driven)
+      Azimuth_Angle_AD = ZERO
+      DO i = 1, SfcOptics%n_Angles
+        DO j = 1, N_STOKES
+          Reflectivity_AD(j) = SfcOptics_AD%Reflectivity(i,j,i,j)
+        END DO
+        CALL Compute_PARMIO_AD( &
+               PARMIOC                                      , &  ! Input PARMIO LUT coefficients
+               SfcOptics_AD%Emissivity(i,:)                 , &  ! AD Input
+               Reflectivity_AD                              , &  ! AD Input
+               iVar%PARMIO_Var(i)                           , &  ! Internal variable input
+               Surface_AD%Water_Temperature                 , &  ! AD Output
+               Surface_AD%Salinity                          , &  ! AD Output
+               Surface_AD%Wind_Speed                        , &  ! AD Output
+               Azimuth_Angle_AD = Azimuth_Angle_AD          , &  ! Optional AD Output
+               Transmittance_AD = SfcOptics_AD%Transmittance  )  ! Optional AD Output
+      END DO
+      Surface_AD%Wind_Direction = Surface_AD%Wind_Direction + Azimuth_Angle_AD
+
+    ELSE IF( SfcOptics%Use_New_MWSSEM ) THEN
 
       ! FastemX model
       Azimuth_Angle_AD = ZERO

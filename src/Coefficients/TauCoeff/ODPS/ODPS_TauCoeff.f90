@@ -35,7 +35,8 @@ MODULE ODPS_TauCoeff
   ! -----------------
   ! Module use
   USE Message_Handler   , ONLY: SUCCESS, FAILURE, WARNING, Display_Message
-  USE ODPS_Define       , ONLY: ODPS_TauCoeff_type    => ODPS_type, &          
+  USE File_Utility      , ONLY: Join_Path
+  USE ODPS_Define       , ONLY: ODPS_TauCoeff_type    => ODPS_type, &
                                 ODPS_Destroy_TauCoeff => Destroy_ODPS        
   USE ODPS_Binary_IO    , ONLY: Read_ODPS_Binary
   USE ODPS_netCDF_IO    , ONLY: Read_ODPS_netCDF
@@ -201,7 +202,7 @@ CONTAINS
     ! Local variables
     CHARACTER(256) :: Message
     CHARACTER(256) :: Process_ID_Tag
-    CHARACTER(256) :: TauCoeff_File
+    CHARACTER(:), ALLOCATABLE :: TauCoeff_File
     INTEGER :: Allocate_Status
     INTEGER :: n, n_Sensors
     LOGICAL :: binary 
@@ -260,7 +261,7 @@ CONTAINS
     
       ! Add the file path
       IF ( PRESENT(File_Path) ) THEN
-        TauCoeff_File = TRIM(ADJUSTL(File_Path))//TRIM(TauCoeff_File)
+        TauCoeff_File = Join_Path(File_Path, TauCoeff_File)
       END IF
       
       IF ( .NOT. binary ) THEN
@@ -269,10 +270,9 @@ CONTAINS
                                              Quiet            =Quiet            , &
                                              Message_Log      =Message_Log        )
         IF ( Error_Status /= SUCCESS ) THEN
-          WRITE(Message,'("Error reading TauCoeff file #",i0,", ",a)') &
-                        n, TRIM(TauCoeff_File)
+          WRITE(Message,'("Error reading TauCoeff file #",i0)') n
           CALL Display_Message( ROUTINE_NAME, &
-                                TRIM(Message)//TRIM(Process_ID_Tag), &
+                                TRIM(Message)//", "//TRIM(TauCoeff_File)//TRIM(Process_ID_Tag), &
                                 Error_Status, &
                                 Message_Log=Message_Log )
           RETURN
@@ -285,10 +285,9 @@ CONTAINS
                                              Output_Process_ID=Output_Process_ID, &
                                              Message_Log      =Message_Log        )
         IF ( Error_Status /= SUCCESS ) THEN
-          WRITE(Message,'("Error reading TauCoeff file #",i0,", ",a)') &
-                        n, TRIM(TauCoeff_File)
+          WRITE(Message,'("Error reading TauCoeff file #",i0)') n
           CALL Display_Message( ROUTINE_NAME, &
-                                TRIM(Message)//TRIM(Process_ID_Tag), &
+                                TRIM(Message)//", "//TRIM(TauCoeff_File)//TRIM(Process_ID_Tag), &
                                 Error_Status, &
                                 Message_Log=Message_Log )
           RETURN

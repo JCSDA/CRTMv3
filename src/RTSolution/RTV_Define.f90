@@ -28,6 +28,7 @@ MODULE RTV_Define
   USE Message_Handler,       ONLY: SUCCESS, FAILURE, Display_Message
   USE CRTM_Parameters,       ONLY: SET, ZERO, ONE, TWO, PI, &
                                    MAX_N_LAYERS, MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, &
+                                   MAX_N_STOKES, &
                                    DEGREES_TO_RADIANS, &
                                    SECANT_DIFFUSIVITY, &
                                    SCATTERING_ALBEDO_THRESHOLD, &
@@ -54,7 +55,6 @@ MODULE RTV_Define
   PUBLIC :: MAX_N_SOI_ITERATIONS
   ! Datatypes
   PUBLIC :: aircraft_rt_type
-  PUBLIC :: obs_4_downward_type
   PUBLIC :: RTV_type
   ! Procedures
   PUBLIC :: RTV_Associated
@@ -97,13 +97,6 @@ MODULE RTV_Define
     ! The output level index
     INTEGER :: idx
   END TYPE aircraft_rt_type
-  ! ...Downward AD calculation
-  TYPE :: obs_4_downward_type
-    ! The switch
-    LOGICAL :: rt = .FALSE.
-    ! The output level index
-    INTEGER :: idx
-  END TYPE obs_4_downward_type
   ! --------------------------------------
   ! Structure definition to hold forward
   ! variables across FWD, TL, and AD calls
@@ -148,6 +141,10 @@ MODULE RTV_Define
     REAL(fp), DIMENSION(   MAX_N_LAYERS ) :: e_Layer_Trans_DOWN = ZERO
     REAL(fp), DIMENSION( 0:MAX_N_LAYERS ) :: e_Level_Rad_UP     = ZERO
     REAL(fp), DIMENSION( 0:MAX_N_LAYERS ) :: e_Level_Rad_DOWN   = ZERO
+    ! Polarized Stokes components (2:n_Stokes) of the emergent radiance on the
+    ! non-scattering path, at the observer level. Slot 1 is unused: the total
+    ! intensity is e_Level_Rad_UP, which the scalar solver already produces.
+    REAL(fp), DIMENSION( MAX_N_STOKES )   :: e_Rad_UP_Stokes    = ZERO
 
     ! Planck radiances
     REAL(fp)                               :: Planck_Surface    = ZERO
@@ -170,8 +167,16 @@ MODULE RTV_Define
     ! Aircraft model RT information
     TYPE(aircraft_rt_type) :: aircraft
 
-    ! Downwelling radiance
-    TYPE(obs_4_downward_type) :: obs_4_downward
+    ! Opt-in switch: compute surface downwelling radiance in the scattering solvers
+    LOGICAL :: Compute_Down_Radiance = .FALSE.
+
+    ! Opt-in switch: compute the level-resolved downwelling radiance profile
+    ! (RTSolution%Downwelling_Radiance), fully differentiated, for all solvers.
+    LOGICAL :: Compute_Down_Radiance_Profile = .FALSE.
+
+    ! Opt-in switch: compute the level-resolved upwelling radiance profile
+    ! (RTSolution%Upwelling_Radiance) in the scattering solvers, fully differentiated.
+    LOGICAL :: Compute_Up_Radiance_Profile = .FALSE.
 
     ! Scattering, visible model variables
     INTEGER :: n_Streams         = 0       ! Number of *hemispheric* stream angles used in RT
@@ -480,16 +485,17 @@ CONTAINS
        RETURN
     END IF
 
-    ! zero items after allocation to prevent underflow / overflow issues
-    RTV%Pff      = ZERO
-    RTV%Pbb      = ZERO
-    RTV%Pplus    = ZERO
-    RTV%Pminus   = ZERO
-    RTV%Pleg     = ZERO
-    RTV%Off      = ZERO
-    RTV%Obb      = ZERO
-    RTV%n_Factor = ZERO
-    RTV%sum_fac  = ZERO
+    ! NOTE: the work arrays are deliberately NOT zero-filled after allocation.
+    ! RTV_Create runs once per profile in every CRTM entry point; zero-filling the
+    ! ~40 MB (n_Stokes=1) of freshly allocated memory faulted every page back in on
+    ! every call and made cloudy CRTM_Forward/K_Matrix ~45x slower than v2.4.1,
+    ! which never zeroed these arrays. See JCSDA/CRTMv3 issues #370 and #368.
+    !
+    ! The one exception is Pff. The ADA solvers (CRTM_ADA, _TL, _AD) test
+    ! maxval(abs(Pff(:,:,k))) for every layer, and at n_Stokes=1 CRTM_Phase_Matrix
+    ! only fills Pff for scattering layers, so that test reads unwritten memory for
+    ! the others. Zero Pff (~200 KB at n_Stokes=1) so the read is defined.
+    RTV%Pff = ZERO
 
 
     ! Perform the allocation for adding-doubling variables
@@ -523,29 +529,20 @@ CONTAINS
       PRINT *,' error in allocate s_Level_Rad_UPT ',alloc_stat
       RETURN
     END IF
+    ! Three level-radiance arrays (nZ x (n_Layers+1) each, a few KB) are also zeroed,
+    ! because some paths read elements that no solver writes:
+    ! - s_Level_Rad_DOWN, s_Level_Rad_DOWNT: when the downward sweep runs (aircraft
+    !   observer or Compute_Down_Radiance*/Compute_Up_Radiance_Profile), ADA/VMOM set
+    !   only the Stokes-I rows of level 0 to the cosmic background, then read (and, for
+    !   the aircraft observer, copy out) every row, so at n_Stokes>1 the Q/U/V rows of
+    !   level 0 are read unwritten.
+    ! - s_Level_Rad_UP: with an aircraft observer the radiance is taken from
+    !   s_Level_Rad_UP at the aircraft level, which SOI does not compute.
+    RTV%s_Level_Rad_UP    = ZERO
+    RTV%s_Level_Rad_DOWN  = ZERO
+    RTV%s_Level_Rad_DOWNT = ZERO
 
-    ! zero items after allocation
-    RTV%Inv_Gamma           = ZERO
-    RTV%Inv_GammaT          = ZERO
-    RTV%Refl_Trans          = ZERO
-    RTV%s_Layer_Trans       = ZERO
-    RTV%s_Layer_Refl        = ZERO
-    RTV%s_Level_Refl_UP     = ZERO
-    RTV%s_Level_Rad_UP      = ZERO
-    RTV%s_Layer_Source_UP   = ZERO
-    RTV%s_Layer_Source_DOWN = ZERO
 
-    ! Add by CD: we don't need to aero the following items for variables of
-    ! aircraft level and downward AD calculation?
-    RTV%s_Level_Rad_UPT     = ZERO
-    RTV%s_Level_Rad_DOWN    = ZERO
-    RTV%s_Level_Refl_DOWN   = ZERO
-    RTV%s_Level_Refl_DOWNT  = ZERO
-    RTV%s_Level_Rad_DOWNT   = ZERO
-    RTV%Inv_Gamma2          = ZERO
-    RTV%Inv_Gamma2T         = ZERO
-    RTV%Inv_Gamma3          = ZERO
-    RTV%Refl_Trans_DOWN     = ZERO
 
     ! Perform the allocation for AMOM variables
     ALLOCATE( RTV%Thermal_C(nZ, n_Layers)        , &
@@ -579,32 +576,6 @@ CONTAINS
       RETURN
     END IF
 
-    ! zero items after allocation
-    RTV%Thermal_C = ZERO
-    RTV%EigVa     = ZERO
-    RTV%Exp_x     = ZERO
-    RTV%EigValue  = ZERO
-    RTV%HH        = ZERO
-    RTV%PM        = ZERO
-    RTV%PP        = ZERO
-    RTV%PPM       = ZERO
-    RTV%PPP       = ZERO
-    RTV%i_PPM     = ZERO
-    RTV%i_PPP     = ZERO
-    RTV%EigVe     = ZERO
-    RTV%Gm        = ZERO
-    RTV%i_Gm      = ZERO
-    RTV%Gp        = ZERO
-    RTV%EigVeF    = ZERO
-    RTV%EigVeVa   = ZERO
-    RTV%A1        = ZERO
-    RTV%A2        = ZERO
-    RTV%A3        = ZERO
-    RTV%A4        = ZERO
-    RTV%A5        = ZERO
-    RTV%A6        = ZERO
-    RTV%Gm_A5     = ZERO
-    RTV%i_Gm_A5   = ZERO
 
     ! Perform the allocation for SOI variables
     ALLOCATE( RTV%e_Layer_Trans( nZ, n_Layers), &
@@ -626,20 +597,6 @@ CONTAINS
        RETURN
     END IF
 
-    ! zero items after allocation
-    RTV%e_Layer_Trans        = ZERO
-    RTV%s_Level_IterRad_DOWN = ZERO
-    RTV%s_Level_IterRad_UP   = ZERO
-    RTV%EXPFACT              = ZERO
-    RTV%Number_Doubling      = ZERO
-    RTV%Delta_Tau   = ZERO
-    RTV%Refl        = ZERO
-    RTV%Trans       = ZERO
-    RTV%Inv_BeT     = ZERO
-    RTV%C1          = ZERO
-    RTV%C2          = ZERO
-    RTV%Source_up   = ZERO
-    RTV%Source_down = ZERO
 
 
     IF(RTV%RT_Algorithm_Id == RT_VMOM) THEN
@@ -657,15 +614,6 @@ CONTAINS
         RETURN
       END IF
 
-      ! zero items after allocation
-      RTV%ADS1  = ZERO
-      RTV%ADS2  = ZERO
-      RTV%ADS3  = ZERO
-      RTV%ADS4  = ZERO
-      RTV%ADS   = ZERO
-      RTV%ADSr  = ZERO
-      RTV%AmBS4 = ZERO
-      RTV%ApBS3 = ZERO
 
     END IF
     ! Set dimensions

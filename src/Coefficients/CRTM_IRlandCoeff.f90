@@ -30,6 +30,7 @@ MODULE CRTM_IRlandCoeff
   ! -----------------
   ! Module use
   USE Message_Handler  , ONLY: SUCCESS, FAILURE, Display_Message
+  USE File_Utility          , ONLY: Join_Path
   USE SEcategory_Define, ONLY: SEcategory_type, &
                                SEcategory_Associated, &
                                SEcategory_Destroy
@@ -182,7 +183,7 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_IRlandCoeff_Load'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
-    CHARACTER(ML) :: IRlandCoeff_File
+    CHARACTER(:), ALLOCATABLE :: IRlandCoeff_File
     LOGICAL :: noisy
     ! Function variables
     LOGICAL :: Binary
@@ -190,9 +191,9 @@ CONTAINS
     ! Setup
     err_stat = SUCCESS
     ! ...Assign the filename to local variable
-    IRlandCoeff_File = ADJUSTL(Filename)
+    IRlandCoeff_File = TRIM(ADJUSTL(Filename))
     ! ...Add the file path
-    IF ( PRESENT(File_Path) ) IRlandCoeff_File = TRIM(ADJUSTL(File_Path))//TRIM(IRlandCoeff_File)
+    IF ( PRESENT(File_Path) ) IRlandCoeff_File = Join_Path(File_Path, IRlandCoeff_File)
     ! ...Check Quiet argument
     noisy = .TRUE.
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
