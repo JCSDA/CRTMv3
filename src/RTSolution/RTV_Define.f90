@@ -486,7 +486,8 @@ CONTAINS
     ! every call and made cloudy CRTM_Forward/K_Matrix ~45x slower than v2.4.1,
     ! which never zeroed these arrays. See JCSDA/CRTMv3 issues #370 and #368.
     !
-    ! The one exception is Pff. The ADA solvers (CRTM_ADA, _TL, _AD) test
+    ! The exceptions are Pff, here, and three level-radiance arrays below. The
+    ! ADA solvers (CRTM_ADA, _TL, _AD) test
     ! maxval(abs(Pff(:,:,k))) for every layer, and at n_Stokes=1 CRTM_Phase_Matrix
     ! only fills Pff for scattering layers, so that test reads unwritten memory for
     ! the others. Zero Pff (~200 KB at n_Stokes=1) so the read is defined.
@@ -524,7 +525,7 @@ CONTAINS
       PRINT *,' error in allocate s_Level_Rad_UPT ',alloc_stat
       RETURN
     END IF
-    ! Three level-radiance arrays (nZ x (n_Layers+1) each, a few KB) are also zeroed,
+    ! Three level-radiance arrays (nZ x (n_Layers+1) each, a few KB) are also zeroed
     ! because the aircraft observer (Options%Aircraft_Pressure > 0) reads elements
     ! that no solver writes:
     ! - s_Level_Rad_UP: the radiance is taken from s_Level_Rad_UP at the aircraft
