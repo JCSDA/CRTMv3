@@ -14,6 +14,15 @@
 ! (C) Copyright 2019 UCAR
 !
 
+! Compilers that run the K-matrix channel loop serially (JCSDA/CRTMv3#231):
+! - legacy classic ifort (icc/ifort, not ifx), which we have no toolchain to verify;
+! - ifx before 2025.3. ifx 2024.2.1 segfaults in its OpenMP runtime
+!   (for_alloc_private) while setting up the loop's private copies, at any
+!   thread count. ifx 2025.3.3 and 2026.0.0 run the loop cleanly.
+#if (defined(__INTEL_COMPILER) && !defined(__INTEL_LLVM_COMPILER)) || (defined(__INTEL_LLVM_COMPILER) && __INTEL_LLVM_COMPILER < 20250300)
+#define CRTM_K_SERIAL_CHANNEL_LOOP
+#endif
+
 
 MODULE CRTM_K_Matrix_Module
 
@@ -461,11 +470,11 @@ CONTAINS
       n_profile_threads = n_Profiles
 
 !** Channel-thread OpenMP for K-matrix.
-!** Verified clean on gfortran 13.x and ifx 2026.0 once the per-channel
+!** Verified clean on gfortran 13.x and ifx 2025.3 and 2026.0 once the per-channel
 !** NLTE_Predictor_K(nt) reset above is in place (see JCSDA/CRTMv3#231).
-!** Legacy classic ifort (icc/ifort, not ifx) is left on the serial fallback
-!** because we have no installed toolchain to verify it.
-#  if defined(__INTEL_COMPILER) && !defined(__INTEL_LLVM_COMPILER)
+!** Legacy classic ifort and ifx before 2025.3 stay on the serial fallback;
+!** see CRTM_K_SERIAL_CHANNEL_LOOP at the top of this file.
+#  ifdef CRTM_K_SERIAL_CHANNEL_LOOP
       n_channel_threads = 1
 #  else
       n_channel_threads = MIN(n_Channels, n_omp_threads / n_Profiles)
@@ -475,7 +484,7 @@ CONTAINS
       ! the channels it owns are worth. See MIN_CHANNELS_PER_CHANNEL_THREAD in
       ! CRTM_Parameters for the measurements behind this. Leftover threads are
       ! deliberately left idle: below break-even, using them is slower than not.
-      ! Applied after the legacy-ifort bypass above, so it can only lower the
+      ! Applied after the serial-channel bypass above, so it can only lower the
       ! count that branch already chose.
       n_channel_threads = MIN( n_channel_threads, &
                                MAX(1, n_Channels / MIN_CHANNELS_PER_CHANNEL_THREAD) )
@@ -1072,10 +1081,10 @@ CONTAINS
         ! ln_base is the read-only per-sensor base. It is set outside the
         ! preprocessor gate below because Thread_Loop reads it on both paths.
         ln_base = ln
-!** See the dispatch-side note above for the legacy-ifort gate (JCSDA/CRTMv3#231).
-#if defined(__INTEL_COMPILER) && !defined(__INTEL_LLVM_COMPILER)
+!** See CRTM_K_SERIAL_CHANNEL_LOOP at the top of this file (JCSDA/CRTMv3#231).
+#ifdef CRTM_K_SERIAL_CHANNEL_LOOP
         IF (n_channel_threads > 1) THEN
-           WRITE( Message,'("ERROR: n_channel_threads > 1, this should not happen under the legacy-ifort bypass")')
+           WRITE( Message,'("ERROR: n_channel_threads > 1, this should not happen under the serial-channel bypass")')
            Err_Thread = FAILURE
            CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
            thread_error = MAX(thread_error, Err_Thread)
@@ -1903,8 +1912,8 @@ CONTAINS
           END DO Channel_Loop
        END DO Thread_Loop
 
-!** Match the legacy-ifort gate above (JCSDA/CRTMv3#231).
-#if !(defined(__INTEL_COMPILER) && !defined(__INTEL_LLVM_COMPILER))
+!** Match the serial-channel gate above (JCSDA/CRTMv3#231).
+#ifndef CRTM_K_SERIAL_CHANNEL_LOOP
 !$OMP END PARALLEL DO
 #endif
 
@@ -1913,7 +1922,7 @@ CONTAINS
           RETURN
         END IF
         ! Advance from ln_base, not the loop-exit ln: on the serial paths
-        ! (OPENMP=OFF builds, and the legacy-ifort gate above) Thread_Loop
+        ! (OPENMP=OFF builds, and the serial-channel gate above) Thread_Loop
         ! mutates the outer ln and accumulating here would double-count
         ! this sensor's channels.
         ln = ln_base + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
