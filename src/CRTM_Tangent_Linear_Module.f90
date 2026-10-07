@@ -504,6 +504,7 @@ CONTAINS
       INTEGER :: SensorIndex
       INTEGER :: ChannelIndex
       INTEGER :: ln, nc, ks
+      INTEGER :: ln_base
       INTEGER :: n_Full_Streams, mth_Azi
       INTEGER :: cloud_coverage_flag
       REAL(fp) :: Source_ZA, r_cloudy
@@ -887,7 +888,10 @@ CONTAINS
                 AtmOptics(nt)%Include_Scattering ) THEN
           ! Assign algorithm selector
             RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
-            CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
+            ! RTV is per-profile; for the 2nd+ sensor of a multi-sensor call it
+            ! is already allocated (same dims) and re-ALLOCATE would fail.
+            IF ( .NOT. RTV_Associated(RTV(nt)) ) &
+              CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
 
             IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
               Error_Status=FAILURE
@@ -942,9 +946,12 @@ CONTAINS
         ! ------------
         ! THREAD LOOP
         ! ------------
+        ! ln_base is the read-only per-sensor base; every Thread_Loop iteration
+        ! rebuilds ln from it, and the post-loop advance derives from it too.
+        ln_base = ln
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
-!$OMP    FIRSTPRIVATE(ln, r_cloudy)                                               &
-!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,    &
+!$OMP    FIRSTPRIVATE(ln_base, r_cloudy)                                               &
+!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar, ln,    &
 !$OMP          start_ch, end_ch, Wavenumber, transmittance, transmittance_TL,   &
 !$OMP          transmittance_clear, transmittance_clear_TL, l, mth_Azi, ks, Status_FWD,Status_TL)
         Thread_Loop: DO nt = 1, n_channel_threads
@@ -955,7 +962,9 @@ CONTAINS
           ELSE
             end_ch = start_ch + chunk_ch - 1
           END IF
-          ln = (start_ch - 1) - n_inactive_channels(nt)
+          ! Rebuild ln from the per-sensor base every iteration, offset by this
+          ! chunk. Never accumulate onto the previous iteration's ln.
+          ln = ln_base + (start_ch - 1) - n_inactive_channels(nt)
 
           ! -------------
           ! CHANNEL LOOP
@@ -1372,7 +1381,9 @@ CONTAINS
 
         IF ( Error_Status == FAILURE ) RETURN
 
-        ln = ln + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
+        ! Advance from ln_base, not the loop-exit ln: on a serial channel loop
+        ! Thread_Loop mutates the outer ln and accumulating here would double-count.
+        ln = ln_base + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
 
       END DO Sensor_Loop
 

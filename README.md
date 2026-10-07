@@ -1,4 +1,4 @@
-CRTM REL-3.1.5
+CRTM REL-3.1.6
 ====================
 
 [![Build Status](https://app.travis-ci.com/JCSDA/CRTMv3.svg?branch=develop)](https://app.travis-ci.com/JCSDA/CRTMv3)
@@ -6,12 +6,13 @@ CRTM REL-3.1.5
 Preamble
 --------
 
-CRTM v3.1.5 release (`REL-3.1.5`)
+CRTM v3.1.6 release (`REL-3.1.6`)
 
-v3.1.5 (in development): loads netCDF NLTECoeff/ACCoeff sibling files (previously silently skipped)
+v3.1.6 released October 7, 2026: removes the per-call zero-fill of the RTV work arrays in RTV_Create that dominated the cost of CRTM calls with clouds, aerosols or visible sensors (#370); CRTM_AOD_TL/AD/K now honor Options%Skip_Profile (#372); calls that pass more than one sensor now return correct results; new coefficient set fix_REL-3.1.6.0, replacing fix_REL-3.1.2.0 (55 new sensor IDs including spire_hyms, and the 3.1.x-compatible updates from the v3.2.0 coefficients); sensor ID changes from fix_REL-3.1.2.0: tms_tomorrow-s01_v4 to tms_tomorrow-s06_v4 are now tms_tomorrow-s01_v4.1 to tms_tomorrow-s06_v4.1, and u.omps-npAllFOV_j2 and u.omps-tcAllFOV_j2 are removed
+v3.1.5 released August 23, 2026: loads netCDF NLTECoeff/ACCoeff sibling files (previously silently skipped)
 v3.1.4 released June 8, 2026 
-v3.1.3 released February 10, 2025 
-v3.1.2 released July 11, 2025
+v3.1.3 released February 12, 2026
+v3.1.2 released June 12, 2025
 v3.1.1 released August 12, 2024
 v3.1.0 (alpha) Released October 31, 2023
 v3.0.0 Released March, 2023  
@@ -26,12 +27,12 @@ Basic requirements:
 (2) A netCDF4 / HDF5 library that has been built with the compiler you're going to use (module environments are helpful here)
 (3) A linux, macOS, or unix-style environment.  This has not been tested under any Windows Fortran environments.
 (4) Bash shell is preferred. 
-(5) git and git-lfs (minimum version TBD, but has been tested on git-lfs v2.10 and higher )
+(5) git
 (6) cmake / make build system
 
 =========================================================
 
-**JEDI NOTE** This release branch is also designed to work directly in a JEDI container or JEDI environment. If you're doing JEDI things, you're probably in the right spot. However, you should stop reading right now and have a look at the README_JEDI.md file.   
+**JEDI NOTE** This release branch is also designed to work directly in a JEDI container or JEDI environment. In most cases you will build CRTM as part of a JEDI bundle (e.g. jedi-bundle), which downloads the coefficients during the cmake step; the build instructions below also apply to a stand-alone build in a JEDI environment.
 
 If you're looking for an older version of CRTM (v2.3.0 or older) you should obtain the appropriate tarball from
 https://bin.ssec.wisc.edu/pub/s4/CRTM/   OR https://github.com/JCSDA/crtm (old versions).   
@@ -60,7 +61,7 @@ Contents
 
 Configuration, building, and testing the library
 ================================================  
-JCSDA CRTM v3.1.5 Build Instructions
+JCSDA CRTM v3.1.6 Build Instructions
 
 The CRTM repository directory structure looks (something) like:
 
@@ -113,13 +114,12 @@ The CRTM repository directory structure looks (something) like:
 In the above list, the directories highlighted in bold (bold in markdown), are the key directories of interest to the casual developer.
 A user is only likely to be interested in creating a "build" or use a previously created build (see releases/* on the github.com repository).
 
-A typical "build release" of CRTM (what you would normally find in a tarball and see in libraries) is what will be contained under the `src/Build` directory after successful compilation.
-But after a clean clone of the development repository, none of the links to source code have been created yet under `src/Build`.   To get there, follow the next steps.
+After a successful build, the library is in `<build>/lib/` and the Fortran module files are in `<build>/module/crtm/<compiler>/<compiler version>/`. To get there, follow the next steps.
 
 Configuration
 -------------
-By default, the `fix/` directory is provided through ftp using the Get_CRTM_Binary_Files.sh script to obtain and unpack the dataset. 
-If this directory doesn't exist during the `cmake` step, then cmake will download and install into `./test-data-release/fix_REL-3.1.2.x/fix/`. (no longer in build directory, but off of source dir). 
+The coefficient files (the `fix/` directory) are downloaded over https from https://bin.ssec.wisc.edu/pub/s4/CRTM/, either with the Get_CRTM_Binary_Files.sh script or automatically during the `cmake` step.
+If there is no `fix/` directory at the top of the source tree during the `cmake` step, cmake downloads the coefficients and unpacks them into `./test-data-release/fix_REL-3.1.6.0/fix/`. 
 The path to an existing fix file installation can be specified using the `FIX_FILE_PATH` option (see CMake variables summary below).
 
 The fix/ directory (as of v3.1.x) contains most of the netCDF SpcCoeff and TauCoeff files, as part of our ongoing effort to transition toward netCDF-only CRTM.  We expect to deprecate the binary formats in v3.2.x, but code to read / convert binary format will continue.  
@@ -155,7 +155,7 @@ cmake -DCMAKE_BUILD_TYPE=DEBUG -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=./
 ```
 this would make a debug build of CRTM, static library (`libcrtm.a`) and set the optional install location to `<build>/install/.` (or something similar, search for `libcrtm.*` and `*.mod`).  Custom Install only happens if you issue the `make install` command. 
 
-The first time you run `cmake`, it will check for a `fix/` directory one level above (or `FIX_FILE_PATH` CMake variable), and if it doesn't find it, it will download the binary files (according to `test/CMakeLists.txt` file information), and store them in `<build>/test_data/**`.
+The first time you run `cmake`, it checks for a `fix/` directory at the top of the source tree (or the `FIX_FILE_PATH` CMake variable), and if it doesn't find one, it downloads the coefficient files (as set in `test/CMakeLists.txt`) and unpacks them into `./test-data-release/fix_REL-3.1.6.0/fix/`. Later `cmake` runs reuse that directory.
 
 Linking to the library
 ----------------------
@@ -165,7 +165,7 @@ Let's assume the above install was moved into "/home/username/CRTMv3/", to use t
 <pre>
 libroot="/home/username/CRTMv3/"
 FCFLAGS="-I${libroot}/build/module/crtm/GNU/13.1.0 ${FCFLAGS}"  (as appropriate for your build environment)
-LDFLAGS="-L${libroot}/src ${LDFLAGS}"
+LDFLAGS="-L${libroot}/build/lib ${LDFLAGS}"
 LIBS="-lcrtm ${LIBS}"
 </pre>
 
@@ -193,6 +193,7 @@ Known Issues
 
 (1) Any "Transmittance Coefficient" generation codes included in src/ are not functional.  Contact CRTM support above for details.
 (2) No testing was done on PGI, XLF, or other less common compilers.  Feedback from users suggest that there's no major concerns though.  Please contact us with specifics.  Tested on GCC v5 and higher, and ifort v18 and higher.  Some specific compiler versions have issues, contact support if you run into problems.
+(3) spire_hyms uses an ODPS coefficient set without an ozone absorber, so channels 1887 to 1904 and 1933 (on the 184.389 GHz ozone line) are degraded (0.15 to 0.43 K RMSE). Treat them as degraded or blacklist them.
 
   
 

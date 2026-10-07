@@ -4,7 +4,7 @@
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
 
 cmake_minimum_required (VERSION 3.12)
-project("CRTM_Tests" VERSION 3.1.5 LANGUAGES Fortran C)
+project("CRTM_Tests" VERSION 3.1.6 LANGUAGES Fortran C)
 
 enable_testing ()
 
@@ -74,14 +74,14 @@ IF(EXISTS  ${FIX_FILE_PATH})
 
 else() # Download CRTM coefficients
   set( CRTM_COEFFS_BRANCH_PREFIX "" )  #preserves the structure of the paths that have been used in jedi previously vs the local path above
-  set( CRTM_COEFFS_BRANCH "fix_REL-3.1.2.0" )
+  set( CRTM_COEFFS_BRANCH "fix_REL-3.1.6.0" )
 
   set(CRTM_COEFFS_PATH ${CMAKE_SOURCE_DIR}/test-data-release)
   file(MAKE_DIRECTORY ${CRTM_COEFFS_PATH})
 
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
   set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz)
-  set(checksum "0e5888cae80aa674b2e67ecd4490317d") # MD5SUM of fix_REL-3.1.2.0.tgz
+  set(checksum "fe65edff7621935c37976b406832d627") # MD5SUM of fix_REL-3.1.6.0.tgz
 
   # Check if the CRTM binary tarball is already present otherwise download it.
   message(STATUS "Checking if ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH} already exists...")
@@ -456,6 +456,17 @@ endforeach()
 # Compares testinput/ (siblings staged) against testinput_no_siblings/.
 ADD_CRTM_UNIT_TEST(NLTE_Verification mains/unit/input_output/test_NLTE_Verification/test_nlte_verification.f90)
 
+# AOD Skip_Profile verification: CRTM_AOD, _TL, _AD and _K must skip a profile
+# flagged with Options%Skip_Profile, even when its input is invalid, leave its
+# outputs untouched, and give bit-identical results for every other profile.
+ADD_CRTM_UNIT_TEST(AOD_Skip_Profile mains/unit/Unit_Test/test_AOD_Skip_Profile/test_aod_skip_profile.f90)
+
+# Multi-sensor single-call consistency: one CRTM_Forward/TL/K_Matrix call with
+# ChannelInfo(1:2) must match the per-sensor calls bit-for-bit (guards the
+# cumulative 'ln' channel-offset bookkeeping in the sensor/channel loops,
+# which no single-sensor test can see).
+ADD_CRTM_UNIT_TEST(Unit_MultiSensor_SingleCall mains/unit/Unit_Test/test_MultiSensor_SingleCall.f90)
+
 #(PS) Hypsometric Equation test
 add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
 target_link_libraries(hypsometric_eq PRIVATE crtm)
@@ -637,8 +648,6 @@ SpcCoeff/Little_Endian/airs_aqua.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/airs_aqua.TauCoeff.bin
 SpcCoeff/Little_Endian/modis_aqua.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/modis_aqua.TauCoeff.bin
-SpcCoeff/Little_Endian/cris-fsr_n21.SpcCoeff.bin
-TauCoeff/ODPS/Little_Endian/cris-fsr_n21.TauCoeff.bin
 SpcCoeff/Little_Endian/atms_n21.SpcCoeff.bin
 TauCoeff/ODPS/Little_Endian/atms_n21.TauCoeff.bin
 SpcCoeff/Little_Endian/v.viirs-m_j2.SpcCoeff.bin
