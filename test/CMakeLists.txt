@@ -81,7 +81,7 @@ else() # Download CRTM coefficients
 
   set(DOWNLOAD_BASE_URL "https://bin.ssec.wisc.edu/pub/s4/CRTM/")
   set(test_files_dirname ${CRTM_COEFFS_BRANCH}.tgz)
-  set(checksum "ecfba7bb866f2a34b6281ae03740b161") # MD5SUM of fix_REL-3.1.6.0.tgz
+  set(checksum "fe65edff7621935c37976b406832d627") # MD5SUM of fix_REL-3.1.6.0.tgz
 
   # Check if the CRTM binary tarball is already present otherwise download it.
   message(STATUS "Checking if ${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH} already exists...")
