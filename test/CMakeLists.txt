@@ -467,6 +467,12 @@ ADD_CRTM_UNIT_TEST(AOD_Skip_Profile mains/unit/Unit_Test/test_AOD_Skip_Profile/t
 # which no single-sensor test can see).
 ADD_CRTM_UNIT_TEST(Unit_MultiSensor_SingleCall mains/unit/Unit_Test/test_MultiSensor_SingleCall.f90)
 
+# Channel-thread chunk overshoot (#383): a 10-channel sensor with 2 profiles at
+# 16 and 19 threads leaves trailing channel threads with no channels. FWD, TL
+# and K must succeed and match the single-thread run bit-for-bit. The test sets
+# its own thread counts, so it does not depend on OMP_NUM_THREADS.
+ADD_CRTM_UNIT_TEST(Unit_OMP_Channel_Overshoot mains/unit/Unit_Test/test_OMP_Channel_Overshoot.F90)
+
 #(PS) Hypsometric Equation test
 add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
 target_link_libraries(hypsometric_eq PRIVATE crtm)
