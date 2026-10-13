@@ -496,6 +496,8 @@ CONTAINS
 
       ! Local variables
       INTEGER :: Error_Status
+      INTEGER :: Err_Thread     ! per-thread call status inside the channel-thread loop
+      INTEGER :: thread_error   ! reduced (MAX) error status across channel threads
       CHARACTER(256) :: Message
       LOGICAL :: compute_antenna_correction
       LOGICAL :: Atmosphere_Invalid, Surface_Invalid, Geometry_Invalid, Options_Invalid
@@ -504,6 +506,7 @@ CONTAINS
       INTEGER :: SensorIndex
       INTEGER :: ChannelIndex
       INTEGER :: ln, nc, ks
+      INTEGER :: ln_base
       INTEGER :: n_Full_Streams, mth_Azi
       INTEGER :: cloud_coverage_flag
       REAL(fp) :: Source_ZA, r_cloudy
@@ -887,7 +890,10 @@ CONTAINS
                 AtmOptics(nt)%Include_Scattering ) THEN
           ! Assign algorithm selector
             RTV(nt)%RT_Algorithm_Id = Opt%RT_Algorithm_Id
-            CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
+            ! RTV is per-profile; for the 2nd+ sensor of a multi-sensor call it
+            ! is already allocated (same dims) and re-ALLOCATE would fail.
+            IF ( .NOT. RTV_Associated(RTV(nt)) ) &
+              CALL RTV_Create( RTV(nt), MAX_N_ANGLES, MAX_N_LEGENDRE_TERMS, Atm%n_Layers )
 
             IF ( .NOT. RTV_Associated(RTV(nt)) ) THEN
               Error_Status=FAILURE
@@ -925,8 +931,9 @@ CONTAINS
         n_inactive_channels(:) = 0
         DO l = 1, n_sensor_channels
           IF ( .NOT. ChannelInfo(n)%Process_Channel(l) ) THEN
-!            nt = l / chunk_ch + 1
-            nt = FLOOR( REAL(l) / REAL(chunk_ch) ) + 1
+            ! Channel l belongs to chunk nt where l in [(nt-1)*chunk_ch+1, nt*chunk_ch]
+            nt = (l - 1) / chunk_ch + 1
+            IF ( nt > n_channel_threads ) nt = n_channel_threads
             n_inactive_channels(nt) = n_inactive_channels(nt) + 1
           END IF
         END DO
@@ -942,20 +949,31 @@ CONTAINS
         ! ------------
         ! THREAD LOOP
         ! ------------
+        ! ln_base is the read-only per-sensor base; every Thread_Loop iteration
+        ! rebuilds ln from it, and the post-loop advance derives from it too.
+        ! AAvar is sized (n_channel_threads) and indexed by nt, so it is shared
+        ! (each thread touches only its own slice) rather than PRIVATE. Error
+        ! status is aggregated via a MAX reduction so a FAILURE in one thread is
+        ! never lost to a later SUCCESS write by another thread.
+        ln_base = ln
+        thread_error = SUCCESS
 !$OMP PARALLEL DO NUM_THREADS(n_channel_threads)                        &
-!$OMP    FIRSTPRIVATE(ln, r_cloudy)                                               &
-!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, AAvar,    &
+!$OMP    FIRSTPRIVATE(ln_base, r_cloudy)                                &
+!$OMP    PRIVATE(Message, ChannelIndex, n_Full_Streams, Err_Thread, ln, &
 !$OMP          start_ch, end_ch, Wavenumber, transmittance, transmittance_TL,   &
-!$OMP          transmittance_clear, transmittance_clear_TL, l, mth_Azi, ks, Status_FWD,Status_TL)
+!$OMP          transmittance_clear, transmittance_clear_TL, l, mth_Azi, ks, Status_FWD,Status_TL) &
+!$OMP    REDUCTION(MAX:thread_error)
         Thread_Loop: DO nt = 1, n_channel_threads
 
           start_ch = (nt - 1) * chunk_ch + 1
-          IF ( nt == n_channel_threads) THEN
+          IF ( nt == n_channel_threads ) THEN
             end_ch = n_sensor_channels
           ELSE
-            end_ch = start_ch + chunk_ch - 1
+            end_ch = MIN( start_ch + chunk_ch - 1, n_sensor_channels )
           END IF
-          ln = (start_ch - 1) - n_inactive_channels(nt)
+          ! Rebuild ln from the per-sensor base every iteration, offset by this
+          ! chunk. Never accumulate onto the previous iteration's ln.
+          ln = ln_base + (start_ch - 1) - n_inactive_channels(nt)
 
           ! -------------
           ! CHANNEL LOOP
@@ -1055,13 +1073,14 @@ CONTAINS
                              Atm_TL      , &
                              AtmOptics_TL(nt)  )
              IF ( Status_FWD /= SUCCESS .OR. Status_TL /= SUCCESS) THEN
-              Error_Status = FAILURE
+              Err_Thread = FAILURE
               WRITE( Message,'("Error computing MoleculeScatter for ",a,&
                      &", channel ",i0,", profile #",i0)') &
                      TRIM(ChannelInfo(n)%Sensor_ID), &
                      ChannelInfo(n)%Sensor_Channel(l), &
                      m
-              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+              thread_error = MAX(thread_error, Err_Thread)
               CYCLE  !RETURN
              END IF
         ELSE
@@ -1078,11 +1097,12 @@ CONTAINS
             Status_FWD = CRTM_AtmOptics_NoScatterCopy(    AtmOptics(nt), AtmOptics_Clear(nt) )
             Status_TL  = CRTM_AtmOptics_NoScatterCopy_TL( AtmOptics(nt), AtmOptics_TL(nt), AtmOptics_Clear_TL(nt) )
             IF ( Status_FWD /= SUCCESS .OR. Status_TL /= SUCCESS ) THEN
-              Error_Status = FAILURE
+              Err_Thread = FAILURE
               WRITE( Message,'("Error copying CLEAR SKY AtmOptics for ",a,&
                      &", channel ",i0,", profile #",i0)' ) &
                      TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+              thread_error = MAX(thread_error, Err_Thread)
               CYCLE  !RETURN
             END IF
           END IF
@@ -1106,11 +1126,12 @@ CONTAINS
                                                       AtmOptics_TL(nt), &  ! TL  Output
                                                       CSvar(nt)         )  ! Internal variable input
             IF ( Status_FWD /= SUCCESS .OR. Status_TL /= SUCCESS) THEN
-              Error_Status = FAILURE
+              Err_Thread = FAILURE
               WRITE( Message,'("Error computing CloudScatter for ",a,&
                      &", channel ",i0,", profile #",i0)' ) &
                      TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+              thread_error = MAX(thread_error, Err_Thread)
               CYCLE  !RETURN
             END IF
           END IF
@@ -1131,11 +1152,12 @@ CONTAINS
                                                          AtmOptics_TL(nt), &  ! TL  Output
                                                          ASvar(nt)         )  ! Internal variable input
             IF ( Status_FWD /= SUCCESS .OR. Status_TL /= SUCCESS) THEN
-              Error_Status = FAILURE
+              Err_Thread = FAILURE
               WRITE( Message,'("Error computing AerosolScatter for ",a,&
                      &", channel ",i0,", profile #",i0)' ) &
                      TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+              thread_error = MAX(thread_error, Err_Thread)
               CYCLE  !RETURN
             END IF
           END IF
@@ -1209,7 +1231,7 @@ CONTAINS
             SfcOptics(nt)%mth_Azi = mth_Azi
 
             ! Solve the radiative transfer problem
-            Error_Status = CRTM_Compute_RTSolution( &
+            Err_Thread = CRTM_Compute_RTSolution( &
                              Atm             , &  ! Input
                              Surface(m)      , &  ! Input
                              AtmOptics(nt)       , &  ! Input
@@ -1219,16 +1241,17 @@ CONTAINS
                              ChannelIndex    , &  ! Input
                              RTSolution(ln,m), &  ! Output
                              RTV(nt)               )  ! Internal variable output
-            IF ( Error_Status /= SUCCESS ) THEN
+            IF ( Err_Thread /= SUCCESS ) THEN
               WRITE( Message,'( "Error computing RTSolution for ", a, &
                      &", channel ", i0,", profile #",i0)' ) &
                      TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+              thread_error = MAX(thread_error, Err_Thread)
             END IF
 
 
             ! ...Tangent-linear model
-            Error_Status = CRTM_Compute_RTSolution_TL( &
+            Err_Thread = CRTM_Compute_RTSolution_TL( &
                              Atm                , &  ! FWD Input
                              Surface(m)         , &  ! FWD Input
                              AtmOptics(nt)          , &  ! FWD Input
@@ -1243,11 +1266,12 @@ CONTAINS
                              ChannelIndex       , &  ! Input
                              RTSolution_TL(ln,m), &  ! TL  Output
                              RTV(nt)                  )  ! Internal variable input
-            IF ( Error_Status /= SUCCESS ) THEN
+            IF ( Err_Thread /= SUCCESS ) THEN
               WRITE( Message,'( "Error computing RTSolution_TL for ", a, &
                      &", channel ", i0,", profile #",i0)' ) &
                      TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+              thread_error = MAX(thread_error, Err_Thread)
               CYCLE  !RETURN
             END IF
 
@@ -1255,7 +1279,7 @@ CONTAINS
           IF (CRTM_Atmosphere_IsFractional(cloud_coverage_flag).and.RTV(nt)%mth_Azi==0 ) THEN
               RTV_Clear(nt)%mth_Azi = mth_Azi
               SfcOptics_Clear(nt)%mth_Azi = mth_Azi
-              Error_Status = CRTM_Compute_RTSolution( &
+              Err_Thread = CRTM_Compute_RTSolution( &
                                Atm_Clear       , &  ! Input
                                Surface(m)      , &  ! Input
                                AtmOptics_Clear(nt) , &  ! Input
@@ -1265,16 +1289,17 @@ CONTAINS
                                ChannelIndex    , &  ! Input
                                RTSolution_Clear(nt), &  ! Output
                                RTV_Clear(nt)         )  ! Internal variable output
-              IF ( Error_Status /= SUCCESS ) THEN
+              IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'( "Error computing CLEAR SKY RTSolution for ", a, &
                        &", channel ", i0,", profile #",i0)' ) &
                        TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = MAX(thread_error, Err_Thread)
               CYCLE
               END IF
 
               ! ...Tangent-linear model
-              Error_Status = CRTM_Compute_RTSolution_TL( &
+              Err_Thread = CRTM_Compute_RTSolution_TL( &
                                Atm_Clear          , &  ! FWD Input
                                Surface(m)         , &  ! FWD Input
                                AtmOptics_Clear(nt)    , &  ! FWD Input
@@ -1289,11 +1314,12 @@ CONTAINS
                                ChannelIndex       , &  ! Input
                                RTSolution_Clear_TL(nt), &  ! TL  Output
                                RTV_Clear(nt)            )  ! Internal variable input
-              IF ( Error_Status /= SUCCESS ) THEN
+              IF ( Err_Thread /= SUCCESS ) THEN
                 WRITE( Message,'( "Error computing CLEAR SKY RTSolution_TL for ", a, &
                        &", channel ", i0,", profile #",i0)' ) &
                        TRIM(ChannelInfo(n)%Sensor_ID), ChannelInfo(n)%Sensor_Channel(l), m
-                CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+                CALL Display_Message( ROUTINE_NAME, Message, Err_Thread )
+                thread_error = MAX(thread_error, Err_Thread)
                 CYCLE  !RETURN
               END IF
             END IF
@@ -1370,9 +1396,14 @@ CONTAINS
         END DO Thread_Loop
 !$OMP END PARALLEL DO
 
-        IF ( Error_Status == FAILURE ) RETURN
+        IF ( thread_error == FAILURE ) THEN
+          Error_Status = FAILURE
+          RETURN
+        END IF
 
-        ln = ln + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
+        ! Advance from ln_base, not the loop-exit ln: on a serial channel loop
+        ! Thread_Loop mutates the outer ln and accumulating here would double-count.
+        ln = ln_base + n_sensor_channels - n_inactive_channels(n_channel_threads + 1)
 
       END DO Sensor_Loop
 
