@@ -434,7 +434,7 @@ CONTAINS
               CloudCoeff%pcoeff_IR(n_IR_Frequencies  , &
                                    n_IR_Radii        , &
                                    n_IR_Densities     , &
-                                   n_Legendre_Terms, &
+                                   0:n_Legendre_Terms, &  ! 0-based like the MW tables (#384)
                                    n_Phase_Elements  ), &
               STAT = alloc_stat(4) )
     IF ( ANY(alloc_stat /= 0) ) RETURN

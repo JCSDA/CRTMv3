@@ -424,6 +424,14 @@ target_link_libraries(Unit_Long_Path_Init PRIVATE crtm)
 add_test(NAME test_Unit_Long_Path_Init
          COMMAND $<TARGET_FILE:Unit_Long_Path_Init>)
 
+# IR cloud phase coefficients must be laid out like the MW ones (0-based Legendre
+# dimension, each stream set starting with c_0 = 0.5 at its offset), since
+# CRTM_CloudScatter indexes all tables alike (#384).
+add_executable(Unit_CloudCoeff_IR_Legendre_Layout mains/unit/Unit_Test/test_CloudCoeff_IR_Legendre_Layout.f90)
+target_link_libraries(Unit_CloudCoeff_IR_Legendre_Layout PRIVATE crtm)
+add_test(NAME test_Unit_CloudCoeff_IR_Legendre_Layout
+         COMMAND $<TARGET_FILE:Unit_CloudCoeff_IR_Legendre_Layout>)
+
 # OpenMP thread policy on a single-profile call, which is what GSI issues.
 # Checks (A) that CRTM restores the caller's max-active-levels, and (B) that
 # threading a small sensor is not dramatically slower than not threading it
