@@ -8,7 +8,7 @@ Preamble
 
 CRTM v3.1.6 release (`REL-3.1.6`)
 
-v3.1.6 released October 7, 2026: removes the per-call zero-fill of the RTV work arrays in RTV_Create that dominated the cost of CRTM calls with clouds, aerosols or visible sensors (#370); CRTM_AOD_TL/AD/K now honor Options%Skip_Profile (#372); calls that pass more than one sensor now return correct results; new coefficient set fix_REL-3.1.6.0, replacing fix_REL-3.1.2.0 (55 new sensor IDs including spire_hyms, and the 3.1.x-compatible updates from the v3.2.0 coefficients); sensor ID changes from fix_REL-3.1.2.0: tms_tomorrow-s01_v4 to tms_tomorrow-s06_v4 are now tms_tomorrow-s01_v4.1 to tms_tomorrow-s06_v4.1, and u.omps-npAllFOV_j2 and u.omps-tcAllFOV_j2 are removed
+v3.1.6 released October 13, 2026: removes the per-call zero-fill of the RTV work arrays in RTV_Create that dominated the cost of CRTM calls with clouds, aerosols or visible sensors (#370); CRTM_AOD_TL/AD/K now honor Options%Skip_Profile (#372); calls that pass more than one sensor now return correct results; new coefficient set fix_REL-3.1.6.0, replacing fix_REL-3.1.2.0 (55 new sensor IDs including spire_hyms, and the 3.1.x-compatible updates from the v3.2.0 coefficients); sensor ID changes from fix_REL-3.1.2.0: tms_tomorrow-s01_v4 to tms_tomorrow-s06_v4 are now tms_tomorrow-s01_v4.1 to tms_tomorrow-s06_v4.1, and u.omps-npAllFOV_j2 and u.omps-tcAllFOV_j2 are removed
 v3.1.5 released August 23, 2026: loads netCDF NLTECoeff/ACCoeff sibling files (previously silently skipped)
 v3.1.4 released June 8, 2026 
 v3.1.3 released February 12, 2026
