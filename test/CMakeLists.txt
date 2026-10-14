@@ -815,6 +815,18 @@ target_link_libraries(test_MWwaterCoeff_FileSelects PRIVATE crtm)
 add_test(NAME test_MWwaterCoeff_FileSelects
          COMMAND $<TARGET_FILE:test_MWwaterCoeff_FileSelects>)
 
+# test_Reflection_Correction_Slant: the FASTEM reflection correction (used by
+# FASTEM-4/5/6 and PARMIO) is a regression in the slant-path surface-to-space
+# transmittance, while CRTM's model modules pass the vertical one; the routine
+# converts at each stream's angle. Checks the forward against the regression
+# evaluated at the slant value (identical to the pre-fix result at nadir), TL
+# against central finite differences, AD against TL, and a zero transmittance
+# derivative below the floor. Synthetic coefficients; no coefficient files.
+add_executable(test_Reflection_Correction_Slant mains/unit/Unit_Test/test_Reflection_Correction_Slant.f90)
+target_link_libraries(test_Reflection_Correction_Slant PRIVATE crtm)
+add_test(NAME test_Reflection_Correction_Slant
+         COMMAND $<TARGET_FILE:test_Reflection_Correction_Slant>)
+
 # test_VectorRT_StokesSign: pins the ADOPTED sign convention of the third and
 # fourth Stokes surface components, per backend, for FASTEM and PARMIO. V and H
 # ride cosine harmonics and U and V4 ride sine harmonics, so a global sign error
