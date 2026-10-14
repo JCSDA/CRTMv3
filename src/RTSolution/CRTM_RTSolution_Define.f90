@@ -155,6 +155,8 @@ MODULE CRTM_RTSolution_Define
   CHARACTER(*), PARAMETER :: SSA_VARNAME        = 'Single_Scatter_Albedo'
   CHARACTER(*), PARAMETER :: ACREFL_VARNAME     = 'Reflectivity'             ! Active sensor
   CHARACTER(*), PARAMETER :: ACRATT_VARNAME     = 'Reflectivity_Attenuated'  ! Active sensor
+  CHARACTER(*), PARAMETER :: ACREFLL_VARNAME     = 'ReflectivityLinear'             ! Active sensor
+  CHARACTER(*), PARAMETER :: ACRATTL_VARNAME     = 'Reflectivity_AttenuatedLinear'  ! Active sensor
   CHARACTER(*), PARAMETER :: BS_VARNAME         = 'Backscat_Coefficient'     
 
   ! Variable units attribute.
@@ -166,8 +168,10 @@ MODULE CRTM_RTSolution_Define
   ! ...Emissivity/Reflectivity
   CHARACTER(*), PARAMETER :: SEMIS_UNITS   = 'fraction (0->1)'
   CHARACTER(*), PARAMETER :: SREFL_UNITS   = 'fraction (0->1)'
-  CHARACTER(*), PARAMETER :: ACREFL_UNITS  = 'Reflectivity'             ! Active sensor
-  CHARACTER(*), PARAMETER :: ACRATT_UNITS  = 'Reflectivity_Attenuated'  ! Active sensor
+  CHARACTER(*), PARAMETER :: ACREFL_UNITS  = 'dBZ'             ! Active sensor
+  CHARACTER(*), PARAMETER :: ACRATT_UNITS  = 'dBZ'             ! Active sensor
+  CHARACTER(*), PARAMETER :: ACREFLL_UNITS  = 'cm^6/m^3'       ! Active sensor
+  CHARACTER(*), PARAMETER :: ACRATTL_UNITS  = 'cm^6/m^3'       ! Active sensor
   ! ...Cloud
   CHARACTER(*), PARAMETER :: TCC_UNITS     = 'fraction (0->1)'
   CHARACTER(*), PARAMETER :: RCLEAR_UNITS  = 'fraction (0->1)'
@@ -246,6 +250,8 @@ MODULE CRTM_RTSolution_Define
     REAL(fp) :: Reflectance            = ZERO
     REAL(fp), ALLOCATABLE :: Reflectivity(:)             ! K
     REAL(fp), ALLOCATABLE :: Reflectivity_Attenuated(:)  ! K
+    REAL(fp), ALLOCATABLE :: ReflectivityLinear(:)             ! K
+    REAL(fp), ALLOCATABLE :: Reflectivity_AttenuatedLinear(:)  ! K
   END TYPE CRTM_RTSolution_type
   !:tdoc-:
 
@@ -377,6 +383,8 @@ CONTAINS
               RTSolution%Single_Scatter_Albedo(n_Layers), &
               RTSolution%Reflectivity(n_Layers), &
               RTSolution%Reflectivity_Attenuated(n_Layers), &
+              RTSolution%ReflectivityLinear(n_Layers), &
+              RTSolution%Reflectivity_AttenuatedLinear(n_Layers), &
               RTSolution%Backscat_Coefficient(n_Layers), &
               STAT = alloc_stat )
     IF ( alloc_stat /= 0 ) RETURN
@@ -391,6 +399,8 @@ CONTAINS
     RTSolution%Single_Scatter_Albedo = ZERO
     RTSolution%Reflectivity = ZERO
     RTSolution%Reflectivity_Attenuated = ZERO
+    RTSolution%ReflectivityLinear = ZERO
+    RTSolution%Reflectivity_AttenuatedLinear = ZERO
     RTSolution%Backscat_Coefficient = ZERO
 
     ! Set allocation indicator
@@ -457,6 +467,8 @@ CONTAINS
       RTSolution%Single_Scatter_Albedo = ZERO
       RTSolution%Reflectivity = ZERO
       RTSolution%Reflectivity_Attenuated = ZERO
+      RTSolution%ReflectivityLinear = ZERO
+      RTSolution%Reflectivity_AttenuatedLinear = ZERO
       RTSolution%Backscat_Coefficient = ZERO
     END IF
 
@@ -547,6 +559,10 @@ CONTAINS
       WRITE(fid,'(5(1x,es22.15,:))') RTSolution%Reflectivity
       WRITE(fid,'(3x,"Reflectivity_Attenuated      :")')
       WRITE(fid,'(5(1x,es22.15,:))') RTSolution%Reflectivity_Attenuated
+      WRITE(fid,'(3x,"ReflectivityLinear      :")')
+      WRITE(fid,'(5(1x,es22.15,:))') RTSolution%ReflectivityLinear
+      WRITE(fid,'(3x,"Reflectivity_AttenuatedLinear      :")')
+      WRITE(fid,'(5(1x,es22.15,:))') RTSolution%Reflectivity_AttenuatedLinear
       WRITE(fid,'(3x,"Backscat_Coefficient      :")')
       WRITE(fid,'(5(1x,es22.15,:))') RTSolution%Backscat_Coefficient
     END IF
@@ -700,6 +716,8 @@ CONTAINS
            (.NOT. ALL(Compares_Within_Tolerance(x%Layer_Optical_Depth        , y%Layer_Optical_Depth        , n))) .OR. &
            (.NOT. ALL(Compares_Within_Tolerance(x%Reflectivity               , y%Reflectivity               , n))) .OR. &
            (.NOT. ALL(Compares_Within_Tolerance(x%Reflectivity_Attenuated    , y%Reflectivity_Attenuated    , n))) .OR. &
+           (.NOT. ALL(Compares_Within_Tolerance(x%ReflectivityLinear         , y%ReflectivityLinear         , n))) .OR. &
+           (.NOT. ALL(Compares_Within_Tolerance(x%Reflectivity_AttenuatedLinear    , y%Reflectivity_AttenuatedLinear    , n))) .OR. &
            (.NOT. ALL(Compares_Within_Tolerance(x%Backscat_Coefficient       , y%Backscat_Coefficient       , n)))) RETURN
     END IF
 
@@ -1634,8 +1652,9 @@ CONTAINS
     REAL(fp), ALLOCATABLE :: Single_Scatter_Albedo(:,:,:)
     REAL(fp), ALLOCATABLE :: Reflectivity(:,:,:)
     REAL(fp), ALLOCATABLE :: Reflectivity_Attenuated(:,:,:)
+    REAL(fp), ALLOCATABLE :: ReflectivityLinear(:,:,:)
+    REAL(fp), ALLOCATABLE :: Reflectivity_AttenuatedLinear(:,:,:)
     REAL(fp), ALLOCATABLE :: Backscat_Coefficient(:,:,:)
-
 
     ! Set up
     err_stat = SUCCESS
@@ -1682,6 +1701,8 @@ CONTAINS
               Single_Scatter_Albedo( n_Channels, n_Layers, n_Profiles ), &
               Reflectivity( n_Channels, n_Layers, n_Profiles ), &
               Reflectivity_Attenuated( n_Channels, n_Layers, n_Profiles ), &
+              ReflectivityLinear( n_Channels, n_Layers, n_Profiles ), &
+              Reflectivity_AttenuatedLinear( n_Channels, n_Layers, n_Profiles ), &
               Backscat_Coefficient( n_Channels, n_Layers, n_Profiles ), &
               STAT = alloc_stat )
     IF ( alloc_stat /= 0 ) THEN
@@ -2023,6 +2044,32 @@ CONTAINS
             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Read_Cleanup(); RETURN
     END IF
+    ! ... ReflectivityLinear variable
+    NF90_Status = NF90_INQ_VARID( FileId,ACREFLL_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//ACREFLL_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_GET_VAR( FileId,VarID, ReflectivityLinear)
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error writing '//ACREFLL_VARNAME//' to '//TRIM(Filename)//&
+            ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    ! ... Reflectivity_AttenuatedLinear variable
+    NF90_Status = NF90_INQ_VARID( FileId,ACRATTL_VARNAME,VarId )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error inquiring '//TRIM(Filename)//' for '//ACRATTL_VARNAME//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
+    NF90_Status = NF90_GET_VAR( FileId,VarID, Reflectivity_AttenuatedLinear)
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error writing '//ACRATTL_VARNAME//' to '//TRIM(Filename)//&
+            ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Read_Cleanup(); RETURN
+    END IF
     ! ... Backscat_Coefficient variable
     NF90_Status = NF90_INQ_VARID( FileId,BS_VARNAME,VarId )
     IF ( NF90_Status /= NF90_NOERR ) THEN
@@ -2098,6 +2145,8 @@ CONTAINS
           RTSolution(l,m)%Single_Scatter_Albedo(c)       = Single_Scatter_Albedo(l,c,m)
           RTSolution(l,m)%Reflectivity(c)                = Reflectivity(l,c,m)
           RTSolution(l,m)%Reflectivity_Attenuated(c)     = Reflectivity_Attenuated(l,c,m)
+          RTSolution(l,m)%ReflectivityLinear(c)          = ReflectivityLinear(l,c,m)
+          RTSolution(l,m)%Reflectivity_AttenuatedLinear(c)     = Reflectivity_AttenuatedLinear(l,c,m)
           RTSolution(l,m)%Backscat_Coefficient(c)        = Backscat_Coefficient(l,c,m)
         END DO
       END DO Channel_Loop
@@ -2491,6 +2540,8 @@ CONTAINS
     REAL(fp), ALLOCATABLE :: Single_Scatter_Albedo(:,:,:)
     REAL(fp), ALLOCATABLE :: Reflectivity(:,:,:)
     REAL(fp), ALLOCATABLE :: Reflectivity_Attenuated(:,:,:)
+    REAL(fp), ALLOCATABLE :: ReflectivityLinear(:,:,:)
+    REAL(fp), ALLOCATABLE :: Reflectivity_AttenuatedLinear(:,:,:)
     REAL(fp), ALLOCATABLE :: Backscat_Coefficient(:,:,:)
     
     ! Set up
@@ -2536,6 +2587,8 @@ CONTAINS
               Single_Scatter_Albedo( n_Channels, n_Layers, n_Profiles ), &
               Reflectivity( n_Channels, n_Layers, n_Profiles ), &
               Reflectivity_Attenuated( n_Channels, n_Layers, n_Profiles ), &
+              ReflectivityLinear( n_Channels, n_Layers, n_Profiles ), &
+              Reflectivity_AttenuatedLinear( n_Channels, n_Layers, n_Profiles ), &
               Backscat_Coefficient( n_Channels, n_Layers, n_Profiles ), &
               STAT = alloc_stat )
       IF ( alloc_stat /= 0 ) THEN
@@ -2576,6 +2629,8 @@ CONTAINS
             Single_Scatter_Albedo(l,c,m)       = RTSolution(l,m)%Single_Scatter_Albedo(c)
             Reflectivity(l,c,m)                = RTSolution(l,m)%Reflectivity(c)
             Reflectivity_Attenuated(l,c,m)     = RTSolution(l,m)%Reflectivity_Attenuated(c)
+            ReflectivityLinear(l,c,m)                = RTSolution(l,m)%ReflectivityLinear(c)
+            Reflectivity_AttenuatedLinear(l,c,m)     = RTSolution(l,m)%Reflectivity_AttenuatedLinear(c)
             Backscat_Coefficient(l,c,m)        = RTSolution(l,m)%Backscat_Coefficient(c)
           END DO
         END DO Channel_Loop
@@ -2930,6 +2985,32 @@ CONTAINS
              ' - '//TRIM(NF90_STRERROR( NF90_Status ))
        CALL Write_Cleanup(); RETURN
      END IF
+     ! ... ReflectivityLinear variable
+     NF90_Status = NF90_INQ_VARID( FileId,ACREFLL_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//ACREFLL_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, ReflectivityLinear)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//ACREFLL_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     ! ... Reflectivity_AttenuatedLinear variable
+     NF90_Status = NF90_INQ_VARID( FileId,ACRATTL_VARNAME,VarId )
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error inquiring '//TRIM(Filename)//' for '//ACRATTL_VARNAME//&
+             ' variable ID - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
+     NF90_Status = NF90_PUT_VAR( FileId,VarID, Reflectivity_AttenuatedLinear)
+     IF ( NF90_Status /= NF90_NOERR ) THEN
+       msg = 'Error writing '//ACRATTL_VARNAME//' to '//TRIM(Filename)//&
+             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
+       CALL Write_Cleanup(); RETURN
+     END IF
      ! ... Backscat_Coefficient variable
      NF90_Status = NF90_INQ_VARID( FileId,BS_VARNAME,VarId )
      IF ( NF90_Status /= NF90_NOERR ) THEN
@@ -2985,6 +3066,8 @@ CONTAINS
                  Single_Scatter_Albedo, &
                  Reflectivity, &
                  Reflectivity_Attenuated, &
+                 ReflectivityLinear, &
+                 Reflectivity_AttenuatedLinear, &
                  Backscat_Coefficient, &
                  STAT = alloc_stat )
      IF ( alloc_stat /= 0 ) THEN
@@ -3095,6 +3178,8 @@ CONTAINS
                  ALL(x%Single_Scatter_Albedo       .EqualTo. y%Single_Scatter_Albedo       ) .AND. & 
                  ALL(x%Reflectivity                .EqualTo. y%Reflectivity                ) .AND. &
                  ALL(x%Reflectivity_Attenuated     .EqualTo. y%Reflectivity_Attenuated     ) .AND. &
+                 ALL(x%ReflectivityLinear                .EqualTo. y%ReflectivityLinear                ) .AND. &
+                 ALL(x%Reflectivity_AttenuatedLinear     .EqualTo. y%Reflectivity_AttenuatedLinear     ) .AND. &
                  ALL(x%Backscat_Coefficient        .EqualTo. y%Backscat_Coefficient        )
     END IF
 
@@ -3188,6 +3273,12 @@ CONTAINS
       rtssum%Reflectivity_Attenuated(1:k) = rtssum%Reflectivity_Attenuated(1:k) + &
                                           rts2%Reflectivity_Attenuated(1:k)
 
+      rtssum%ReflectivityLinear(1:k) = rtssum%ReflectivityLinear(1:k) + &
+                                          rts2%ReflectivityLinear(1:k)
+
+      rtssum%Reflectivity_AttenuatedLinear(1:k) = rtssum%Reflectivity_AttenuatedLinear(1:k) + &
+                                          rts2%Reflectivity_AttenuatedLinear(1:k)
+
     END IF
 
   END FUNCTION CRTM_RTSolution_Add
@@ -3279,6 +3370,12 @@ CONTAINS
 
       rtsdiff%Reflectivity_Attenuated(1:k) = rtsdiff%Reflectivity_Attenuated(1:k) - &
                                            rts2%Reflectivity_Attenuated(1:k)
+
+      rtsdiff%ReflectivityLinear(1:k) = rtsdiff%ReflectivityLinear(1:k) - &
+                                           rts2%ReflectivityLinear(1:k)
+
+      rtsdiff%Reflectivity_AttenuatedLinear(1:k) = rtsdiff%Reflectivity_AttenuatedLinear(1:k) - &
+                                           rts2%Reflectivity_AttenuatedLinear(1:k)
     END IF
 
   END FUNCTION CRTM_RTSolution_Subtract
@@ -3358,6 +3455,8 @@ CONTAINS
       rts_power%Layer_Optical_Depth(1:k)         = (rts_power%Layer_Optical_Depth(1:k)        )**power
       rts_power%Reflectivity(1:k)                = (rts_power%Reflectivity(1:k)               )**power
       rts_power%Reflectivity_Attenuated(1:k)     = (rts_power%Reflectivity_Attenuated(1:k)    )**power
+      rts_power%ReflectivityLinear(1:k)                = (rts_power%ReflectivityLinear(1:k)               )**power
+      rts_power%Reflectivity_AttenuatedLinear(1:k)     = (rts_power%Reflectivity_AttenuatedLinear(1:k)    )**power
     END IF
 
   END FUNCTION CRTM_RTSolution_Exponent
@@ -3438,6 +3537,8 @@ CONTAINS
       rts_normal%Layer_Optical_Depth(1:k)         = rts_normal%Layer_Optical_Depth(1:k)        /factor
       rts_normal%Reflectivity(1:k)                = rts_normal%Reflectivity(1:k)               /factor
       rts_normal%Reflectivity_Attenuated(1:k)     = rts_normal%Reflectivity_Attenuated(1:k)    /factor
+      rts_normal%ReflectivityLinear(1:k)                = rts_normal%ReflectivityLinear(1:k)               /factor
+      rts_normal%Reflectivity_AttenuatedLinear(1:k)     = rts_normal%Reflectivity_AttenuatedLinear(1:k)    /factor
     END IF
 
   END FUNCTION CRTM_RTSolution_Normalise
@@ -3509,6 +3610,8 @@ CONTAINS
       rts_sqrt%Layer_Optical_Depth(1:k)         = SQRT(rts_sqrt%Layer_Optical_Depth(1:k)        )
       rts_sqrt%Reflectivity(1:k)                = SQRT(rts_sqrt%Reflectivity(1:k)               )
       rts_sqrt%Reflectivity_Attenuated(1:k)     = SQRT(rts_sqrt%Reflectivity_Attenuated(1:k)    )
+      rts_sqrt%ReflectivityLinear(1:k)                = SQRT(rts_sqrt%ReflectivityLinear(1:k)               )
+      rts_sqrt%Reflectivity_AttenuatedLinear(1:k)     = SQRT(rts_sqrt%Reflectivity_AttenuatedLinear(1:k)    )
     END IF
 
   END FUNCTION CRTM_RTSolution_Sqrt
@@ -3606,6 +3709,8 @@ CONTAINS
         rts%Layer_Optical_Depth, &
         rts%Reflectivity, &
         rts%Reflectivity_Attenuated, &
+        rts%ReflectivityLinear, &
+        rts%Reflectivity_AttenuatedLinear, &
         rts%Backscat_Coefficient
       IF ( io_stat /= 0 ) THEN
         msg = 'Error reading array intermediate results - '//TRIM(io_msg)
@@ -3721,6 +3826,8 @@ CONTAINS
         rts%Layer_Optical_Depth, &
         rts%Reflectivity, &
         rts%Reflectivity_Attenuated, &
+        rts%ReflectivityLinear, &
+        rts%Reflectivity_AttenuatedLinear, &
         rts%Backscat_Coefficient
       IF ( io_stat /= 0 ) THEN
         msg = 'Error writing array intermediate results - '//TRIM(io_msg)
@@ -4287,7 +4394,7 @@ CONTAINS
             TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Create_Cleanup(); RETURN
     END IF
-    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,ACRATT_UNITS)
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,ACREFL_UNITS)
     Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT  )
     IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
       msg = 'Error writing '//ACREFL_VARNAME//' variable attributes to '//TRIM(Filename)
@@ -4309,6 +4416,41 @@ CONTAINS
     Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT  )
     IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
       msg = 'Error writing '//ACRATT_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+    ! ... ReflectivityLinear variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      ACREFLL_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Layers_DimID, n_Profiles_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//ACREFLL_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,ACREFLL_UNITS)
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT  )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//ACREFLL_VARNAME//' variable attributes to '//TRIM(Filename)
+      CALL Create_Cleanup(); RETURN
+    END IF
+
+    ! ... Reflectivity_AttenuatedLinear variable
+    NF90_Status = NF90_DEF_VAR( FileID, &
+      ACRATTL_VARNAME, &
+      FLOAT_TYPE, &
+      dimIDs=(/n_Channels_DimID, n_Layers_DimID, n_Profiles_DimID/), &
+      varID=VarID )
+    IF ( NF90_Status /= NF90_NOERR ) THEN
+      msg = 'Error defining '//ACRATTL_VARNAME//' variable in '//&
+            TRIM(Filename)//' - '//TRIM(NF90_STRERROR( NF90_Status ))
+      CALL Create_Cleanup(); RETURN
+    END IF
+    Put_Status(1) = NF90_PUT_ATT( FileID,VarID,UNITS_ATTNAME      ,ACRATTL_UNITS)
+    Put_Status(2) = NF90_PUT_ATT( FileID,VarID,FILLVALUE_ATTNAME  ,FILL_FLOAT  )
+    IF ( ANY(Put_Status /= NF90_NOERR) ) THEN
+      msg = 'Error writing '//ACRATTL_VARNAME//' variable attributes to '//TRIM(Filename)
       CALL Create_Cleanup(); RETURN
     END IF
 
