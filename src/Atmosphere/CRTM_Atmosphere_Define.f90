@@ -451,7 +451,7 @@ MODULE CRTM_Atmosphere_Define
     INTEGER, ALLOCATABLE :: Absorber_Units(:) ! J
     ! Profile LEVEL and LAYER quantities
     REAL(fp), ALLOCATABLE :: Level_Pressure(:)  ! 0:K
-    REAL(fp), ALLOCATABLE :: Height(:)          ! 0:K in km
+    REAL(fp), ALLOCATABLE :: Height(:)          ! 0:K in m
     REAL(fp), ALLOCATABLE :: Pressure(:)        ! K
     REAL(fp), ALLOCATABLE :: Temperature(:)     ! K
     REAL(fp), ALLOCATABLE :: Absorber(:,:)      ! K x J
@@ -1116,7 +1116,7 @@ CONTAINS
     k = Atm%n_Layers
     WRITE(fid, '(3x,"Level pressure:")')
     WRITE(fid, '(5(1x,es22.15,:))') Atm%Level_Pressure(0:k)
-    WRITE(fid, '(3x,"Height [km]:")')
+    WRITE(fid, '(3x,"Height [m]:")')
     WRITE(fid, '(5(1x,es22.15,:))') Atm%Height(0:k)
     WRITE(fid, '(3x,"Layer pressure:")')
     WRITE(fid, '(5(1x,es22.15,:))') Atm%Pressure(1:k)

@@ -54,6 +54,7 @@ MODULE CRTM_Active_Sensor
   REAL(fp), PARAMETER :: M6_MM6 = 1.0d18
   REAL(fp), PARAMETER :: REFLECTIVITY_THRESHOLD = TINY(REAL(fp))
   REAL(fp), PARAMETER :: MM6_TO_CM6 = 1.0e-6_fp
+  REAL(fp), PARAMETER :: KW_TEMPERATURE_K = 273.15_fp
 CONTAINS
 
 !--------------------------------------------------------------------------------
@@ -76,7 +77,7 @@ CONTAINS
 !                       ATTRIBUTES: INTENT(IN)
 ! OUTPUT ARGUMENTS:
 !       Height:         Array containing height
-!                       UNITS:      km
+!                       UNITS:      m
 !                       TYPE:       REAL
 !                       DIMENSION:  Array
 !
@@ -342,7 +343,6 @@ END FUNCTION Water_Permittivity_Turner_2016
     REAL(fp) :: P1(AtmOptics%n_Layers)
     REAL(fp) :: Height(0:AtmOptics%n_Layers)
     REAL(fp) :: dZ_m(AtmOptics%n_Layers)
-    REAL(fp) :: dS_m(AtmOptics%n_Layers)
     REAL(fp) :: Temp_K(AtmOptics%n_Layers)
     REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Kw_2, perm_re, perm_im
     COMPLEX :: perm(AtmOptics%n_Layers), kw(AtmOptics%n_Layers)
@@ -360,7 +360,6 @@ END FUNCTION Water_Permittivity_Turner_2016
         Height = Atm%Height
     ENDIF
     dZ_m = (Height(0:n_Layers-1) - Height(1:n_Layers))
-    dS_m = dZ_m / GeometryInfo%Cosine_Sensor_Zenith
 
     IF ( SpcCoeff_IsMicrowaveSensor(SC(SensorIndex)) ) THEN
        Frequency = SC(SensorIndex)%Frequency(ChannelIndex) ! GHz
@@ -370,7 +369,7 @@ END FUNCTION Water_Permittivity_Turner_2016
        Wavelength_m = POINT_01 / Wavenumber
     END IF
 
-    Temp_K = 273.15_fp
+    Temp_K = KW_TEMPERATURE_K
     perm = Water_Permittivity_Turner_2016(Frequency * 1.0d9, & ! Input
                                           Temp_K) ! Input
 
@@ -381,7 +380,7 @@ END FUNCTION Water_Permittivity_Turner_2016
     P1 = (M6_MM6 * Wavelength_m**4.0_fp) / (PI**5.0_fp * Kw_2)
 
     ! Calculate transmittance 
-    Optical_Depth = AtmOptics%optical_depth / dS_m
+    Optical_Depth = AtmOptics%optical_depth / GeometryInfo%Cosine_Sensor_Zenith
     DO k = 1, n_layers
        temp_sum = SUM(Optical_Depth(1:k))
        Transmittance(k) = EXP(-TWO * temp_sum)
@@ -436,7 +435,7 @@ SUBROUTINE CRTM_Compute_Reflectivity_TL(Atm, &
   REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Optical_Depth, Optical_Depth_TL
   REAL(fp), DIMENSION(AtmOptics%n_Layers) :: P1, Kw_2, perm_re, perm_im
   REAL(fp), DIMENSION(0:AtmOptics%n_Layers) :: Height
-  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: dZ_m, dS_m
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: dZ_m
   COMPLEX :: perm(AtmOptics%n_Layers)
   INTEGER :: k, n_Layers
   REAL(fp) :: temp_sum
@@ -451,7 +450,6 @@ SUBROUTINE CRTM_Compute_Reflectivity_TL(Atm, &
   END IF
 
   dZ_m = Height(0:n_Layers-1) - Height(1:n_Layers)
-  dS_m = dZ_m / GeometryInfo%Cosine_Sensor_Zenith
 
   ! Compute wavelength
   IF (SpcCoeff_IsMicrowaveSensor(SC(SensorIndex))) THEN
@@ -463,14 +461,15 @@ SUBROUTINE CRTM_Compute_Reflectivity_TL(Atm, &
   END IF
 
   ! Compute permittivity and related factor
-  perm = Water_Permittivity_Turner_2016(Frequency * 1.0d9, Atm%Temperature)
+  perm = Water_Permittivity_Turner_2016(Frequency * 1.0d9, &
+                                        SPREAD(KW_TEMPERATURE_K, DIM=1, NCOPIES=n_Layers))
   perm_re = REAL(perm)
   perm_im = AIMAG(perm)
   Kw_2 = ABS((perm - ONE) / (perm + TWO)) ** TWO
   P1 = (M6_MM6 * Wavelength_m**4.0_fp) / (PI**5.0_fp * Kw_2)
 
   ! Forward (base state) calculations
-  Optical_Depth = AtmOptics%optical_depth / dS_m
+  Optical_Depth = AtmOptics%optical_depth / GeometryInfo%Cosine_Sensor_Zenith
   DO k = 1, n_Layers
      temp_sum = SUM(Optical_Depth(1:k))
      Transmittance(k) = EXP(-TWO * temp_sum)
@@ -480,7 +479,7 @@ SUBROUTINE CRTM_Compute_Reflectivity_TL(Atm, &
   Reflectivity_Attenuated = Transmittance * Reflectivity
 
   ! Tangent-linear calculations
-  Optical_Depth_TL = AtmOptics_TL%optical_depth / dS_m
+  Optical_Depth_TL = AtmOptics_TL%optical_depth / GeometryInfo%Cosine_Sensor_Zenith
   DO k = 1, n_Layers
      temp_sum = SUM(Optical_Depth_TL(1:k))
      Transmittance_TL(k) = -TWO * Transmittance(k) * temp_sum
@@ -587,8 +586,9 @@ SUBROUTINE CRTM_Compute_Reflectivity_AD(Atm, &
                                        AtmOptics_AD, &
                                        RTSolution_AD)
   !-----------------------------------------------------------------------
-  !  Compute adjoint sensitivities of reflectivity (linear or dBZ)
-  !  depending on which adjoint variable is set to one in RTSolution_AD.
+  !  Compute adjoint sensitivities of reflectivity. The dBZ and linear
+  !  adjoint inputs in RTSolution_AD are all accumulated, so a caller may
+  !  seed any combination of them.
   !
   !  Supported adjoint targets:
   !    - RTSolution_AD%Reflectivity_Attenuated        (logarithmic dBZ)
@@ -618,7 +618,7 @@ SUBROUTINE CRTM_Compute_Reflectivity_AD(Atm, &
   REAL(fp), DIMENSION(AtmOptics%n_Layers) :: Transmittance, Optical_Depth
   REAL(fp), DIMENSION(AtmOptics%n_Layers) :: P1, Kw_2, perm_re, perm_im
   REAL(fp), DIMENSION(0:AtmOptics%n_Layers) :: Height
-  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: dZ_m, dS_m
+  REAL(fp), DIMENSION(AtmOptics%n_Layers) :: dZ_m
   COMPLEX :: perm(AtmOptics%n_Layers)
 
   ! Adjoint variables
@@ -636,8 +636,6 @@ SUBROUTINE CRTM_Compute_Reflectivity_AD(Atm, &
   ReflectivityLinear_AD            = ZERO
   Reflectivity_AttenuatedLinear_AD = ZERO
   Optical_Depth_AD           = ZERO
-  AtmOptics_AD%Backscat_Coefficient = ZERO
-  AtmOptics_AD%optical_depth       = ZERO
 
   !-----------------------------------------------------------------------
   ! Heights and geometry
@@ -649,7 +647,6 @@ SUBROUTINE CRTM_Compute_Reflectivity_AD(Atm, &
   END IF
 
   dZ_m = Height(0:n_Layers-1) - Height(1:n_Layers)
-  dS_m = dZ_m / GeometryInfo%Cosine_Sensor_Zenith
 
   !-----------------------------------------------------------------------
   ! Frequency / wavelength
@@ -665,12 +662,13 @@ SUBROUTINE CRTM_Compute_Reflectivity_AD(Atm, &
   !-----------------------------------------------------------------------
   ! Permittivity and forward reflectivity computation
   !-----------------------------------------------------------------------
-  perm = Water_Permittivity_Turner_2016(Frequency * 1.0d9, Atm%Temperature)
+  perm = Water_Permittivity_Turner_2016(Frequency * 1.0d9, &
+                                        SPREAD(KW_TEMPERATURE_K, DIM=1, NCOPIES=n_Layers))
   perm_re = REAL(perm)
   perm_im = AIMAG(perm)
   Kw_2 = ABS((perm - ONE) / (perm + TWO))**TWO
 
-  Optical_Depth = AtmOptics%optical_depth / dS_m
+  Optical_Depth = AtmOptics%optical_depth / GeometryInfo%Cosine_Sensor_Zenith
 
   DO k = 1, n_Layers
       temp_sum = SUM(Optical_Depth(1:k))
@@ -696,8 +694,10 @@ SUBROUTINE CRTM_Compute_Reflectivity_AD(Atm, &
              TEN * RTSolution_AD%Reflectivity_Attenuated / (Reflectivity_Attenuated * LOG(TEN))
       END WHERE
 
+  END IF
+
   ! === Case 2: Linear attenuated reflectivity (cm^6/m^3)
-  ELSEIF (ANY(RTSolution_AD%Reflectivity_AttenuatedLinear /= ZERO)) THEN
+  IF (ANY(RTSolution_AD%Reflectivity_AttenuatedLinear /= ZERO)) THEN
       Reflectivity_AttenuatedLinear_AD = Reflectivity_AttenuatedLinear_AD + RTSolution_AD%Reflectivity_AttenuatedLinear
       Reflectivity_Attenuated_AD = Reflectivity_Attenuated_AD + MM6_TO_CM6 * Reflectivity_AttenuatedLinear_AD
   END IF
@@ -710,8 +710,10 @@ SUBROUTINE CRTM_Compute_Reflectivity_AD(Atm, &
              TEN * RTSolution_AD%Reflectivity / (Reflectivity * LOG(TEN))
       END WHERE
 
+  END IF
+
   ! === Case 4: Linear reflectivity (cm^6/m^3)
-  ELSEIF (ANY(RTSolution_AD%ReflectivityLinear /= ZERO)) THEN
+  IF (ANY(RTSolution_AD%ReflectivityLinear /= ZERO)) THEN
       ReflectivityLinear_AD = ReflectivityLinear_AD + RTSolution_AD%ReflectivityLinear
       Reflectivity_AD = Reflectivity_AD + MM6_TO_CM6 * ReflectivityLinear_AD
   END IF
@@ -737,7 +739,7 @@ SUBROUTINE CRTM_Compute_Reflectivity_AD(Atm, &
   !-----------------------------------------------------------------------
   ! Adjoint of optical depth normalization
   !-----------------------------------------------------------------------
-  AtmOptics_AD%optical_depth = AtmOptics_AD%optical_depth + Optical_Depth_AD / dS_m
+  AtmOptics_AD%optical_depth = AtmOptics_AD%optical_depth + Optical_Depth_AD / GeometryInfo%Cosine_Sensor_Zenith
 
 END SUBROUTINE CRTM_Compute_Reflectivity_AD
 
