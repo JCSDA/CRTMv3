@@ -69,7 +69,7 @@ MODULE Reflection_Correction_Module
   TYPE :: iVar_type
     PRIVATE
     ! Forward model input values
-    REAL(fp) :: Transmittance = ZERO   ! Slant-path, as used by the regression
+    REAL(fp) :: Transmittance = ZERO   ! Slant-path, floored at EXP(-LIMIT_EXP)
     REAL(fp) :: dTs_dTv       = ZERO   ! d(slant)/d(vertical) transmittance
     REAL(fp) :: Wind_Speed    = ZERO
     REAL(fp) :: cos_z         = ZERO
@@ -127,8 +127,11 @@ CONTAINS
     ! optical depth only from a slant-path T). RTTOV passes the slant value.
     Transmittance = Transmittance_in**(ONE/cos_z)
 
-    ! Apply limits per Emily Liu (5/2022) -- this only applies to the REL_2.4.0_emc release branch, and has not 
-    ! been merged into v2.4.1 or later pending a more detailed assessment --BTJ
+    ! Floor the slant transmittance at EXP(-LIMIT_EXP), about 2e-9. The floor
+    ! is Emily Liu's NaN fix from release/REL-2.4.0_emc (5/2022), ported to v3
+    ! in 1f48e62. It used to clamp the vertical input while the TL still passed
+    ! Transmittance_TL through; it now clamps the slant value, and the
+    ! transmittance derivative is zero below it, so FWD, TL and AD agree.
     IF ( Transmittance > EXP(-LIMIT_EXP) ) THEN
       iVar%dTs_dTv = Transmittance / (cos_z * Transmittance_in)
     ELSE
