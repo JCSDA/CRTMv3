@@ -10,8 +10,8 @@
 ! modules pass the vertical transmittance EXP(-SUM(layer optical depth)), so
 ! the routine converts it to the slant value at the stream's angle. Before
 ! that conversion the correction was evaluated with the vertical value, which
-! left CRTM 0.4 to 1.7 K warmer than RTTOV in off-nadir ocean window channels
-! and agreed only at nadir.
+! agreed with the slant evaluation only at nadir and made off-nadir ocean
+! window brightness temperatures too warm (JCSDA/CRTMv3#388).
 !
 ! Checks, with synthetic regression coefficients (no coefficient files):
 !   1. Forward: Reflection_Correction(T_vertical, cos_z) equals an independent
