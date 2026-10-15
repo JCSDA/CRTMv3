@@ -92,7 +92,7 @@ MODULE CRTM_SfcOptics_Define
     ! needs it and does not see Options.
     LOGICAL  :: Use_PARMIO_MWSSEM = .FALSE.
     REAL(fp) :: Azimuth_Angle  = 999.9_fp  ! Relative azimuth angle
-    REAL(fp) :: Transmittance  = ZERO      ! Total atmospheric transmittance
+    REAL(fp) :: Transmittance  = ZERO      ! Vertical surface-to-space transmittance
 
     ! Index of the satellite view angle in the angle arrays
     INTEGER  :: Index_Sat_Ang = 1
