@@ -202,7 +202,9 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
   0.03 nm.
 - **CRTM-Exp cloud-optics schema (experimental, opt-in).** A new
   habit-resolved cloud LUT format selected explicitly with
-  `Cloud_Model='CRTM-Exp'`; the default cloud path is unchanged.
+  `Cloud_Model='CRTM-Exp'`; the default cloud path is unchanged. CRTM-Exp is
+  microwave-only in this release: when it is active, IR, visible and UV
+  channels see no cloud optics (clear sky for cloud), see Known issues.
 - **IR/VIS/UV cloud phase coefficients are read correctly again, and a new MC6
   ice table (opt-in).** Since v3.1.0 every IR cloud stream set was read one
   Legendre order low (#384); that is fixed, and all cloudy IR, visible and UV
@@ -708,6 +710,15 @@ standing adversarial audit — is in
     `CloudCoeff_MC6.nc` (Coefficient changes) for cloudy IR/VIS/UV work.
   - `CloudCoeff_DDA_Moradi_2022.nc` and `CloudCoeff_DDA_Moradi_2024.nc` carry
     the same IR table.
+- **CRTM-Exp is microwave-only.** With `Cloud_Model='CRTM-Exp'`,
+  `CRTM_CloudScatter` zeroes cloud optics for IR, visible and UV channels, so a
+  cloudy scene is clear sky for cloud there, with no warning. Hosts that run
+  microwave and IR/VIS sensors together should select the cloud table per
+  sensor: CRTM-Exp for microwave, and a legacy table (`CloudCoeff_MC6.nc`
+  recommended) for IR/VIS/UV.
+  - In UFO, `Cloud_Model` and `CloudCoeff_File` are per obs operator, and the
+    operator initializes CRTM on each call, so mixing the two in one
+    application works.
 - **Sub-mm thin frozen cloud (≈ 325 GHz):** optically thin frozen-cloud
   layers can produce nonphysical TBs through the adding-doubling/MOM path
   (small-τ matrix conditioning with high phase-function truncation orders).
