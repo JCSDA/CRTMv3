@@ -432,6 +432,25 @@ target_link_libraries(Unit_CloudCoeff_IR_Legendre_Layout PRIVATE crtm)
 add_test(NAME test_Unit_CloudCoeff_IR_Legendre_Layout
          COMMAND $<TARGET_FILE:Unit_CloudCoeff_IR_Legendre_Layout>)
 
+# IR phase coefficients of CloudCoeff_MC6.nc must be consistent with its g_IR: the
+# implied first moment of every delta-fit stream set tracks the asymmetry parameter
+# (#394; the default CloudCoeff.nc fails this for IR class 4). Gated on the source
+# file in the fix tree, like the other coefficient-gated tests, since the table
+# arrives with a coefficient tarball roll.
+add_executable(Unit_CloudCoeff_IR_Moments mains/unit/Unit_Test/test_CloudCoeff_IR_Moments.f90)
+target_link_libraries(Unit_CloudCoeff_IR_Moments PRIVATE crtm)
+set(_MC6_CLOUDCOEFF "${CRTM_COEFFS_PATH}/${CRTM_COEFFS_BRANCH_PREFIX}/${CRTM_COEFFS_BRANCH}/fix/CloudCoeff/netCDF/CloudCoeff_MC6.nc")
+if(EXISTS "${_MC6_CLOUDCOEFF}")
+  execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                   "${_MC6_CLOUDCOEFF}"
+                   "${CMAKE_CURRENT_BINARY_DIR}/testinput/CloudCoeff_MC6.nc" )
+  add_test(NAME test_Unit_CloudCoeff_IR_Moments
+           COMMAND $<TARGET_FILE:Unit_CloudCoeff_IR_Moments>)
+else()
+  message(STATUS "test_Unit_CloudCoeff_IR_Moments not registered (needs CloudCoeff/netCDF/CloudCoeff_MC6.nc in the fix tree).")
+endif()
+unset(_MC6_CLOUDCOEFF)
+
 # OpenMP thread policy on a single-profile call, which is what GSI issues.
 # Checks (A) that CRTM restores the caller's max-active-levels, and (B) that
 # threading a small sensor is not dramatically slower than not threading it

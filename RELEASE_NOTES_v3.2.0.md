@@ -203,6 +203,13 @@ shipped coefficient files is in `REL-3.2.0_coefficient_inventory.md`.
 - **CRTM-Exp cloud-optics schema (experimental, opt-in).** A new
   habit-resolved cloud LUT format selected explicitly with
   `Cloud_Model='CRTM-Exp'`; the default cloud path is unchanged.
+- **IR/VIS/UV cloud phase coefficients are read correctly again, and a new MC6
+  ice table (opt-in).** Since v3.1.0 every IR cloud stream set was read one
+  Legendre order low (#384); that is fixed, and all cloudy IR, visible and UV
+  results change (Breaking item 22). The default `CloudCoeff.nc` ice class has
+  degenerate phase coefficients (#394, Known issues), so the new
+  `CloudCoeff_MC6.nc` replaces that class with the MC6 ice optics and is the
+  recommended table for cloudy IR/VIS/UV work (Coefficient changes).
 - **SNICAR visible snow reflectance LUT (new, opt-in).** A SNICAR-based VIS-snow
   reflectance table, `SNICAR.VISsnow.EmisCoeff.nc`, ships in the fix tarball
   alongside updated IR snow emissivity modules. The default snow surface path
@@ -350,6 +357,23 @@ The 14 data-changed files are the only ones whose numbers moved:
 `iasi-ng_metop-sg-a1`, `metimage_metop-sg-a1`, `mws_metop-sg-a1`,
 `v.metimage_metop-sg-a1`, `v.viirs-i_n21`.
 
+**New optional table: `CloudCoeff_MC6.nc` (#394).** It was added after the
+3.2.0.0 roll, so the census tables above do not include it.
+- **What it is:** the default `CloudCoeff.nc` with IR density class 4
+  (density 0.9 g/cm3; `ICE_CLOUD` and `HAIL_CLOUD` at IR, visible and UV)
+  replaced by the MC6 ice optical properties that Ping Yang delivered on
+  2015-09-07 (Yang et al., 2013, J. Atmos. Sci., 70, 330-347; severely
+  roughened column aggregates). `ke_IR`, `w_IR`, `g_IR` and `pcoeff_IR` for
+  that class are copied bitwise from `CloudCoeff_TAMU-07Sep2015.nc`.
+- **What is unchanged:** every other array, including all microwave tables,
+  is bit-identical to `CloudCoeff.nc`.
+- **How to use it:** select it with `CloudCoeff_File='CloudCoeff_MC6.nc'`. It
+  needs the indexing fix in Breaking item 22.
+- **Verification:** the class's phase coefficients are consistent with its
+  `g_IR` (the default's are not; `test_Unit_CloudCoeff_IR_Moments` checks every
+  class). An independent regeneration from Baum's V3.6 aggregate-column bulk
+  models agrees to 0.38 K RMS in IR window channels. Details are in #394.
+
 **On the large "retired" count, which is easy to misread.** The census records
 3605 retired paths, but **2612 of those are `.bin` files** removed by the
 deliberate binary-format drop, not products withdrawn. Of the 993 netCDF
@@ -389,7 +413,8 @@ standing adversarial audit — is in
    CloudCoeff tables with `ICE_CLOUD` in their profiles will see different
    brightness temperatures (validated against a sub-mm sounder; tropical O−B
    at 325 GHz moved from ~+13 K to ~−0.6 K). Default (Mie-TAMU) cloud optics
-   are bit-identical.
+   are bit-identical under this item; the IR/VIS/UV default path changes
+   through item 22.
 6. **PARMIO is presence-activated; TELSEM2 is opt-in.** Placing
    `PARMIO.MWwater.EmisCoeff.nc` in the coefficient directory switches MW
    water emissivity physics at and above 200 GHz; removing it restores FASTEM.
@@ -648,9 +673,41 @@ standing adversarial audit — is in
     sounder on 8 threads 0.92x to 2.12x; 2211-channel infrared sounder on 8
     threads 1.96x to 2.79x. Cases where profiles already met or exceeded the
     thread count are unchanged at 4.4x to 5.4x.
+22. **IR/VIS/UV cloud phase coefficients are read at the correct Legendre order
+    (#384).** Since v3.1.0, `pcoeff_IR` was allocated with a 1-based Legendre
+    dimension, while the stored stream sets and `CRTM_CloudScatter` are 0-based.
+    Every IR cloud phase function therefore had c_1 = 0.5 (asymmetry 1/3), with
+    the remaining coefficients and the delta-fit truncation factor shifted. The
+    fix restores the 0-based dimension (`CloudCoeff_Define.f90`).
+
+    Every cloudy IR, visible and UV radiance and Jacobian changes (forward, TL,
+    AD, K). Measured with the default table (US standard profile, ABI and
+    HIRS-4, night): low water cloud is warmer by up to about 8 K in window
+    channels, and thin ice cloud colder by up to about 3 K. Microwave clouds and
+    aerosols are unaffected. The regression suite does not exercise cloudy IR
+    (#382), so it passes unchanged; the new unit test
+    `test_Unit_CloudCoeff_IR_Legendre_Layout` checks the layout.
+
+    With the indexing fixed, the default table's ice class is read as stored,
+    and those stored sets are degenerate (#394, Known issues). Use
+    `CloudCoeff_MC6.nc` for ice cloud at IR, visible and UV.
 
 ## Known issues and limitations
 
+- **The default `CloudCoeff.nc` ice phase coefficients are degenerate (#394).**
+  This is IR density class 4 (`ICE_CLOUD` and `HAIL_CLOUD` at IR, visible and
+  UV). In every stream set the first and second Legendre moments are zero,
+  while the class's `g_IR` is 0.04 to 0.997, so ice clouds scatter almost
+  isotropically.
+  - In offline tests against the MC6 table (overcast single-layer ice),
+    thermal-IR window brightness temperatures are too cold by 10 to 12 K on
+    average, and visible reflectance is too high.
+  - The defect has been in the table since at least REL-2.1.1; in v3.1.x the
+    #384 indexing error distorted it further.
+  - The default table is unchanged in this release, for continuity. Use
+    `CloudCoeff_MC6.nc` (Coefficient changes) for cloudy IR/VIS/UV work.
+  - `CloudCoeff_DDA_Moradi_2022.nc` and `CloudCoeff_DDA_Moradi_2024.nc` carry
+    the same IR table.
 - **Sub-mm thin frozen cloud (≈ 325 GHz):** optically thin frozen-cloud
   layers can produce nonphysical TBs through the adding-doubling/MOM path
   (small-τ matrix conditioning with high phase-function truncation orders).
