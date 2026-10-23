@@ -9,6 +9,23 @@ if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/crtm-targets.cmake)
   include(${crtm_IMPORT_FILE})
 endif()
 
+# Namespaced alias. The export set deliberately keeps the bare `crtm` target,
+# because spack-stack recipes and other existing consumers link it by that
+# name and adding NAMESPACE to install(EXPORT) would rename it and break them.
+# But `crtm::crtm` is the modern CMake convention, it is what CRTM v2.4
+# provided, and it is what downstream code actually writes: NOAA-EMC/GSI links
+# `crtm::crtm` in src/gsi/CMakeLists.txt, so find_package(crtm) succeeded and
+# the link then failed with "target not found". Providing both spellings costs
+# nothing and breaks no one.
+#
+# An INTERFACE IMPORTED target is used rather than add_library(... ALIAS ...)
+# because ALIAS of an IMPORTED target requires the target to be GLOBAL, which
+# targets from install(EXPORT) are not.
+if(TARGET crtm AND NOT TARGET crtm::crtm)
+  add_library(crtm::crtm INTERFACE IMPORTED)
+  set_target_properties(crtm::crtm PROPERTIES INTERFACE_LINK_LIBRARIES crtm)
+endif()
+
 set(crtm_VERSION           "@PROJECT_VERSION@")
 
 #Export Fortran compiler version for checking module compatibility

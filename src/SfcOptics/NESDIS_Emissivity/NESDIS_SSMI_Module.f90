@@ -256,8 +256,6 @@ subroutine NESDIS_SSMI_SSICEEM_CORE(Snow_status,Ice_status,frequency,Ts,tv,th,em
 
   logical Snow_status,Ice_status,data_invalid
 
-  save  coe_v,coe_h
-
   coe_v(1,1,1:5) = (/ -8.722723e-002_fp,  1.064573e-002_fp, &
        -5.333843e-003_fp, -1.394910e-003_fp,  4.007640e-004_fp/)
   coe_v(1,2,1:5) = (/-1.373924e-001_fp,  6.580569e-003_fp, &

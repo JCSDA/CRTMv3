@@ -292,7 +292,7 @@ CONTAINS
       REAL( fp_kind ), DIMENSION(MAX_N_SUBSET_TOTAL_PREDICTORS, MAX_N_ODCAPS_LAYERS) ::  Predictor_Subset5
       REAL( fp_kind ), DIMENSION(MAX_N_SUBSET_TOTAL_PREDICTORS, MAX_N_ODCAPS_LAYERS) ::  Predictor_Subset6
       REAL( fp_kind ), DIMENSION(MAX_N_SUBSET_TOTAL_PREDICTORS, MAX_N_ODCAPS_LAYERS) ::  Predictor_Subset7
-      TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+      TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
       TC => ODCAPS_TC(Sensor_Index)
         
@@ -936,7 +936,7 @@ CONTAINS
       REAL( fp_kind ), DIMENSION(MAX_N_SUBSET_TOTAL_PREDICTORS, MAX_N_ODCAPS_LAYERS) ::  Predictor_Subset5_TL
       REAL( fp_kind ), DIMENSION(MAX_N_SUBSET_TOTAL_PREDICTORS, MAX_N_ODCAPS_LAYERS) ::  Predictor_Subset6_TL
       REAL( fp_kind ), DIMENSION(MAX_N_SUBSET_TOTAL_PREDICTORS, MAX_N_ODCAPS_LAYERS) ::  Predictor_Subset7_TL
-      TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+      TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
       TC => ODCAPS_TC(Sensor_Index)
          
@@ -1699,7 +1699,7 @@ CONTAINS
       REAL( fp_kind ), DIMENSION(MAX_N_SUBSET_TOTAL_PREDICTORS, MAX_N_ODCAPS_LAYERS) ::  Predictor_Subset5_AD
       REAL( fp_kind ), DIMENSION(MAX_N_SUBSET_TOTAL_PREDICTORS, MAX_N_ODCAPS_LAYERS) ::  Predictor_Subset6_AD
       REAL( fp_kind ), DIMENSION(MAX_N_SUBSET_TOTAL_PREDICTORS, MAX_N_ODCAPS_LAYERS) ::  Predictor_Subset7_AD
-      TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+      TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
       TC => ODCAPS_TC(Sensor_Index)
          
@@ -2668,7 +2668,7 @@ CONTAINS
     REAL( fp_kind ), DIMENSION(MAX_N_TRACEGASES_PREDICTORS,Predictor%n_Layers) :: TraceGas_Predictors
     REAL( fp_kind ), DIMENSION(MAX_N_ODCAPS_LAYERS) :: SECANG
     LOGICAL :: Cal_Sun
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
  
@@ -2750,7 +2750,7 @@ CONTAINS
     REAL( fp_kind ), DIMENSION(MAX_N_TRACEGASES_PREDICTORS,Predictor%n_Layers) :: TraceGas_Predictors_TL
     REAL( fp_kind ), DIMENSION(MAX_N_ODCAPS_LAYERS) :: SECANG, SECANG_TL
     LOGICAL :: Cal_Sun
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
  
@@ -2834,7 +2834,7 @@ CONTAINS
     REAL( fp_kind ), DIMENSION(MAX_N_TRACEGASES_PREDICTORS,Predictor%n_Layers) :: TraceGas_Predictors_AD
     REAL( fp_kind ), DIMENSION(MAX_N_ODCAPS_LAYERS) :: SECANG, SECANG_AD
     LOGICAL :: Cal_Sun
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
  
@@ -2930,7 +2930,7 @@ CONTAINS
     REAL(fp_kind) ::  ANGOP 	  
     LOGICAL ::  LAST	  
     INTEGER :: H2O_Index		    
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
     
@@ -3169,7 +3169,7 @@ CONTAINS
     REAL(fp_kind) ::    POP,  POP_TL 	  
     REAL(fp_kind) ::    TOP,  TOP_TL 	  
     INTEGER :: H2O_Index		    
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
     
@@ -3361,7 +3361,7 @@ CONTAINS
     REAL(fp_kind) ::    POP,  POP_AD 	  
     REAL(fp_kind) ::    TOP,  TOP_AD 	  
     INTEGER :: H2O_Index		    
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
     
@@ -3722,7 +3722,7 @@ CONTAINS
     INTEGER       :: CO2_Index, SO2_Index, HNO3_Index, N2O_Index
     REAL(fp) :: psurf, m_air, delp
     REAL(fp), DIMENSION(Atmosphere%n_Layers) :: mr_H2O 
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
 
@@ -5302,7 +5302,7 @@ CONTAINS
     
     INTEGER :: L
     INTEGER :: H2O_Index
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
  
@@ -5410,7 +5410,7 @@ CONTAINS
     
     INTEGER :: L
     INTEGER :: H2O_Index
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
  
@@ -5520,7 +5520,7 @@ CONTAINS
     
     INTEGER :: L
     INTEGER :: H2O_Index
-    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC => NULL()
+    TYPE( ODCAPS_TauCoeff_type ), POINTER  ::  TC
 
     TC => ODCAPS_TC(Sensor_Index)
  

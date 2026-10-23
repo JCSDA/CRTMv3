@@ -11,7 +11,7 @@
 ####################################################################
 set( CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -emf -rmoid -lhugetlbfs")
 
-if( HAVE_OMP )
+if( OPENMP )
   set( CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -homp")
 else( )
   set( CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -hnoomp")

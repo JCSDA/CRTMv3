@@ -13,6 +13,7 @@ PROGRAM Example6_ChannelSubset
   !
   ! Module usage
   USE CRTM_Module
+  USE CRTM_RTSolution_Diff, ONLY: Report_RTSolution_Diff
   ! Disable all implicit typing
   IMPLICIT NONE
   ! ============================================================================
@@ -60,6 +61,7 @@ PROGRAM Example6_ChannelSubset
   INTEGER :: n_ls, n_ms
   INTEGER :: n_l, n_m
   CHARACTER(256) :: atmk_File, sfck_File, rtsk_File
+  LOGICAL        :: any_compare_failed = .FALSE.
   TYPE(CRTM_Atmosphere_type), ALLOCATABLE :: atm_k(:,:)
   TYPE(CRTM_Surface_type)   , ALLOCATABLE :: sfc_k(:,:)
   TYPE(CRTM_RTSolution_type), ALLOCATABLE :: rts_k(:,:)
@@ -306,13 +308,13 @@ PROGRAM Example6_ChannelSubset
   ! ------------------------------------------------
   ! 9a.1 Atmosphere file
   ! ...Generate filename
-  atmk_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.bin'
+  atmk_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.nc'
   ! ...Check if the file exists
   IF ( .NOT. File_Exists(atmk_File) ) THEN
     Message = 'Atmosphere_K save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write Atmosphere_K structure to file
-    Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, Quiet=.TRUE. )
+    Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating Atmosphere_K save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -321,13 +323,13 @@ PROGRAM Example6_ChannelSubset
   END IF
   ! 9a.2 Surface file
   ! ...Generate filename
-  sfck_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.bin'
+  sfck_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.nc'
   ! ...Check if the file exists
   IF ( .NOT. File_Exists(sfck_File) ) THEN
     Message = 'Surface_K save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write Surface_K structure to file
-    Error_Status = CRTM_Surface_WriteFile( sfck_file, Surface_K, Quiet=.TRUE. )
+    Error_Status = CRTM_Surface_WriteFile( sfck_file, Surface_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating Surface_K save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -336,13 +338,13 @@ PROGRAM Example6_ChannelSubset
   END IF
   ! 9a.3 RTSolution_K file
   ! ...Generate filename
-  rtsk_file = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution_K.bin'
+  rtsk_file = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution_K.nc'
   ! ...Check if the file exists
   IF ( .NOT. File_Exists(rtsk_file) ) THEN
     Message = 'RTSolution_K save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write RTSolution_K structure to file
-    Error_Status = CRTM_RTSolution_WriteFile( rtsk_file, RTSolution_K, Quiet=.TRUE. )
+    Error_Status = CRTM_RTSolution_WriteFile( rtsk_file, RTSolution_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating RTSolution_K save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -353,7 +355,7 @@ PROGRAM Example6_ChannelSubset
   ! 9b. Inquire the saved files
   ! ---------------------------
   ! 9b.1 Atmosphere file
-  Error_Status = CRTM_Atmosphere_InquireFile( atmk_File, &
+  Error_Status = CRTM_Atmosphere_InquireFile( atmk_File, NetCDF=.TRUE., &
                                               n_Channels = n_la, &
                                               n_Profiles = n_ma )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -362,7 +364,7 @@ PROGRAM Example6_ChannelSubset
     STOP 1
   END IF
   ! 9b.2 Surface file
-  Error_Status = CRTM_Surface_InquireFile( sfck_File, &
+  Error_Status = CRTM_Surface_InquireFile( sfck_File, NetCDF=.TRUE., &
                                            n_Channels = n_ls, &
                                            n_Profiles = n_ms )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -371,7 +373,7 @@ PROGRAM Example6_ChannelSubset
     STOP 1
   END IF
   ! 9b.3 RTSolution_K file
-  Error_Status = CRTM_RTSolution_InquireFile(rtsk_file, &
+  Error_Status = CRTM_RTSolution_InquireFile(rtsk_file, NetCDF=.TRUE., &
                                              n_Channels = n_l, &
                                              n_Profiles = n_m )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -394,14 +396,14 @@ PROGRAM Example6_ChannelSubset
   ! 9d. Read the saved data
   ! -----------------------
   ! 9d.1 Atmosphere file
-  Error_Status = CRTM_Atmosphere_ReadFile( atmk_File, atm_k, Quiet=.TRUE. )
+  Error_Status = CRTM_Atmosphere_ReadFile( atmk_File, atm_k, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading Atmosphere_K save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
   ! 9d.2 Surface file
-  Error_Status = CRTM_Surface_ReadFile( sfck_File, sfc_k, Quiet=.TRUE. )
+  Error_Status = CRTM_Surface_ReadFile( sfck_File, sfc_k, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading Surface_K save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -414,7 +416,7 @@ PROGRAM Example6_ChannelSubset
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
-  Error_Status = CRTM_RTSolution_ReadFile( rtsk_file, rts_k, Quiet=.TRUE. )
+  Error_Status = CRTM_RTSolution_ReadFile( rtsk_file, rts_k, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading RTSolution_K save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -431,13 +433,13 @@ PROGRAM Example6_ChannelSubset
     Message = 'Atmosphere_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     ! Write the current Atmosphere_K results to file
-    atmk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.bin'
-    Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, Quiet=.TRUE. )
+    atmk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.nc'
+    Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary Atmosphere_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
-    STOP 1
+    any_compare_failed = .TRUE.
   END IF
   ! 9e.2 Surface
   IF ( ALL(CRTM_Surface_Compare(Surface_K, sfc_k, n_SigFig=5)) ) THEN
@@ -447,13 +449,13 @@ PROGRAM Example6_ChannelSubset
     Message = 'Surface_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     ! Write the current Surface_K results to file
-    sfck_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.bin'
-    Error_Status = CRTM_Surface_WriteFile( sfck_file, Surface_K, Quiet=.TRUE. )
+    sfck_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.nc'
+    Error_Status = CRTM_Surface_WriteFile( sfck_file, Surface_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary Surface_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
-    STOP 1
+    any_compare_failed = .TRUE.
   END IF
   ! 9e.3 RTSolution_K
   IF ( ALL(CRTM_RTSolution_Compare(RTSolution_K, rts_k, n_SigFig=5)) ) THEN
@@ -462,14 +464,17 @@ PROGRAM Example6_ChannelSubset
   ELSE
     Message = 'RTSolution_K results are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
-    rtsk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution_K.bin'
-    Error_Status = CRTM_RTSolution_WriteFile( rtsk_File, RTSolution_K, Quiet=.TRUE. )
+    CALL Report_RTSolution_Diff( actual=RTSolution_K, expected=rts_k, &
+                                 label=TRIM(PROGRAM_NAME)//' (K-matrix)' )
+    rtsk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.RTSolution_K.nc'
+    Error_Status = CRTM_RTSolution_WriteFile( rtsk_File, RTSolution_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary RTSolution_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     END IF
-    STOP 1
+    any_compare_failed = .TRUE.
   END IF
+  IF ( any_compare_failed ) STOP 1
   ! ============================================================================
 
 

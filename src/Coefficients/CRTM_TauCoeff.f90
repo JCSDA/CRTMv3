@@ -30,7 +30,7 @@ MODULE CRTM_TauCoeff
   USE Type_Kinds          , ONLY: Long
   USE File_Utility        , ONLY: File_Exists
   USE Binary_File_Utility , ONLY: Open_Binary_File
-  USE Message_Handler     , ONLY: SUCCESS, FAILURE, WARNING, Display_Message
+  USE Message_Handler     , ONLY: SUCCESS, FAILURE, WARNING, INFORMATION, Display_Message
   USE CRTM_Parameters     , ONLY: MAX_N_SENSORS, SET
   USE ODAS_TauCoeff       , ONLY: ODAS_Load_TauCoeff    => Load_TauCoeff   , &
                                   ODAS_Destroy_TauCoeff => Destroy_TauCoeff, &
@@ -40,6 +40,7 @@ MODULE CRTM_TauCoeff
                                   ODPS_Destroy_TauCoeff => Destroy_TauCoeff, &
                                   ODPS_TC => TC
   USE ODPS_Define         , ONLY: ODPS_type, ODPS_ALGORITHM
+  USE ODPS_Predictor      , ONLY: ODPS_Validate_Group
   USE ODSSU_TauCoeff      , ONLY: ODSSU_Load_TauCoeff    => Load_TauCoeff   , &
                                   ODSSU_Destroy_TauCoeff => Destroy_TauCoeff, &
                                   ODSSU_TC => TC
@@ -221,17 +222,24 @@ CONTAINS
     ! Local variables
     CHARACTER(256) :: Message
     CHARACTER(256) :: Process_ID_Tag
-    CHARACTER(256) :: local_path
-    CHARACTER(256), DIMENSION(MAX_N_SENSORS) :: TauCoeff_File
+    CHARACTER(:), ALLOCATABLE :: local_path
+    CHARACTER(:), ALLOCATABLE :: TauCoeff_File(:)
     INTEGER :: Allocate_Status, Deallocate_Status
     INTEGER :: n, n_Sensors
-    INTEGER :: i, j
+    INTEGER :: i, j, k
+    CHARACTER(512) :: GroupMessage
     INTEGER, PARAMETER :: SL = 128
     INTEGER            :: Algorithm_ID
     CHARACTER(SL), ALLOCATABLE :: SensorIDs(:)
     CHARACTER(SL), ALLOCATABLE :: zfnames(:)
+    LOGICAL,       ALLOCATABLE :: zeeman_candidate(:)
     INTEGER,       ALLOCATABLE :: SensorIndex(:)
-    LOGICAL :: binary 
+    LOGICAL :: binary
+    LOGICAL :: use_netCDF
+    LOGICAL :: alt_available
+    LOGICAL :: zeeman_use_netCDF
+    LOGICAL :: zeeman_nc_exists, zeeman_bin_exists
+    CHARACTER(16) :: zeeman_ext, zeeman_other_ext
 
     ! Set up
     Error_Status = SUCCESS
@@ -245,9 +253,15 @@ CONTAINS
     ELSE
       Process_ID_Tag = ' '
     END IF
-    ! ...Check netCDF argument
-    binary = .TRUE.
+    ! ...Check netCDF argument. Default is NetCDF (REL-3.2.0); fallback to
+    !    Binary (or vice versa) is decided per-batch below.
+    binary = .FALSE.
     IF ( PRESENT(netCDF) ) binary = .NOT. netCDF
+
+    ! Allocate the filename array with room for the path prefix, so a long
+    ! File_Path is never truncated. The filename portion is bounded (a sensor
+    ! id plus extension); the path portion is sized from the actual argument.
+    ALLOCATE( CHARACTER(LEN_TRIM(local_path)+256) :: TauCoeff_File(MAX_N_SENSORS) )
 
     ! Determine the number of sensors and construct their filenames
     IF ( PRESENT(Sensor_ID) ) THEN
@@ -281,11 +295,72 @@ CONTAINS
         TauCoeff_File(1) = 'TauCoeff.nc'
       END IF
     END IF
-    
+
     ! Add the file path
     DO n=1,n_Sensors
       TauCoeff_File(n) = TRIM(ADJUSTL(local_path))//TRIM(TauCoeff_File(n))
     END DO
+
+    ! Batch-level format fallback: if any of the requested files is missing
+    ! but the alternate-format set is fully present, switch the whole batch.
+    ! ODAS/ODPS/ODSSU loaders accept a single netCDF flag, so per-sensor
+    ! mixed formats are not supported.
+    alt_available = .TRUE.
+    DO n=1,n_Sensors
+      IF ( .NOT. File_Exists(TRIM(TauCoeff_File(n))) ) THEN
+        alt_available = .FALSE.
+        EXIT
+      END IF
+    END DO
+    IF ( .NOT. alt_available ) THEN
+      ! Try the alternate format for the whole batch.
+      BLOCK
+        CHARACTER(:), ALLOCATABLE :: Alt_File(:)
+        LOGICAL :: alt_complete
+        CHARACTER(8) :: alt_ext, req_ext
+
+        ALLOCATE( CHARACTER(LEN_TRIM(local_path)+256) :: Alt_File(MAX_N_SENSORS) )
+        IF ( binary ) THEN
+          req_ext = '.bin'
+          alt_ext = '.nc'
+        ELSE
+          req_ext = '.nc'
+          alt_ext = '.bin'
+        END IF
+
+        IF ( PRESENT(Sensor_ID) ) THEN
+          DO n=1,n_Sensors
+            Alt_File(n) = TRIM(ADJUSTL(local_path)) // &
+                          TRIM(ADJUSTL(Sensor_ID(n))) // &
+                          '.TauCoeff' // TRIM(alt_ext)
+          END DO
+        ELSE
+          Alt_File(1) = TRIM(ADJUSTL(local_path)) // 'TauCoeff' // TRIM(alt_ext)
+        END IF
+
+        alt_complete = .TRUE.
+        DO n=1,n_Sensors
+          IF ( .NOT. File_Exists(TRIM(Alt_File(n))) ) THEN
+            alt_complete = .FALSE.
+            EXIT
+          END IF
+        END DO
+
+        IF ( alt_complete ) THEN
+          DO n=1,n_Sensors
+            TauCoeff_File(n) = Alt_File(n)
+          END DO
+          binary = .NOT. binary
+          CALL Display_Message( ROUTINE_NAME, &
+            'Requested '//TRIM(req_ext)//' TauCoeff file(s) missing; '// &
+            'falling back to '//TRIM(alt_ext)//' for the whole batch', &
+            INFORMATION )
+        END IF
+      END BLOCK
+    END IF
+
+    ! Resolved per-batch netCDF flag to pass downstream.
+    use_netCDF = .NOT. binary
 
     ! set the sensor dimension for structure TC
     TC%n_Sensors = n_Sensors
@@ -294,6 +369,7 @@ CONTAINS
     ! Allocate memory for the local arrays    
     ALLOCATE( SensorIDs( n_Sensors ),   &                                                                 
               zfnames( n_Sensors ),     & 
+              zeeman_candidate( n_Sensors ), & 
               SensorIndex( n_Sensors ), &                                                                
               STAT = Allocate_Status )                                                                    
     IF ( Allocate_Status /= 0 ) THEN                                                                      
@@ -401,7 +477,7 @@ CONTAINS
                                        Sensor_ID        =SensorIDs(1:n)   , & 
                                        File_Path        =File_Path        , & 
                                        Quiet            =Quiet            , & 
-                                       netCDF           =netCDF           , &
+                                       netCDF           =use_netCDF       , &
                                        Process_ID       =Process_ID       , & 
                                        Output_Process_ID=Output_Process_ID, & 
                                        Message_Log      =Message_Log        ) 
@@ -410,7 +486,7 @@ CONTAINS
         Error_Status = ODAS_Load_TauCoeff( &
                                        File_Path        =File_Path        , &
                                        Quiet            =Quiet            , &
-                                       netCDF           =netCDF           , &
+                                       netCDF           =use_netCDF       , &
                                        Process_ID       =Process_ID       , &
                                        Output_Process_ID=Output_Process_ID, &
                                        Message_Log      =Message_Log        )
@@ -450,7 +526,7 @@ CONTAINS
                                        Sensor_ID        =SensorIDs(1:n)   , & 
                                        File_Path        =File_Path        , & 
                                        Quiet            =Quiet            , &
-                                       netCDF           =netCDF           , & 
+                                       netCDF           =use_netCDF       , & 
                                        Process_ID       =Process_ID       , & 
                                        Output_Process_ID=Output_Process_ID, & 
                                        Message_Log      =Message_Log        ) 
@@ -459,7 +535,7 @@ CONTAINS
         Error_Status = ODPS_Load_TauCoeff( &
                                        File_Path        =File_Path        , &
                                        Quiet            =Quiet            , &
-                                       netCDF           =netCDF           , &
+                                       netCDF           =use_netCDF       , &
                                        Process_ID       =Process_ID       , &
                                        Output_Process_ID=Output_Process_ID, &
                                        Message_Log      =Message_Log        )
@@ -476,15 +552,35 @@ CONTAINS
       ! set the pointer pointing to the local (algorithm specific) TC array
       TC%ODPS => ODPS_TC
 
-      ! Copy over sensor types and IDs 
-      DO i = 1, n  
-        j = SensorIndex(i)   
-        TC%Sensor_ID(j)        = TC%ODPS(i)%Sensor_ID  
+      ! Copy over sensor types and IDs
+      DO i = 1, n
+        j = SensorIndex(i)
+        TC%Sensor_ID(j)        = TC%ODPS(i)%Sensor_ID
         TC%WMO_Satellite_ID(j) = TC%ODPS(i)%WMO_Satellite_ID
         TC%WMO_Sensor_ID(j)    = TC%ODPS(i)%WMO_Sensor_ID
         TC%Sensor_Type(j)      = TC%ODPS(i)%Sensor_Type
-      END DO     
-        
+      END DO
+
+      ! Validate each loaded structure against the supported ODPS group
+      ! definitions (Group_Index plus the Component_ID/Absorber_ID rosters).
+      ! Zeeman companion files (z*.TauCoeff) are loaded separately via the
+      ! ODZeeman path below and are not subject to this check.
+      DO i = 1, n
+        IF ( .NOT. ODPS_Validate_Group( TC%ODPS(i)%Group_Index , &
+                                        TC%ODPS(i)%Component_ID, &
+                                        TC%ODPS(i)%Absorber_ID , &
+                                        GroupMessage ) ) THEN
+          Error_Status = FAILURE
+          CALL Display_Message( ROUTINE_NAME, &
+                                'Invalid ODPS TauCoeff for sensor '// &
+                                TRIM(TC%ODPS(i)%Sensor_ID)//': '// &
+                                TRIM(GroupMessage), &
+                                Error_Status, &
+                                Message_Log=Message_Log )
+          RETURN
+        END IF
+      END DO
+
     END IF
 
     ! *** ODSSU algorithm  ***
@@ -496,17 +592,19 @@ CONTAINS
                                 SensorIDs, SensorIndex, &
                                 SensorID_in = Sensor_ID )
         Error_Status = ODSSU_Load_TauCoeff( &
-                                       Sensor_ID        =SensorIDs(1:n)   , & 
-                                       File_Path        =File_Path        , & 
-                                       Quiet            =Quiet            , & 
-                                       Process_ID       =Process_ID       , & 
-                                       Output_Process_ID=Output_Process_ID, & 
-                                       Message_Log      =Message_Log        ) 
+                                       Sensor_ID        =SensorIDs(1:n)   , &
+                                       File_Path        =File_Path        , &
+                                       Quiet            =Quiet            , &
+                                       netCDF           =use_netCDF       , &
+                                       Process_ID       =Process_ID       , &
+                                       Output_Process_ID=Output_Process_ID, &
+                                       Message_Log      =Message_Log        )
       ELSE
         ! for the case that the Sensor_ID is not present (in this case, 1 sensor only)
         Error_Status = ODSSU_Load_TauCoeff( &
                                        File_Path        =File_Path        , &
                                        Quiet            =Quiet            , &
+                                       netCDF           =use_netCDF       , &
                                        Process_ID       =Process_ID       , &
                                        Output_Process_ID=Output_Process_ID, &
                                        Message_Log      =Message_Log        )
@@ -523,15 +621,36 @@ CONTAINS
       ! set the pointer pointing to the local (algorithm specific) TC array
       TC%ODSSU => ODSSU_TC
         
-      ! Copy over sensor types and IDs 
-      DO i = 1, n  
-        j = SensorIndex(i) 
-        TC%Sensor_ID(j)        = TC%ODSSU(i)%Sensor_ID  
+      ! Copy over sensor types and IDs
+      DO i = 1, n
+        j = SensorIndex(i)
+        TC%Sensor_ID(j)        = TC%ODSSU(i)%Sensor_ID
         TC%WMO_Satellite_ID(j) = TC%ODSSU(i)%WMO_Satellite_ID
         TC%WMO_Sensor_ID(j)    = TC%ODSSU(i)%WMO_Sensor_ID
         TC%Sensor_Type(j)      = TC%ODSSU(i)%Sensor_Type
-      END DO   
-        
+      END DO
+
+      ! Validate every nested ODPS sub-structure of each ODSSU sensor
+      ! (ODSSU may instead carry ODAS sub-structures, hence the guard)
+      DO i = 1, n
+        IF ( .NOT. ASSOCIATED(TC%ODSSU(i)%ODPS) ) CYCLE
+        DO k = 1, SIZE(TC%ODSSU(i)%ODPS)
+          IF ( .NOT. ODPS_Validate_Group( TC%ODSSU(i)%ODPS(k)%Group_Index , &
+                                          TC%ODSSU(i)%ODPS(k)%Component_ID, &
+                                          TC%ODSSU(i)%ODPS(k)%Absorber_ID , &
+                                          GroupMessage ) ) THEN
+            Error_Status = FAILURE
+            CALL Display_Message( ROUTINE_NAME, &
+                                  'Invalid ODPS sub-structure in ODSSU TauCoeff for sensor '// &
+                                  TRIM(TC%ODSSU(i)%Sensor_ID)//': '// &
+                                  TRIM(GroupMessage), &
+                                  Error_Status, &
+                                  Message_Log=Message_Log )
+            RETURN
+          END IF
+        END DO
+      END DO
+
     END IF
 
     !----------------------------------------------------------------------------------
@@ -541,26 +660,89 @@ CONTAINS
     TC%ZSensor_LoIndex = 0
     TC%n_ODZeeman = 0
     i = 1
+
+    ! Batch-level format probe. ODZeeman_Load_TauCoeff takes a single netCDF
+    ! flag, so the whole Zeeman batch must use one format; this picks it.
+    !
+    ! Prefer NetCDF. A Zeeman-candidate sensor only forces the batch to Binary
+    ! when it genuinely has a Binary coeff but NOT the NetCDF one (a real
+    ! mixed-format set). A sensor that has NEITHER format (e.g. AMSU-A in a
+    ! NetCDF-only deployment that ships no zamsua*.TauCoeff at all) has no
+    ! Zeeman coefficient to load and must NOT drag the batch to Binary: doing
+    ! so would make a NetCDF-only SSMIS set (which ships zssmis*.TauCoeff.nc
+    ! and no .bin) silently lose its Zeeman correction, because the per-file
+    ! existence guard below would then find no zssmis*.TauCoeff.bin. Sensors
+    ! with no Zeeman file in either format are simply skipped by that guard.
+    ! A sensor is a Zeeman candidate through the heritage WMO gate (SSMIS,
+    ! AMSU-A) OR, dual-acceptance, when a netCDF companion z-file exists and
+    ! opts in via the global attribute Zeeman_Algorithm = 1. Existing
+    ! coefficient sets carry no such attribute and behave exactly as before;
+    ! future Zeeman-corrected sensors can opt in via metadata instead of
+    ! having their WMO IDs hardwired here.
     DO n = 1, n_Sensors
-      IF(TC%WMO_Sensor_ID(n) == WMO_SSMIS .OR. TC%WMO_Sensor_ID(n) == WMO_AMSUA )THEN
-               
-          ! file name: i.g. zssmis_n16.TauCoeff.bin
-        zfnames(i) = 'z'//TRIM(TC%Sensor_ID(n))//'.TauCoeff.bin'
+      zeeman_candidate(n) = ( TC%WMO_Sensor_ID(n) == WMO_SSMIS .OR. &
+                              TC%WMO_Sensor_ID(n) == WMO_AMSUA )
+      IF ( .NOT. zeeman_candidate(n) ) THEN
+        zeeman_candidate(n) = Zeeman_Metadata_OptIn( &
+          TRIM(local_path)//'z'//TRIM(TC%Sensor_ID(n))//'.TauCoeff.nc' )
+      END IF
+    END DO
+
+    zeeman_use_netCDF = .TRUE.
+    DO n = 1, n_Sensors
+      IF ( zeeman_candidate(n) ) THEN
+        zeeman_nc_exists  = File_Exists( TRIM(local_path) // 'z' // TRIM(TC%Sensor_ID(n)) // '.TauCoeff.nc'  )
+        zeeman_bin_exists = File_Exists( TRIM(local_path) // 'z' // TRIM(TC%Sensor_ID(n)) // '.TauCoeff.bin' )
+        IF ( ( .NOT. zeeman_nc_exists ) .AND. zeeman_bin_exists ) THEN
+          zeeman_use_netCDF = .FALSE.
+          CALL Display_Message( ROUTINE_NAME, &
+            'NetCDF Zeeman TauCoeff missing for '//TRIM(TC%Sensor_ID(n))// &
+            '; using Binary for the whole Zeeman batch', &
+            INFORMATION )
+          EXIT
+        END IF
+      END IF
+    END DO
+    IF ( zeeman_use_netCDF ) THEN
+      zeeman_ext = '.TauCoeff.nc'
+      zeeman_other_ext = '.TauCoeff.bin'
+    ELSE
+      zeeman_ext = '.TauCoeff.bin'
+      zeeman_other_ext = '.TauCoeff.nc'
+    END IF
+
+    DO n = 1, n_Sensors
+      IF( zeeman_candidate(n) )THEN
+
+          ! file name: e.g. zssmis_f16.TauCoeff.nc (or .bin if NetCDF set incomplete)
+        zfnames(i) = 'z'//TRIM(TC%Sensor_ID(n))//TRIM(zeeman_ext)
         IF( File_Exists(TRIM(local_path)//TRIM(zfnames(i))) ) THEN
           TC%ZSensor_LoIndex(n) = i
           TC%n_ODZeeman = i
           i = i + 1
+        ELSE IF ( File_Exists( TRIM(local_path)//'z'//TRIM(TC%Sensor_ID(n))// &
+                               TRIM(zeeman_other_ext) ) ) THEN
+          ! The sensor DOES have a Zeeman coefficient file, but only in the
+          ! format the batch probe did not choose (mixed-format deployment).
+          ! Skipping it silently would drop the Zeeman correction (wrong TBs
+          ! in upper-stratospheric channels) with no trace -- make it loud.
+          CALL Display_Message( ROUTINE_NAME, &
+            'Zeeman TauCoeff for '//TRIM(TC%Sensor_ID(n))//' exists only as z'// &
+            TRIM(TC%Sensor_ID(n))//TRIM(zeeman_other_ext)//' but the Zeeman batch format is '// &
+            TRIM(zeeman_ext)//'; its Zeeman correction is DISABLED for this run', &
+            WARNING )
         END IF
       END IF
     END DO
-    IF( TC%n_ODZeeman > 0 )THEN 
-      Error_Status = ODZeeman_Load_TauCoeff( &                              
-                                     zfnames(1:TC%n_ODZeeman)           , &                     
-                                     File_Path        =File_Path        , &    
-                                     Quiet            =Quiet            , &    
-                                     Process_ID       =Process_ID       , &    
-                                     Output_Process_ID=Output_Process_ID, &    
-                                     Message_Log      =Message_Log        )  
+    IF( TC%n_ODZeeman > 0 )THEN
+      Error_Status = ODZeeman_Load_TauCoeff( &
+                                     zfnames(1:TC%n_ODZeeman)            , &
+                                     File_Path        =File_Path         , &
+                                     Quiet            =Quiet             , &
+                                     netCDF           =zeeman_use_netCDF , &
+                                     Process_ID       =Process_ID        , &
+                                     Output_Process_ID=Output_Process_ID , &
+                                     Message_Log      =Message_Log         )
       IF ( Error_Status /= SUCCESS ) THEN
         CALL Display_Message( ROUTINE_NAME, &
                               'Error loading ODZeeman TauCoeff data', &
@@ -577,6 +759,7 @@ CONTAINS
 
     DEALLOCATE(SensorIDs,   &                 
                zfnames,     &
+               zeeman_candidate, &
                SensorIndex, &                                                                
                 STAT  = Deallocate_Status)
     IF ( Deallocate_Status /= 0 ) THEN                                   
@@ -760,6 +943,25 @@ CONTAINS
 
   END FUNCTION CRTM_Destroy_TauCoeff
 
+  ! Dual-acceptance Zeeman opt-in probe: .TRUE. only when the named netCDF
+  ! companion file exists and carries global attribute Zeeman_Algorithm = 1.
+  ! Any missing file, unreadable file, or absent attribute means .FALSE.
+  ! (the heritage WMO gate then decides alone).
+  FUNCTION Zeeman_Metadata_OptIn( zFilename ) RESULT( OptIn )
+    CHARACTER(*), INTENT(IN) :: zFilename
+    LOGICAL :: OptIn
+    INTEGER :: status, FileID
+    INTEGER(Long) :: zeeman_flag
+    OptIn = .FALSE.
+    IF ( .NOT. File_Exists( zFilename ) ) RETURN
+    status = NF90_OPEN( zFilename, NF90_NOWRITE, FileID )
+    IF ( status /= NF90_NOERR ) RETURN
+    status = NF90_GET_ATT( FileID, NF90_GLOBAL, 'Zeeman_Algorithm', zeeman_flag )
+    IF ( status == NF90_NOERR ) OptIn = ( zeeman_flag == 1 )
+    status = NF90_CLOSE( FileID )
+  END FUNCTION Zeeman_Metadata_OptIn
+
+
   FUNCTION Inquire_AlgorithmID(  Filename        , &  ! Input
                                  Algorithm_ID    , &  ! Output
                                  RCS_Id          , &  ! Revision control
@@ -809,9 +1011,8 @@ CONTAINS
     ! ----------------------------------------
     READ( FileID, IOSTAT=IO_Status ) Release_in, Version_in
     IF ( IO_Status /= 0 ) THEN
-      WRITE( Message,'("Error reading Release/Version values from ",a,&
-                      &". IOSTAT = ",i0)' ) &
-                      TRIM(Filename), IO_Status
+      WRITE( Message,'(". IOSTAT = ",i0)' ) IO_Status
+      Message = 'Error reading Release/Version values from '//TRIM(Filename)//TRIM(Message)
       CALL Inquire_Cleanup(Close_File=SET); RETURN
     END IF
 
@@ -820,9 +1021,8 @@ CONTAINS
     ! --------------------
     READ( FileID, IOSTAT=IO_Status ) Algorithm_ID_in
     IF ( IO_Status /= 0 ) THEN
-      WRITE( Message,'("Error reading Algorithm ID from ",a,&
-                      &". IOSTAT = ",i0)' ) &
-                      TRIM(Filename), IO_Status
+      WRITE( Message,'(". IOSTAT = ",i0)' ) IO_Status
+      Message = 'Error reading Algorithm ID from '//TRIM(Filename)//TRIM(Message)
       CALL Inquire_Cleanup(Close_File=SET); RETURN
     END IF
 
@@ -833,8 +1033,8 @@ CONTAINS
     ! --------------
     CLOSE( FileID, IOSTAT=IO_Status )
     IF ( IO_Status /= 0 ) THEN
-      WRITE( Message,'("Error closing ",a,". IOSTAT = ",i0)' ) &
-                    TRIM(Filename), IO_Status
+      WRITE( Message,'(". IOSTAT = ",i0)' ) IO_Status
+      Message = 'Error closing '//TRIM(Filename)//TRIM(Message)
       CALL Inquire_Cleanup(); RETURN
     END IF
 

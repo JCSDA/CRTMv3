@@ -95,8 +95,8 @@ PROGRAM test_MWSurfEM
 
   ! ============================================================================
   ! Initialize Unit test:
-  CALL UnitTest_Init(emTest, .TRUE.)
-  CALL UnitTest_Setup(emTest, 'test_MWSurfEM', Program_Name, .TRUE.)
+  CALL emTest%Init(.TRUE.)
+  CALL emTest%Setup('test_MWSurfEM', Program_Name, .TRUE.)
 
   ! Get sensor id from user
   ! -----------------------
@@ -115,12 +115,12 @@ PROGRAM test_MWSurfEM
                                     File_Path         = COEFFICIENTS_PATH, &
                                     netCDF            = .FALSE.           , &
                                     Quiet             = Quiet          )
-  CALL UnitTest_Assert(emTest, (Error_Status==SUCCESS) )
+  CALL emTest%Assert((Error_Status==SUCCESS) )
 
   Error_Status = CRTM_MWwaterCoeff_Load_FASTEM( &
                         'FASTEM6',             &
                         Quiet             = Quiet            )
-  CALL UnitTest_Assert(emTest, (Error_Status==SUCCESS) )
+  CALL emTest%Assert((Error_Status==SUCCESS) )
   ! 2b. Determine the total number of channels
   !     for which the CRTM was initialized
   ! ------------------------------------------
@@ -153,6 +153,8 @@ PROGRAM test_MWSurfEM
   CALL CRTM_SfcOptics_Create(SfcOptics, &
                               1, & ! n_Angles
                               4)   ! n_Stokes
+  SfcOptics%Angle(1)  = ZENITH_ANGLE
+  SfcOptics%Weight(1) = 1.0_fp
 
   !Error_Status = Compute_MW_Water_SfcOptics( &
   !  Sfc(1)     , &  ! Input
@@ -173,13 +175,13 @@ PROGRAM test_MWSurfEM
     WRITE(*,*) "Channel: ", ChannelIndex, " Emissivity: ", SfcOptics%Emissivity
   END DO ChannelLoop
 
-  CALL UnitTest_Assert(emTest, (Error_Status==SUCCESS) )
+  CALL emTest%Assert((Error_Status==SUCCESS) )
 
   ! 5. Cleanup
   CALL CRTM_SfcOptics_Destroy(SfcOptics)
   CALL CRTM_GeometryInfo_Destroy(GeometryInfo)
 
-  testPassed = UnitTest_Passed(emTest)
+  testPassed = emTest%Passed()
   IF(testPassed) THEN
     STOP 0
   ELSE

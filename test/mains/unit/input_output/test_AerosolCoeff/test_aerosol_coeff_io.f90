@@ -40,9 +40,9 @@ PROGRAM test_aerosol_coeff_io
   !TYPE(AerosolCoeff_type) :: aero_coeff
   CHARACTER(2000)         :: info
   CHARACTER(*), PARAMETER :: Aerosol_Model = 'CRTM'
-  CHARACTER(*), PARAMETER :: AerosolCoeff_File = 'AerosolCoeff.bin'
+  CHARACTER(*), PARAMETER :: AerosolCoeff_File = 'AerosolCoeff.nc'
   CHARACTER(*), PARAMETER :: File_Path = './testinput/'
-  LOGICAL,      PARAMETER :: netCDF = .FALSE.
+  LOGICAL,      PARAMETER :: netCDF = .TRUE.
   LOGICAL,      PARAMETER :: Quiet = .TRUE.
   INTEGER                 :: err_stat
   TYPE(UnitTest_type)     :: ioTest
@@ -50,8 +50,8 @@ PROGRAM test_aerosol_coeff_io
   CHARACTER(*), PARAMETER :: Program_Name = 'Test_Aerosol_Coeff_IO'
 
   ! Initialize Unit test:
-  CALL UnitTest_Init(ioTest, .TRUE.)
-  CALL UnitTest_Setup(ioTest, 'Aerosol_Coeff_IO_Test', Program_Name, .TRUE.)
+  CALL ioTest%Init(.TRUE.)
+  CALL ioTest%Setup('Aerosol_Coeff_IO_Test', Program_Name, .TRUE.)
 
   ! Greeting:
   WRITE(*,*) 'HELLO, THIS IS A TEST CODE TO INSPECT AerosolCoeff files.'
@@ -64,8 +64,8 @@ PROGRAM test_aerosol_coeff_io
                 File_Path                  , &
                 netCDF            = netCDF , &
                 Quiet             = Quiet    )
-  CALL UnitTest_Assert(ioTest, (err_stat==SUCCESS) )
-  testPassed = UnitTest_Passed(ioTest)
+  CALL ioTest%Assert((err_stat==SUCCESS) )
+  testPassed = ioTest%Passed()
 
   IF ( err_stat /= SUCCESS ) THEN
     CALL Display_Message( 'CRTM_Load_Aerosol_Coeff' ,'Error loading AerosolCoeff data', err_stat )

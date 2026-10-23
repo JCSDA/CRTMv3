@@ -94,9 +94,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:            Set this logical argument to access netCDF format
 !                          ACCoeff datafiles.
-!                          If == .FALSE., file format is BINARY [DEFAULT].
-!                             == .TRUE.,  file format is NETCDF.
-!                          If not specified, default is .FALSE.
+!                          If == .FALSE., file format is BINARY.
+!                             == .TRUE.,  file format is NETCDF [DEFAULT].
+!                          If not specified, default is .TRUE.
 !                          UNITS:      N/A
 !                          TYPE:       LOGICAL
 !                          DIMENSION:  Scalar
@@ -213,17 +213,17 @@ CONTAINS
     ! Function result
     INTEGER :: err_stat
     ! Function variables
-    LOGICAL :: binary
+    LOGICAL :: Binary
 
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    binary = .TRUE.
-    IF ( PRESENT(netCDF) ) binary = .NOT. netCDF
+    Binary = .FALSE.
+    IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
 
     ! Call the appropriate function
-    IF ( binary ) THEN
+    IF ( Binary ) THEN
       err_stat = ACCoeff_Binary_InquireFile( &
                    Filename, &
                    n_FOVs           = n_FOVs          , &
@@ -289,9 +289,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:         Set this logical argument to access netCDF format
 !                       ACCoeff datafiles.
-!                       If == .FALSE., file format is BINARY [DEFAULT].
-!                          == .TRUE.,  file format is NETCDF.
-!                       If not specified, default is .FALSE.
+!                       If == .FALSE., file format is BINARY.
+!                          == .TRUE.,  file format is NETCDF [DEFAULT].
+!                       If not specified, default is .TRUE.
 !                       UNITS:      N/A
 !                       TYPE:       LOGICAL
 !                       DIMENSION:  Scalar
@@ -367,16 +367,16 @@ CONTAINS
     ! Function result
     INTEGER :: err_stat
     ! Function variables
-    LOGICAL :: binary
+    LOGICAL :: Binary
 
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    binary = .TRUE.
-    IF ( PRESENT(netCDF) ) binary = .NOT. netCDF
+    Binary = .FALSE.
+    IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
     ! Call the appropriate function
-    IF ( binary ) THEN
+    IF ( Binary ) THEN
       err_stat = ACCoeff_Binary_ReadFile( &
                    Filename, &
                    ACCoeff , &
@@ -431,9 +431,9 @@ CONTAINS
 ! OPTIONAL INPUTS:
 !       netCDF:         Set this logical argument to access netCDF format
 !                       ACCoeff datafiles.
-!                       If == .FALSE., file format is BINARY [DEFAULT].
-!                          == .TRUE.,  file format is NETCDF.
-!                       If not specified, default is .FALSE.
+!                       If == .FALSE., file format is BINARY.
+!                          == .TRUE.,  file format is NETCDF [DEFAULT].
+!                       If not specified, default is .TRUE.
 !                       UNITS:      N/A
 !                       TYPE:       LOGICAL
 !                       DIMENSION:  Scalar
@@ -508,16 +508,16 @@ CONTAINS
     ! Function result
     INTEGER :: err_stat
     ! Local variables
-    LOGICAL :: binary
+    LOGICAL :: Binary
 
     ! Set up
     err_stat = SUCCESS
     ! ...Check netCDF argument
-    binary = .TRUE.
-    IF ( PRESENT(netCDF) ) binary = .NOT. netCDF
+    Binary = .FALSE.
+    IF ( PRESENT(netCDF) ) Binary = .NOT. netCDF
 
     ! Call the appropriate function
-    IF ( binary ) THEN
+    IF ( Binary ) THEN
       err_stat = ACCoeff_Binary_WriteFile( &
                    Filename, &
                    ACCoeff , &
@@ -622,7 +622,7 @@ CONTAINS
     END IF
 
     ! Write the Binary file
-    err_stat = ACCoeff_WriteFile( BIN_Filename, ACCoeff, Quiet = Quiet )
+    err_stat = ACCoeff_WriteFile( BIN_Filename, ACCoeff, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error writing Binary file '//TRIM(BIN_Filename)
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
@@ -631,7 +631,7 @@ CONTAINS
 
     ! Check the write was successful
     ! ...Read the Binary file
-    err_stat = ACCoeff_ReadFile( BIN_Filename, ACCoeff_copy, Quiet = Quiet )
+    err_stat = ACCoeff_ReadFile( BIN_Filename, ACCoeff_copy, Quiet = Quiet, netCDF = .FALSE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error reading Binary file '//TRIM(BIN_Filename)//' for test'
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )

@@ -30,6 +30,7 @@ MODULE CRTM_VISlandCoeff
   ! -----------------
   ! Module use
   USE Message_Handler  , ONLY: SUCCESS, FAILURE, Display_Message
+  USE File_Utility          , ONLY: Join_Path
   USE SEcategory_Define, ONLY: SEcategory_type, &
                                SEcategory_Associated, &
                                SEcategory_Destroy
@@ -181,7 +182,7 @@ CONTAINS
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_VISlandCoeff_Load'
     ! Local variables
     CHARACTER(ML) :: msg, pid_msg
-    CHARACTER(ML) :: VISlandCoeff_File
+    CHARACTER(:), ALLOCATABLE :: VISlandCoeff_File
     LOGICAL :: noisy
     ! Function variables
     LOGICAL :: Binary
@@ -189,9 +190,9 @@ CONTAINS
     ! Setup
     err_stat = SUCCESS
     ! ...Assign the filename to local variable
-    VISlandCoeff_File = ADJUSTL(Filename)
+    VISlandCoeff_File = TRIM(ADJUSTL(Filename))
     ! ...Add the file path
-    IF ( PRESENT(File_Path) ) VISlandCoeff_File = TRIM(ADJUSTL(File_Path))//TRIM(VISlandCoeff_File)
+    IF ( PRESENT(File_Path) ) VISlandCoeff_File = Join_Path(File_Path, VISlandCoeff_File)
     ! ...Check Quiet argument
     noisy = .TRUE.
     IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet

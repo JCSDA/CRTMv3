@@ -29,6 +29,7 @@ MODULE File_Utility
   PUBLIC :: File_Exists
   PUBLIC :: File_Open
   PUBLIC :: Count_Lines_in_File
+  PUBLIC :: Join_Path
 
 
   ! --------------------
@@ -193,6 +194,47 @@ CONTAINS
     nLines = n
 
   END FUNCTION Count_Lines_in_File
+
+
+!------------------------------------------------------------------------------
+!
+! NAME:
+!       Join_Path
+!
+! PURPOSE:
+!       Compose a directory prefix and a file name into a full path without
+!       imposing any fixed length. The result is a deferred-length allocatable
+!       string sized exactly to its contents, so a long path can never be
+!       silently truncated into a fixed-length buffer.
+!
+!       This preserves the historical CRTM join convention: the prefix is
+!       prepended verbatim and NO separator is inserted, so the caller is
+!       responsible for supplying any trailing slash on the directory, exactly
+!       as the loaders did with TRIM(ADJUSTL(File_Path))//TRIM(Filename). An
+!       empty (all-blank) directory yields just the file name.
+!
+! CALLING SEQUENCE:
+!       path = Join_Path( dir, name )
+!
+! INPUTS:
+!       dir:   Directory prefix. May be blank.
+!              TYPE:       CHARACTER(*)
+!       name:  File name (or trailing path component).
+!              TYPE:       CHARACTER(*)
+!
+! FUNCTION RESULT:
+!       path:  The composed path, sized exactly to its contents.
+!              TYPE:       CHARACTER(:), ALLOCATABLE
+!
+!------------------------------------------------------------------------------
+
+  PURE FUNCTION Join_Path( dir, name ) RESULT( path )
+    CHARACTER(*), INTENT(IN)  :: dir
+    CHARACTER(*), INTENT(IN)  :: name
+    CHARACTER(:), ALLOCATABLE :: path
+    path = TRIM(ADJUSTL(name))
+    IF ( LEN_TRIM(dir) > 0 ) path = TRIM(ADJUSTL(dir)) // path
+  END FUNCTION Join_Path
 
 END MODULE File_Utility
 

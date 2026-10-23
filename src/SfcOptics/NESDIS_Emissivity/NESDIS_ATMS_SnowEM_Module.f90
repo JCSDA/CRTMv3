@@ -339,12 +339,24 @@ CONTAINS
            ENDIF
      END SELECT
 
-    IF (ANY(Tbs((/1,2,3,4,5/)) < 50.0_fp) .OR. ANY(TBs((/1,2,3,4,5/)) > 500.0_fp)) THEN
-        !** use default snow EM
-        CALL ATMS_SNOW_ByTypes(Frequency,Snow_Type,em_vector)
-     ELSE
-        ! the above regression-based snow-typing algs are superseded by the diagnosis-based snow-typing
-        CALL ATMS_SNOW_ByTBTs_D(Frequency,Tbs,Ts,Snow_Type,em_vector)  
+   ! The regression-based snow-typing above is superseded by the diagnosis-based
+   ! snow-typing (ATMS_SNOW_ByTBTs_D), but that needs the five ATMS window-channel
+   ! TBs (23.8/31.4/50.3/88.2/165.5 GHz). Only apply it when Tbs is actually
+   ! present and large enough, and when all five values are physically sane
+   ! (in particular, reject NaN via the x/=x test) -- otherwise keep the result
+   ! from the SELECT CASE above. Indexing an absent or too-short Tbs here was the
+   ! out-of-bounds crash reported in JCSDA/CRTMv3#192.
+     IF ( PRESENT(Tbs) ) THEN
+        IF ( SIZE(Tbs) >= nwch ) THEN
+           IF ( ANY( Tbs(1:nwch) < 50.0_fp  .OR. &
+                     Tbs(1:nwch) > 500.0_fp .OR. &
+                     Tbs(1:nwch) /= Tbs(1:nwch) ) ) THEN
+              !** TBs out of range / not finite -- use default snow EM
+              CALL ATMS_SNOW_ByTypes(Frequency,Snow_Type,em_vector)
+           ELSE
+              CALL ATMS_SNOW_ByTBTs_D(Frequency,Tbs,Ts,Snow_Type,em_vector)
+           END IF
+        END IF
      END IF
 
 
@@ -641,7 +653,7 @@ CONTAINS
      REAL(fp) :: tb(:),frequency
      REAL(fp) :: em_vector(:),emissivity,discriminator(nwch)
      INTEGER  :: i,snow_type,ich,nvalid_ch
-     REAL(fp),SAVE :: coe(nwch*(ncoe+1))
+     REAL(fp) :: coe(nwch*(ncoe+1))
 
 
    ! Fitting Coefficients at 23.8 GHz: Using Tb1 ~ Tb3
@@ -756,7 +768,7 @@ CONTAINS
      REAL(fp)    :: tba(:)
      REAL(fp)    :: em_vector(:),emissivity,frequency,discriminator(nwch)
      INTEGER :: snow_type,i,ich,nvalid_ch
-     REAL(fp),SAVE  :: coe(50)
+     REAL(fp)  :: coe(50)
 
 
    ! Fitting Coefficients at 23.8 GHz: Using Tb1 ~ Tb3
@@ -873,7 +885,6 @@ CONTAINS
      REAL(fp)    :: em_vector(:),emissivity,frequency,ed0(nwch),discriminator(5)
      INTEGER :: snow_type,i,ich,nvalid_ch
      REAL(fp)  :: coe(50)
-     SAVE coe
 
    ! Fitting Coefficients at 31.4 GHz: Using Tb4, Tb5
      coe(1:5) = (/-4.015636e-001_fp,9.297894e-003_fp, -1.305068e-005_fp, &
@@ -980,7 +991,6 @@ CONTAINS
      REAL(fp)   :: ts,emissivity
      REAL(fp)   :: discriminator(5)
      LOGICAL:: pick_status,tindex(nind)
-     SAVE      threshold,DI_coe,LI_coe, HI_coe,nmodel
 
      ! Silence gfortran complaints about maybe-used-uninit by init to HUGE()
      npass = HUGE(npass)
@@ -1246,7 +1256,7 @@ CONTAINS
      REAL(fp)  :: tba(:)
      REAL(fp)  :: em_vector(:),emissivity,ts,frequency,discriminator(nwch)
      INTEGER   :: snow_type,i,ich,nvalid_ch
-     REAL(fp),SAVE  :: coe(nch*(ncoe+1))
+     REAL(fp)  :: coe(nch*(ncoe+1))
 
 
    ! Fitting Coefficients at 23.8 GHz: Using Tb1, Tb2 and Ts
@@ -1353,7 +1363,7 @@ CONTAINS
      REAL(fp)    :: tbb(:)
      REAL(fp)    :: em_vector(:),emissivity,ts,frequency,ed0(nwch),discriminator(5)
      INTEGER :: snow_type,i,ich,nvalid_ch
-     REAL(fp),SAVE  :: coe(nch*(ncoe+1))
+     REAL(fp)  :: coe(nch*(ncoe+1))
 
 
    ! Fitting Coefficients at 31.4 GHz: Using Tb4, Tb5 and Ts
@@ -1793,8 +1803,6 @@ CONTAINS
      REAL(fp) :: discriminator(5),emmod(nw_3),dem(nw_3)
      REAL(fp) :: emissivity,em_vector(2)
      REAL(DOUBLE) :: dem_coe(nw_3,0:ncoe-1),sinthetas,costhetas,deg2rad
-
-     SAVE  dem_coe
 
      dem_coe(1,0:ncoe-1)=(/ 2.306844e+000_Double, -7.287718e-003_Double, &
           -6.433248e-004_Double,  1.664216e-005_Double, &

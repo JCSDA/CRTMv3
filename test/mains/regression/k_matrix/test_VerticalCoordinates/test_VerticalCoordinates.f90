@@ -391,9 +391,9 @@ PROGRAM test_VerticalCoordinates
   ! ------------------------------------------------
   ! 9a.1 Atmosphere file
   ! ...Generate filename
-  atmk_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.bin'
-  atmk_NAM_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.Atmosphere.bin'
-  atmk_GFS_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.Atmosphere.bin'
+  atmk_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.nc'
+  atmk_NAM_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.Atmosphere.nc'
+  atmk_GFS_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.Atmosphere.nc'
 
   ! Assign pressures for k-matrix plotting
   DO l = 1, n_Channels
@@ -408,7 +408,7 @@ PROGRAM test_VerticalCoordinates
     Message = 'Atmosphere_K save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write Atmosphere_K structure to file
-    Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, Quiet=.TRUE. )
+    Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating Atmosphere_K save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -420,7 +420,7 @@ PROGRAM test_VerticalCoordinates
     Message = 'Atmosphere_NAM_K save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write Atmosphere_K structure to file
-    Error_Status = CRTM_Atmosphere_WriteFile( atmk_NAM_file, Atmosphere_NAM_K, Quiet=.TRUE. )
+    Error_Status = CRTM_Atmosphere_WriteFile( atmk_NAM_file, Atmosphere_NAM_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating Atmosphere_NAM_K save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -432,7 +432,7 @@ PROGRAM test_VerticalCoordinates
     Message = 'Atmosphere_GFS_K save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write Atmosphere_K structure to file
-    Error_Status = CRTM_Atmosphere_WriteFile( atmk_GFS_file, Atmosphere_GFS_K, Quiet=.TRUE. )
+    Error_Status = CRTM_Atmosphere_WriteFile( atmk_GFS_file, Atmosphere_GFS_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating Atmosphere_GFS_K save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -441,16 +441,16 @@ PROGRAM test_VerticalCoordinates
   END IF
   ! 9a.2 Surface file
   ! ...Generate filename
-  sfck_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.bin'
-  sfck_NAM_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.Surface.bin'
-  sfck_GFS_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.Surface.bin'
+  sfck_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.nc'
+  sfck_NAM_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.Surface.nc'
+  sfck_GFS_File = RESULTS_PATH//TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.Surface.nc'
   ! ...Check if the file exists
   ! CRTM build
   IF ( .NOT. File_Exists(sfck_File) ) THEN
     Message = 'Surface_K save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write Surface_K structure to file
-    Error_Status = CRTM_Surface_WriteFile( sfck_file, Surface_K, Quiet=.TRUE. )
+    Error_Status = CRTM_Surface_WriteFile( sfck_file, Surface_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating Surface_K save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -462,7 +462,7 @@ PROGRAM test_VerticalCoordinates
     Message = 'Surface_NAM_K save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write Surface_K structure to file
-    Error_Status = CRTM_Surface_WriteFile( sfck_NAM_file, Surface_NAM_K, Quiet=.TRUE. )
+    Error_Status = CRTM_Surface_WriteFile( sfck_NAM_file, Surface_NAM_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating Surface_NAM_K save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -474,7 +474,7 @@ PROGRAM test_VerticalCoordinates
     Message = 'Surface_GFS_K save file does not exist. Creating...'
     CALL Display_Message( PROGRAM_NAME, Message, INFORMATION )
     ! ...File not found, so write Surface_K structure to file
-    Error_Status = CRTM_Surface_WriteFile( sfck_GFS_file, Surface_GFS_K, Quiet=.TRUE. )
+    Error_Status = CRTM_Surface_WriteFile( sfck_GFS_file, Surface_GFS_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating Surface_GFS_K save file'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -486,7 +486,7 @@ PROGRAM test_VerticalCoordinates
   ! ---------------------------
   ! 9b.1 Atmosphere file
   ! build test atmosphere
-  Error_Status = CRTM_Atmosphere_InquireFile( atmk_File, &
+  Error_Status = CRTM_Atmosphere_InquireFile( atmk_File, NetCDF=.TRUE., &
                                               n_Channels = n_la, &
                                               n_Profiles = n_ma )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -495,7 +495,7 @@ PROGRAM test_VerticalCoordinates
     STOP 1
   END IF
   ! NAM atmosphere
-  Error_Status = CRTM_Atmosphere_InquireFile( atmk_NAM_File, &
+  Error_Status = CRTM_Atmosphere_InquireFile( atmk_NAM_File, NetCDF=.TRUE., &
                                               n_Channels = n_NAM_la, &
                                               n_Profiles = n_NAM_ma )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -504,7 +504,7 @@ PROGRAM test_VerticalCoordinates
     STOP 1
   END IF
   ! GFS atmosphere
-  Error_Status = CRTM_Atmosphere_InquireFile( atmk_GFS_File, &
+  Error_Status = CRTM_Atmosphere_InquireFile( atmk_GFS_File, NetCDF=.TRUE., &
                                               n_Channels = n_GFS_la, &
                                               n_Profiles = n_GFS_ma )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -514,7 +514,7 @@ PROGRAM test_VerticalCoordinates
   END IF
   ! 9b.2 Surface file
   ! build test
-  Error_Status = CRTM_Surface_InquireFile( sfck_File, &
+  Error_Status = CRTM_Surface_InquireFile( sfck_File, NetCDF=.TRUE., &
                                            n_Channels = n_ls, &
                                            n_Profiles = n_ms )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -523,7 +523,7 @@ PROGRAM test_VerticalCoordinates
     STOP 1
   END IF
   ! NAM
-  Error_Status = CRTM_Surface_InquireFile( sfck_NAM_File, &
+  Error_Status = CRTM_Surface_InquireFile( sfck_NAM_File, NetCDF=.TRUE., &
                                            n_Channels = n_NAM_ls, &
                                            n_Profiles = n_NAM_ms )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -532,7 +532,7 @@ PROGRAM test_VerticalCoordinates
     STOP 1
   END IF
   ! GFS
-  Error_Status = CRTM_Surface_InquireFile( sfck_GFS_File, &
+  Error_Status = CRTM_Surface_InquireFile( sfck_GFS_File, NetCDF=.TRUE., &
                                            n_Channels = n_GFS_ls, &
                                            n_Profiles = n_GFS_ms )
   IF ( Error_Status /= SUCCESS ) THEN
@@ -558,21 +558,21 @@ PROGRAM test_VerticalCoordinates
   ! -----------------------
   ! 9d.1 Atmosphere file
   ! Build test atmosphere
-  Error_Status = CRTM_Atmosphere_ReadFile( atmk_File, atm_k, Quiet=.TRUE. )
+  Error_Status = CRTM_Atmosphere_ReadFile( atmk_File, atm_k, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading Atmosphere_K save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
   ! NAM atmosphere
-  Error_Status = CRTM_Atmosphere_ReadFile( atmk_NAM_File, atm_NAM_k, Quiet=.TRUE. )
+  Error_Status = CRTM_Atmosphere_ReadFile( atmk_NAM_File, atm_NAM_k, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading Atmosphere_NAM_K save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
   ! GFS atmosphere
-  Error_Status = CRTM_Atmosphere_ReadFile( atmk_GFS_File, atm_GFS_k, Quiet=.TRUE. )
+  Error_Status = CRTM_Atmosphere_ReadFile( atmk_GFS_File, atm_GFS_k, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading Atmosphere_GFS_K save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -580,21 +580,21 @@ PROGRAM test_VerticalCoordinates
   END IF
   ! 9d.2 Surface file
   ! Build
-  Error_Status = CRTM_Surface_ReadFile( sfck_File, sfc_k, Quiet=.TRUE. )
+  Error_Status = CRTM_Surface_ReadFile( sfck_File, sfc_k, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading Surface_K save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
   ! NAM
-  Error_Status = CRTM_Surface_ReadFile( sfck_NAM_File, sfc_NAM_k, Quiet=.TRUE. )
+  Error_Status = CRTM_Surface_ReadFile( sfck_NAM_File, sfc_NAM_k, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading Surface_NAM_K save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP 1
   END IF
   ! GFS
-  Error_Status = CRTM_Surface_ReadFile( sfck_GFS_File, sfc_GFS_k, Quiet=.TRUE. )
+  Error_Status = CRTM_Surface_ReadFile( sfck_GFS_File, sfc_GFS_k, NetCDF=.TRUE., Quiet=.TRUE. )
   IF ( Error_Status /= SUCCESS ) THEN
     Message = 'Error reading Surface_GFS_K save file'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -612,8 +612,8 @@ PROGRAM test_VerticalCoordinates
     Message = 'Atmosphere_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     ! Write the current Atmosphere_K results to file
-    atmk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.bin'
-    Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, Quiet=.TRUE. )
+    atmk_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Atmosphere.nc'
+    Error_Status = CRTM_Atmosphere_WriteFile( atmk_file, Atmosphere_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary Atmosphere_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -628,8 +628,8 @@ PROGRAM test_VerticalCoordinates
     Message = 'Atmosphere_NAM_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     ! Write the current Atmosphere_NAM_K results to file
-    atmk_NAM_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.Atmosphere.bin'
-    Error_Status = CRTM_Atmosphere_WriteFile( atmk_NAM_file, Atmosphere_NAM_K, Quiet=.TRUE. )
+    atmk_NAM_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.Atmosphere.nc'
+    Error_Status = CRTM_Atmosphere_WriteFile( atmk_NAM_file, Atmosphere_NAM_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary Atmosphere_NAM_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -644,8 +644,8 @@ PROGRAM test_VerticalCoordinates
     Message = 'Atmosphere_GFS_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     ! Write the current Atmosphere_GFS_K results to file
-    atmk_GFS_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.Atmosphere.bin'
-    Error_Status = CRTM_Atmosphere_WriteFile( atmk_GFS_file, Atmosphere_GFS_K, Quiet=.TRUE. )
+    atmk_GFS_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.Atmosphere.nc'
+    Error_Status = CRTM_Atmosphere_WriteFile( atmk_GFS_file, Atmosphere_GFS_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary Atmosphere_GFS_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -662,8 +662,8 @@ PROGRAM test_VerticalCoordinates
     Message = 'Surface_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     ! Write the current Surface_K results to file
-    sfck_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.bin'
-    Error_Status = CRTM_Surface_WriteFile( sfck_file, Surface_K, Quiet=.TRUE. )
+    sfck_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.Surface.nc'
+    Error_Status = CRTM_Surface_WriteFile( sfck_file, Surface_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary Surface_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -678,8 +678,8 @@ PROGRAM test_VerticalCoordinates
     Message = 'Surface_NAM_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     ! Write the current Surface_NAM_K results to file
-    sfck_NAM_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.Surface.bin'
-    Error_Status = CRTM_Surface_WriteFile( sfck_NAM_file, Surface_NAM_K, Quiet=.TRUE. )
+    sfck_NAM_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.NAM.Surface.nc'
+    Error_Status = CRTM_Surface_WriteFile( sfck_NAM_file, Surface_NAM_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary Surface_NAM_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -694,8 +694,8 @@ PROGRAM test_VerticalCoordinates
     Message = 'Surface_GFS_K Jacobians are different!'
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     ! Write the current Surface_GFS_K results to file
-    sfck_GFS_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.Surface.bin'
-    Error_Status = CRTM_Surface_WriteFile( sfck_GFS_file, Surface_GFS_K, Quiet=.TRUE. )
+    sfck_GFS_File = TRIM(PROGRAM_NAME)//'_'//TRIM(Sensor_Id)//'.GFS.Surface.nc'
+    Error_Status = CRTM_Surface_WriteFile( sfck_GFS_file, Surface_GFS_K, NetCDF=.TRUE., Quiet=.TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error creating temporary Surface_GFS_K save file for failed comparison'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )

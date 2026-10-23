@@ -331,7 +331,7 @@ CONTAINS
     DO i4 = 1, self%n_Temperature
       WRITE(*,'(5x,"TEMPERATURE :",es22.15)') self%Temperature(i4)
       DO i3 = 1, self%n_Grain_Sizes
-        WRITE(*,'(5x,"Grain_Size :",es22.15)') self%Grain_Size(i3)
+        WRITE(*,'(5x,"GRAIN_SIZE :",es22.15)') self%Grain_Size(i3)
         DO i2 = 1, self%n_Frequencies
           WRITE(*,'(5x,"FREQUENCY  :",es22.15)') self%Frequency(i2)
           WRITE(*,'(5(1x,es22.15,:))') self%Emissivity(:,i2,i3,i4)
@@ -454,7 +454,7 @@ CONTAINS
               &"CLASSIFICATION: ",a,",",2x,&
               &"N_ANGLES=",i3,2x,&
               &"N_FREQUENCIES=",i5,2x,&
-              &"n_Grain_Sizes=",i3,2x,&
+              &"N_GRAIN_SIZES=",i3,2x,&
               &"N_TEMPERATURE=",i3 )' ) &
            ACHAR(CARRIAGE_RETURN)//ACHAR(LINEFEED), &
            self%Release, self%Version, &
@@ -536,11 +536,11 @@ CONTAINS
          (x%n_Grain_Sizes /= y%n_Grain_Sizes ) .OR. &
          (x%n_Temperature /= y%n_Temperature ) ) RETURN
     ! ...Arrays
-    IF ( ALL(x%Angle       .EqualTo. y%Angle      ) .AND. &
-         ALL(x%Frequency   .EqualTo. y%Frequency  ) .AND. &
-         ALL(x%Grain_Size  .EqualTo. y%Grain_Size ) .AND. &
+    IF ( ALL(x%Angle       .EqualTo. y%Angle       ) .AND. &
+         ALL(x%Frequency   .EqualTo. y%Frequency   ) .AND. &
+         ALL(x%Grain_Size  .EqualTo. y%Grain_Size  ) .AND. &
          ALL(x%Temperature .EqualTo. y%Temperature ) .AND. &
-         ALL(x%Emissivity  .EqualTo. y%Emissivity ) ) &
+         ALL(x%Emissivity  .EqualTo. y%Emissivity  ) ) &
       is_equal = .TRUE.
 
   END FUNCTION IRsnowCoeff_Equal

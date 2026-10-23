@@ -263,9 +263,12 @@ MODULE CRTM_Cloud_Define
   ! Indices of different clouds in  the CloudCoef solid phase (*_S_*) parameters
   INTEGER, PARAMETER :: CLOUD_INDEX_DDA_ARTS(0:N_VALID_CLOUDS_DDA_ARTS) = &
     [ 0, &
-    ! Default clouds - Note that GemSnow, GemGraupel, IceSphere, and GemHail are used
-    ! for default and once can change the defaults by changing the faollowing line
-    -99, -99, 7, 15, 18, 17, &
+    ! Default DDA habits for the six basic cloud types (change here to retune):
+    !   SNOW->SectorSnowflake(7), GRAUPEL->GemGraupel(15), ICE_CLOUD->IconCloudIce(6), HAIL->GemHail(17).
+    ! ICE_CLOUD default was IceSphere(18); changed to IconCloudIce(6) because spheres over-scatter cloud
+    ! ice at submm (AWS 325 GHz: IceSphere tropical O-B +13 K vs IconCloudIce -0.6 K). WATER/RAIN (-99)
+    ! are handled by the liquid branch. Per-species habits remain user-selectable via the obs-operator.
+    -99, -99, 7, 15, 6, 17, &
     ! Non default clouds
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, -99 ]
 

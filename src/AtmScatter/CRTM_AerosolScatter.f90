@@ -310,7 +310,10 @@ CONTAINS
                                          (ASV%kb(ka,n) * Atm%Aerosol(n)%Concentration(ka))
 
 
-          DO m = 1, AScat%n_Phase_Elements
+          ! Aerosols contribute only to their OWN phase elements; independent of a
+          ! cloud LUT that may have sized AtmOptics with more elements (clouds and
+          ! aerosols are decoupled).
+          DO m = 1, MIN(AScat%n_Phase_Elements, AeroC%N_PHASE_ELEMENTS)
             DO l = 0, AScat%n_Legendre_Terms
               AScat%Phase_Coefficient(l,m,ka) = AScat%Phase_Coefficient(l,m,ka) + &
                                                 (ASV%pcoeff(l,m,ka,n) * bs)
@@ -528,7 +531,7 @@ CONTAINS
                                               (kb_TL * Atm%Aerosol(n)%Concentration(ka)) + &
                                               (ASV%kb(ka,n) * Atm_TL%Aerosol(n)%Concentration(ka))
 
-          DO m = 1, n_Phase_Elements
+          DO m = 1, MIN(n_Phase_Elements, AeroC%N_PHASE_ELEMENTS)
             DO l = 0, n_Legendre_Terms
               AScat_TL%Phase_Coefficient(l,m,ka) = AScat_TL%Phase_Coefficient(l,m,ka) + &
                                                    (pcoeff_TL(l,m)       * bs   ) + &
@@ -716,7 +719,7 @@ CONTAINS
           ! Recompute the forward model volume scattering
           ! coefficient for the current aerosol type ONLY
           bs = Atm%Aerosol(n)%Concentration(ka) * ASV%ke(ka,n) * ASV%w(ka,n)
-          DO m = 1, n_Phase_Elements
+          DO m = 1, MIN(n_Phase_Elements, AeroC%N_PHASE_ELEMENTS)
             DO l = 0, n_Legendre_Terms
               bs_AD = bs_AD + (ASV%pcoeff(l,m,ka,n) * AScat_AD%Phase_Coefficient(l,m,ka))
               pcoeff_AD(l,m) = pcoeff_AD(l,m) + (bs * AScat_AD%Phase_Coefficient(l,m,ka))

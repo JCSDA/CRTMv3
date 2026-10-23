@@ -1,9 +1,0 @@
-========================================
-*** TLtTL, dxtAD equality test failed for profile #19
-TLtTL                =  9.195196328255246E-01
-dxtAD                =  9.195196325937121E-01
-***--->>> delta      =  2.318125691402884E-10
-***--->>> threshold  =  2.220446049250313E-10
-*** TLtTL, dxtAD equality test failed for profile #19
-========================================
-

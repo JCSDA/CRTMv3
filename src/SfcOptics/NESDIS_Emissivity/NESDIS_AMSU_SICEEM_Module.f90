@@ -260,8 +260,6 @@ subroutine AMSU_IATs(frequency,tba,ts,em_vector)
   integer     :: ich
   real(fp)    :: coe(100)
 
-  save coe
-
   coe(1:5) = (/ 9.815214e-001_fp,  3.783815e-003_fp,  &
        6.391155e-004_fp, -9.106375e-005_fp, -4.263206e-003_fp/)
   coe(21:25) = (/ 9.047181e-001_fp, -2.782826e-004_fp,  &
@@ -300,8 +298,6 @@ subroutine AMSU_IBTs(theta,frequency,tbb,ts,em_vector)
   real(fp)    :: em_vector(*),emissivity,ts,frequency,discriminator(nwch)
   integer     :: i,ich,nvalid_ch
   real(fp)    :: coe(nch*(ncoe+1))
-
-  save coe
 
   coe(1:7) = (/ 2.239429e+000_fp, -2.153967e-002_fp,  &
        5.785736e-005_fp,  1.366728e-002_fp,    &
