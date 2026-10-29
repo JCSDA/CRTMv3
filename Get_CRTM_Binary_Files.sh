@@ -1,10 +1,10 @@
-#https://bin.ssec.wisc.edu/pub/s4/CRTM/fix_REL-3.1.2.0.tgz  (use this for jedi and stand-alone, some files have changed).
+#https://bin.ssec.wisc.edu/pub/s4/CRTM/fix_REL-3.1.6.0.tgz  (use this for jedi and stand-alone, some files have changed).
 
 # This script is used to manually download the tarball of binary and netcdf coefficient files.
 # The same files also download automatically during the cmake step, so you don't have to actually run this manually. 
 
-foldername="fix_REL-3.1.2.0"
-checksum=0e5888cae80aa674b2e67ecd4490317d
+foldername="fix_REL-3.1.6.0"
+checksum=fe65edff7621935c37976b406832d627
 filename="${foldername}.tgz"
 download_url=https://bin.ssec.wisc.edu/pub/s4/CRTM/$filename
 
@@ -28,9 +28,21 @@ while getopts "hd:" opt; do
   esac
 done
 
+# Exit with failure unless the md5 of file $1 matches $checksum.
+verify_checksum() {
+    local_checksum=$(md5sum "$1" | cut -d ' ' -f 1)
+    if [ "${local_checksum}" != "${checksum}" ]; then
+        echo "$1 has checksum ${local_checksum}, but ${checksum} is expected."
+        echo "Not using it. Remove it and try again."
+        exit 1
+    fi
+    echo "Checksum OK: $1"
+}
+
 if [ -n "${DOWNLOAD_ONLY_PATH}" ]; then
     echo "Downloading coefficients ${foldername} to file \"${DOWNLOAD_ONLY_PATH}\" and exiting."
-    wget --no-verbose $download_url -O "${DOWNLOAD_ONLY_PATH}"
+    wget --no-verbose $download_url -O "${DOWNLOAD_ONLY_PATH}" || { echo "Download failed."; exit 1; }
+    verify_checksum "${DOWNLOAD_ONLY_PATH}"
     exit 0
 fi
 
@@ -63,13 +75,21 @@ if [ -n "${CRTM_BINARY_FILES_TARBALL}" ]; then
     fi
 fi
 
-# If the file is not present in the pwd (or otherwise provided by
-# CRTM_BINARY_FILES_TARBALL as already verified), download the coefficients file.
+# A tarball already in the pwd is used only if its checksum matches; otherwise
+# it is downloaded again. (A CRTM_BINARY_FILES_TARBALL file was verified above.)
+download=no
 if ! test -f "$filename"; then
+    download=yes
+elif [ -z "${CRTM_BINARY_FILES_TARBALL}" ] && [ "$(md5sum "$filename" | cut -d ' ' -f 1)" != "${checksum}" ]; then
+    echo "$filename in the working directory does not match checksum ${checksum}; downloading it again."
+    download=yes
+fi
+if [ "$download" = yes ]; then
     # Ensure that filename is set to the local directory.
     filename="${foldername}.tgz"
-    echo "Downloading $filename (7 GB tar file)"
-    wget $download_url -O "${filename}"
+    echo "Downloading $filename (about 10 GB)"
+    wget $download_url -O "${filename}" || { echo "Download failed."; exit 1; }
+    verify_checksum "${filename}"
 fi
 
 # Extract the file to the working directory.
