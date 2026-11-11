@@ -96,6 +96,7 @@ CONTAINS
 !                           - CMAQ
 !                           - GOCART-GEOS5
 !                           - NAAPS
+!                           - RRFS
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar
@@ -116,6 +117,9 @@ CONTAINS
 !                           NAAPS:
 !                           - AerosolCoeff.NAAPS.bin  [Binary]
 !                           - AerosolCoeff.NAAPS.nc   [netCDF-Classic/4]
+!                           RRFS:
+!                           - AerosolCoeff.RRFS.bin  [Binary]
+!                           - AerosolCoeff.RRFS.nc4  [netCDF-4]
 !                           UNITS:      N/A
 !                           TYPE:       CHARACTER(*)
 !                           DIMENSION:  Scalar

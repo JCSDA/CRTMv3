@@ -587,8 +587,10 @@ set_tests_properties(test_TL_convergence_active_sensor PROPERTIES ENVIRONMENT OM
 list( APPEND crtm_test_input
 AerosolCoeff/Little_Endian/AerosolCoeff.bin
 AerosolCoeff/Little_Endian/AerosolCoeff.GOCART-GEOS5.bin
+AerosolCoeff/Little_Endian/AerosolCoeff.RRFS.bin
 AerosolCoeff/Little_Endian/AerosolCoeff.CMAQ.bin
 AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.nc4
+AerosolCoeff/netCDF/AerosolCoeff.RRFS.nc4
 AerosolCoeff/netCDF/AerosolCoeff.GOCART-GEOS5.BRC.kb.v2.nc
 AerosolCoeff/netCDF/AerosolCoeff.nc4
 CloudCoeff/Little_Endian/CloudCoeff.bin

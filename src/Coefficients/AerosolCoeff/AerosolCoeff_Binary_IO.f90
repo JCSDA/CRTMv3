@@ -306,6 +306,7 @@ CONTAINS
 !                          - CMAQ
 !                          - GOCART-GEOS5
 !                          - NAAPS
+!                          - RRFS
 !                          UNITS:      N/A
 !                          TYPE:       CHARACTER(*)
 !                          DIMENSION:  Scalar

@@ -937,7 +937,8 @@ CONTAINS
          ke = ke * (ONE- w)
       END IF
     
-    ELSE IF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'NAAPS' ) THEN
+    ELSE IF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'NAAPS' .OR. &
+          AeroC%Scheme == 'RRFS' ) THEN
       ! Fixed indices
       fix_sig = 1
       fix_r   = 1
@@ -1186,7 +1187,8 @@ CONTAINS
       END IF
       NULLIFY(zc)
 
-   ELSE IF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'NAAPS' ) THEN
+  ELSE IF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'NAAPS' .OR. &
+         AeroC%Scheme == 'RRFS' ) THEN
      ! Fixed indices
      fix_sig  = 1
      fix_r    = 1
@@ -1491,7 +1493,8 @@ CONTAINS
       Rsig_AD = Rsig_AD + v_int_AD
       Reff_AD = Reff_AD + r_int_AD
 
-   ELSE IF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'NAAPS' ) THEN
+  ELSE IF ( AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'NAAPS' .OR. &
+         AeroC%Scheme == 'RRFS' ) THEN
      ! Fixed indices
      fix_sig = 1
      fix_r   = 1
@@ -1539,7 +1542,7 @@ CONTAINS
                         ke_AD                  , &  ! AD  Input
                         zg_AD, wlp_AD,  hlp_AD   )  ! AD  Output
      ! Backscattering coefficient
-     IF (AeroC%Scheme == 'GOCART-GEOS5') THEN
+    IF (AeroC%Scheme == 'GOCART-GEOS5' .OR. AeroC%Scheme == 'RRFS') THEN
         zg => AeroC%kb( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k)
         CALL interp_2D_AD( zg   , asi%wlp, asi%hlp, &  ! FWD Input
                            kb_AD                  , &  ! AD  Input

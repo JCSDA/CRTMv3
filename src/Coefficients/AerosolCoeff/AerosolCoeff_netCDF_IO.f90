@@ -1149,8 +1149,8 @@ CONTAINS
             ' - '//TRIM(NF90_STRERROR( NF90_Status ))
       CALL Read_Cleanup(); RETURN
     END IF
-    ! ...kb variable, only for GOCART-GEOS5 scheme
-    IF ( Aerosol_Model == 'GOCART-GEOS5' ) THEN
+    ! ...kb variable, only for GOCART-GEOS5 and RRFS schemes
+    IF ( Aerosol_Model == 'GOCART-GEOS5' .OR. Aerosol_Model == 'RRFS' ) THEN
       NF90_Status = NF90_INQ_VARID( FileId,KB_VARNAME,VarId )
       ! Older GOCART-GEOS5 files may not include kb, so treat it as optional.
       IF ( NF90_Status .EQ. NF90_ENOTVAR ) THEN
