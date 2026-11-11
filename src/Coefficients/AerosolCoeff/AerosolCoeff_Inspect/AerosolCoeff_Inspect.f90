@@ -44,7 +44,7 @@ PROGRAM AerosolCoeff_Inspect
                         PROGRAM_RCS_ID )
 
   ! Get the aerosol model
-  WRITE( *,FMT='(/5x,"Enter the Aerosol Model (CRTM, CMAQ, GOCART-GEOS5, or NAAPS): ")',ADVANCE='NO' )
+  WRITE( *,FMT='(/5x,"Enter the Aerosol Model (CRTM, CMAQ, GOCART-GEOS5, NAAPS, or RRFS): ")',ADVANCE='NO' )
   READ( *,'(a)' ) Aerosol_Model
   Aerosol_Model = ADJUSTL( Aerosol_Model )
 

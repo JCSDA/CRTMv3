@@ -344,7 +344,7 @@ CONTAINS
           ! Save the nadir optical depth
           RTSolution(ln,m)%Layer_Optical_Depth(1:Atmosphere(m)%n_Layers) = AtmOptics%Optical_Depth
 
-          ! Save the Backscat_Coefficient, only non-zero for GOCART-GEOS5
+          ! Save the Backscat_Coefficient, non-zero for GOCART-GEOS5 and RRFS tables
           ! CD: double check if should be divided by 2PI
           RTSolution(ln,m)%Backscat_Coefficient(1:Atmosphere(m)%n_Layers) = AtmOptics%Backscat_Coefficient
           
@@ -676,7 +676,7 @@ CONTAINS
           RTSolution(ln,m)%Layer_Optical_Depth(1:Atmosphere(m)%n_Layers) = AtmOptics%Optical_Depth
           RTSolution_TL(ln,m)%Layer_Optical_Depth(1:Atmosphere(m)%n_Layers) = AtmOptics_TL%Optical_Depth
 
-          ! Save the backscatter coefficient, only non-zero for GOCART-GEOS5
+          ! Save the backscatter coefficient, non-zero for GOCART-GEOS5 and RRFS tables
           ! CD: double check if should be divided by 2PI
           RTSolution(ln,m)%Backscat_Coefficient(1:Atmosphere(m)%n_Layers) = AtmOptics%Backscat_Coefficient
           RTSolution_TL(ln,m)%Backscat_Coefficient(1:Atmosphere(m)%n_Layers) = AtmOptics_TL%Backscat_Coefficient

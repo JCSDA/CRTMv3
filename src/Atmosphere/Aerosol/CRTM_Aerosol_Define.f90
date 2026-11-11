@@ -1522,7 +1522,7 @@ CONTAINS
          aerosol%Type, &
          aerosol%Effective_Radius, &
          aerosol%Concentration
-    ELSEIF ( AeroC%Scheme == 'NAAPS' ) THEN
+    ELSEIF ( AeroC%Scheme == 'NAAPS' .OR. AeroC%Scheme == 'RRFS' ) THEN
       READ( fid,IOSTAT=io_stat,IOMSG=io_msg ) &
          aerosol%Type, &
          aerosol%Concentration
@@ -1607,7 +1607,7 @@ CONTAINS
          Aerosol%Type, &
          Aerosol%Effective_Radius(1:Aerosol%n_Layers), &
          Aerosol%Concentration(1:Aerosol%n_Layers)
-    ELSEIF ( AeroC%Scheme == 'NAAPS' ) THEN
+    ELSEIF ( AeroC%Scheme == 'NAAPS' .OR. AeroC%Scheme == 'RRFS' ) THEN
       WRITE( fid,IOSTAT=io_stat,IOMSG=io_msg ) &
          Aerosol%Type, &
          Aerosol%Concentration(1:Aerosol%n_Layers)

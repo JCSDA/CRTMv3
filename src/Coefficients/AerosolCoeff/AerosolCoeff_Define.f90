@@ -773,6 +773,11 @@ CONTAINS
 !  "Nitrate 2                                                                       ";
 !  "Nitrate 3                                                                       ";
 !
+! RRFS Aerosol_Type_Name =
+!  "Dust fine                                                                       ",
+!  "Dust coarse                                                                     ",
+!  "Smoke fine                                                                      ",
+!
 ! NAAPS Aerosol_Type_Name =
 !  "Dust                                                                            ",
 !  "Smoke                                                                           ",
