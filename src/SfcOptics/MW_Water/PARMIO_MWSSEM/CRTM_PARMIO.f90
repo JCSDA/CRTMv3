@@ -182,6 +182,11 @@ CONTAINS
     !    own RCCoeff; this is acceptable as a Phase-4 baseline (see plan
     !    §4.5). When Transmittance is absent or RCCoeff is unallocated
     !    we leave Reflectivity at the (1 - Emissivity) value.
+    !    Transmittance is the vertical surface-to-space value.
+    !    Reflection_Correction converts it to the slant path at iVar%cos_z,
+    !    the stream's own angle; unlike Compute_FastemX there is no 60 deg
+    !    cap for multi-stream calls (see #390). PARMIO_RC_Interp_Forward
+    !    also receives the vertical value.
     iVar%Rv_Mod = ONE
     iVar%Rh_Mod = ONE
     IF (iVar%Has_Transmittance) THEN

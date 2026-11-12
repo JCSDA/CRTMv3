@@ -52,7 +52,12 @@ PROGRAM test_Grazing_SfcOptics
   REAL(fp), PARAMETER :: SST   = 290.0_fp        ! K
   REAL(fp), PARAMETER :: SSS   = 33.0_fp         ! psu
   REAL(fp), PARAMETER :: WIND  = 6.0_fp          ! m/s
-  REAL(fp), PARAMETER :: TRANS = 0.5_fp          ! atmospheric transmittance (enables the correction)
+  ! Vertical surface-to-space transmittance (enables the correction). The
+  ! correction converts it to the slant path at each angle; with that
+  ! conversion a moderately opaque column (T = 0.5) no longer drives the
+  ! regression out of band below 88 deg, so the test uses a 325 GHz-typical
+  ! opaque column, where both backends still need the guard from 83 deg.
+  REAL(fp), PARAMETER :: TRANS = 0.1_fp
   ! Guard band -- must match R_PHYS_LO/R_PHYS_HI in CRTM_FastemX / CRTM_PARMIO
   REAL(fp), PARAMETER :: R_LO  = -0.5_fp, R_HI = 1.5_fp
   REAL(fp), PARAMETER :: FB_TOL = 1.0e-8_fp      ! fall-back match tolerance

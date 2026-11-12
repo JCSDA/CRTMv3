@@ -303,7 +303,12 @@ CONTAINS
 !                       DIMENSION:  Scalar
 !                       ATTRIBUTES: INTENT(IN), OPTIONAL
 !
-!       Transmittance:  Total atmospheric transmittance
+!       Transmittance:  Vertical (nadir) surface-to-space atmospheric
+!                       transmittance, EXP(-SUM(layer optical depth)), as
+!                       returned by CRTM_Compute_Transmittance. The reflection
+!                       correction converts it to the slant path at the angle
+!                       it is evaluated at (the zenith angle, capped at 60 deg
+!                       for multi-stream calls).
 !                       UNITS:      N/A
 !                       TYPE:       REAL(fp)
 !                       DIMENSION:  Scalar
@@ -582,7 +587,8 @@ CONTAINS
 !                          DIMENSION:  Scalar
 !                          ATTRIBUTES: INTENT(IN), OPTIONAL
 !
-!       Transmittance_TL:  Tangent-linear total atmospheric transmittance
+!       Transmittance_TL:  Tangent-linear of the vertical surface-to-space
+!                          transmittance (see Compute_FastemX).
 !                          This argument is ignored if a valid transmittance
 !                          was not passed into the forward model call.
 !                          UNITS:      N/A
@@ -833,7 +839,8 @@ CONTAINS
 !                          DIMENSION:  Scalar
 !                          ATTRIBUTES: INTENT(IN), OPTIONAL
 !
-!       Transmittance_AD:  Adjoint total atmospheric transmittance
+!       Transmittance_AD:  Adjoint of the vertical surface-to-space
+!                          transmittance (see Compute_FastemX).
 !                          This argument is ignored if a valid transmittance
 !                          was not passed into the forward model call.
 !                          UNITS:      N/A

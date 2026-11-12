@@ -69,7 +69,8 @@ MODULE Reflection_Correction_Module
   TYPE :: iVar_type
     PRIVATE
     ! Forward model input values
-    REAL(fp) :: Transmittance = ZERO
+    REAL(fp) :: Transmittance = ZERO   ! Slant-path, floored at EXP(-LIMIT_EXP)
+    REAL(fp) :: dTs_dTv       = ZERO   ! d(slant)/d(vertical) transmittance
     REAL(fp) :: Wind_Speed    = ZERO
     REAL(fp) :: cos_z         = ZERO
     REAL(fp) :: Frequency     = ZERO
@@ -120,9 +121,23 @@ CONTAINS
     INTEGER  :: i
     REAL(fp) :: Transmittance
 
-    ! Apply limits per Emily Liu (5/2022) -- this only applies to the REL_2.4.0_emc release branch, and has not 
-    ! been merged into v2.4.1 or later pending a more detailed assessment --BTJ
-    Transmittance = MAX(Transmittance_in, EXP(-LIMIT_EXP))  
+    ! The callers pass the vertical surface-to-space transmittance; the
+    ! regression is defined for the slant path at this stream's angle (the
+    ! optical depth predictor below, -LOG(T)*cos_z, recovers the vertical
+    ! optical depth only from a slant-path T). RTTOV passes the slant value.
+    Transmittance = Transmittance_in**(ONE/cos_z)
+
+    ! Floor the slant transmittance at EXP(-LIMIT_EXP), about 2e-9. The floor
+    ! is Emily Liu's NaN fix from release/REL-2.4.0_emc (5/2022), ported to v3
+    ! in 1f48e62. It used to clamp the vertical input while the TL still passed
+    ! Transmittance_TL through; it now clamps the slant value, and the
+    ! transmittance derivative is zero below it, so FWD, TL and AD agree.
+    IF ( Transmittance > EXP(-LIMIT_EXP) ) THEN
+      iVar%dTs_dTv = Transmittance / (cos_z * Transmittance_in)
+    ELSE
+      Transmittance = EXP(-LIMIT_EXP)
+      iVar%dTs_dTv  = ZERO
+    END IF
 
     ! Save forward input variables for TL and AD calculations
     iVar%Transmittance = Transmittance 
@@ -194,15 +209,20 @@ CONTAINS
     REAL(fp) :: variance_TL, od_TL
     REAL(fp) :: odx_TL(N_TERMS-1), zx_TL(N_PREDICTORS)
     REAL(fp) :: Rv_Rough_TL, Rh_Rough_TL
+    REAL(fp) :: Ts_TL
     INTEGER :: i
 
     
+    ! Slant-path transmittance from the vertical input
+    Ts_TL = iVar%dTs_dTv * Transmittance_TL
+
+
     ! Compute the wave slope variance
     CALL Compute_Slope_Variance_TL( Wind_Speed_TL, iVar%svVar, Variance_TL )
 
 
     ! Compute surface to space optical depth predictors
-    od_TL     = -Transmittance_TL * iVar%cos_z / iVar%Transmittance
+    od_TL     = -Ts_TL * iVar%cos_z / iVar%Transmittance
     odx_TL(1) = od_TL / iVar%od
     odx_TL(2) = TWO * odx_TL(1) * iVar%odx(1)
 
@@ -237,10 +257,10 @@ CONTAINS
 
 
     ! Compute the reflectivity modifier
-    Rv_Mod_TL = ((iVar%Rv_Mod - iVar%Rv_Rough*(iVar%Transmittance**(iVar%Rv_Rough-ONE)))*Transmittance_TL - &
+    Rv_Mod_TL = ((iVar%Rv_Mod - iVar%Rv_Rough*(iVar%Transmittance**(iVar%Rv_Rough-ONE)))*Ts_TL - &
                  (LOG(iVar%Transmittance)*(iVar%Transmittance**iVar%Rv_Rough))*Rv_Rough_TL) / &
                 (ONE - iVar%Transmittance)
-    Rh_Mod_TL = ((iVar%Rh_Mod - iVar%Rh_Rough*(iVar%Transmittance**(iVar%Rh_Rough-ONE)))*Transmittance_TL - &
+    Rh_Mod_TL = ((iVar%Rh_Mod - iVar%Rh_Rough*(iVar%Transmittance**(iVar%Rh_Rough-ONE)))*Ts_TL - &
                  (LOG(iVar%Transmittance)*(iVar%Transmittance**iVar%Rh_Rough))*Rh_Rough_TL) / &
                 (ONE - iVar%Transmittance)
     
@@ -268,13 +288,15 @@ CONTAINS
     REAL(fp) :: odx_AD(N_TERMS-1), zx_AD(N_PREDICTORS)
     REAL(fp) :: od_AD
     REAL(fp) :: variance_AD
+    REAL(fp) :: Ts_AD
 
 
     ! Compute the reflectivity modifier
+    Ts_AD       = ZERO
     Rv_Rough_AD = ZERO
     Rh_Rough_AD = ZERO
     ! ...for Rh_Mod
-    Transmittance_AD = Transmittance_AD + &
+    Ts_AD = Ts_AD + &
                        (iVar%Rh_Mod - iVar%Rh_Rough * iVar%Transmittance**(iVar%Rh_Rough-ONE)) * Rh_Mod_AD / &
                        (ONE - iVar%Transmittance)
     Rh_Rough_AD = Rh_Rough_AD - &
@@ -282,7 +304,7 @@ CONTAINS
                   (ONE - iVar%Transmittance)
     Rh_Mod_AD = ZERO
     ! ...for Rv_Mod
-    Transmittance_AD = Transmittance_AD + &
+    Ts_AD = Ts_AD + &
                        (iVar%Rv_Mod - iVar%Rv_Rough * iVar%Transmittance**(iVar%Rv_Rough-ONE)) * Rv_Mod_AD / &
                        (ONE - iVar%Transmittance)
     Rv_Rough_AD = Rv_Rough_AD - &
@@ -339,7 +361,11 @@ CONTAINS
     odx_AD(2) = ZERO
     od_AD = odx_AD(1) / iVar%od
     odx_AD(1) = ZERO
-    Transmittance_AD = Transmittance_AD - od_AD*iVar%cos_z/iVar%Transmittance
+    Ts_AD = Ts_AD - od_AD*iVar%cos_z/iVar%Transmittance
+
+
+    ! Slant-path transmittance from the vertical input
+    Transmittance_AD = Transmittance_AD + iVar%dTs_dTv * Ts_AD
     
 
     ! Compute the wave slope variance
