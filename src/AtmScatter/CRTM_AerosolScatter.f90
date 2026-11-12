@@ -520,7 +520,6 @@ CONTAINS
           AScat_TL%Single_Scatter_Albedo(ka) = AScat_TL%Single_Scatter_Albedo(ka) + bs_TL
           AScat_TL%Asymmetry_Factor(ka) = AScat_TL%Asymmetry_Factor(ka) + &
                                           (g_TL * bs) + (ASV%g(ka,n) * bs_TL)
-          ! Backscatter coefficient (scattering case only, consistent with FWD)
           AScat_TL%Backscat_Coefficient(ka) = AScat_TL%Backscat_Coefficient(ka) + &
                                               (kb_TL * Atm%Aerosol(n)%Concentration(ka)) + &
                                               (ASV%kb(ka,n) * Atm_TL%Aerosol(n)%Concentration(ka))
