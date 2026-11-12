@@ -509,10 +509,6 @@ CONTAINS
         AScat_TL%Optical_Depth(ka) = AScat_TL%Optical_Depth(ka) + &
                                      (ke_TL        * Atm%Aerosol(n)%Concentration(ka)) + &
                                      (ASV%ke(ka,n) * Atm_TL%Aerosol(n)%Concentration(ka))
-        ! Compute the back scatter coefficient
-        AScat_TL%Backscat_Coefficient(ka) = AScat_TL%Backscat_Coefficient(ka) + &
-                                            (kb_TL        * Atm%Aerosol(n)%Concentration(ka)) + &
-                                            (ASV%kb(ka,n) * Atm_TL%Aerosol(n)%Concentration(ka))
 
         ! Compute the phase matrix coefficients
         IF( n_Phase_Elements > 0 .and. AScat%Include_Scattering ) THEN
@@ -731,6 +727,12 @@ CONTAINS
           !       start of the Aerosol_Layer_loop
           bs_AD = bs_AD + AScat_AD%Single_Scatter_Albedo(ka)
           w_AD  = w_AD  + (Atm%Aerosol(n)%Concentration(ka) * ASV%ke(ka,n)* bs_AD )
+
+          ! Adjoint of the backscatter coefficient
+          ! (scattering case only, consistent with FWD)
+          Atm_AD%Aerosol(n)%Concentration(ka) = Atm_AD%Aerosol(n)%Concentration(ka) + &
+                                                (ASV%kb(ka,n) * AScat_AD%Backscat_Coefficient(ka))
+          kb_AD = kb_AD + (Atm%Aerosol(n)%Concentration(ka) * AScat_AD%Backscat_Coefficient(ka))
         END IF
 
         ! Compute the adjoint of the optical
@@ -738,11 +740,6 @@ CONTAINS
         Atm_AD%Aerosol(n)%Concentration(ka) = Atm_AD%Aerosol(n)%Concentration(ka) + &
                                               (ASV%ke(ka,n) * AScat_AD%Optical_Depth(ka))
         ke_AD = ke_AD + (Atm%Aerosol(n)%Concentration(ka) * AScat_AD%Optical_Depth(ka))
-
-        ! Compute the adjoint of the backscatter coefficient
-        Atm_AD%Aerosol(n)%Concentration(ka) = Atm_AD%Aerosol(n)%Concentration(ka) + &
-                                              (ASV%kb(ka,n) * AScat_AD%Backscat_Coefficient(ka))
-        kb_AD = kb_AD + (Atm%Aerosol(n)%Concentration(ka) * AScat_AD%Backscat_Coefficient(ka))
 
         ! Compute the adjoint of the volume
         ! scattering coefficient.
@@ -867,7 +864,7 @@ CONTAINS
       ! Fixed indices
       fix_rh  = 1
       fix_sig = 1
-      ! kb is not used in CRTM scheme
+      ! No backscatter coefficient in the CRTM scheme (only GOCART-GEOS5 has kb)
       kb = ZERO
 
       ! Find effective radius indices for Interpolation
@@ -882,7 +879,6 @@ CONTAINS
       CALL interp_2D( AeroC%ke( asi%i1:asi%i2, fix_rh, asi%j1:asi%j2, fix_sig, k), asi%wlp, asi%xlp, ke )
       CALL interp_2D( AeroC%w(  asi%i1:asi%i2, fix_rh, asi%j1:asi%j2, fix_sig, k), asi%wlp, asi%xlp, w  )
       CALL interp_2D( AeroC%g(  asi%i1:asi%i2, fix_rh, asi%j1:asi%j2, fix_sig, k), asi%wlp, asi%xlp, g  )
-      CALL interp_2D( AeroC%kb( asi%i1:asi%i2, fix_rh, asi%j1:asi%j2, fix_sig, k), asi%wlp, asi%xlp, kb )
       IF (AerosolScatter%n_Phase_Elements > 0 .and. AerosolScatter%Include_Scattering ) THEN
          pcoeff(0,1) = POINT_5
          DO m = 1, AerosolScatter%n_Phase_Elements
@@ -899,7 +895,7 @@ CONTAINS
     ELSE IF ( AeroC%Scheme == 'CMAQ' ) THEN
       ! Fixed indices
       fix_rh  = 1
-      ! kb is not used in CMAQ scheme
+      ! No backscatter coefficient in the CMAQ scheme (only GOCART-GEOS5 has kb)
       kb = ZERO
 
       ! Find effective radius indices for Interpolation
@@ -923,7 +919,6 @@ CONTAINS
       CALL interp_3D( AeroC%ke( asi%i1:asi%i2, fix_rh, asi%j1:asi%j2, asi%k1:asi%k2, k), asi%wlp, asi%xlp, asi%vlp, ke )
       CALL interp_3D( AeroC%w(  asi%i1:asi%i2, fix_rh, asi%j1:asi%j2, asi%k1:asi%k2, k), asi%wlp, asi%xlp, asi%vlp, w  )
       CALL interp_3D( AeroC%g(  asi%i1:asi%i2, fix_rh, asi%j1:asi%j2, asi%k1:asi%k2, k), asi%wlp, asi%xlp, asi%vlp, g  )
-      CALL interp_3D( AeroC%kb( asi%i1:asi%i2, fix_rh, asi%j1:asi%j2, asi%k1:asi%k2, k), asi%wlp, asi%xlp, asi%vlp, kb )
       IF (AerosolScatter%n_Phase_Elements > 0 .and. AerosolScatter%Include_Scattering ) THEN
          pcoeff(0,1) = POINT_5
          DO m = 1, AerosolScatter%n_Phase_Elements
@@ -954,7 +949,12 @@ CONTAINS
       CALL interp_2D( AeroC%ke( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k), asi%wlp, asi%hlp, ke )
       CALL interp_2D( AeroC%w(  asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k), asi%wlp, asi%hlp, w  )
       CALL interp_2D( AeroC%g(  asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k), asi%wlp, asi%hlp, g  )
-      CALL interp_2D( AeroC%kb( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k), asi%wlp, asi%hlp, kb )
+      ! Backscatter coefficient: only GOCART-GEOS5 has kb
+      IF ( AeroC%Scheme == 'GOCART-GEOS5' ) THEN
+        CALL interp_2D( AeroC%kb( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k), asi%wlp, asi%hlp, kb )
+      ELSE
+        kb = ZERO
+      END IF
       IF (AerosolScatter%n_Phase_Elements > 0 .and. AerosolScatter%Include_Scattering ) THEN
          pcoeff(0,1) = POINT_5
          DO m = 1, AerosolScatter%n_Phase_Elements
@@ -1077,7 +1077,7 @@ CONTAINS
       ! Fixed indices
       fix_rh  = 1
       fix_sig = 1
-      ! kb is not used in CRTM scheme
+      ! No backscatter coefficient in the CRTM scheme (only GOCART-GEOS5 has kb)
       kb_TL     = ZERO
 
       ! Effective radius term
@@ -1101,11 +1101,6 @@ CONTAINS
       CALL interp_2D_TL( zg   , asi%wlp, asi%xlp, &  ! FWD Input
                          zg_TL, wlp_TL , xlp_TL , &  ! TL  Input
                          g_TL                     )  ! TL  Output
-      ! Backscatter coefficient
-      zg => AeroC%kb( asi%i1:asi%i2, fix_rh, asi%j1:asi%j2, fix_sig, k)
-      CALL interp_2D_TL( zg   , asi%wlp, asi%xlp, &  ! FWD Input
-                         zg_TL, wlp_TL , xlp_TL , &  ! TL  Input
-                         kb_TL                    )  ! TL  Output
       ! Phase matrix coefficients
       IF (AerosolScatter_TL%n_Phase_Elements > 0 .and. AerosolScatter_TL%Include_Scattering ) THEN
          pcoeff_TL(0,1) = ZERO
@@ -1130,7 +1125,7 @@ CONTAINS
     ELSE IF ( AeroC%Scheme == 'CMAQ' ) THEN
       ! Fixed indices
       fix_rh  = 1
-      ! kb is not used in CMAQ scheme
+      ! No backscatter coefficient in the CMAQ scheme (only GOCART-GEOS5 has kb)
       kb_TL     = ZERO
 
       ! Effective radius term
@@ -1160,11 +1155,6 @@ CONTAINS
       CALL interp_3D_TL( zc   , asi%wlp, asi%xlp, asi%vlp, &  ! FWD Input
                          zc_TL, wlp_TL , xlp_TL , vlp_TL , &  ! TL  Input
                          g_TL                              )  ! TL  Output
-      ! Backscatter coefficient
-      zc => AeroC%kb( asi%i1:asi%i2, fix_rh, asi%j1:asi%j2, asi%k1:asi%k2, k)
-      CALL interp_3D_TL( zc   , asi%wlp, asi%xlp, asi%vlp, &  ! FWD Input
-                         zc_TL, wlp_TL , xlp_TL , vlp_TL , &  ! TL  Input
-                         kb_TL                             )  ! TL  Output
       ! Phase matrix coefficients
       IF (AerosolScatter_TL%n_Phase_Elements > 0 .and. AerosolScatter_TL%Include_Scattering ) THEN
          pcoeff_TL(0,1) = ZERO
@@ -1212,16 +1202,15 @@ CONTAINS
      CALL interp_2D_TL( zg   , asi%wlp, asi%hlp, &  ! FWD Input
                         zg_TL, wlp_TL , hlp_TL , &  ! TL  Input
                         g_TL                     )  ! TL  Output
-     ! Backscatter coefficient
-     zg => AeroC%kb( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k)
-     CALL interp_2D_TL( zg   , asi%wlp, asi%hlp, &  ! FWD Input
-                        zg_TL, wlp_TL , hlp_TL , &  ! TL  Input
-                        kb_TL                    )  ! TL  Output
-     ! Backscattering coefficient
-     zg => AeroC%kb( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k)
-     CALL interp_2D_TL( zg   , asi%wlp, asi%hlp, &  ! FWD Input
-                        zg_TL, wlp_TL , hlp_TL , &  ! TL  Input
-                        kb_TL                    )  ! TL  Output
+     ! Backscatter coefficient: only GOCART-GEOS5 has kb
+     IF ( AeroC%Scheme == 'GOCART-GEOS5' ) THEN
+        zg => AeroC%kb( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k)
+        CALL interp_2D_TL( zg   , asi%wlp, asi%hlp, &  ! FWD Input
+                           zg_TL, wlp_TL , hlp_TL , &  ! TL  Input
+                           kb_TL                    )  ! TL  Output
+     ELSE
+        kb_TL = ZERO
+     END IF
      ! Phase matrix coefficients
      IF (AerosolScatter_TL%n_Phase_Elements > 0 .and. AerosolScatter_TL%Include_Scattering ) THEN
         pcoeff_TL(0,1) = ZERO
@@ -1354,7 +1343,7 @@ CONTAINS
       ! Fixed indices
       fix_rh = 1
       fix_sig = 1
-      ! kb is not used in CRTM scheme
+      ! No backscatter coefficient in the CRTM scheme (only GOCART-GEOS5 has kb)
       kb_AD = ZERO
 
       ! Phase matrix coefficients
@@ -1378,11 +1367,6 @@ CONTAINS
          END IF
       END IF
 
-      ! Backscatter coefficient
-      zg => AeroC%kb( asi%i1:asi%i2, fix_rh, asi%j1:asi%j2, fix_sig, k)
-      CALL interp_2D_AD( zg   , asi%wlp, asi%xlp, &  ! FWD Input
-                         kb_AD                  , &  ! AD  Input
-                         zg_AD, wlp_AD , xlp_AD   )  ! AD  Output
       ! Asymmetry factor
       zg => AeroC%g( asi%i1:asi%i2, fix_rh, asi%j1:asi%j2, fix_sig, k)
       CALL interp_2D_AD( zg   , asi%wlp, asi%xlp, &  ! FWD Input
@@ -1420,7 +1404,7 @@ CONTAINS
    ELSE IF ( AeroC%Scheme == 'CMAQ' ) THEN
       ! Fixed indices
       fix_rh = 1
-      ! kb is not used in CMAQ scheme
+      ! No backscatter coefficient in the CMAQ scheme (only GOCART-GEOS5 has kb)
       kb_AD = ZERO
 
       ! Phase matrix coefficients
@@ -1444,11 +1428,6 @@ CONTAINS
          END IF
       END IF
 
-      ! Backscatter coefficient
-      zc => AeroC%kb( asi%i1:asi%i2, fix_rh, asi%j1:asi%j2, asi%k1:asi%k2, k)
-      CALL interp_3D_AD( zc   , asi%wlp, asi%xlp, asi%vlp, &  ! FWD Input
-                         kb_AD                            , &  ! AD  Input
-                         zc_AD, wlp_AD,  xlp_AD,  vlp_AD   )  ! AD  Output
       ! Asymmetry factor
       zc => AeroC%g( asi%i1:asi%i2, fix_rh, asi%j1:asi%j2, asi%k1:asi%k2, k)
       CALL interp_3D_AD( zc   , asi%wlp, asi%xlp, asi%vlp, &  ! FWD Input
@@ -1517,11 +1496,15 @@ CONTAINS
         END IF
      END IF
 
-     ! Backscatter coefficient
-     zg => AeroC%kb( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k)
-     CALL interp_2D_AD( zg   , asi%wlp, asi%hlp, &  ! FWD Input
-                        kb_AD                  , &  ! AD  Input
-                        zg_AD, wlp_AD,  hlp_AD   )  ! AD  Output
+     ! Backscatter coefficient: only GOCART-GEOS5 has kb
+     IF ( AeroC%Scheme == 'GOCART-GEOS5' ) THEN
+        zg => AeroC%kb( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k)
+        CALL interp_2D_AD( zg   , asi%wlp, asi%hlp, &  ! FWD Input
+                           kb_AD                  , &  ! AD  Input
+                           zg_AD, wlp_AD,  hlp_AD   )  ! AD  Output
+     ELSE
+        kb_AD = ZERO
+     END IF
      ! Asymmetry factor
      zg => AeroC%g( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k)
      CALL interp_2D_AD( zg   , asi%wlp, asi%hlp, &  ! FWD Input
@@ -1538,15 +1521,6 @@ CONTAINS
      CALL interp_2D_AD( zg   , asi%wlp, asi%hlp, &  ! FWD Input
                         ke_AD                  , &  ! AD  Input
                         zg_AD, wlp_AD,  hlp_AD   )  ! AD  Output
-     ! Backscattering coefficient
-     IF (AeroC%Scheme == 'GOCART-GEOS5') THEN
-        zg => AeroC%kb( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k)
-        CALL interp_2D_AD( zg   , asi%wlp, asi%hlp, &  ! FWD Input
-                           kb_AD                  , &  ! AD  Input
-                           zg_AD, wlp_AD,  hlp_AD   )  ! AD  Output
-     ELSE
-       kb_AD = ZERO
-     END IF
      NULLIFY(zg)
 
      ! Compute the AD of the interpolating polynomials
