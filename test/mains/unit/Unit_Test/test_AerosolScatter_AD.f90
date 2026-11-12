@@ -96,6 +96,7 @@ PROGRAM test_AerosolScatter_AD
   AScat_AD%Optical_Depth = AScat_TL%Optical_Depth
   AScat_AD%Single_Scatter_Albedo = AScat_TL%Single_Scatter_Albedo
   AScat_AD%Asymmetry_Factor = AScat_TL%Asymmetry_Factor
+  AScat_AD%Backscat_Coefficient = AScat_TL%Backscat_Coefficient
   AScat_AD%Phase_Coefficient = AScat_TL%Phase_Coefficient
 
   ! AD Call
@@ -108,6 +109,7 @@ PROGRAM test_AerosolScatter_AD
   sum_tl = SUM(AScat_TL%Optical_Depth**2) + &
            SUM(AScat_TL%Single_Scatter_Albedo**2) + &
            SUM(AScat_TL%Asymmetry_Factor**2) + &
+           SUM(AScat_TL%Backscat_Coefficient**2) + &
            SUM(AScat_TL%Phase_Coefficient**2)
 
   ! sum_ad = sum(Atm_TL * Atm_AD)

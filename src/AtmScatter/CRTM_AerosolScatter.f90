@@ -509,10 +509,6 @@ CONTAINS
         AScat_TL%Optical_Depth(ka) = AScat_TL%Optical_Depth(ka) + &
                                      (ke_TL        * Atm%Aerosol(n)%Concentration(ka)) + &
                                      (ASV%ke(ka,n) * Atm_TL%Aerosol(n)%Concentration(ka))
-        ! Compute the back scatter coefficient
-        AScat_TL%Backscat_Coefficient(ka) = AScat_TL%Backscat_Coefficient(ka) + &
-                                            (kb_TL        * Atm%Aerosol(n)%Concentration(ka)) + &
-                                            (ASV%kb(ka,n) * Atm_TL%Aerosol(n)%Concentration(ka))
 
         ! Compute the phase matrix coefficients
         IF( n_Phase_Elements > 0 .and. AScat%Include_Scattering ) THEN
@@ -524,6 +520,7 @@ CONTAINS
           AScat_TL%Single_Scatter_Albedo(ka) = AScat_TL%Single_Scatter_Albedo(ka) + bs_TL
           AScat_TL%Asymmetry_Factor(ka) = AScat_TL%Asymmetry_Factor(ka) + &
                                           (g_TL * bs) + (ASV%g(ka,n) * bs_TL)
+          ! Backscatter coefficient (scattering case only, consistent with FWD)
           AScat_TL%Backscat_Coefficient(ka) = AScat_TL%Backscat_Coefficient(ka) + &
                                               (kb_TL * Atm%Aerosol(n)%Concentration(ka)) + &
                                               (ASV%kb(ka,n) * Atm_TL%Aerosol(n)%Concentration(ka))
@@ -731,6 +728,12 @@ CONTAINS
           !       start of the Aerosol_Layer_loop
           bs_AD = bs_AD + AScat_AD%Single_Scatter_Albedo(ka)
           w_AD  = w_AD  + (Atm%Aerosol(n)%Concentration(ka) * ASV%ke(ka,n)* bs_AD )
+
+          ! Adjoint of the backscatter coefficient
+          ! (scattering case only, consistent with FWD)
+          Atm_AD%Aerosol(n)%Concentration(ka) = Atm_AD%Aerosol(n)%Concentration(ka) + &
+                                                (ASV%kb(ka,n) * AScat_AD%Backscat_Coefficient(ka))
+          kb_AD = kb_AD + (Atm%Aerosol(n)%Concentration(ka) * AScat_AD%Backscat_Coefficient(ka))
         END IF
 
         ! Compute the adjoint of the optical
@@ -738,11 +741,6 @@ CONTAINS
         Atm_AD%Aerosol(n)%Concentration(ka) = Atm_AD%Aerosol(n)%Concentration(ka) + &
                                               (ASV%ke(ka,n) * AScat_AD%Optical_Depth(ka))
         ke_AD = ke_AD + (Atm%Aerosol(n)%Concentration(ka) * AScat_AD%Optical_Depth(ka))
-
-        ! Compute the adjoint of the backscatter coefficient
-        Atm_AD%Aerosol(n)%Concentration(ka) = Atm_AD%Aerosol(n)%Concentration(ka) + &
-                                              (ASV%kb(ka,n) * AScat_AD%Backscat_Coefficient(ka))
-        kb_AD = kb_AD + (Atm%Aerosol(n)%Concentration(ka) * AScat_AD%Backscat_Coefficient(ka))
 
         ! Compute the adjoint of the volume
         ! scattering coefficient.
@@ -1217,11 +1215,6 @@ CONTAINS
      CALL interp_2D_TL( zg   , asi%wlp, asi%hlp, &  ! FWD Input
                         zg_TL, wlp_TL , hlp_TL , &  ! TL  Input
                         kb_TL                    )  ! TL  Output
-     ! Backscattering coefficient
-     zg => AeroC%kb( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k)
-     CALL interp_2D_TL( zg   , asi%wlp, asi%hlp, &  ! FWD Input
-                        zg_TL, wlp_TL , hlp_TL , &  ! TL  Input
-                        kb_TL                    )  ! TL  Output
      ! Phase matrix coefficients
      IF (AerosolScatter_TL%n_Phase_Elements > 0 .and. AerosolScatter_TL%Include_Scattering ) THEN
         pcoeff_TL(0,1) = ZERO
@@ -1538,15 +1531,6 @@ CONTAINS
      CALL interp_2D_AD( zg   , asi%wlp, asi%hlp, &  ! FWD Input
                         ke_AD                  , &  ! AD  Input
                         zg_AD, wlp_AD,  hlp_AD   )  ! AD  Output
-     ! Backscattering coefficient
-     IF (AeroC%Scheme == 'GOCART-GEOS5') THEN
-        zg => AeroC%kb( asi%i1:asi%i2, asi%h1:asi%h2, fix_r, fix_sig, k)
-        CALL interp_2D_AD( zg   , asi%wlp, asi%hlp, &  ! FWD Input
-                           kb_AD                  , &  ! AD  Input
-                           zg_AD, wlp_AD,  hlp_AD   )  ! AD  Output
-     ELSE
-       kb_AD = ZERO
-     END IF
      NULLIFY(zg)
 
      ! Compute the AD of the interpolating polynomials
