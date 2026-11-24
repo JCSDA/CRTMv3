@@ -272,25 +272,25 @@ CONTAINS
         RETURN
     END IF
 
+    ! Determine the number of extra layers required
+    n = Extra_Layers( Atm_In )
+    IF ( n < 0 ) THEN
+      err_stat = FAILURE
+      msg = 'Error determining extra layer count'
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
+
+
     ! If extra layers are NOT needed,
     ! then simply copy the structure
-    IF ( Atm_In%Level_Pressure(0) <= TOA_PRESSURE) THEN
+    IF ( n == 0 ) THEN
       Atm_Out = Atm_In
       IF ( .NOT. CRTM_Atmosphere_Associated( Atm_Out ) ) THEN
         err_stat = FAILURE
         msg = 'Error assigning Atmosphere structure with NO extra layers'
         CALL Display_Message( ROUTINE_NAME, msg, err_stat )
       END IF
-      RETURN
-    END IF
-    
-    
-    ! Determine the number of extra layers required
-    n = Extra_Layers( Atm_In )
-    IF ( n < 1 ) THEN
-      err_stat = FAILURE
-      msg = 'Error determining extra layer count'
-      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
       RETURN
     END IF
     
@@ -479,25 +479,25 @@ CONTAINS
         RETURN
     END IF
 
+    ! Determine how many extra layers are needed
+    n = Extra_Layers( Atm_In )
+    IF ( n < 0 ) THEN
+      err_stat = FAILURE
+      msg = 'Error determining extra layer count'
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
+
+
     ! If extra layers are NOT needed,
     ! then simply copy the structure
-    IF ( Atm_In%Level_Pressure(0) <= TOA_PRESSURE) THEN
+    IF ( n == 0 ) THEN
       Atm_Out_TL = Atm_In_TL
       IF ( .NOT. CRTM_Atmosphere_Associated( Atm_Out_TL ) ) THEN
         err_stat = FAILURE
         msg = 'Error assigning Atmosphere structure with NO extra layers'
         CALL Display_Message( ROUTINE_NAME, msg, err_stat )
       END IF
-      RETURN
-    END IF
-
-    
-    ! Determine how many extra layers are needed
-    n = Extra_Layers( Atm_In )
-    IF ( n < 1 ) THEN
-      err_stat = FAILURE
-      msg = 'Error determining extra layer count'
-      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
       RETURN
     END IF
 
@@ -594,20 +594,19 @@ CONTAINS
     ! so the adjoint form is
     !   Atm_In_AD  = Atm_In_AD + Atm_Out_AD
     !   Atm_Out_AD = ZERO
-    IF (( Atm_In%Level_Pressure(0) <= TOA_PRESSURE) .OR. &
-        (.NOT. Atm_In%Add_Extra_Layers            )) THEN
-      Atm_In_AD = Atm_In_AD + Atm_Out_AD
-      CALL CRTM_Atmosphere_Zero( Atm_Out_AD )
-      RETURN
-    END IF
-    
-    
-    ! Determine how many extra layers have been used
-    n = Extra_Layers( Atm_In )
-    IF ( n < 1 ) THEN
+    ! The layer count comes from the same function the forward and
+    ! tangent-linear routines use, so the three always agree.
+    n = 0
+    IF ( Atm_In%Add_Extra_Layers ) n = Extra_Layers( Atm_In )
+    IF ( n < 0 ) THEN
       err_stat = FAILURE
       msg = 'Error determining extra layer count'
       CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+      RETURN
+    END IF
+    IF ( n == 0 ) THEN
+      Atm_In_AD = Atm_In_AD + Atm_Out_AD
+      CALL CRTM_Atmosphere_Zero( Atm_Out_AD )
       RETURN
     END IF
 
@@ -1048,14 +1047,34 @@ CONTAINS
 !##################################################################################
 !##################################################################################
 
-  ! Subprogram to determine the number of extra layers required
+  ! Subprogram to determine the number of extra layers required.
+  !
+  !   n > 0 : the number of model layers to add above the user top
+  !   n = 0 : none; the user top is at the TOA pressure, or within
+  !           rounding of it
+  !   n < 0 : error; the user top is below every model level
+  !
+  ! A user top that sits within TOP_LEVEL_TOLERANCE (relative) below a model
+  ! level is treated as being on that level. Otherwise the layer between the
+  ! model level and the user top would have zero thickness to within
+  ! rounding: an empty layer whose mean pressure, (p2-p1)/LOG(p2/p1), is 0/0.
   FUNCTION Extra_Layers( Atm ) RESULT( n )
     TYPE(CRTM_Atmosphere_type), INTENT(IN) :: Atm
     INTEGER :: n
-    DO n = 1, SIZE(MODEL_LEVEL_PRESSURE)
-      IF ( MODEL_LEVEL_PRESSURE(n) >= Atm%Level_Pressure(0) ) RETURN
-    END DO
+    REAL(fp), PARAMETER :: TOP_LEVEL_TOLERANCE = 1.0e-06_fp
+    REAL(fp) :: p_top
+    INTEGER  :: k
+    p_top = Atm%Level_Pressure(0)
     n = 0
+    IF ( p_top <= TOA_PRESSURE*(ONE + TOP_LEVEL_TOLERANCE) ) RETURN
+    DO k = LBOUND(MODEL_LEVEL_PRESSURE,1) + 1, UBOUND(MODEL_LEVEL_PRESSURE,1)
+      IF ( MODEL_LEVEL_PRESSURE(k) >= p_top ) THEN
+        n = k - LBOUND(MODEL_LEVEL_PRESSURE,1)
+        IF ( p_top - MODEL_LEVEL_PRESSURE(k-1) <= TOP_LEVEL_TOLERANCE*p_top ) n = n - 1
+        RETURN
+      END IF
+    END DO
+    n = -1
   END FUNCTION Extra_Layers
 
 
