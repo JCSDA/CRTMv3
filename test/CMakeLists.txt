@@ -473,6 +473,12 @@ ADD_CRTM_UNIT_TEST(Unit_MultiSensor_SingleCall mains/unit/Unit_Test/test_MultiSe
 # its own thread counts, so it does not depend on OMP_NUM_THREADS.
 ADD_CRTM_UNIT_TEST(Unit_OMP_Channel_Overshoot mains/unit/Unit_Test/test_OMP_Channel_Overshoot.F90)
 
+# CRTM_Atmosphere_AddLayers fill above the user profile top (JCSDA/CRTMv3#403):
+# no zero-thickness layer for a user top next to a model level, the same fill
+# for tops that differ by rounding, and the same number of added layers in the
+# forward, tangent-linear and adjoint routines. Needs no coefficient files.
+ADD_CRTM_UNIT_TEST(Unit_AddLayers_Fill mains/unit/Unit_Test/test_AddLayers_Fill.f90)
+
 #(PS) Hypsometric Equation test
 add_executable(hypsometric_eq mains/unit/Unit_Test/test_Hypsometric.f90)
 target_link_libraries(hypsometric_eq PRIVATE crtm)
